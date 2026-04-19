@@ -8,8 +8,11 @@ import { createServer } from "http";
 import { spawn } from "child_process";
 import { readFileSync, existsSync, unlinkSync } from "fs";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Support both ESM (import.meta.url) and CJS bundled builds (__filename)
+const __filename_esm = typeof __filename !== 'undefined'
+  ? __filename
+  : fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename_esm);
 
 async function startServer() {
   const app = express();
@@ -20,7 +23,7 @@ async function startServer() {
       methods: ["GET", "POST"]
     }
   });
-  const PORT = 3000;
+  const PORT = 3001;
 
   app.use(cors());
   app.use(express.json());
@@ -50,7 +53,8 @@ async function startServer() {
   // Generate close-ticket report via Python (ReportLab + Arabic)
   app.post("/api/generate-report", (req, res) => {
     const scriptPath = path.join(__dirname, "report_generator.py");
-    const python = spawn("python", [scriptPath, "--stdin"], {
+    const pythonBin = process.platform === 'win32' ? 'python' : 'python3';
+    const python = spawn(pythonBin, [scriptPath, "--stdin"], {
       env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' }
     });
 

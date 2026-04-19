@@ -23,6 +23,7 @@ import TeamMemberDetail from '@/pages/TeamMemberDetail';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
+import { ProfileCompletionModal } from '@/components/ProfileCompletionModal';
 
 export default function App() {
   return (
@@ -35,7 +36,7 @@ export default function App() {
 }
 
 function AppContent() {
-  const { user, loading, login } = useAuth();
+  const { user, loading, login, needsProfileCompletion } = useAuth();
 
   if (loading) {
     return (
@@ -53,7 +54,7 @@ function AppContent() {
     <Router>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-orange-500/30">
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
           <Route path="/register" element={<Register />} />
           <Route 
             path="/" 
@@ -98,6 +99,7 @@ function AppContent() {
         </Routes>
         <Toaster position="top-right" theme="dark" />
         <PWAInstallPrompt />
+        <ProfileCompletionModal open={needsProfileCompletion} />
       </div>
     </Router>
   );

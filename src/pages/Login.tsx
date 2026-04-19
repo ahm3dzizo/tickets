@@ -19,7 +19,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      // navigation handled by App route guard once onAuthStateChanged fires
     } catch (error: any) {
       console.error(error);
       toast.error('فشل تسجيل الدخول. يرجى التحقق من البيانات.');

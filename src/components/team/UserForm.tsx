@@ -7,7 +7,8 @@ import {
   Mail,
   User as UserIcon,
   Hash,
-  Phone
+  Phone,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,17 +73,21 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!displayName.trim()) {
-      toast.error('يرجى إدخال الاسم الكامل');
-      return;
-    }
-    if (!email.trim()) {
-      toast.error('يرجى إدخال البريد الإلكتروني');
-      return;
-    }
-    if (role !== 'admin' && selectedProjects.length === 0) {
-      toast.error('يرجى اختيار مشروع واحد على الأقل من قائمة المشاريع');
-      return;
+
+    if (editingUser) {
+      // Edit mode: keep existing validation
+      if (!displayName.trim()) { toast.error('يرجى إدخال الاسم الكامل'); return; }
+      if (role !== 'admin' && selectedProjects.length === 0) {
+        toast.error('يرجى اختيار مشروع واحد على الأقل'); return;
+      }
+    } else {
+      // New user mode: employeeId OR phoneNumber required
+      if (!employeeId.trim() && !phoneNumber.trim()) {
+        toast.error('يرجى إدخال الرقم الوظيفي أو رقم الهاتف على الأقل'); return;
+      }
+      if (role !== 'admin' && selectedProjects.length === 0) {
+        toast.error('يرجى اختيار مشروع واحد على الأقل'); return;
+      }
     }
 
     setLoading(true);
@@ -94,33 +99,34 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
           employeeId,
           phoneNumber,
           specialties,
-          specialty: specialties[0], // keep legacy field in sync
+          specialty: specialties[0],
           role,
           projectIds: selectedProjects
         });
-        toast.success('تم تحديث بيانات المستخدم بنجاح');
+        toast.success('تم تحديث بيانات العضو بنجاح');
       } else {
-        // Create new user profile (pre-registration)
+        // Create pending user — employee will complete registration later
         const userRef = doc(collection(db, 'users'));
         await setDoc(userRef, {
-          uid: userRef.id, // Temporary ID, will be linked on first login
-          email,
-          displayName,
-          employeeId,
-          phoneNumber,
+          uid: userRef.id,
+          displayName: '',
+          email: '',
+          employeeId: employeeId.trim(),
+          phoneNumber: phoneNumber.trim(),
           specialties,
-          specialty: specialties[0], // keep legacy field in sync
+          specialty: specialties[0],
           role,
           projectIds: selectedProjects,
           isPending: true,
+          profileCompleted: false,
           createdAt: new Date().toISOString()
         });
-        toast.success('تم إضافة بيانات العضو بنجاح، سيتم تفعيل حسابه فور تسجيله بنفس البريد الإلكتروني.');
+        toast.success('تم إضافة العضو بنجاح. يمكنه إتمام تسجيله باستخدام رقمه الوظيفي أو رقم هاتفه.');
       }
       setOpen(false);
     } catch (error) {
       console.error('Error updating user:', error);
-      toast.error('فشل تحديث بيانات المستخدم');
+      toast.error('فشل حفظ بيانات العضو');
     } finally {
       setLoading(false);
     }
@@ -155,50 +161,80 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
             {editingUser ? 'تعديل بيانات العضو' : 'إضافة عضو جديد'}
           </DialogTitle>
           <DialogDescription className="text-slate-500 text-right">
-            حدد الدور والتخصصات والمشاريع المسؤولة لهذا العضو.
+            {editingUser
+              ? 'حدد الدور والتخصصات والمشاريع المسؤولة لهذا العضو.'
+              : 'أضف الرقم الوظيفي أو رقم الهاتف مع الدور والمشروع. العضو سيكمل بياناته عند التسجيل.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} noValidate className="space-y-6 py-4">
-          <div className="space-y-2">
-            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">الاسم الكامل</Label>
-            <div className="relative">
-              <Input 
-                placeholder="مثال: أحمد علي" 
-                className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-              />
-              <UserIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">الرقم الوظيفي</Label>
-            <div className="relative">
-              <Input 
-                placeholder="مثال: EMP001" 
-                className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12 font-mono"
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-              />
-              <Hash className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            </div>
-          </div>
+          {/* ── Edit mode: show name fields ── */}
+          {editingUser && (
+            <>
+              <div className="space-y-2">
+                <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">الاسم الكامل</Label>
+                <div className="relative">
+                  <Input
+                    placeholder="مثال: أحمد علي"
+                    className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                  />
+                  <UserIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">البريد الإلكتروني</Label>
+                <div className="relative">
+                  <Input
+                    type="email"
+                    placeholder="name@example.com"
+                    className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12 font-mono"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled
+                  />
+                  <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                </div>
+              </div>
+            </>
+          )}
 
-          <div className="space-y-2">
-            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">البريد الإلكتروني</Label>
-            <div className="relative">
-              <Input 
-                type="email"
-                placeholder="name@example.com" 
-                className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12 font-mono"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={!!editingUser}
-              />
-              <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          {/* ── New user: identifier section ── */}
+          {!editingUser && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+                <Info className="w-4 h-4 text-blue-400 shrink-0" />
+                <p className="text-xs text-blue-300 text-right">أدخل الرقم الوظيفي أو رقم الهاتف — يكفي واحد منهما. العضو سيُكمل بياناته عند أول تسجيل دخول.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">الرقم الوظيفي</Label>
+                  <div className="relative">
+                    <Input
+                      placeholder="EMP001"
+                      className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-10 font-mono"
+                      value={employeeId}
+                      onChange={(e) => setEmployeeId(e.target.value)}
+                    />
+                    <Hash className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">رقم الهاتف</Label>
+                  <div className="relative">
+                    <Input
+                      placeholder="05xxxxxxxx"
+                      className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-10"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                    />
+                    <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="space-y-2">
             <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">الدور الوظيفي</Label>
@@ -286,18 +322,35 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
           </div>
 
           <div className="space-y-4 pt-4 border-t border-white/5">
-            <div className="space-y-2">
-              <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">رقم الهاتف</Label>
-              <div className="relative">
-                <Input 
-                  placeholder="05xxxxxxxx" 
-                  className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                />
-                <Phone className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              </div>
-            </div>
+            {/* Edit mode: show employeeId + phone in bottom section */}
+            {editingUser && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">الرقم الوظيفي</Label>
+                  <div className="relative">
+                    <Input
+                      placeholder="EMP001"
+                      className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12 font-mono"
+                      value={employeeId}
+                      onChange={(e) => setEmployeeId(e.target.value)}
+                    />
+                    <Hash className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">رقم الهاتف</Label>
+                  <div className="relative">
+                    <Input
+                      placeholder="05xxxxxxxx"
+                      className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                    />
+                    <Phone className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <DialogFooter className="pt-4 gap-3">

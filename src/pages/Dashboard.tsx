@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { TicketForm } from '@/components/tickets/TicketForm';
-import { TicketTable, statusTranslations, typeTranslations } from '@/components/tickets/TicketTable';
+import { TicketTable, statusTranslations, typeTranslations, BulkActionBar } from '@/components/tickets/TicketTable';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { WhatsAppService } from '@/services/whatsappService';
 import { ProjectForm } from '@/components/projects/ProjectForm';
@@ -36,7 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { collection, collectionGroup, onSnapshot, query, where, getCountFromServer, orderBy, limit, doc, getDoc, Query, DocumentData, writeBatch, updateDoc } from 'firebase/firestore';
+import { collection, collectionGroup, onSnapshot, query, where, orderBy, doc, writeBatch, updateDoc } from 'firebase/firestore';
 import { getFirestoreDb } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -128,41 +128,7 @@ export default function Dashboard() {
     if (!user) return;
     const db = getFirestoreDb();
 
-    // 1. Fetch Stats
-    const fetchStats = async () => {
-      const ticketsRef = collection(db, 'tickets');
-      const projectsRef = collection(db, 'projects');
-      const techsRef = collection(db, 'technicians');
-
-      // Admin sees everything, others see their projects
-      let ticketQuery: Query<DocumentData> | null = ticketsRef;
-      let projectQuery: Query<DocumentData> | null = projectsRef;
-
-      if (user.role !== 'admin') {
-        if (user.role === 'supervisor') {
-          // Supervisors only see tickets assigned to them specifically
-          ticketQuery = query(ticketsRef, where('assignedSupervisorIds', 'array-contains', user.uid));
-          projectQuery = (user.projectIds?.length ?? 0) > 0
-            ? query(projectsRef, where('__name__', 'in', user.projectIds))
-            : null;
-        } else if (user.projectIds && user.projectIds.length > 0) {
-          ticketQuery = query(ticketsRef, where('projectId', 'in', user.projectIds));
-          projectQuery = query(projectsRef, where('__name__', 'in', user.projectIds));
-        } else {
-          ticketQuery = null;
-          projectQuery = null;
-        }
-      }
-
-      const totalTickets    = ticketQuery  ? await getCountFromServer(ticketQuery).then(s => s.data().count).catch(() => 0) : 0;
-      const openTickets     = ticketQuery  ? await getCountFromServer(query(ticketQuery, where('status', '==', 'open'))).then(s => s.data().count).catch(() => 0) : 0;
-      const activeProjects  = projectQuery ? await getCountFromServer(projectQuery).then(s => s.data().count).catch(() => 0) : 0;
-      const totalTechnicians = await getCountFromServer(techsRef).then(s => s.data().count).catch(() => 0);
-
-      setStats({ totalTickets, openTickets, activeProjects, totalTechnicians });
-    };
-
-    // 2. Fetch user's projects
+    // 1. Fetch user's projects — counts → activeProjects
     let projectsQuery: ReturnType<typeof query> | null = null;
     if (user.role === 'admin') {
       projectsQuery = query(collection(db, 'projects'));
@@ -175,6 +141,7 @@ export default function Dashboard() {
       unsubscribeProjects = onSnapshot(projectsQuery, (snapshot) => {
         const projects = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Project));
         setUserProjects(projects);
+        setStats(prev => ({ ...prev, activeProjects: snapshot.size }));
         setLoading(false);
       }, (err) => {
         console.error('[Dashboard] projects snapshot error:', err.code);
@@ -185,29 +152,32 @@ export default function Dashboard() {
       setLoading(false);
     }
 
-    // 3. Fetch recent tickets
+    // 2. Fetch tickets — counts totalTickets + openTickets, fills recentTickets
     let ticketsQuery: ReturnType<typeof query> | null = null;
     if (user.role === 'admin') {
-      ticketsQuery = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'), limit(10));
+      ticketsQuery = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'));
     } else if (user.role === 'supervisor') {
-      // Supervisors only see their assigned tickets
-      ticketsQuery = query(collection(db, 'tickets'), where('assignedSupervisorIds', 'array-contains', user.uid), limit(50));
+      ticketsQuery = query(collection(db, 'tickets'), where('assignedSupervisorIds', 'array-contains', user.uid));
     } else if (user.projectIds && user.projectIds.length > 0) {
-      ticketsQuery = query(collection(db, 'tickets'), where('projectId', 'in', user.projectIds), limit(50));
+      ticketsQuery = query(collection(db, 'tickets'), where('projectId', 'in', user.projectIds));
     }
 
     let unsubscribeTickets = () => {};
     if (ticketsQuery) {
       unsubscribeTickets = onSnapshot(ticketsQuery, (snapshot) => {
-        const tickets = snapshot.docs
+        const allTickets = snapshot.docs
           .map(doc => ({ id: doc.id, ...(doc.data() as any) } as Ticket))
           .sort((a, b) => {
             const ta = (a.createdAt as any)?.toMillis?.() ?? new Date(a.createdAt as any).getTime() ?? 0;
             const tb = (b.createdAt as any)?.toMillis?.() ?? new Date(b.createdAt as any).getTime() ?? 0;
             return tb - ta;
-          })
-          .slice(0, 10);
-        setRecentTickets(tickets);
+          });
+        setRecentTickets(allTickets.slice(0, 10));
+        setStats(prev => ({
+          ...prev,
+          totalTickets: allTickets.length,
+          openTickets: allTickets.filter(t => t.status === 'open').length,
+        }));
       }, (err) => {
         console.error('[Dashboard] tickets snapshot error:', err.code);
         setRecentTickets([]);
@@ -216,11 +186,15 @@ export default function Dashboard() {
       setRecentTickets([]);
     }
 
-    fetchStats();
-    
+    // 3. Technicians count
+    const unsubscribeTechs = onSnapshot(collection(db, 'technicians'), (snap) => {
+      setStats(prev => ({ ...prev, totalTechnicians: snap.size }));
+    });
+
     return () => {
       unsubscribeProjects();
       unsubscribeTickets();
+      unsubscribeTechs();
     };
   }, [user]);
 
@@ -563,60 +537,14 @@ export default function Dashboard() {
       </div>
       {/* Floating bulk action bar */}
       {selectedTicketIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900/95 backdrop-blur-md border border-blue-500/30 rounded-2xl shadow-2xl shadow-black/60 px-3 py-2.5 w-[calc(100vw-2rem)] max-w-2xl">
-          <div className="flex flex-col text-right px-3 border-r border-white/10 shrink-0">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">المختارة</span>
-            <span className="text-lg font-black text-blue-400">{selectedTicketIds.length}</span>
-          </div>
-          <div className="flex items-center gap-2 flex-1 flex-wrap">
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <Button variant="outline" size="sm" className="border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold rounded-xl gap-1.5 h-9 px-3">
-                  <Edit className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">تغيير الحالة</span>
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </Button>
-              } />
-              <DropdownMenuContent className="bg-card border-border text-slate-200">
-                {Object.entries(statusTranslations).map(([k, v]) => (
-                  <DropdownMenuItem key={k} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => handleBulkStatusChange(k)}>
-                    {v}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-green-500/30 bg-green-500/10 text-green-400 font-bold rounded-xl gap-1.5 h-9 px-3"
-              onClick={handleSendAppointment}
-            >
-              <MessageCircle className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">تحديد موعد</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isMultiClient}
-              title={isMultiClient ? 'الإغلاق يتطلب تذاكر لنفس العميل' : undefined}
-              className="border-yellow-500/30 bg-yellow-500/10 text-yellow-400 font-bold rounded-xl gap-1.5 h-9 px-3 disabled:opacity-40 disabled:cursor-not-allowed"
-              onClick={() => setCloseDialogOpen(true)}
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">إغلاق التذكرة</span>
-            </Button>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="shrink-0 text-slate-500 hover:text-white h-9 w-9"
-            onClick={() => setSelectedTicketIds([])}
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
+        <BulkActionBar
+          count={selectedTicketIds.length}
+          isMultiClient={isMultiClient}
+          onStatusChange={handleBulkStatusChange}
+          onAppointment={handleSendAppointment}
+          onClose={() => setCloseDialogOpen(true)}
+          onClear={() => setSelectedTicketIds([])}
+        />
       )}
 
       <CloseTicketDialog

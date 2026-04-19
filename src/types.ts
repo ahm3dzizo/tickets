@@ -13,6 +13,7 @@ export interface User {
   role: 'admin' | 'engineer' | 'supervisor';
   projectIds?: string[];
   photoURL?: string;
+  profileCompleted?: boolean;
 }
 
 export interface Project {
@@ -50,7 +51,7 @@ export interface Ticket {
   issuedAt?: string; // Original issue date from file e.g. '15/3/2025'
   description: string;
   type: TicketType;
-  status: 'open' | 'in-progress' | 'pending' | 'completed' | 'closed' | 'waiting';
+  status: 'open' | 'in-progress' | 'pending' | 'completed' | 'closed' | 'waiting' | 'out-of-scope';
   priority: 'low' | 'medium' | 'high' | 'urgent' | number; // Support numbers 3, 4, 6, 7, 9
   assigneeName?: string;
   assignedSupervisorId?: string;

@@ -109,6 +109,7 @@ export default function TicketDetail() {
     'pending': 'معلقة',
     'completed': 'مكتملة',
     'closed': 'مغلقة',
+    'out-of-scope': 'خارج اختصاص',
   };
 
   const priorityTranslations: Record<string, string> = {
@@ -531,6 +532,7 @@ export default function TicketDetail() {
                 <option value="pending">معلقة</option>
                 <option value="completed">مكتملة</option>
                 <option value="closed">مغلقة</option>
+                <option value="out-of-scope">خارج اختصاص</option>
               </select>
             </div>
             <div className="space-y-1.5">

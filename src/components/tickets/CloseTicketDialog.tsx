@@ -254,8 +254,9 @@ export function CloseTicketDialog({
         }
       }
 
-      // 2nd priority: showSaveFilePicker (desktop Chrome/Edge)
-      if (!saved && 'showSaveFilePicker' in window) {
+      // 2nd priority: showSaveFilePicker (desktop Chrome/Edge only — skip on mobile)
+      const isMobile = navigator.maxTouchPoints > 0 && /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+      if (!saved && !isMobile && 'showSaveFilePicker' in window) {
         try {
           const fileHandle = await (window as any).showSaveFilePicker({
             suggestedName: fileName,
@@ -299,12 +300,19 @@ export function CloseTicketDialog({
       });
       await batch.commit();
 
-      // 3. Open WhatsApp
+      // 3. Open WhatsApp — use native app deep link on mobile
       if (targetClient?.phone) {
         const waIds = selectedTickets.map(t => t.ticketId || t.refNumber).join('، ');
         const message = `السلام عليكم، بخصوص بلاغ الصيانة رقم ${waIds}، تم الانتهاء من الصيانة المطلوبة بنجاح. نرجو التفضل بالتوقيع على نموذج الإغلاق. شكراً لتعاونكم.`;
         const phone = targetClient.phone.replace(/[^0-9]/g, '');
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+        const encodedMsg = encodeURIComponent(message);
+        const isMobileDevice = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+        if (isMobileDevice) {
+          // whatsapp:// deep link opens native app directly, bypassing the browser
+          window.location.href = `whatsapp://send?phone=${phone}&text=${encodedMsg}`;
+        } else {
+          window.open(`https://wa.me/${phone}?text=${encodedMsg}`, '_blank');
+        }
       }
 
       toast.success('تم إغلاق التذاكر بنجاح');

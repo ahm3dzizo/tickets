@@ -16,9 +16,10 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 
 import fitz  # PyMuPDF for PDF→JPG
+import tempfile
 
 # ─── Constants ───────────────────────────────────────────────────
-OUTPUT_DIR = r"D:\closed tickets"
+OUTPUT_DIR = os.environ.get("REPORT_OUTPUT_DIR", tempfile.gettempdir())
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FONTS_DIR = os.path.join(SCRIPT_DIR, "fonts")
 # Check multiple locations for logo

@@ -7,6 +7,7 @@ import { User, UserRole } from '../types';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  needsProfileCompletion: boolean;
   login: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -89,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, needsProfileCompletion: !!(user && !user.profileCompleted && !user.employeeId && !user.phoneNumber), login, logout }}>
       {children}
     </AuthContext.Provider>
   );

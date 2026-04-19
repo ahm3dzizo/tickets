@@ -1,5 +1,5 @@
 ﻿import React, { useRef, useState } from 'react';
-import { FileUp, Loader2, Check, FileSpreadsheet, ChevronLeft, FileText } from 'lucide-react';
+import { FileUp, Loader2, Check, FileSpreadsheet, ChevronLeft, FileText, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { parsePdfTickets, type PdfParseProgress } from '@/services/pdfParser';
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,7 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [isPdf, setIsPdf] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<{ done: number; total: number } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
@@ -68,6 +69,7 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
     setMapping({});
     setIsPdf(false);
     setPdfProgress(null);
+    setImportError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -156,6 +158,7 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
 
   const handleImport = async () => {
     setLoading(true);
+    setImportError(null);
     try {
       const mapped = getMappedData();
       await onImport(mapped as T[]);
@@ -164,7 +167,8 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
       reset();
     } catch (err) {
       console.error(err);
-      toast.error('حدث خطأ أثناء استيراد البيانات');
+      const msg = err instanceof Error ? err.message : 'حدث خطأ أثناء استيراد البيانات';
+      setImportError(msg);
     } finally {
       setLoading(false);
     }
@@ -223,8 +227,28 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
 
         <div className="flex-1 overflow-y-auto py-2 min-h-0">
 
+          {/* ── Import Error Panel ── */}
+          {importError && (
+            <div className="flex flex-col items-center justify-center gap-5 py-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-rose-500/15 flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-rose-400" />
+              </div>
+              <div className="space-y-2 max-w-sm">
+                <p className="text-base font-black text-rose-300">تعذّر الاستيراد</p>
+                <p className="text-sm text-slate-300 leading-relaxed">{importError}</p>
+              </div>
+              <Button
+                variant="outline"
+                className="border-rose-500/30 bg-rose-500/10 text-rose-300 hover:text-white rounded-xl h-10 px-6 font-bold"
+                onClick={() => { setImportError(null); setStep('upload'); reset(); }}
+              >
+                رجوع واختر الملف الصحيح
+              </Button>
+            </div>
+          )}
+
           {/* ── Step 1: Upload ── */}
-          {step === 'upload' && (
+          {!importError && step === 'upload' && (
             <div className="space-y-4">
               <div
                 className="border-2 border-dashed border-border rounded-2xl p-10 text-center hover:border-blue-500/50 transition-all cursor-pointer bg-white/5"
@@ -261,7 +285,7 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
           )}
 
           {/* ── Step 2: Column Mapping ── */}
-          {step === 'mapping' && (
+          {!importError && step === 'mapping' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span>الملف: <span className="text-blue-400 font-bold">{fileName}</span></span>
@@ -303,7 +327,7 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
           )}
 
           {/* ── Step 3: Confirm ── */}
-          {step === 'confirm' && (
+          {!importError && step === 'confirm' && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 justify-center py-2">
                 {isPdf
@@ -341,7 +365,7 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
           )}
         </div>
 
-        <DialogFooter className="gap-2 pt-2 shrink-0 flex-col sm:flex-row">
+        <DialogFooter className="gap-2 pt-2 shrink-0 flex-col sm:flex-row" hidden={!!importError}>
           {step === 'upload' && (
             <Button variant="ghost" onClick={() => setOpen(false)} className="text-slate-500 hover:text-white rounded-xl h-11">إلغاء</Button>
           )}

@@ -2,13 +2,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { 
-  Search, 
-  Filter, 
-  Calendar,
-  Clock,
-  Home,
-  Tag,
-  CheckCircle2,
   AlertTriangle,
   FileUp,
   ChevronDown,
@@ -18,7 +11,6 @@ import {
   CheckSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,13 +21,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
-import { TicketTable, parseIssuedAt, statusTranslations, typeTranslations } from '@/components/tickets/TicketTable';
+import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/TicketTable';
 import { DataImport, FieldDef } from '@/components/ui/DataImport';
 import { collection, collectionGroup, onSnapshot, query, orderBy, getDocs, addDoc, serverTimestamp, where, writeBatch, doc, updateDoc } from 'firebase/firestore';
 import { getFirestoreDb } from '@/lib/firebase';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { classifyTicket } from '@/services/ticketClassifier';
-import { scheduleAiEnrichment } from '@/services/ticketEnricher';
 import { findMatchingSupervisors } from '@/services/supervisorAssignment';
 import { WhatsAppService } from '@/services/whatsappService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -50,15 +41,11 @@ export default function TicketsList() {
   const [projects, setProjects] = useState<Record<string, Project>>({});
   const [clients, setClients] = useState<Record<string, Client>>({});
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importProjectId, setImportProjectId] = useState('');
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterType, setFilterType] = useState<TicketType | ''>('');
-  const [filterProject, setFilterProject] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -234,6 +221,22 @@ export default function TicketsList() {
   const handleImportTickets = async (data: any[]) => {
     const db = getFirestoreDb();
 
+    // ── Abbreviation mismatch check (only when a target project is selected) ──
+    if (importProjectId) {
+      const targetAbbr = projects[importProjectId]?.abbreviation?.toUpperCase() ?? '';
+      const foreignAbbrs = [...new Set(
+        data
+          .map(item => parseTicketRef(String(item.refNumber ?? '').trim()).projectAbbr)
+          .filter(abbr => abbr && abbr !== targetAbbr)
+      )];
+      if (foreignAbbrs.length > 0) {
+        const targetName = projects[importProjectId]?.abbreviation ?? importProjectId;
+        throw new Error(
+          `هذه التذاكر تابعة لمشروع آخر (${foreignAbbrs.join(', ')}) وليس لمشروع "${targetName}". تأكد من الملف الصحيح.`
+        );
+      }
+    }
+
     const importPromises = data.map(async (item) => {
       const refNumber    = String(item.refNumber    ?? '').trim();
       const { projectAbbr, villaNumber: refVilla } = parseTicketRef(refNumber);
@@ -301,6 +304,14 @@ export default function TicketsList() {
 
       const priorityNum = priorityRaw ? (isNaN(Number(priorityRaw)) ? 3 : Number(priorityRaw)) : 3;
 
+      // ── Dedup: skip if ticketId already exists ─────────────────
+      if (ticketId) {
+        const dupSnap = await getDocs(
+          query(collection(db, 'tickets'), where('ticketId', '==', ticketId))
+        );
+        if (!dupSnap.empty) return null;
+      }
+
       return addDoc(collection(db, 'tickets'), {
         ticketId,
         refNumber,
@@ -324,36 +335,12 @@ export default function TicketsList() {
       });
     });
 
-    const docRefs = await Promise.all(importPromises);
+    const results = await Promise.all(importPromises);
+    const skipped = results.filter(r => r === null).length;
     setImportOpen(false);
     setImportProjectId('');
-
-    // Fire-and-forget: AI enrichment runs sequentially with delay after dialog closes
-    const resolvedProjectId = importProjectId || '';
-    const enrichJobs = docRefs.map((ref, i) => ({
-      docRef: ref,
-      description: String(data[i].description ?? '').trim(),
-      projectId: resolvedProjectId ||
-        (Object.values(projects) as Project[]).find(p => {
-          const abbr = parseTicketRef(String(data[i].refNumber ?? '')).projectAbbr;
-          return p.name === String(data[i].projectName ?? '') || (abbr && p.abbreviation === abbr);
-        })?.id || '',
-    }));
-
-    const AI_TOAST_ID = 'ai-enrichment';
-    toast.loading(`🤖 جارٍ تحسين التصنيف: 0 / ${enrichJobs.length}`, { id: AI_TOAST_ID, duration: Infinity });
-
-    scheduleAiEnrichment(enrichJobs, ({ done, total, failed, finished }) => {
-      if (finished) {
-        if (failed === 0) {
-          toast.success(`✅ اكتمل التصنيف الذكي: ${total} تذكرة`, { id: AI_TOAST_ID, duration: 6000 });
-        } else {
-          toast.warning(`⚠ اكتمل التصنيف: ${total - failed} نجح، ${failed} فشل`, { id: AI_TOAST_ID, duration: 8000 });
-        }
-      } else {
-        toast.loading(`🤖 جارٍ تحسين التصنيف: ${done} / ${total}${failed > 0 ? ` (${failed} فشل)` : ''}`, { id: AI_TOAST_ID, duration: Infinity });
-      }
-    }); // intentionally not awaited
+    if (skipped > 0) toast.info(`تم تخطي ${skipped} تذكرة مكررة`);
+    toast.success(`تم استيراد ${results.length - skipped} تذكرة بنجاح`);
   };
 
   const importFieldDefs: FieldDef[] = [
@@ -379,28 +366,11 @@ export default function TicketsList() {
     'المشروع':        'اسم المشروع',
   };
 
-  const filteredTickets = tickets
-    .filter(ticket => {
-      const s = searchTerm.toLowerCase();
-      const matchSearch = !s ||
-        ticket.villaNumber?.toLowerCase().includes(s) ||
-        ticket.description?.toLowerCase().includes(s) ||
-        ticket.clientName?.toLowerCase().includes(s) ||
-        ticket.ticketId?.toLowerCase().includes(s) ||
-        ticket.refNumber?.toLowerCase().includes(s);
-      const matchStatus = !filterStatus || ticket.status === filterStatus;
-      const matchType = !filterType ||
-        ticket.type === filterType ||
-        (ticket.detectedTypes as string[] | undefined)?.includes(filterType);
-      const matchProject = !filterProject || ticket.projectId === filterProject;
-      return matchSearch && matchStatus && matchType && matchProject;
-    })
+  const sortedTickets = tickets
     .sort((a, b) => {
-      // Closed tickets always at the bottom
       const aClosed = a.status === 'closed' ? 1 : 0;
       const bClosed = b.status === 'closed' ? 1 : 0;
       if (aClosed !== bClosed) return aClosed - bClosed;
-      // Oldest first: use issuedAt when present, fall back to createdAt
       const getMs = (t: Ticket) => {
         if (t.issuedAt) { const d = parseIssuedAt(t.issuedAt); if (d) return d.getTime(); }
         return (t.createdAt as any)?.toMillis?.() ?? new Date(t.createdAt as any).getTime() ?? 0;
@@ -411,8 +381,6 @@ export default function TicketsList() {
   // Show project column if tickets span more than one project
   const distinctProjectIds = new Set(tickets.map(t => t.projectId).filter(Boolean));
   const showProjectColumn = user?.role === 'admin' || distinctProjectIds.size > 1;
-
-  const activeFiltersCount = [filterStatus, filterType, filterProject].filter(Boolean).length;
 
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedTicketIds.length === 0) return;
@@ -557,156 +525,26 @@ export default function TicketsList() {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <Input 
-              placeholder="البحث برقم التذكرة، العميل، أو الوصف..." 
-              className="pr-12 bg-card border-border rounded-2xl h-12 text-white text-right"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {/* Status filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <Button variant="outline" className={cn(
-                  'border-border bg-card text-slate-300 rounded-2xl h-12 gap-2 px-4 font-medium',
-                  filterStatus && 'border-blue-500/50 bg-blue-500/10 text-blue-300'
-                )}>
-                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-                  {filterStatus ? statusTranslations[filterStatus] ?? filterStatus : 'الحالة'}
-                </Button>
-              } />
-              <DropdownMenuContent className="bg-card border-border text-slate-200">
-                <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setFilterStatus('')}>كل الحالات</DropdownMenuItem>
-                {Object.entries(statusTranslations).map(([k, v]) => (
-                  <DropdownMenuItem key={k} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setFilterStatus(k)}>{v}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Type filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <Button variant="outline" className={cn(
-                  'border-border bg-card text-slate-300 rounded-2xl h-12 gap-2 px-4 font-medium',
-                  filterType && 'border-blue-500/50 bg-blue-500/10 text-blue-300'
-                )}>
-                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-                  {filterType ? typeTranslations[filterType] ?? filterType : 'التخصص'}
-                </Button>
-              } />
-              <DropdownMenuContent className="bg-card border-border text-slate-200">
-                <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setFilterType('')}>كل التخصصات</DropdownMenuItem>
-                {Object.entries(typeTranslations).map(([k, v]) => (
-                  <DropdownMenuItem key={k} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setFilterType(k as TicketType)}>{v}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Project filter — only when multiple projects */}
-            {showProjectColumn && (
-              <DropdownMenu>
-                <DropdownMenuTrigger render={
-                  <Button variant="outline" className={cn(
-                    'border-border bg-card text-slate-300 rounded-2xl h-12 gap-2 px-4 font-medium',
-                    filterProject && 'border-blue-500/50 bg-blue-500/10 text-blue-300'
-                  )}>
-                    <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-                    {filterProject ? (projects[filterProject]?.name ?? 'المشروع') : 'المشروع'}
-                  </Button>
-                } />
-                <DropdownMenuContent className="bg-card border-border text-slate-200">
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setFilterProject('')}>كل المشاريع</DropdownMenuItem>
-                  {Object.values(projects).map(p => (
-                    <DropdownMenuItem key={p.id} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setFilterProject(p.id)}>{p.name}</DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            {/* Clear filters */}
-            {activeFiltersCount > 0 && (
-              <Button
-                variant="ghost"
-                className="rounded-2xl h-12 px-4 text-slate-500 hover:text-white gap-1"
-                onClick={() => { setFilterStatus(''); setFilterType(''); setFilterProject(''); }}
-              >
-                <X className="w-3.5 h-3.5" />
-                مسح ({activeFiltersCount})
-              </Button>
-            )}
-          </div>
-        </div>
         {/* Floating bulk action bar */}
         {selectedTicketIds.length > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900/95 backdrop-blur-md border border-blue-500/30 rounded-2xl shadow-2xl shadow-black/60 px-3 py-2.5 w-[calc(100vw-2rem)] max-w-2xl">
-            <div className="flex flex-col text-right px-3 border-r border-white/10 shrink-0">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">المختارة</span>
-              <span className="text-lg font-black text-blue-400">{selectedTicketIds.length}</span>
-            </div>
-            <div className="flex items-center gap-2 flex-1 flex-wrap">
-              <DropdownMenu>
-                <DropdownMenuTrigger render={
-                  <Button variant="outline" size="sm" className="border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold rounded-xl gap-1.5 h-9 px-3">
-                    <Edit className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">تغيير الحالة</span>
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  </Button>
-                } />
-                <DropdownMenuContent className="bg-card border-border text-slate-200">
-                  <DropdownMenuItem className="text-right justify-end hover:bg-white/5" onClick={() => handleBulkStatusChange('open')}>مفتوحة</DropdownMenuItem>
-                  <DropdownMenuItem className="text-right justify-end hover:bg-white/5" onClick={() => handleBulkStatusChange('in-progress')}>قيد التنفيذ</DropdownMenuItem>
-                  <DropdownMenuItem className="text-right justify-end hover:bg-white/5" onClick={() => handleBulkStatusChange('waiting')}>بانتظار الموعد</DropdownMenuItem>
-                  <DropdownMenuItem className="text-right justify-end hover:bg-white/5" onClick={() => handleBulkStatusChange('pending')}>معلقة</DropdownMenuItem>
-                  <DropdownMenuItem className="text-right justify-end hover:bg-white/5" onClick={() => handleBulkStatusChange('completed')}>مكتملة</DropdownMenuItem>
-                  <DropdownMenuItem className="text-right justify-end hover:bg-white/5" onClick={() => handleBulkStatusChange('closed')}>مغلقة</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-green-500/30 bg-green-500/10 text-green-400 font-bold rounded-xl gap-1.5 h-9 px-3"
-                onClick={handleSendAppointment}
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">تحديد موعد</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isMultiClient}
-                title={isMultiClient ? 'الإغلاق يتطلب تذاكر لنفس العميل' : undefined}
-                className="border-yellow-500/30 bg-yellow-500/10 text-yellow-400 font-bold rounded-xl gap-1.5 h-9 px-3 disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={() => setCloseDialogOpen(true)}
-              >
-                <CheckSquare className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">إغلاق التذكرة</span>
-              </Button>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-slate-500 hover:text-white h-9 w-9"
-              onClick={() => setSelectedTicketIds([])}
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+          <BulkActionBar
+            count={selectedTicketIds.length}
+            isMultiClient={isMultiClient}
+            onStatusChange={handleBulkStatusChange}
+            onAppointment={handleSendAppointment}
+            onClose={() => setCloseDialogOpen(true)}
+            onClear={() => setSelectedTicketIds([])}
+          />
         )}
 
         <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl shadow-black/40">
           <TicketTable
-            tickets={filteredTickets}
+            tickets={sortedTickets}
             selectedIds={selectedTicketIds}
             onSelectionChange={setSelectedTicketIds}
             hideProjectColumn={!showProjectColumn}
             projects={projects}
+            showInlineFilters
           />
         </div>
 

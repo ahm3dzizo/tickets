@@ -29,7 +29,7 @@ import { Project, Ticket, Client, User, TicketType } from '@/types';
 import { doc, onSnapshot, collection, query, where, getDocs, getDoc, addDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { getFirestoreDb } from '@/lib/firebase';
 import { TicketCard } from '@/components/tickets/TicketCard';
-import { TicketTable } from '@/components/tickets/TicketTable';
+import { TicketTable, BulkActionBar } from '@/components/tickets/TicketTable';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
@@ -45,7 +45,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format, differenceInDays, parse, isValid } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { classifyTicketSmart } from '@/services/ticketClassifier';
+import { classifyTicket } from '@/services/ticketClassifier';
 import { findMatchingSupervisors } from '@/services/supervisorAssignment';
 
 export default function ProjectDetail() {
@@ -245,6 +245,19 @@ export default function ProjectDetail() {
       return m ? { projectAbbr: m[1].toUpperCase(), villaNumber: m[2] } : { projectAbbr: '', villaNumber: '' };
     };
 
+    // ── Abbreviation mismatch check ────────────────────────────────────────
+    const projectAbbr = project!.abbreviation?.toUpperCase() ?? '';
+    const foreignAbbrs = [...new Set(
+      data
+        .map(item => parseTicketRef(String(item.refNumber ?? '').trim()).projectAbbr)
+        .filter(abbr => abbr && abbr !== projectAbbr)
+    )];
+    if (foreignAbbrs.length > 0) {
+      throw new Error(
+        `هذه التذاكر تابعة لمشروع آخر (${foreignAbbrs.join(', ')}) وليس لمشروع "${project!.abbreviation}". تأكد من الملف الصحيح.`
+      );
+    }
+
     // Arabic type names → TicketType
     const arabicTypeMap: Record<string, TicketType> = {
       'سباكة': 'plumbing', 'كهرباء': 'electricity', 'أبواب': 'doors',
@@ -265,8 +278,8 @@ export default function ProjectDetail() {
       const typeRaw      = String(item.ticketType   ?? item.type ?? '').trim();
       const fileType     = arabicTypeMap[typeRaw] ?? (typeRaw as TicketType) ?? null;
 
-      // Classify description (use file type if provided, else AI)
-      const classification = await classifyTicketSmart(description);
+      // Classify description (rule-based)
+      const classification = classifyTicket(description);
       const finalType = fileType || classification.primaryType;
 
       // Auto-assign supervisors
@@ -374,57 +387,26 @@ export default function ProjectDetail() {
         </div>
 
         {/* Action Bar for selected tickets */}
-        {selectedTicketIds.length > 0 && (
-          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10">
-            <div className="bg-slate-900/90 backdrop-blur-xl border border-blue-500/30 rounded-3xl p-4 shadow-2xl flex items-center gap-4 min-w-[300px] sm:min-w-[450px]">
-              <div className="flex flex-col text-right px-4 border-r border-white/10">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">المختارة</span>
-                <span className="text-lg font-black text-blue-400">{selectedTicketIds.length}</span>
-              </div>
-              
-              <div className="flex items-center gap-2 flex-1">
-                <Button 
-                  className="bg-[#25D366] hover:bg-[#20b858] text-white font-bold rounded-2xl gap-2 h-11 px-4 sm:px-6"
-                  onClick={handleSendWhatsApp}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  واتساب
-                </Button>
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger render={
-                    <Button variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold rounded-2xl gap-2 h-11 px-4">
-                      <Edit className="w-4 h-4" />
-                      تغيير الحالة
-                    </Button>
-                  } />
-                  <DropdownMenuContent className="bg-card border-border text-slate-200">
-                    <DropdownMenuItem className="text-right justify-end hover:bg-white/5" onClick={() => handleBulkStatusChange('open')}>مفتوحة</DropdownMenuItem>
-                    <DropdownMenuItem className="text-right justify-end hover:bg-white/5" onClick={() => handleBulkStatusChange('in-progress')}>جاري العمل</DropdownMenuItem>
-                    <DropdownMenuItem className="text-right justify-end hover:bg-white/5" onClick={() => handleBulkStatusChange('waiting')}>بانتظار الموعد</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <Button 
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl gap-2 h-11 px-4"
-                  onClick={() => setIsCloseDialogOpen(true)}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  قفل
-                </Button>
-
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="mr-auto text-slate-500 hover:text-white"
-                  onClick={() => setSelectedTicketIds([])}
-                >
-                  <XCircle className="w-5 h-5" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        {selectedTicketIds.length > 0 && (() => {
+          const selTickets = tickets.filter(t => selectedTicketIds.includes(t.id));
+          const uniqueClientKeys = new Set(selTickets.map(t => t.clientId || t.villaNumber || 'unknown'));
+          const isMultiClient = uniqueClientKeys.size > 1;
+          return (
+            <BulkActionBar
+              count={selectedTicketIds.length}
+              isMultiClient={isMultiClient}
+              onStatusChange={handleBulkStatusChange}
+              onAppointment={handleSendWhatsApp}
+              onClose={() => setIsCloseDialogOpen(true)}
+              onClear={() => setSelectedTicketIds([])}
+              statusOptions={[
+                { key: 'open', label: 'مفتوحة' },
+                { key: 'in-progress', label: 'جاري العمل' },
+                { key: 'waiting', label: 'بانتظار الموعد' },
+              ]}
+            />
+          );
+        })()}
 
         {/* Primary Content: Tickets Table */}
         <div className="space-y-3">
@@ -437,6 +419,7 @@ export default function ProjectDetail() {
               hideSupervisorColumn={currentUser?.role === 'supervisor'}
               emptyMessage="لا توجد تذاكر مسجلة لهذا المشروع"
               maxHeight="calc(100vh - 320px)"
+              showInlineFilters
             />
           </div>
         </div>
