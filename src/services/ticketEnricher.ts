@@ -8,12 +8,12 @@
  * Called without `await` — intentional fire-and-forget.
  */
 
-import { DocumentReference, updateDoc } from 'firebase/firestore';
+import { ticketsApi } from '@/lib/api';
 import { classifyTicketSmart } from './ticketClassifier';
 import { findMatchingSupervisors } from './supervisorAssignment';
 
 export interface EnrichJob {
-  docRef: DocumentReference;
+  ticketId: string;
   description: string;
   projectId: string;
 }
@@ -56,7 +56,7 @@ export async function scheduleAiEnrichment(
         : [];
       const primary = supervisors[0];
 
-      await updateDoc(job.docRef, {
+      await ticketsApi.update(job.ticketId, {
         type:                  classification.primaryType,
         detectedTypes:         classification.allTypes,
         aiConfidence:          classification.confidence,

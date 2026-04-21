@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
-import { collection, onSnapshot, query, orderBy, doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { usersApi, projectsApi } from '@/lib/api';
 import { Users, Shield, Mail, Search, MoreHorizontal, Phone, Briefcase, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,21 +25,21 @@ export default function Team() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    const q = query(collection(db, 'users'), orderBy('displayName', 'asc'));
-    return onSnapshot(q, (snapshot) => {
-      setTeam(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    });
-  }, []);
-
-  useEffect(() => {
-    return onSnapshot(collection(db, 'projects'), (snap) => {
+  const loadData = async () => {
+    try {
+      const [users, projectList] = await Promise.all([
+        usersApi.getAll(),
+        projectsApi.getAll(),
+      ]);
+      setTeam(users.map((u: any) => ({ ...u, id: u.uid })));
       const map: Record<string, string> = {};
-      snap.docs.forEach(d => { map[d.id] = (d.data() as any).name; });
+      projectList.forEach((p: any) => { map[p.id] = p.name; });
       setProjects(map);
-    });
-  }, []);
+    } catch { toast.error('فشل تحميل البيانات'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   const filtered = team.filter(t =>
     t.displayName?.toLowerCase().includes(search.toLowerCase()) ||
@@ -74,8 +73,9 @@ export default function Team() {
 
   const handleToggleStatus = async (member: any) => {
     try {
-      await updateDoc(doc(db, 'users', member.id), { disabled: !member.disabled });
+      await usersApi.update(member.uid || member.id, { disabled: !member.disabled });
       toast.success(member.disabled ? 'تم تفعيل الحساب' : 'تم تعطيل الحساب');
+      loadData();
     } catch { toast.error('فشل تحديث الحساب'); }
   };
 

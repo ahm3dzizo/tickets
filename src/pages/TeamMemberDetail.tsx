@@ -4,10 +4,7 @@ import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { UserForm } from '@/components/team/UserForm';
-import {
-  doc, onSnapshot, collection, query, where, updateDoc
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { usersApi, projectsApi, ticketsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
@@ -87,44 +84,33 @@ export default function TeamMemberDetail() {
   const [editOpen, setEditOpen] = useState(false);
 
   // Fetch member
-  useEffect(() => {
+  const loadData = async () => {
     if (!id) return;
-    return onSnapshot(doc(db, 'users', id), (snap) => {
-      if (snap.exists()) {
-        setMember({ id: snap.id, ...snap.data() });
-      } else {
-        setMember(null);
-      }
-      setLoading(false);
-    });
-  }, [id]);
-
-  // Fetch projects map
-  useEffect(() => {
-    return onSnapshot(collection(db, 'projects'), (snap) => {
+    try {
+      const [memberData, allProjects, allTickets] = await Promise.all([
+        usersApi.get(id),
+        projectsApi.getAll(),
+        ticketsApi.getAll(),
+      ]);
+      setMember(memberData ?? null);
       const map: Record<string, string> = {};
-      snap.docs.forEach(d => { map[d.id] = (d.data() as any).name; });
+      (allProjects as any[]).forEach(p => { map[p.id] = p.name; });
       setProjects(map);
-    });
-  }, []);
+      setTickets((allTickets as any[]).filter(t =>
+        Array.isArray(t.assignedSupervisorIds) && t.assignedSupervisorIds.includes(id)
+      ));
+    } catch { setMember(null); }
+    finally { setLoading(false); }
+  };
 
-  // Fetch tickets assigned to this member
-  useEffect(() => {
-    if (!id) return;
-    const q = query(
-      collection(db, 'tickets'),
-      where('assignedSupervisorIds', 'array-contains', id)
-    );
-    return onSnapshot(q, (snap) => {
-      setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-  }, [id]);
+  useEffect(() => { loadData(); }, [id]);
 
   const handleToggleStatus = async () => {
     if (!member) return;
     try {
-      await updateDoc(doc(db, 'users', member.id), { disabled: !member.disabled });
+      await usersApi.update(member.id, { disabled: !member.disabled });
       toast.success(member.disabled ? 'تم تفعيل الحساب' : 'تم تعطيل الحساب');
+      loadData();
     } catch { toast.error('فشل تحديث الحساب'); }
   };
 

@@ -23,8 +23,7 @@ import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/TicketTable';
 import { DataImport, FieldDef } from '@/components/ui/DataImport';
-import { collection, collectionGroup, onSnapshot, query, orderBy, getDocs, addDoc, serverTimestamp, where, writeBatch, doc, updateDoc } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { classifyTicket } from '@/services/ticketClassifier';
 import { findMatchingSupervisors } from '@/services/supervisorAssignment';
@@ -47,80 +46,45 @@ export default function TicketsList() {
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
 
-  useEffect(() => {
+  const loadData = async () => {
     if (!user) return;
-    const db = getFirestoreDb();
-    const unsub = onSnapshot(collectionGroup(db, 'clients'), snap => {
-      const map: Record<string, Client> = {};
-      snap.docs.forEach(d => { map[d.id] = { id: d.id, ...d.data() } as Client; });
-      setClients(map);
-    });
-    return () => unsub();
-  }, [user?.uid]);
+    try {
+      const [allClients, allProjects] = await Promise.all([
+        clientsApi.getAll(),
+        projectsApi.getAll(),
+      ]);
+      const clientMap: Record<string, Client> = {};
+      allClients.forEach((c: any) => { clientMap[c.id] = c as Client; });
+      setClients(clientMap);
+      const projectMap: Record<string, Project> = {};
+      allProjects.forEach((p: any) => { projectMap[p.id] = p as Project; });
+      setProjects(projectMap);
+
+      const params: Parameters<typeof ticketsApi.getAll>[0] = {};
+      if (user.role === 'supervisor') params.supervisorId = user.uid;
+      else if (user.role !== 'admin' && user.projectIds?.length)
+        params.projectIds = user.projectIds;
+      const allTickets = await ticketsApi.getAll(params);
+      setTickets(allTickets as Ticket[]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const db = getFirestoreDb();
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snap) => {
-      const map: Record<string, Project> = {};
-      snap.docs.forEach(d => { map[d.id] = { id: d.id, ...d.data() } as Project; });
-      setProjects(map);
-    });
-    return () => unsubProjects();
-  }, []);
-
-  useEffect(() => {
-    const db = getFirestoreDb();
-
-    if (!user) return;
-
-    let q: ReturnType<typeof query> | null = null;
-
-    if (user.role === 'admin') {
-      q = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'));
-    } else if (user.role === 'supervisor') {
-      // Supervisors only see tickets assigned to them
-      q = query(collection(db, 'tickets'), where('assignedSupervisorIds', 'array-contains', user.uid));
-    } else if (user.projectIds && user.projectIds.length > 0) {
-      q = query(collection(db, 'tickets'), where('projectId', 'in', user.projectIds));
-    }
-
-    if (!q) {
-      setTickets([]);
-      setLoading(false);
-      return;
-    }
-
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const ticketsData = snapshot.docs
-        .map(d => ({ id: d.id, ...(d.data() as object) } as Ticket))
-        .sort((a, b) => {
-          const ta = (a.createdAt as any)?.toMillis?.() ?? new Date(a.createdAt as any).getTime() ?? 0;
-          const tb = (b.createdAt as any)?.toMillis?.() ?? new Date(b.createdAt as any).getTime() ?? 0;
-          return tb - ta;
-        });
-
-      setTickets(ticketsData);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+    loadData();
+  }, [user]);
 
   // ── Delete all tickets ──────────────────────────────────────
   const handleDeleteAll = async () => {
     if (!deleteConfirm) { setDeleteConfirm(true); return; }
     setDeleteConfirm(false);
     try {
-      const db = getFirestoreDb();
-      const snap = await getDocs(collection(db, 'tickets'));
-      // Firestore batch limit = 500 ops
-      const CHUNK = 499;
-      for (let i = 0; i < snap.docs.length; i += CHUNK) {
-        const batch = writeBatch(db);
-        snap.docs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-      toast.success(`تم حذف ${snap.docs.length} تذكرة بنجاح`);
+      const result = await ticketsApi.deleteAll();
+      toast.success(`تم حذف ${result.count} تذكرة بنجاح`);
+      loadData();
     } catch (err) {
       console.error(err);
       toast.error('فشل حذف التذاكر');
@@ -132,19 +96,16 @@ export default function TicketsList() {
 
   const handleReassignSupervisors = async () => {
     setReassigning(true);
-    const db = getFirestoreDb();
     try {
-      // Get tickets without assigned supervisors
-      const snap = await getDocs(collection(db, 'tickets'));
-      const unassigned = snap.docs.filter(d => {
-        const data = d.data();
-        const noAssignee = !data.assigneeName || data.assigneeName === '---';
-        const noSupervisors = !data.assignedSupervisorIds || data.assignedSupervisorIds.length === 0;
-        return noAssignee && noSupervisors;
+      const activeStatuses = new Set(['open', 'in-progress', 'pending', 'waiting']);
+      const unassigned = tickets.filter(t => {
+        const isActive = activeStatuses.has(String(t.status || '').toLowerCase());
+        const noSupervisors = !t.assignedSupervisorIds || t.assignedSupervisorIds.length === 0;
+        return isActive && noSupervisors;
       });
 
       if (unassigned.length === 0) {
-        toast.info('جميع التذاكر لديها مشرفون مُعيَّنون');
+        toast.info('لا توجد تذاكر نشطة تحتاج إعادة تعيين مشرفين');
         setReassigning(false);
         return;
       }
@@ -155,32 +116,27 @@ export default function TicketsList() {
       toast.loading(`⚙ جارٍ تعيين المشرفين: 0 / ${unassigned.length}`, { id: toastId, duration: Infinity });
 
       let done = 0;
-      const CHUNK = 499;
-      let batchUpdates: { ref: any; data: any }[] = [];
+      const updates: Promise<any>[] = [];
 
-      for (const ticketDoc of unassigned) {
-        const ticket = ticketDoc.data();
+      for (const ticket of unassigned) {
         const ticketType = (ticket.type || 'plumbing') as TicketType;
         const projectId = ticket.projectId || '';
 
         if (!projectId) { done++; noProjectCount++; continue; }
 
         const { TYPE_TO_SPECIALTY } = await import('@/services/ticketClassifier');
-        const detectedTypes: TicketType[] = ticket.detectedTypes?.length ? ticket.detectedTypes : [ticketType];
+        const detectedTypes: TicketType[] = ticket.detectedTypes?.length ? ticket.detectedTypes as TicketType[] : [ticketType];
         const specialties = [...new Set(detectedTypes.map((t: TicketType) => TYPE_TO_SPECIALTY[t]))] as any[];
         const supervisors = await findMatchingSupervisors(projectId, specialties);
         const primary = supervisors[0];
 
         if (primary) {
-          batchUpdates.push({
-            ref: ticketDoc.ref,
-            data: {
-              assigneeName:          primary.name,
-              assignedSupervisorId:  primary.id,
-              assignedSupervisorIds: supervisors.map(s => s.id),
-              assignedSupervisors:   supervisors,
-            },
-          });
+          updates.push(ticketsApi.update(ticket.id, {
+            assigneeName:          primary.name,
+            assignedSupervisorId:  primary.id,
+            assignedSupervisorIds: supervisors.map((s: any) => s.id),
+            assignedSupervisors:   supervisors,
+          }));
         } else {
           noSupervisorCount++;
         }
@@ -191,19 +147,15 @@ export default function TicketsList() {
         }
       }
 
-      // Commit batch writes in chunks of 499
-      for (let i = 0; i < batchUpdates.length; i += CHUNK) {
-        const batch = writeBatch(db);
-        batchUpdates.slice(i, i + CHUNK).forEach(({ ref, data }) => batch.update(ref, data));
-        await batch.commit();
-      }
+      await Promise.all(updates);
 
       toast.success(
-        `✅ تم تعيين المشرفين لـ ${batchUpdates.length} تذكرة` +
+        `✅ تم تعيين المشرفين لـ ${updates.length} تذكرة` +
         (noProjectCount   > 0 ? ` | ${noProjectCount} بدون مشروع`  : '') +
         (noSupervisorCount > 0 ? ` | ${noSupervisorCount} بدون مشرف مطابق` : ''),
         { id: toastId, duration: 8000 }
       );
+      loadData();
     } catch (err) {
       console.error(err);
       toast.error('فشل إعادة تعيين المشرفين');
@@ -219,9 +171,18 @@ export default function TicketsList() {
   };
 
   const handleImportTickets = async (data: any[]) => {
-    const db = getFirestoreDb();
+    if (!importProjectId) {
+      toast.error('اختر المشروع أولاً');
+      return;
+    }
 
-    // ── Abbreviation mismatch check (only when a target project is selected) ──
+    const clientsInProject = Object.values(clients).filter(c => c.projectId === importProjectId).length;
+    if (clientsInProject === 0) {
+      toast.error('لا يمكن استيراد التذاكر قبل إضافة عملاء للمشروع');
+      return;
+    }
+
+    // ── Abbreviation mismatch check ──
     if (importProjectId) {
       const targetAbbr = projects[importProjectId]?.abbreviation?.toUpperCase() ?? '';
       const foreignAbbrs = [...new Set(
@@ -237,41 +198,37 @@ export default function TicketsList() {
       }
     }
 
-    const importPromises = data.map(async (item) => {
+    const allClientsArr = Object.values(clients);
+    const ticketsToCreate: any[] = [];
+
+    for (const item of data) {
       const refNumber    = String(item.refNumber    ?? '').trim();
       const { projectAbbr, villaNumber: refVilla } = parseTicketRef(refNumber);
       const villaNumber  = String(item.villaNumber  ?? refVilla).trim();
       const clientName   = String(item.clientName   ?? '').trim();
       const issuedAtRaw  = item.issuedAt ?? item.date ?? item.issuedDate ?? '';
       const daysOpenRaw  = String(item.daysOpen ?? '').trim();
-      // If no issuedAt but daysOpen provided, derive date going back N days
       const derivedIssuedAt = (!issuedAtRaw && daysOpenRaw && !isNaN(Number(daysOpenRaw)))
-        ? new Date(Date.now() - Number(daysOpenRaw) * 86400 * 1000)
-        : null;
+        ? new Date(Date.now() - Number(daysOpenRaw) * 86400 * 1000) : null;
       const issuedAtStr = issuedAtRaw
         ? (() => { const d = parseIssuedAt(issuedAtRaw); return d ? format(d, 'd/M/yyyy') : String(issuedAtRaw).trim(); })()
         : derivedIssuedAt ? format(derivedIssuedAt, 'd/M/yyyy') : '';
-      const projectName  = String(item.projectName  ?? '').trim();
       const description  = String(item.description  ?? '').trim();
       const assigneeRaw  = String(item.assigneeName ?? '').trim();
       const assigneeName = assigneeRaw === '---' ? '' : assigneeRaw;
       const ticketId     = String(item.ticketId     ?? '').trim();
       const priorityRaw  = String(item.priority     ?? '').trim();
       const typeRaw      = String(item.ticketType   ?? item.type ?? '').trim();
+      const projectName  = String(item.projectName  ?? '').trim();
 
-      // Arabic type → TicketType
       const arabicTypeMap: Record<string, TicketType> = {
         'سباكة': 'plumbing', 'كهرباء': 'electricity', 'أبواب': 'doors',
-        'دهانات': 'paints', 'تشققات': 'cracks', 'سيراميك': 'ceramics',
-        'عزل خزان': 'tank_insulation',
+        'دهانات': 'paints', 'تشققات': 'cracks', 'سيراميك': 'ceramics', 'عزل خزان': 'tank_insulation',
       };
       const fileType = arabicTypeMap[typeRaw] ?? (typeRaw as TicketType) ?? null;
-
-      // Classify description — use rule-based only during bulk import to avoid Gemini 429 rate limits
       const classification = classifyTicket(description);
       const finalType = fileType || classification.primaryType;
 
-      // Find project — importProjectId takes priority, then column-based matching
       const project = importProjectId
         ? (projects[importProjectId] || null)
         : (Object.values(projects) as Project[]).find(
@@ -279,47 +236,31 @@ export default function TicketsList() {
                  (projectAbbr && p.abbreviation === projectAbbr)
           ) || null;
 
-      // Auto-assign supervisors
       const supervisors = project
         ? await findMatchingSupervisors(project.id, classification.requiredSpecialties)
         : [];
       const primarySupervisor = supervisors[0];
 
-      // Look up client by villa number — use project subcollection if project found
+      // Find client from cached clients
       let clientId = '';
       let resolvedClientName = clientName;
       if (villaNumber) {
-        try {
-          const clientQ = project
-            ? query(collection(db, `projects/${project.id}/clients`), where('villaNumber', '==', villaNumber))
-            : query(collection(db, 'clients'), where('villaNumber', '==', villaNumber));
-          const snap = await getDocs(clientQ);
-          if (!snap.empty) {
-            const cd = snap.docs[0];
-            clientId = cd.id;
-            resolvedClientName = (cd.data() as Client).name || clientName;
-          }
-        } catch (_) { /* client not found */ }
+        const found = allClientsArr.find(c =>
+          c.villaNumber === villaNumber && (!project || c.projectId === project.id)
+        );
+        if (found) { clientId = found.id; resolvedClientName = found.name || clientName; }
       }
 
       const priorityNum = priorityRaw ? (isNaN(Number(priorityRaw)) ? 3 : Number(priorityRaw)) : 3;
 
-      // ── Dedup: skip if ticketId already exists ─────────────────
-      if (ticketId) {
-        const dupSnap = await getDocs(
-          query(collection(db, 'tickets'), where('ticketId', '==', ticketId))
-        );
-        if (!dupSnap.empty) return null;
-      }
-
-      return addDoc(collection(db, 'tickets'), {
+      ticketsToCreate.push({
         ticketId,
         refNumber,
         projectAbbr,
         issuedAt: issuedAtStr,
         assigneeName: assigneeName || primarySupervisor?.name || '',
         assignedSupervisorId:  primarySupervisor?.id  || '',
-        assignedSupervisorIds: supervisors.map(s => s.id),
+        assignedSupervisorIds: supervisors.map((s: any) => s.id),
         assignedSupervisors:   supervisors,
         detectedTypes:         classification.allTypes,
         projectId:  project?.id || '',
@@ -330,17 +271,26 @@ export default function TicketsList() {
         type:   finalType,
         status: 'open',
         priority: priorityNum,
-        createdAt: serverTimestamp(),
-        createdBy: user?.uid,
       });
-    });
+    }
 
-    const results = await Promise.all(importPromises);
-    const skipped = results.filter(r => r === null).length;
+    const unresolved = ticketsToCreate.filter(t => !t.clientId);
+    if (unresolved.length > 0) {
+      toast.error(`تعذر استيراد ${unresolved.length} تذكرة لعدم وجود عميل مطابق (رقم فيلا/مشروع)`);
+      return;
+    }
+
+      const withoutSupervisors = ticketsToCreate.filter(t => !t.assignedSupervisorIds || t.assignedSupervisorIds.length === 0);
+      if (withoutSupervisors.length > 0) {
+        toast.error(`تعذر استيراد ${withoutSupervisors.length} تذكرة لعدم وجود مشرفين مطابقين`);
+        return;
+      }
+
+    const result = await ticketsApi.bulkCreate(ticketsToCreate);
     setImportOpen(false);
     setImportProjectId('');
-    if (skipped > 0) toast.info(`تم تخطي ${skipped} تذكرة مكررة`);
-    toast.success(`تم استيراد ${results.length - skipped} تذكرة بنجاح`);
+    toast.success(`تم استيراد ${result.count} تذكرة بنجاح`);
+    loadData();
   };
 
   const importFieldDefs: FieldDef[] = [
@@ -373,7 +323,7 @@ export default function TicketsList() {
       if (aClosed !== bClosed) return aClosed - bClosed;
       const getMs = (t: Ticket) => {
         if (t.issuedAt) { const d = parseIssuedAt(t.issuedAt); if (d) return d.getTime(); }
-        return (t.createdAt as any)?.toMillis?.() ?? new Date(t.createdAt as any).getTime() ?? 0;
+        return new Date(t.createdAt as any).getTime() ?? 0;
       };
       return getMs(a) - getMs(b);
     });
@@ -384,13 +334,11 @@ export default function TicketsList() {
 
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedTicketIds.length === 0) return;
-    const db = getFirestoreDb();
-    const batch = writeBatch(db);
-    selectedTicketIds.forEach(id => batch.update(doc(db, 'tickets', id), { status: newStatus }));
     try {
-      await batch.commit();
+      await ticketsApi.bulkStatus(selectedTicketIds, newStatus);
       toast.success(`تم تحديث حالة ${selectedTicketIds.length} تذكرة`);
       setSelectedTicketIds([]);
+      loadData();
     } catch {
       toast.error('فشل تحديث الحالة');
     }
@@ -465,9 +413,22 @@ export default function TicketsList() {
                   {/* Step 2 — File upload (disabled until project chosen) */}
                   <div className="space-y-2">
                     <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">٢. ارفع ملف Excel</Label>
-                    <div className={importProjectId ? '' : 'opacity-40 pointer-events-none select-none'}>
+                    <div className={importProjectId && Object.values(clients).some(c => c.projectId === importProjectId) ? '' : 'opacity-40 pointer-events-none select-none'}>
                       {!importProjectId && (
                         <p className="text-amber-400 text-xs text-right mb-2 font-medium">⚠ اختر المشروع أولاً لتفعيل الاستيراد</p>
+                      )}
+                      {importProjectId && !Object.values(clients).some(c => c.projectId === importProjectId) && (
+                        <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-right">
+                          <p className="text-amber-300 text-xs font-bold mb-2">لا يمكن استيراد التذاكر: لا يوجد عملاء مضافون لهذا المشروع.</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-9 border-amber-400/40 text-amber-200 hover:text-white"
+                            onClick={() => navigate('/clients')}
+                          >
+                            الانتقال إلى صفحة العملاء
+                          </Button>
+                        </div>
                       )}
                       <DataImport
                         title="استيراد تذاكر"
@@ -554,7 +515,7 @@ export default function TicketsList() {
           selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))}
           clients={Object.values(clients)}
           projects={projects}
-          onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); }}
+          onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }}
         />
       </div>
     </Layout>

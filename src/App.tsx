@@ -40,7 +40,7 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-zinc-950">
+      <div className="flex items-center justify-center h-screen bg-background">
         <img
           src="/logo.jpg"
           alt="Retal"
@@ -52,7 +52,7 @@ function AppContent() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-orange-500/30">
+      <div className="min-h-screen bg-background text-foreground selection:bg-primary/30">
         <Routes>
           <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
           <Route path="/register" element={<Register />} />
@@ -97,7 +97,7 @@ function AppContent() {
             element={user ? <Settings /> : <Navigate to="/login" />} 
           />
         </Routes>
-        <Toaster position="top-right" theme="dark" />
+        <Toaster position="top-right" />
         <PWAInstallPrompt />
         <ProfileCompletionModal open={needsProfileCompletion} />
       </div>

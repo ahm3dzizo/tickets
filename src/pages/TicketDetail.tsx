@@ -25,14 +25,13 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { doc, onSnapshot, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { TYPE_TO_SPECIALTY } from '@/services/ticketClassifier';
 import { findMatchingSupervisors } from '@/services/supervisorAssignment';
-import { NotificationService } from '@/services/notificationService';
 import { toast } from 'sonner';
 
 export default function TicketDetail() {
@@ -59,39 +58,31 @@ export default function TicketDetail() {
   const [apptTime, setApptTime] = useState('');
   const [apptNotes, setApptNotes] = useState('');
   const [apptSaving, setApptSaving] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
 
-  useEffect(() => {
+  const loadData = async () => {
     if (!id) return;
-    const db = getFirestoreDb();
-    const ticketRef = doc(db, 'tickets', id);
-
-    const unsubscribe = onSnapshot(ticketRef, async (snapshot) => {
-      if (snapshot.exists()) {
-        const ticketData = { id: snapshot.id, ...snapshot.data() } as Ticket;
-        setTicket(ticketData);
-
-        // Fetch project
-        const pDoc = await getDoc(doc(db, 'projects', ticketData.projectId));
-        if (pDoc.exists()) {
-          setProject({ id: pDoc.id, ...pDoc.data() } as Project);
-        }
-
-        // Fetch client (only if clientId is set)
-        if (ticketData.clientId && ticketData.projectId) {
-          const cDoc = await getDoc(doc(db, `projects/${ticketData.projectId}/clients`, ticketData.clientId));
-          if (cDoc.exists()) {
-            setClient({ id: cDoc.id, ...cDoc.data() } as Client);
-          }
-        }
-      } else {
-        toast.error('التذكرة غير موجودة');
-        navigate('/tickets');
+    try {
+      const ticketData = await ticketsApi.get(id);
+      if (!ticketData) { toast.error('التذكرة غير موجودة'); navigate('/tickets'); return; }
+      setTicket(ticketData as Ticket);
+      if (ticketData.projectId) {
+        const proj = await projectsApi.get(ticketData.projectId);
+        if (proj) setProject(proj as Project);
       }
+      if (ticketData.clientId && ticketData.projectId) {
+        const projectClients = await clientsApi.getByProject(ticketData.projectId);
+        const found = (projectClients as Client[]).find(c => c.id === ticketData.clientId);
+        if (found) setClient(found);
+      }
+    } catch {
+      navigate('/tickets');
+    } finally {
       setLoading(false);
-    });
+    }
+  };
 
-    return () => unsubscribe();
-  }, [id, navigate]);
+  useEffect(() => { loadData(); }, [id, navigate]);
 
   const typeTranslations: Record<TicketType, string> = {
     'electricity': 'كهرباء',
@@ -145,9 +136,8 @@ export default function TicketDetail() {
     if (!ticket) return;
     setEditSaving(true);
     try {
-      const db = getFirestoreDb();
       const selectedSupervisors = availableSupervisors.filter(s => editAssignedSupervisorIds.includes(s.id));
-      await updateDoc(doc(db, 'tickets', ticket.id), {
+      await ticketsApi.update(ticket.id, {
         status:                 editStatus,
         priority:               isNaN(Number(editPriority)) ? editPriority : Number(editPriority),
         type:                   editTypes[0] as TicketType,
@@ -157,20 +147,9 @@ export default function TicketDetail() {
         assignedSupervisorIds:  editAssignedSupervisorIds,
         assignedSupervisors:    selectedSupervisors,
       });
-      // Notify newly added supervisors only
-      const previousIds: string[] = (ticket.assignedSupervisorIds as string[] | undefined) ?? [];
-      const newlySupervisors = selectedSupervisors.filter(s => !previousIds.includes(s.id));
-      if (newlySupervisors.length > 0) {
-        NotificationService.writeAssignmentNotifications(
-          newlySupervisors,
-          ticket.id,
-          ticket.refNumber,
-          ticket.villaNumber,
-          ticket.description
-        ).catch(console.warn);
-      }
       toast.success('تم تحديث التذكرة');
       setEditOpen(false);
+      loadData();
     } catch {
       toast.error('فشل تحديث التذكرة');
     } finally {
@@ -182,27 +161,15 @@ export default function TicketDetail() {
     if (!ticket) return;
     setApptSaving(true);
     try {
-      const db = getFirestoreDb();
       const appointmentTime = apptDate ? `${apptDate}${apptTime ? ' ' + apptTime : ''}` : '';
-      await updateDoc(doc(db, 'tickets', ticket.id), {
+      await ticketsApi.update(ticket.id, {
         appointmentTime,
         appointmentNotes: apptNotes,
         status: ticket.status === 'open' ? 'pending' : ticket.status,
       });
-      // Write/update appointment reminder notification for all involved parties
-      if (appointmentTime) {
-        const supervisorIds: string[] = (ticket.assignedSupervisorIds as string[] | undefined) ?? [];
-        NotificationService.writeAppointmentReminder(
-          ticket.id,
-          ticket.refNumber,
-          ticket.villaNumber,
-          appointmentTime,
-          supervisorIds,
-          (ticket as any).createdBy
-        ).catch(console.warn);
-      }
       toast.success('تم تحديد الموعد');
       setApptOpen(false);
+      loadData();
     } catch {
       toast.error('فشل حفظ الموعد');
     } finally {
@@ -226,24 +193,6 @@ export default function TicketDetail() {
     const requiredSpecialties = [...new Set(editTypes.map(t => TYPE_TO_SPECIALTY[t]))] as any[];
     findMatchingSupervisors(ticket.projectId, requiredSpecialties).then(setAvailableSupervisors);
   }, [editTypes, editOpen, ticket?.projectId]);
-
-  const handleCloseTicket = async () => {
-    if (!ticket) return;
-    setLoading(true);
-    try {
-      const db = getFirestoreDb();
-      await updateDoc(doc(db, 'tickets', ticket.id), {
-        status: 'closed',
-        closedAt: new Date().toISOString()
-      });
-      toast.success('تم إغلاق التذكرة بنجاح');
-    } catch (error) {
-      console.error('Error closing ticket:', error);
-      toast.error('فشل إغلاق التذكرة');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -292,7 +241,7 @@ export default function TicketDetail() {
             {ticket.status !== 'closed' && (
               <Button 
                 className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-xl px-4 sm:px-6 shadow-lg shadow-emerald-500/20 font-bold h-10 sm:h-11 flex-1 sm:flex-none order-1 sm:order-2"
-                onClick={handleCloseTicket}
+                onClick={() => setCloseDialogOpen(true)}
               >
                 <CheckCircle2 className="w-4 h-4" />
                 إغلاق التذكرة
@@ -514,6 +463,18 @@ export default function TicketDetail() {
             </Card>
           </div>
         </div>
+
+        <CloseTicketDialog
+          open={closeDialogOpen}
+          onOpenChange={setCloseDialogOpen}
+          selectedTickets={[ticket]}
+          clients={client ? [client] : []}
+          projects={project ? { [project.id]: project } : undefined}
+          onSuccess={() => {
+            setCloseDialogOpen(false);
+            loadData();
+          }}
+        />
       </div>
 
       {/* ── Edit Dialog ───────────────────────────────── */}

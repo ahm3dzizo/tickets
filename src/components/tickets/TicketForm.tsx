@@ -27,12 +27,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { collection, onSnapshot, query, addDoc, serverTimestamp, collectionGroup, where, Query, DocumentData, getDocs } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { Project, Client, TicketType } from '@/types';
 import { classifyTicket, TYPE_TO_SPECIALTY } from '@/services/ticketClassifier';
 import { findMatchingSupervisors } from '@/services/supervisorAssignment';
-import { NotificationService } from '@/services/notificationService';
 import { useAuth } from '@/contexts/AuthContext';
 import { DataImport } from '@/components/ui/DataImport';
 import { toast } from 'sonner';
@@ -64,16 +62,15 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
   const isCustomTrigger = !!trigger;
 
   useEffect(() => {
-    const db = getFirestoreDb();
-    let q: Query<DocumentData> = query(collection(db, 'projects'));
-    
-    if (user && user.role !== 'admin' && user.projectIds && user.projectIds.length > 0) {
-      q = query(collection(db, 'projects'), where('__name__', 'in', user.projectIds));
-    }
-
-    return onSnapshot(q, (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project)));
-    });
+    projectsApi.getAll()
+      .then(all => {
+        if (user && user.role !== 'admin' && user.projectIds?.length) {
+          setProjects(all.filter((p: Project) => user.projectIds.includes(p.id)));
+        } else {
+          setProjects(all);
+        }
+      })
+      .catch(() => {});
   }, [user]);
 
   useEffect(() => {
@@ -83,15 +80,8 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
   }, [defaultProjectId]);
 
   useEffect(() => {
-    if (!projectId) {
-      setClients([]);
-      return;
-    }
-    const db = getFirestoreDb();
-    const q = query(collection(db, `projects/${projectId}/clients`));
-    return onSnapshot(q, (snapshot) => {
-      setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
-    });
+    if (!projectId) { setClients([]); return; }
+    clientsApi.getByProject(projectId).then(setClients).catch(() => {});
   }, [projectId]);
 
   // Auto-classify description → suggest types
@@ -117,15 +107,21 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
       toast.error('يرجى ملء جميع الحقول المطلوبة');
       return;
     }
+    if (!clientId) {
+      toast.error('يجب اختيار العميل أولاً قبل إنشاء التذكرة');
+      return;
+    }
     setLoading(true);
 
     try {
-      const db = getFirestoreDb();
       const currentClient = clients.find(c => c.id === clientId);
-      // Auto-assign supervisors based on detected specialties
       const requiredSpecialties = [...new Set(types.map(t => TYPE_TO_SPECIALTY[t]))] as any[];
       const supervisors = projectId ? await findMatchingSupervisors(projectId, requiredSpecialties) : [];
-      const ticketDocRef = await addDoc(collection(db, 'tickets'), {
+      if (supervisors.length === 0) {
+        toast.error('لا يمكن إنشاء التذكرة: لا يوجد مشرفون مطابقون لهذا النوع في المشروع');
+        return;
+      }
+      await ticketsApi.create({
         ticketId,
         refNumber,
         assigneeName: assigneeName || (supervisors[0]?.name ?? ''),
@@ -141,25 +137,16 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
         assignedSupervisors:   supervisors,
         status: 'open',
         priority: Number(priority),
-        createdAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
         createdBy: user?.uid
       });
-      // Notify each assigned supervisor
-      if (supervisors.length > 0) {
-        NotificationService.writeAssignmentNotifications(
-          supervisors,
-          ticketDocRef.id,
-          refNumber,
-          villaNumber,
-          description
-        ).catch(console.warn);
-      }
       toast.success('تم إنشاء التذكرة بنجاح');
       setOpen(false);
       resetForm();
     } catch (error) {
       console.error('Error creating ticket:', error);
-      toast.error('فشل إنشاء التذكرة');
+      const message = error instanceof Error ? error.message : 'فشل إنشاء التذكرة';
+      toast.error(message || 'فشل إنشاء التذكرة');
     } finally {
       setLoading(false);
     }
@@ -178,83 +165,55 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
   };
 
   const handleImportTickets = async (data: any[]) => {
-    const db = getFirestoreDb();
     setLoading(true);
-    
     try {
-      // 1. Fetch all clients across all projects to build a lookup map
-      const clientsSnapshot = await getDocs(query(collectionGroup(db, 'clients')));
-      const allClients = clientsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        projectId: doc.ref.parent.parent?.id,
-        ...doc.data()
-      } as any));
+      const allClients = await clientsApi.getAll();
 
-      const batch = data.map(item => {
-        // Helper to get value from multiple possible keys (Named or Positional)
+      const tickets = data.map(item => {
         const getValue = (keys: string[], index?: number): string => {
-          // 1. Try named keys first
           for (const key of keys) {
             if (item[key] !== undefined && item[key] !== null) return String(item[key]).trim();
           }
-          // 2. Fallback to Positional keys based on user screenshot pattern: EMPTY_N__
           if (index !== undefined) {
-            // Pattern from screenshot: EMPTY__, EMPTY_1__, EMPTY_2__
-            const patterns = [
-              index === 0 ? 'EMPTY__' : `EMPTY_${index}__`,
-              index === 0 ? '__EMPTY' : `__EMPTY_${index}`,
-              index === 0 ? 'EMPTY' : `EMPTY_${index}`
-            ];
-            for (const p of patterns) {
-              if (item[p] !== undefined) return String(item[p]).trim();
-            }
-            // Last resort: find by object keys order
             const objKeys = Object.keys(item);
             if (objKeys[index] !== undefined) return String(item[objKeys[index]]).trim();
           }
           return '';
         };
 
-        const rawTicketId = getValue(['ID', 'ticketId'], 0);
-        const rawRef = getValue(['المرجع', 'refNumber', 'المرجع '], 1);
-        const rawClientName = getValue(['العميل', 'clientName', 'العميل '], 2);
-        const rawVilla = getValue(['رقم الفيلا', 'villaNumber', 'رقم الفيلا '], 3); 
-        const itemDescription = getValue(['الوصف', 'description', 'الوصف '], 4);
-        const itemPriority = getValue(['الأولوية', 'priority', 'ف'], 5);
-        const rawAssignee = getValue(['المسؤول', 'assigneeName', 'المسؤول '], 6);
+        const rawTicketId   = getValue(['ID', 'ticketId'], 0);
+        const rawRef        = getValue(['المرجع', 'refNumber'], 1);
+        const rawClientName = getValue(['العميل', 'clientName'], 2);
+        const rawVilla      = getValue(['رقم الفيلا', 'villaNumber'], 3);
+        const itemDescription = getValue(['الوصف', 'description'], 4);
+        const itemPriority  = getValue(['الأولوية', 'priority'], 5);
+        const rawAssignee   = getValue(['المسؤول', 'assigneeName'], 6);
 
         const projectName = item['المشروع'] || item.projectName || '';
-        const targetProject = projects.find(p => p.name === projectName) || 
+        const targetProject = projects.find(p => p.name === projectName) ||
                              projects.find(p => p.id === projectId) ||
                              projects.find(p => p.abbreviation === item['المشروع']) ||
                              projects[0];
-        
-        // Extract villa number from Reference if it looks like "NTF-296"
+
         let extractedVilla = rawVilla;
         if (!extractedVilla && rawRef.includes('-')) {
           const parts = rawRef.split('-');
-          const lastPart = parts[parts.length - 1];
-          if (!isNaN(Number(lastPart))) {
-            extractedVilla = lastPart;
-          }
+          const last = parts[parts.length - 1];
+          if (!isNaN(Number(last))) extractedVilla = last;
         }
 
         const typeMap: Record<string, string> = {
           'كهرباء': 'electricity', 'سباكة': 'plumbing', 'أبواب': 'doors',
           'دهانات': 'paints', 'تشققات': 'cracks', 'سيراميك': 'ceramics', 'عزل خزان': 'tank_insulation'
         };
-        
         const rawType = item['النوع'] || item.type || '';
         const mappedType = typeMap[rawType] || rawType || 'electricity';
-        
-        // Robust Client Matching:
-        // 1. By Villa Number (extracted or rawValue)
-        // 2. By Client Name
-        const matchedClient = allClients.find(c => 
+
+        const matchedClient = (allClients as Client[]).find(c =>
           c.projectId === targetProject?.id && (
             (extractedVilla && String(c.villaNumber) === String(extractedVilla)) ||
-            (rawClientName && c.name.includes(rawClientName)) ||
-            (rawClientName && rawClientName.includes(c.name))
+            (rawClientName && c.name?.includes(rawClientName)) ||
+            (rawClientName && rawClientName.includes(c.name ?? ''))
           )
         );
 
@@ -263,7 +222,7 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
           finalRef = `${targetProject.abbreviation}-${extractedVilla}`;
         }
 
-        return addDoc(collection(db, 'tickets'), {
+        return {
           ticketId: rawTicketId,
           refNumber: finalRef || '---',
           assigneeName: rawAssignee,
@@ -275,17 +234,30 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
           type: mappedType,
           status: 'open',
           priority: Number(itemPriority || 3),
-          createdAt: serverTimestamp(),
+          createdAt: new Date().toISOString(),
           createdBy: user?.uid
-        });
+        };
       });
 
-      await Promise.all(batch);
+      const unresolved = tickets.filter(t => !t.clientId || !t.projectId);
+      if (unresolved.length > 0) {
+        toast.error(`تعذر استيراد ${unresolved.length} تذكرة لعدم وجود عميل/مشروع مطابق`);
+        return;
+      }
+
+      const withoutSupervisors = tickets.filter(t => !t.assignedSupervisorIds || t.assignedSupervisorIds.length === 0);
+      if (withoutSupervisors.length > 0) {
+        toast.error(`تعذر استيراد ${withoutSupervisors.length} تذكرة لعدم وجود مشرفين مطابقين`);
+        return;
+      }
+
+      await ticketsApi.bulkCreate(tickets);
       toast.success(`تم استيراد ${data.length} تذكرة بنجاح`);
       setOpen(false);
     } catch (error) {
       console.error('Import error:', error);
-      toast.error('حدث خطأ أثناء الاستيراد');
+      const message = error instanceof Error ? error.message : 'حدث خطأ أثناء الاستيراد';
+      toast.error(message || 'حدث خطأ أثناء الاستيراد');
     } finally {
       setLoading(false);
     }

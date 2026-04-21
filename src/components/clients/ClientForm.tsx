@@ -19,8 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { collection, onSnapshot, query, addDoc, serverTimestamp } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { clientsApi, projectsApi } from '@/lib/api';
 import { Project } from '@/types';
 import { toast } from 'sonner';
 
@@ -46,11 +45,7 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton 
   const isCustomTrigger = !!trigger;
 
   useEffect(() => {
-    const db = getFirestoreDb();
-    const q = query(collection(db, 'projects'));
-    return onSnapshot(q, (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project)));
-    });
+    projectsApi.getAll().then(setProjects).catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,8 +57,7 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton 
 
     setLoading(true);
     try {
-      const db = getFirestoreDb();
-      await addDoc(collection(db, `projects/${projectId}/clients`), {
+      await clientsApi.create(projectId, {
         name,
         phone,
         villaNumber,
@@ -78,7 +72,8 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton 
       resetForm();
     } catch (error) {
       console.error('Error creating client:', error);
-      toast.error('فشل إضافة العميل');
+      const message = error instanceof Error ? error.message : 'فشل إضافة العميل';
+      toast.error(message || 'فشل إضافة العميل');
     } finally {
       setLoading(false);
     }
@@ -96,32 +91,22 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton 
 
   const handleImportClients = async (data: any[]) => {
     if (!projectId) { toast.error('اختر المشروع أولاً'); return; }
-    const db = getFirestoreDb();
-    const batch = data.map(item => {
-      // Support both: mapped field keys (from DataImport wizard)
-      // AND direct column values by index (A=villaNumber, B=blockNumber, C=name, D=phone)
+    const rows = data.map(item => {
       const keys = Object.keys(item);
       const byIndex = (i: number) => String(item[keys[i]] ?? '').trim();
-
       const villaNumber    = String(item.villaNumber    || item['رقم الفيلا']    || item['فيلا']        || (keys.length > 0 ? byIndex(0) : '')).trim();
       const blockNumber    = String(item.blockNumber    || item['رقم البلوك']    || item['البلوك']      || item['رقم القطعة'] || (keys.length > 1 ? byIndex(1) : '')).trim();
       const name           = String(item.name           || item['الاسم']         || item['اسم العميل']  || (keys.length > 2 ? byIndex(2) : '')).trim();
       const phone          = String(item.phone          || item['الجوال']        || item['رقم الجوال']  || item['الهاتف']     || (keys.length > 3 ? byIndex(3) : '')).trim();
-
-      console.log('[Import] row:', { villaNumber, blockNumber, name, phone }, '| raw keys:', keys, '| raw:', item);
-
-      return addDoc(collection(db, `projects/${projectId}/clients`), {
-        name,
-        phone,
-        villaNumber,
-        blockNumber,
+      return clientsApi.create(projectId, {
+        name, phone, villaNumber, blockNumber,
         handoverDate: item.handoverDate || item['تاريخ الاستلام'] || '',
         warrantyExpiryDate: item.warrantyExpiryDate || item['انتهاء الضمان'] || '',
         projectId,
         createdAt: new Date().toISOString()
       });
     });
-    await Promise.all(batch);
+    await Promise.all(rows);
     setOpen(false);
   };
 

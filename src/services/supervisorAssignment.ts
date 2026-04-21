@@ -1,5 +1,4 @@
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { usersApi } from '@/lib/api';
 import type { User, Specialty } from '@/types';
 
 export interface AssignedSupervisor {
@@ -19,23 +18,16 @@ export async function findMatchingSupervisors(
   if (!projectId) return [];
 
   try {
-    const db = getFirestoreDb();
+    const allUsers = await usersApi.getAll();
 
-    // ── 1. Query supervisors assigned to this specific project ──
-    const q = query(
-      collection(db, 'users'),
-      where('role', '==', 'supervisor'),
-      where('projectIds', 'array-contains', projectId)
+    // ── 1. Supervisors assigned to this specific project ──
+    let all = allUsers.filter(
+      (u: User) => u.role === 'supervisor' && Array.isArray(u.projectIds) && u.projectIds.includes(projectId)
     );
-    const snap = await getDocs(q);
-    let all = snap.docs.map(d => ({ uid: d.id, ...d.data() } as User));
 
-    // ── 2. If no project-specific supervisors found, fall back to ALL supervisors ──
+    // ── 2. If none found, fall back to ALL supervisors ──
     if (all.length === 0) {
-      const globalSnap = await getDocs(
-        query(collection(db, 'users'), where('role', '==', 'supervisor'))
-      );
-      all = globalSnap.docs.map(d => ({ uid: d.id, ...d.data() } as User));
+      all = allUsers.filter((u: User) => u.role === 'supervisor');
     }
 
     if (all.length === 0) return [];

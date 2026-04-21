@@ -36,8 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { collection, collectionGroup, onSnapshot, query, where, orderBy, doc, writeBatch, updateDoc } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { ticketsApi, projectsApi, clientsApi, techniciansApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
@@ -70,12 +69,10 @@ export default function Dashboard() {
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedTicketIds.length === 0) return;
     try {
-      const db = getFirestoreDb();
-      const batch = writeBatch(db);
-      selectedTicketIds.forEach(id => batch.update(doc(db, 'tickets', id), { status: newStatus }));
-      await batch.commit();
+      await ticketsApi.bulkStatus(selectedTicketIds, newStatus);
       toast.success(`تم تحديث ${selectedTicketIds.length} تذكرة`);
       setSelectedTicketIds([]);
+      loadDashboard();
     } catch {
       toast.error('فشل تحديث الحالة');
     }
@@ -115,87 +112,49 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!user) return;
-    const db = getFirestoreDb();
-    const unsub = onSnapshot(collectionGroup(db, 'clients'), snap => {
+    clientsApi.getAll().then((all: any[]) => {
       const map: Record<string, Client> = {};
-      snap.docs.forEach(d => { map[d.id] = { id: d.id, ...d.data() } as Client; });
+      all.forEach((c: any) => { map[c.id] = c as Client; });
       setClients(map);
-    });
-    return () => unsub();
+    }).catch(() => {});
   }, [user?.uid]);
 
-  useEffect(() => {
+  const loadDashboard = async () => {
     if (!user) return;
-    const db = getFirestoreDb();
+    try {
+      // Projects
+      const allProjects: Project[] = await projectsApi.getAll() as Project[];
+      const filtered = user.role === 'admin'
+        ? allProjects
+        : allProjects.filter(p => user.projectIds?.includes(p.id));
+      setUserProjects(filtered);
+      setStats(prev => ({ ...prev, activeProjects: filtered.length }));
 
-    // 1. Fetch user's projects — counts → activeProjects
-    let projectsQuery: ReturnType<typeof query> | null = null;
-    if (user.role === 'admin') {
-      projectsQuery = query(collection(db, 'projects'));
-    } else if (user.projectIds && user.projectIds.length > 0) {
-      projectsQuery = query(collection(db, 'projects'), where('__name__', 'in', user.projectIds));
-    }
+      // Tickets
+      const params: Parameters<typeof ticketsApi.getAll>[0] = {};
+      if (user.role === 'supervisor')  params.supervisorId = user.uid;
+      else if (user.role !== 'admin' && user.projectIds?.length)
+        params.projectIds = user.projectIds;
+      const allTickets: Ticket[] = await ticketsApi.getAll(params) as Ticket[];
+      setRecentTickets(allTickets.slice(0, 10));
+      setStats(prev => ({
+        ...prev,
+        totalTickets: allTickets.length,
+        openTickets: allTickets.filter(t => t.status === 'open').length,
+      }));
 
-    let unsubscribeProjects = () => {};
-    if (projectsQuery) {
-      unsubscribeProjects = onSnapshot(projectsQuery, (snapshot) => {
-        const projects = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Project));
-        setUserProjects(projects);
-        setStats(prev => ({ ...prev, activeProjects: snapshot.size }));
-        setLoading(false);
-      }, (err) => {
-        console.error('[Dashboard] projects snapshot error:', err.code);
-        setLoading(false);
-      });
-    } else {
-      setUserProjects([]);
+      // Technicians count
+      const techs = await techniciansApi.getAll();
+      setStats(prev => ({ ...prev, totalTechnicians: techs.length }));
+    } catch (err) {
+      console.error('[Dashboard] load error:', err);
+    } finally {
       setLoading(false);
     }
+  };
 
-    // 2. Fetch tickets — counts totalTickets + openTickets, fills recentTickets
-    let ticketsQuery: ReturnType<typeof query> | null = null;
-    if (user.role === 'admin') {
-      ticketsQuery = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'));
-    } else if (user.role === 'supervisor') {
-      ticketsQuery = query(collection(db, 'tickets'), where('assignedSupervisorIds', 'array-contains', user.uid));
-    } else if (user.projectIds && user.projectIds.length > 0) {
-      ticketsQuery = query(collection(db, 'tickets'), where('projectId', 'in', user.projectIds));
-    }
-
-    let unsubscribeTickets = () => {};
-    if (ticketsQuery) {
-      unsubscribeTickets = onSnapshot(ticketsQuery, (snapshot) => {
-        const allTickets = snapshot.docs
-          .map(doc => ({ id: doc.id, ...(doc.data() as any) } as Ticket))
-          .sort((a, b) => {
-            const ta = (a.createdAt as any)?.toMillis?.() ?? new Date(a.createdAt as any).getTime() ?? 0;
-            const tb = (b.createdAt as any)?.toMillis?.() ?? new Date(b.createdAt as any).getTime() ?? 0;
-            return tb - ta;
-          });
-        setRecentTickets(allTickets.slice(0, 10));
-        setStats(prev => ({
-          ...prev,
-          totalTickets: allTickets.length,
-          openTickets: allTickets.filter(t => t.status === 'open').length,
-        }));
-      }, (err) => {
-        console.error('[Dashboard] tickets snapshot error:', err.code);
-        setRecentTickets([]);
-      });
-    } else {
-      setRecentTickets([]);
-    }
-
-    // 3. Technicians count
-    const unsubscribeTechs = onSnapshot(collection(db, 'technicians'), (snap) => {
-      setStats(prev => ({ ...prev, totalTechnicians: snap.size }));
-    });
-
-    return () => {
-      unsubscribeProjects();
-      unsubscribeTickets();
-      unsubscribeTechs();
-    };
+  useEffect(() => {
+    loadDashboard();
   }, [user]);
 
   const filteredDashTickets = recentTickets.filter(t => {
@@ -553,7 +512,7 @@ export default function Dashboard() {
         selectedTickets={recentTickets.filter(t => selectedTicketIds.includes(t.id))}
         clients={Object.values(clients)}
         projects={Object.fromEntries(userProjects.map(p => [p.id, p]))}
-        onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); }}
+        onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }}
       />
     </Layout>
   );

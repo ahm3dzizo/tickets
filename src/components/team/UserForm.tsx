@@ -28,8 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { collection, onSnapshot, query, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { usersApi, projectsApi } from '@/lib/api';
 import { Project, UserRole } from '@/types';
 import { toast } from 'sonner';
 
@@ -64,11 +63,7 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
   const isCustomTrigger = !!trigger;
 
   useEffect(() => {
-    const db = getFirestoreDb();
-    const q = query(collection(db, 'projects'));
-    return onSnapshot(q, (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project)));
-    });
+    projectsApi.getAll().then(setProjects).catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -92,9 +87,8 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
 
     setLoading(true);
     try {
-      const db = getFirestoreDb();
       if (editingUser) {
-        await updateDoc(doc(db, 'users', editingUser.id ?? editingUser.uid), {
+        await usersApi.update(editingUser.id ?? editingUser.uid, {
           displayName,
           employeeId,
           phoneNumber,
@@ -106,9 +100,7 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
         toast.success('تم تحديث بيانات العضو بنجاح');
       } else {
         // Create pending user — employee will complete registration later
-        const userRef = doc(collection(db, 'users'));
-        await setDoc(userRef, {
-          uid: userRef.id,
+        await usersApi.upsert({
           displayName: '',
           email: '',
           employeeId: employeeId.trim(),
@@ -126,7 +118,8 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
       setOpen(false);
     } catch (error) {
       console.error('Error updating user:', error);
-      toast.error('فشل حفظ بيانات العضو');
+      const message = error instanceof Error ? error.message : 'فشل حفظ بيانات العضو';
+      toast.error(message || 'فشل حفظ بيانات العضو');
     } finally {
       setLoading(false);
     }
@@ -253,6 +246,7 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
             </DropdownMenu>
           </div>
 
+          {role !== 'admin' && (
           <div className="space-y-2">
             <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
               التخصصات <span className="text-slate-600 normal-case">(يمكن اختيار أكثر من واحد)</span>
@@ -291,7 +285,9 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
               ))}
             </div>
           </div>
+          )}
 
+          {role !== 'admin' && (
           <div className="space-y-2">
             <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest flex items-center justify-between">
               <span>
@@ -320,6 +316,7 @@ export function UserForm({ trigger, user: editingUser, nativeButton }: UserFormP
               ))}
             </div>
           </div>
+          )}
 
           <div className="space-y-4 pt-4 border-t border-white/5">
             {/* Edit mode: show employeeId + phone in bottom section */}

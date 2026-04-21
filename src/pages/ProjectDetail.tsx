@@ -26,8 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Project, Ticket, Client, User, TicketType } from '@/types';
-import { doc, onSnapshot, collection, query, where, getDocs, getDoc, addDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { ticketsApi, projectsApi, clientsApi, usersApi } from '@/lib/api';
 import { TicketCard } from '@/components/tickets/TicketCard';
 import { TicketTable, BulkActionBar } from '@/components/tickets/TicketTable';
 import { ClientForm } from '@/components/clients/ClientForm';
@@ -60,56 +59,29 @@ export default function ProjectDetail() {
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
 
-  useEffect(() => {
+  const loadData = async () => {
     if (!id) return;
-    const db = getFirestoreDb();
-    
-    // Project listener
-    const unsubProject = onSnapshot(doc(db, 'projects', id), async (snapshot) => {
-      if (snapshot.exists()) {
-        const pData = { id: snapshot.id, ...snapshot.data() } as Project;
-        setProject(pData);
-
-        // Fetch engineers
-        if (pData.engineerIds?.length > 0) {
-          const engs: User[] = [];
-          for (const uid of pData.engineerIds) {
-            const uDoc = await getDoc(doc(db, 'users', uid));
-            if (uDoc.exists()) {
-              engs.push({ uid: uDoc.id, ...uDoc.data() } as User);
-            }
-          }
-          setEngineers(engs);
-        }
-      } else {
-        navigate('/projects');
-      }
-    }, (error) => {
-      console.error("Project listener error:", error);
-    });
-
-    // Tickets listener
-    const unsubTickets = onSnapshot(query(collection(db, 'tickets'), where('projectId', '==', id)), (snapshot) => {
-      setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ticket)));
-    }, (error) => {
-      console.error("Tickets listener error:", error);
-    });
-
-    // Clients listener
-    const unsubClients = onSnapshot(collection(db, `projects/${id}/clients`), (snapshot) => {
-      setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
+    try {
+      const [projectData, allTickets, projectClients, allUsers] = await Promise.all([
+        projectsApi.get(id),
+        ticketsApi.getAll({ projectId: id }),
+        clientsApi.getByProject(id),
+        usersApi.getAll(),
+      ]);
+      if (!projectData) { navigate('/projects'); return; }
+      setProject(projectData as Project);
+      setTickets(allTickets as Ticket[]);
+      setClients(projectClients as Client[]);
+      const engs = (allUsers as User[]).filter(u => (projectData as Project).engineerIds?.includes(u.uid));
+      setEngineers(engs);
+    } catch (err) {
+      console.error('ProjectDetail load error:', err);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      console.error("Clients listener error:", error);
-      setLoading(false);
-    });
+    }
+  };
 
-    return () => {
-      unsubProject();
-      unsubTickets();
-      unsubClients();
-    };
-  }, [id, navigate]);
+  useEffect(() => { loadData(); }, [id, navigate]);
 
   if (loading) {
     return (
@@ -133,18 +105,11 @@ export default function ProjectDetail() {
 
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedTicketIds.length === 0) return;
-    const db = getFirestoreDb();
-    const batch = writeBatch(db);
-
-    selectedTicketIds.forEach(id => {
-      const ref = doc(db, 'tickets', id);
-      batch.update(ref, { status: newStatus });
-    });
-
     try {
-      await batch.commit();
+      await ticketsApi.bulkStatus(selectedTicketIds, newStatus);
       toast.success('تم تحديث حالة التذاكر المختارة');
       setSelectedTicketIds([]);
+      loadData();
     } catch (error) {
       console.error('Error updating tickets:', error);
       toast.error('فشل تحديث حالة التذاكر');
@@ -220,9 +185,8 @@ export default function ProjectDetail() {
   };
 
   const handleImportClients = async (data: any[]) => {
-    const db = getFirestoreDb();
-    const batch = data.map(item => {
-      return addDoc(collection(db, `projects/${project.id}/clients`), {
+    await Promise.all(data.map(item =>
+      clientsApi.create(project.id, {
         name: item.name || item['الاسم'] || '',
         phone: String(item.phone || item['الهاتف'] || ''),
         villaNumber: String(item.villaNumber || item['رقم الفيلا'] || ''),
@@ -230,14 +194,17 @@ export default function ProjectDetail() {
         warrantyExpiryDate: item.warrantyExpiryDate || item['انتهاء الضمان'] || '',
         projectId: project.id,
         createdAt: new Date().toISOString()
-      });
-    });
-    await Promise.all(batch);
+      })
+    ));
     toast.success('تم استيراد العملاء بنجاح');
+    loadData();
   };
 
   const handleImportTickets = async (data: any[]) => {
-    const db = getFirestoreDb();
+    if (clients.length === 0) {
+      toast.error('لا يمكن استيراد التذاكر قبل إضافة عملاء لهذا المشروع');
+      return;
+    }
 
     // Parse 'ABBR-NUMBER' reference → { projectAbbr, villaNumber }
     const parseTicketRef = (ref: string) => {
@@ -245,12 +212,12 @@ export default function ProjectDetail() {
       return m ? { projectAbbr: m[1].toUpperCase(), villaNumber: m[2] } : { projectAbbr: '', villaNumber: '' };
     };
 
-    // ── Abbreviation mismatch check ────────────────────────────────────────
-    const projectAbbr = project!.abbreviation?.toUpperCase() ?? '';
+    // ── Abbreviation mismatch check ──
+    const projectAbbrUpper = project!.abbreviation?.toUpperCase() ?? '';
     const foreignAbbrs = [...new Set(
       data
         .map(item => parseTicketRef(String(item.refNumber ?? '').trim()).projectAbbr)
-        .filter(abbr => abbr && abbr !== projectAbbr)
+        .filter(abbr => abbr && abbr !== projectAbbrUpper)
     )];
     if (foreignAbbrs.length > 0) {
       throw new Error(
@@ -258,14 +225,13 @@ export default function ProjectDetail() {
       );
     }
 
-    // Arabic type names → TicketType
     const arabicTypeMap: Record<string, TicketType> = {
       'سباكة': 'plumbing', 'كهرباء': 'electricity', 'أبواب': 'doors',
       'دهانات': 'paints', 'تشققات': 'cracks', 'سيراميك': 'ceramics',
       'عزل خزان': 'tank_insulation',
     };
 
-    const importPromises = data.map(async (item) => {
+    const ticketData = await Promise.all(data.map(async (item) => {
       const refNumber    = String(item.refNumber    ?? '').trim();
       const { projectAbbr, villaNumber: refVilla } = parseTicketRef(refNumber);
       const villaNumber  = String(item.villaNumber  ?? refVilla).trim();
@@ -278,35 +244,20 @@ export default function ProjectDetail() {
       const typeRaw      = String(item.ticketType   ?? item.type ?? '').trim();
       const fileType     = arabicTypeMap[typeRaw] ?? (typeRaw as TicketType) ?? null;
 
-      // Classify description (rule-based)
       const classification = classifyTicket(description);
       const finalType = fileType || classification.primaryType;
 
-      // Auto-assign supervisors
       const supervisors = await findMatchingSupervisors(project!.id, classification.requiredSpecialties);
       const primarySupervisor = supervisors[0];
 
-      // Look up client by villa number — uses project subcollection
-      let clientId = '';
-      let resolvedClientName = clientName;
-      if (villaNumber) {
-        try {
-          const clientQ = query(
-            collection(db, `projects/${project!.id}/clients`),
-            where('villaNumber', '==', villaNumber)
-          );
-          const snap = await getDocs(clientQ);
-          if (!snap.empty) {
-            const cd = snap.docs[0];
-            clientId = cd.id;
-            resolvedClientName = (cd.data() as Client).name || clientName;
-          }
-        } catch (_) {}
-      }
+      // Look up client from already-loaded clients state
+      const matchedClient = clients.find(c => c.villaNumber === villaNumber);
+      const clientId = matchedClient?.id || '';
+      const resolvedClientName = matchedClient?.name || clientName;
 
       const priorityNum = priorityRaw ? (isNaN(Number(priorityRaw)) ? 3 : Number(priorityRaw)) : 3;
 
-      return addDoc(collection(db, 'tickets'), {
+      return {
         ticketId,
         refNumber,
         projectAbbr,
@@ -324,13 +275,26 @@ export default function ProjectDetail() {
         type:   finalType,
         status: 'open',
         priority: priorityNum,
-        createdAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
         createdBy: currentUser?.uid,
-      });
-    });
+      };
+    }));
 
-    await Promise.all(importPromises);
+    const unresolved = ticketData.filter(t => !t.clientId);
+    if (unresolved.length > 0) {
+      toast.error(`تعذر استيراد ${unresolved.length} تذكرة: لا يوجد عميل مطابق لرقم الفيلا`);
+      return;
+    }
+
+    const withoutSupervisors = ticketData.filter(t => !t.assignedSupervisorIds || t.assignedSupervisorIds.length === 0);
+    if (withoutSupervisors.length > 0) {
+      toast.error(`تعذر استيراد ${withoutSupervisors.length} تذكرة: لا يوجد مشرفون مطابقون`);
+      return;
+    }
+
+    await ticketsApi.bulkCreate(ticketData);
     toast.success(`تم استيراد ${data.length} تذكرة بنجاح`);
+    loadData();
   };
 
   return (
@@ -379,6 +343,15 @@ export default function ProjectDetail() {
                     </Button>
                   }
                 />
+                {clients.length === 0 && (
+                  <Button
+                    variant="outline"
+                    className="border-amber-500/30 bg-amber-500/10 text-amber-200 hover:text-white rounded-2xl gap-2 h-10 px-4"
+                    onClick={() => navigate('/clients')}
+                  >
+                    لا يوجد عملاء - اذهب لصفحة العملاء
+                  </Button>
+                )}
                 <ClientForm projectId={project.id} />
                 <TicketForm projectId={project.id} />
               </>
@@ -496,7 +469,7 @@ export default function ProjectDetail() {
         onOpenChange={setIsCloseDialogOpen}
         selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))}
         clients={clients}
-        onSuccess={() => setSelectedTicketIds([])}
+        onSuccess={() => { setSelectedTicketIds([]); loadData(); }}
       />
     </Layout>
   );

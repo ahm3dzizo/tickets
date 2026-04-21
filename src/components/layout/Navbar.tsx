@@ -15,10 +15,13 @@ import {
   CalendarClock,
   ClipboardList,
   CheckCheck,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
+import { useTheme } from 'next-themes';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,7 +41,18 @@ export function Navbar() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(user?.uid ?? null);
+  const isLight = resolvedTheme === 'light';
+
+  const navigateToSettings = (hash?: 'profile') => {
+    navigate(hash ? `/settings#${hash}` : '/settings');
+    setIsOpen(false);
+  };
+
+  const toggleTheme = () => {
+    setTheme(isLight ? 'dark' : 'light');
+  };
 
   const formatTimeAgo = (ts: any): string => {
     if (!ts) return '';
@@ -73,7 +87,7 @@ export function Navbar() {
     <>
       <div className="flex items-center gap-3 mb-12">
         <img src="/logo.jpg" alt="Retal" className="w-9 h-9 object-contain" />
-        <span className="font-extrabold text-lg tracking-tight text-slate-50">Retal Maintenance System</span>
+        <span className="font-extrabold text-lg tracking-tight text-foreground">Retal Maintenance System</span>
       </div>
 
       <div className="flex-1 space-y-2">
@@ -82,8 +96,8 @@ export function Navbar() {
             <Button
               variant="ghost"
               className={cn(
-                "w-full justify-start gap-3 px-4 py-6 text-slate-400 hover:text-slate-100 hover:bg-white/5 transition-all font-medium",
-                location.pathname === item.path && "text-blue-400 bg-blue-500/10 hover:bg-blue-500/15"
+                'w-full justify-start gap-3 px-4 py-6 text-muted-foreground hover:text-foreground hover:bg-muted transition-all font-medium',
+                location.pathname === item.path && 'text-blue-500 bg-blue-500/10 hover:bg-blue-500/15'
               )}
             >
               <item.icon className="w-4 h-4" />
@@ -94,7 +108,17 @@ export function Navbar() {
       </div>
 
       <div className="mt-auto pt-6 border-t border-border">
-          <div className="flex items-center justify-between mb-6 px-2">
+          <div className="flex items-center justify-between mb-4 px-2 gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={toggleTheme}
+              aria-label={isLight ? 'تفعيل الوضع الداكن' : 'تفعيل الوضع الفاتح'}
+              title={isLight ? 'الوضع الداكن' : 'الوضع الفاتح'}
+            >
+              {isLight ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+            </Button>
             {/* ── Notification Bell ── */}
             <DropdownMenu onOpenChange={(open) => { if (open) markAllRead(); }}>
               <DropdownMenuTrigger
@@ -102,7 +126,7 @@ export function Navbar() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-slate-400 hover:text-slate-100 relative"
+                    className="text-muted-foreground hover:text-foreground relative"
                   />
                 }
               >
@@ -117,20 +141,20 @@ export function Navbar() {
                 side="left"
                 sideOffset={12}
                 align="end"
-                className="!w-80 !min-w-0 bg-[#0f172a] border-border text-slate-200 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden p-0"
+                className="!w-80 !min-w-0 bg-popover border-border text-popover-foreground rounded-2xl shadow-2xl shadow-black/20 overflow-hidden p-0"
               >
                 {/* Header */}
                 <div className="p-4 border-b border-border flex items-center justify-between">
-                  <span className="text-[11px] text-slate-500 font-bold">
+                  <span className="text-[11px] text-muted-foreground font-bold">
                     {unreadCount > 0 ? `${unreadCount} غير مقروء` : 'لا يوجد جديد'}
                   </span>
-                  <span className="text-sm font-bold text-white">الإشعارات</span>
+                  <span className="text-sm font-bold text-foreground">الإشعارات</span>
                 </div>
 
                 {/* Notification list */}
                 <div className="max-h-[340px] overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <div className="py-12 text-center text-slate-500 text-sm">
+                    <div className="py-12 text-center text-muted-foreground text-sm">
                       <Bell className="w-8 h-8 mx-auto mb-3 opacity-20" />
                       لا توجد إشعارات
                     </div>
@@ -139,7 +163,7 @@ export function Navbar() {
                       <div
                         key={n.id}
                         className={cn(
-                          'px-4 py-3 border-b border-border/40 cursor-pointer hover:bg-white/5 transition-colors flex gap-3 items-start',
+                          'px-4 py-3 border-b border-border/40 cursor-pointer hover:bg-muted transition-colors flex gap-3 items-start',
                           !n.read && 'bg-blue-500/5'
                         )}
                         onClick={() => handleNotifClick(n)}
@@ -165,15 +189,15 @@ export function Navbar() {
                               {!n.read && (
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
                               )}
-                              <span className="text-[10px] text-slate-600 font-mono">
+                              <span className="text-[10px] text-muted-foreground font-mono">
                                 {formatTimeAgo(n.createdAt)}
                               </span>
                             </div>
-                            <p className="text-[13px] font-semibold text-white leading-tight truncate">
+                            <p className="text-[13px] font-semibold text-foreground leading-tight truncate">
                               {n.title}
                             </p>
                           </div>
-                          <p className="text-[11px] text-slate-400 line-clamp-2 text-right">
+                          <p className="text-[11px] text-muted-foreground line-clamp-2 text-right">
                             {n.body}
                           </p>
                         </div>
@@ -187,7 +211,7 @@ export function Navbar() {
                   <div className="p-3 border-t border-border">
                     <button
                       onClick={markAllRead}
-                      className="w-full text-[11px] text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-1.5"
+                      className="w-full text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1.5"
                     >
                       <CheckCheck className="w-3.5 h-3.5" />
                       تحديد الكل كمقروء
@@ -199,26 +223,36 @@ export function Navbar() {
           </div>
 
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" className="w-full justify-start gap-3 px-2 h-14 hover:bg-white/5" />}>
+          <DropdownMenuTrigger render={<Button variant="ghost" className="w-full justify-start gap-3 px-2 h-14 hover:bg-muted" />}>
             <Avatar className="w-9 h-9 border border-border">
               <AvatarImage src={user?.photoURL} />
-              <AvatarFallback className="bg-slate-800 text-slate-400">
+              <AvatarFallback className="bg-muted text-muted-foreground">
                 {user?.displayName?.slice(0, 2).toUpperCase() || '??'}
               </AvatarFallback>
             </Avatar>
               <div className="flex flex-col items-end text-xs">
-              <span className="font-semibold text-slate-200 truncate max-w-[110px]">{user?.displayName}</span>
-              <span className="text-slate-500 uppercase tracking-widest text-[9px] font-bold">
+              <span className="font-semibold text-foreground truncate max-w-[110px]">{user?.displayName}</span>
+              <span className="text-muted-foreground uppercase tracking-widest text-[9px] font-bold">
                 {user?.role === 'admin' ? 'مدير النظام' : user?.role === 'engineer' ? 'مهندس مشروع' : 'مشرف'}
               </span>
             </div>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 bg-card border-border text-slate-200">
+          <DropdownMenuContent align="end" className="w-56 bg-card border-border text-card-foreground">
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-slate-400 text-right">حسابي</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-muted-foreground text-right">حسابي</DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end">الملف الشخصي</DropdownMenuItem>
-              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end">الإعدادات</DropdownMenuItem>
+              <DropdownMenuItem
+                className="hover:bg-muted cursor-pointer text-right justify-end"
+                onClick={() => navigateToSettings('profile')}
+              >
+                الملف الشخصي
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="hover:bg-muted cursor-pointer text-right justify-end"
+                onClick={() => navigateToSettings()}
+              >
+                الإعدادات
+              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem 
@@ -240,11 +274,22 @@ export function Navbar() {
       <div className="lg:hidden fixed top-0 left-0 right-0 h-16 border-b border-border bg-card px-4 flex items-center justify-between z-50">
         <div className="flex items-center gap-2">
           <img src="/logo.jpg" alt="Retal" className="w-7 h-7 object-contain" />
-          <span className="font-bold text-slate-50">Retal Maintenance System</span>
+          <span className="font-bold text-foreground">Retal Maintenance System</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)}>
-          {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            aria-label={isLight ? 'تفعيل الوضع الداكن' : 'تفعيل الوضع الفاتح'}
+            title={isLight ? 'الوضع الداكن' : 'الوضع الفاتح'}
+          >
+            {isLight ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)}>
+            {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </Button>
+        </div>
       </div>
 
       {/* Desktop Sidebar */}

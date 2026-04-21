@@ -25,8 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { collection, onSnapshot, query, addDoc, serverTimestamp, where } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { usersApi, projectsApi } from '@/lib/api';
 import { User } from '@/types';
 import { toast } from 'sonner';
 
@@ -50,11 +49,9 @@ export function ProjectForm({ trigger, nativeButton }: ProjectFormProps) {
   const isCustomTrigger = !!trigger;
 
   useEffect(() => {
-    const db = getFirestoreDb();
-    const q = query(collection(db, 'users'), where('role', '==', 'engineer'));
-    return onSnapshot(q, (snapshot) => {
-      setEngineers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as User)));
-    });
+    usersApi.getAll()
+      .then(all => setEngineers(all.filter((u: User) => u.role === 'engineer')))
+      .catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,8 +63,7 @@ export function ProjectForm({ trigger, nativeButton }: ProjectFormProps) {
 
     setLoading(true);
     try {
-      const db = getFirestoreDb();
-      await addDoc(collection(db, 'projects'), {
+      await projectsApi.create({
         name,
         location,
         abbreviation,
@@ -80,7 +76,8 @@ export function ProjectForm({ trigger, nativeButton }: ProjectFormProps) {
       resetForm();
     } catch (error) {
       console.error('Error creating project:', error);
-      toast.error('فشل إنشاء المشروع');
+      const message = error instanceof Error ? error.message : 'فشل إنشاء المشروع';
+      toast.error(message || 'فشل إنشاء المشروع');
     } finally {
       setLoading(false);
     }

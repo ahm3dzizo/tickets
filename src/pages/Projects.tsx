@@ -3,12 +3,12 @@ import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Plus, Briefcase, MapPin, Hash, User, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { projectsApi } from '@/lib/api';
 import { Project } from '@/types';
 import { format } from 'date-fns';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 import { Link } from 'react-router-dom';
 
@@ -19,27 +19,14 @@ export default function Projects() {
 
   useEffect(() => {
     if (!user) return;
-    const db = getFirestoreDb();
-    let q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
-    
-    // Filter projects for non-admin users
-    if (user.role !== 'admin' && user.projectIds && user.projectIds.length > 0) {
-      q = query(collection(db, 'projects'), where('__name__', 'in', user.projectIds), orderBy('createdAt', 'desc'));
-    }
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const projectsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Project[];
-      setProjects(projectsData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Projects listener error:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    projectsApi.getAll().then((all: any[]) => {
+      let list = all as Project[];
+      if (user.role !== 'admin' && user.projectIds?.length) {
+        list = list.filter(p => user.projectIds!.includes(p.id));
+      }
+      setProjects(list);
+    }).catch(() => toast.error('فشل تحميل المشاريع'))
+      .finally(() => setLoading(false));
   }, [user]);
 
   return (

@@ -1,6 +1,7 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 import {
   User, Lock, Bell, Shield, LogOut, ChevronDown, ChevronUp,
   Camera, Save, Eye, EyeOff, CheckCircle2, Loader2, Check,
@@ -8,15 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { auth, db, storage } from '@/lib/firebase';
-import {
-  updateProfile,
-  updatePassword,
-  reauthenticateWithCredential,
-  EmailAuthProvider,
-} from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { authApi, usersApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -40,7 +33,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       onClick={() => onChange(!checked)}
       className={cn(
         'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none',
-        checked ? 'bg-blue-500' : 'bg-white/10',
+        checked ? 'bg-blue-500' : 'bg-muted border border-border',
       )}
     >
       <span className={cn(
@@ -78,12 +71,12 @@ function Section({
           <Icon className="w-6 h-6" />
         </div>
         <div className="flex-1 px-4 text-right">
-          <h3 className="font-bold text-white text-lg">{title}</h3>
-          <p className="text-slate-500 text-sm mt-0.5">{desc}</p>
+          <h3 className="font-bold text-foreground text-lg">{title}</h3>
+          <p className="text-muted-foreground text-sm mt-0.5">{desc}</p>
         </div>
         {open
-          ? <ChevronUp className="w-5 h-5 text-slate-500 shrink-0" />
-          : <ChevronDown className="w-5 h-5 text-slate-500 shrink-0" />}
+          ? <ChevronUp className="w-5 h-5 text-muted-foreground shrink-0" />
+          : <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />}
       </button>
       {open && (
         <div className="px-6 pb-6 border-t border-border/40 pt-5 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -97,8 +90,16 @@ function Section({
 // ════════════════════════════════════════════════════════════════════════════
 export default function Settings() {
   const { user, logout } = useAuth();
+  const location = useLocation();
   const [openSection, setOpenSection] = useState<string | null>(null);
   const toggle = (s: string) => setOpenSection(prev => prev === s ? null : s);
+
+  useEffect(() => {
+    const section = location.hash.replace('#', '');
+    if (section === 'profile') {
+      setOpenSection('profile');
+    }
+  }, [location.hash]);
 
   // ── Profile ────────────────────────────────────────────────────────────────
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
@@ -122,26 +123,13 @@ export default function Settings() {
   };
 
   const handleSaveProfile = async () => {
-    if (!auth.currentUser) return;
+    if (!user) return;
     setSavingProfile(true);
     try {
-      let photoURL = user?.photoURL ?? '';
-
-      if (photoFile) {
-        const sRef = storageRef(storage, `avatars/${auth.currentUser.uid}`);
-        await uploadBytes(sRef, photoFile);
-        photoURL = await getDownloadURL(sRef);
-      }
-
-      await updateProfile(auth.currentUser, {
-        displayName: displayName.trim() || auth.currentUser.displayName,
-        photoURL: photoURL || undefined,
-      });
-
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+      await usersApi.update(user.uid, {
         displayName: displayName.trim(),
         phoneNumber: phoneNumber.trim(),
-        ...(photoURL ? { photoURL } : {}),
+        photoURL: photoPreview,
       });
 
       toast.success('تم حفظ الملف الشخصي');
@@ -162,23 +150,15 @@ export default function Settings() {
   const [savingPass, setSavingPass] = useState(false);
 
   const handleChangePassword = async () => {
-    if (!auth.currentUser?.email) return;
     if (newPass.length < 6) { toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
     if (newPass !== confirmPass) { toast.error('كلمتا المرور غير متطابقتين'); return; }
     setSavingPass(true);
     try {
-      const cred = EmailAuthProvider.credential(auth.currentUser.email, currentPass);
-      await reauthenticateWithCredential(auth.currentUser, cred);
-      await updatePassword(auth.currentUser, newPass);
+      await authApi.changePassword(currentPass, newPass);
       toast.success('تم تغيير كلمة المرور بنجاح');
       setCurrentPass(''); setNewPass(''); setConfirmPass('');
     } catch (err: any) {
-      const code = err?.code ?? '';
-      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-        toast.error('كلمة المرور الحالية غير صحيحة');
-      } else {
-        toast.error(err?.message ?? 'فشل تغيير كلمة المرور');
-      }
+      toast.error(err?.message ?? 'فشل تغيير كلمة المرور');
     } finally {
       setSavingPass(false);
     }
@@ -195,10 +175,10 @@ export default function Settings() {
   const [savingNotifs, setSavingNotifs] = useState(false);
 
   const handleSaveNotifs = async () => {
-    if (!auth.currentUser) return;
+    if (!user) return;
     setSavingNotifs(true);
     try {
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), { notifPrefs: notifs });
+      await usersApi.update(user.uid, { notifPrefs: notifs });
       toast.success('تم حفظ تفضيلات التنبيهات');
     } catch {
       toast.error('فشل الحفظ');
@@ -216,8 +196,8 @@ export default function Settings() {
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-right">
-          <h1 className="text-3xl font-extrabold text-white">الإعدادات</h1>
-          <p className="text-slate-500 mt-1">تخصيص حسابك وتفضيلات النظام</p>
+          <h1 className="text-3xl font-extrabold text-foreground">الإعدادات</h1>
+          <p className="text-muted-foreground mt-1">تخصيص حسابك وتفضيلات النظام</p>
         </div>
 
         {/* ── Profile ─────────────────────────────────────────────────────── */}
@@ -238,8 +218,8 @@ export default function Settings() {
               </div>
               <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
               <div className="text-right">
-                <p className="text-white font-bold text-base">{user?.displayName || '---'}</p>
-                <p className="text-slate-500 text-sm">{user?.email}</p>
+                <p className="text-foreground font-bold text-base">{user?.displayName || '---'}</p>
+                <p className="text-muted-foreground text-sm">{user?.email}</p>
                 <button
                   type="button"
                   onClick={() => photoInputRef.current?.click()}
@@ -253,22 +233,22 @@ export default function Settings() {
             {/* Fields */}
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-slate-500 text-xs font-bold text-right block">الاسم الكامل</Label>
+                <Label className="text-muted-foreground text-xs font-bold text-right block">الاسم الكامل</Label>
                 <Input
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
                   placeholder="الاسم الكامل"
-                  className="bg-white/5 border-border rounded-xl h-11 text-white text-right"
+                  className="bg-background/70 border-border rounded-xl h-11 text-foreground text-right"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-500 text-xs font-bold text-right block">رقم الجوال</Label>
+                <Label className="text-muted-foreground text-xs font-bold text-right block">رقم الجوال</Label>
                 <Input
                   value={phoneNumber}
                   onChange={e => setPhoneNumber(e.target.value)}
                   placeholder="+966xxxxxxxxx"
                   dir="ltr"
-                  className="bg-white/5 border-border rounded-xl h-11 text-white text-left"
+                  className="bg-background/70 border-border rounded-xl h-11 text-foreground text-left"
                 />
               </div>
             </div>
@@ -292,7 +272,7 @@ export default function Settings() {
           <div className="space-y-4">
             {/* Current password */}
             <div className="space-y-1.5">
-              <Label className="text-slate-500 text-xs font-bold text-right block">كلمة المرور الحالية</Label>
+              <Label className="text-muted-foreground text-xs font-bold text-right block">كلمة المرور الحالية</Label>
               <div className="relative">
                 <Input
                   type={showCurrent ? 'text' : 'password'}
@@ -300,12 +280,12 @@ export default function Settings() {
                   onChange={e => setCurrentPass(e.target.value)}
                   placeholder="••••••••"
                   dir="ltr"
-                  className="bg-white/5 border-border rounded-xl h-11 text-white pr-12 text-left"
+                  className="bg-background/70 border-border rounded-xl h-11 text-foreground pr-12 text-left"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrent(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -314,7 +294,7 @@ export default function Settings() {
 
             {/* New password */}
             <div className="space-y-1.5">
-              <Label className="text-slate-500 text-xs font-bold text-right block">كلمة المرور الجديدة</Label>
+              <Label className="text-muted-foreground text-xs font-bold text-right block">كلمة المرور الجديدة</Label>
               <div className="relative">
                 <Input
                   type={showNew ? 'text' : 'password'}
@@ -322,12 +302,12 @@ export default function Settings() {
                   onChange={e => setNewPass(e.target.value)}
                   placeholder="••••••••"
                   dir="ltr"
-                  className="bg-white/5 border-border rounded-xl h-11 text-white pr-12 text-left"
+                  className="bg-background/70 border-border rounded-xl h-11 text-foreground pr-12 text-left"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNew(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -336,7 +316,7 @@ export default function Settings() {
 
             {/* Confirm */}
             <div className="space-y-1.5">
-              <Label className="text-slate-500 text-xs font-bold text-right block">تأكيد كلمة المرور</Label>
+              <Label className="text-muted-foreground text-xs font-bold text-right block">تأكيد كلمة المرور</Label>
               <div className="relative">
                 <Input
                   type="password"
@@ -345,7 +325,7 @@ export default function Settings() {
                   placeholder="••••••••"
                   dir="ltr"
                   className={cn(
-                    'bg-white/5 border-border rounded-xl h-11 text-white text-left',
+                    'bg-background/70 border-border rounded-xl h-11 text-foreground text-left',
                     confirmPass && newPass && confirmPass === newPass && 'border-emerald-500/50',
                   )}
                 />
@@ -385,8 +365,8 @@ export default function Settings() {
               <div key={key} className="flex items-center justify-between gap-4">
                 <Toggle checked={notifs[key]} onChange={v => setNotifs(p => ({ ...p, [key]: v }))} />
                 <div className="text-right flex-1">
-                  <p className="text-white font-bold text-sm">{label}</p>
-                  <p className="text-slate-500 text-xs">{sub}</p>
+                  <p className="text-foreground font-bold text-sm">{label}</p>
+                  <p className="text-muted-foreground text-xs">{sub}</p>
                 </div>
               </div>
             ))}
@@ -409,16 +389,16 @@ export default function Settings() {
           accent="green" open={openSection === 'perms'} onToggle={() => toggle('perms')}>
           <div className="space-y-4">
             {/* Role */}
-            <div className="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
+            <div className="flex items-center justify-between bg-muted/70 rounded-2xl px-5 py-4 border border-border/60">
               <span className="font-bold text-emerald-400 text-sm px-3 py-1 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                 {roleLabels[user?.role ?? ''] ?? user?.role ?? '---'}
               </span>
-              <span className="text-slate-400 text-sm font-bold">الدور الوظيفي</span>
+              <span className="text-muted-foreground text-sm font-bold">الدور الوظيفي</span>
             </div>
 
             {/* Specialties */}
             {(user?.specialties?.length || user?.specialty) && (
-              <div className="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
+              <div className="flex items-center justify-between bg-muted/70 rounded-2xl px-5 py-4 border border-border/60">
                 <div className="flex gap-2 flex-wrap justify-end">
                   {(user?.specialties?.length ? user.specialties : [user.specialty!]).map(s => (
                     <span key={s} className="text-xs font-bold px-3 py-1 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
@@ -426,12 +406,12 @@ export default function Settings() {
                     </span>
                   ))}
                 </div>
-                <span className="text-slate-400 text-sm font-bold shrink-0 mr-4">التخصصات</span>
+                <span className="text-muted-foreground text-sm font-bold shrink-0 mr-4">التخصصات</span>
               </div>
             )}
 
             {/* Projects */}
-            <div className="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
+            <div className="flex items-center justify-between bg-muted/70 rounded-2xl px-5 py-4 border border-border/60">
               <span className="font-bold text-blue-300 text-sm">
                 {user?.role === 'admin'
                   ? 'جميع المشاريع'
@@ -439,19 +419,19 @@ export default function Settings() {
                     ? `${user.projectIds.length} مشروع`
                     : 'لا توجد مشاريع'}
               </span>
-              <span className="text-slate-400 text-sm font-bold">المشاريع</span>
+              <span className="text-muted-foreground text-sm font-bold">المشاريع</span>
             </div>
 
             {/* Employee ID */}
             {user?.employeeId && (
-              <div className="flex items-center justify-between bg-white/5 rounded-2xl px-5 py-4">
-                <span className="font-mono text-slate-300 text-sm">{user.employeeId}</span>
-                <span className="text-slate-400 text-sm font-bold">رقم الموظف</span>
+              <div className="flex items-center justify-between bg-muted/70 rounded-2xl px-5 py-4 border border-border/60">
+                <span className="font-mono text-foreground text-sm">{user.employeeId}</span>
+                <span className="text-muted-foreground text-sm font-bold">رقم الموظف</span>
               </div>
             )}
 
             <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl px-5 py-3 justify-end">
-              <span className="text-xs font-bold">وصولك مؤمَّن عبر Firebase Authentication</span>
+              <span className="text-xs font-bold">وصولك مؤمَّن عبر PostgreSQL + JWT</span>
               <CheckCircle2 className="w-4 h-4 shrink-0" />
             </div>
           </div>
@@ -461,7 +441,7 @@ export default function Settings() {
         <div className="bg-red-500/5 border border-red-500/10 rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-right">
             <h3 className="text-red-400 font-bold text-lg">تسجيل الخروج</h3>
-            <p className="text-slate-500 text-sm mt-0.5">سيتم الخروج من الجلسة الحالية على هذا المتصفح.</p>
+            <p className="text-muted-foreground text-sm mt-0.5">سيتم الخروج من الجلسة الحالية على هذا المتصفح.</p>
           </div>
           <Button
             variant="destructive"
@@ -474,8 +454,8 @@ export default function Settings() {
         </div>
 
         {/* ── Build info ──────────────────────────────────────────────────── */}
-        <p className="text-center text-slate-700 text-[10px] font-bold uppercase tracking-[0.3em] pb-4">
-          MaintenanceFlow Build 2026.4.17
+        <p className="text-center text-muted-foreground/70 text-[10px] font-bold uppercase tracking-[0.3em] pb-4">
+          Retal Maintenance System Build 2026.4.17
         </p>
       </div>
     </Layout>

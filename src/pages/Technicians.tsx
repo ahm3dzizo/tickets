@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { techniciansApi } from '@/lib/api';
 import { HardHat, Phone, Wrench, Plus, Search, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TechnicianForm } from '@/components/technicians/TechnicianForm';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,11 +22,10 @@ export default function Technicians() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    const q = query(collection(db, 'technicians'), orderBy('name', 'asc'));
-    return onSnapshot(q, (snapshot) => {
-      setTechnicians(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    });
+    techniciansApi.getAll()
+      .then((list: any[]) => setTechnicians(list.sort((a, b) => a.name.localeCompare(b.name))))
+      .catch(() => toast.error('فشل تحميل الفنيين'))
+      .finally(() => setLoading(false));
   }, []);
 
   const filtered = technicians.filter(t => 
@@ -102,7 +101,7 @@ export default function Technicians() {
                       <td className="px-6 py-4 text-xs font-bold text-slate-300">
                         {t.specialty === 'mechanics' ? 'ميكانيكا' : t.specialty === 'electricity' ? 'كهرباء' : 'عام'}
                       </td>
-                      <td className="px-6 py-4 text-xs font-mono text-slate-400">{t.phone}</td>
+                      <td className="px-6 py-4 text-xs font-mono text-slate-400">{t.phoneNumber || t.phone || '---'}</td>
                       <td className="px-6 py-4 text-xs">
                         <span className="bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded text-[10px] font-bold">نشط</span>
                       </td>
@@ -113,7 +112,21 @@ export default function Technicians() {
                                 <MoreHorizontal className="w-4 h-4" />
                              </DropdownMenuTrigger>
                              <DropdownMenuContent align="end" className="bg-card border-border text-slate-200">
-                                <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end">تعديل البيانات</DropdownMenuItem>
+                                <div onClick={(e) => e.stopPropagation()}>
+                                  <TechnicianForm
+                                    technician={t}
+                                    onSaved={() => {
+                                      techniciansApi.getAll()
+                                        .then((list: any[]) => setTechnicians(list.sort((a, b) => a.name.localeCompare(b.name))))
+                                        .catch(() => toast.error('فشل تحميل الفنيين'));
+                                    }}
+                                    trigger={
+                                      <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onSelect={(e) => e.preventDefault()}>
+                                        تعديل البيانات
+                                      </DropdownMenuItem>
+                                    }
+                                  />
+                                </div>
                              </DropdownMenuContent>
                           </DropdownMenu>
                         </div>

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { collectionGroup, onSnapshot, query, collection, addDoc, updateDoc, doc, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { clientsApi, projectsApi, ticketsApi } from '@/lib/api';
 import { Search, MoreHorizontal, UserCheck, FileUp, ChevronDown, X, TicketCheck, ExternalLink, Pencil, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,32 +67,32 @@ export default function Clients() {
   const [editBlock, setEditBlock]     = useState('');
   const [editSaving, setEditSaving]   = useState(false);
 
-  useEffect(() => {
-    const unsub = onSnapshot(query(collectionGroup(db, 'clients')), (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, _ref: doc.ref, ...doc.data() }));
-      docs.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', 'ar'));
-      setClients(docs);
-      setLoading(false);
-    });
-    const projUnsub = onSnapshot(query(collection(db, 'projects')), (snap) => {
-      setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as Project)));
-    });
-    return () => { unsub(); projUnsub(); };
-  }, []);
+  const loadData = async () => {
+    try {
+      const [allClients, allProjects] = await Promise.all([
+        clientsApi.getAll(),
+        projectsApi.getAll(),
+      ]);
+      const sorted = [...allClients].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', 'ar'));
+      setClients(sorted);
+      setProjects(allProjects as Project[]);
+    } catch { toast.error('فشل تحميل البيانات'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   // Load tickets when a client is selected
   useEffect(() => {
     if (!selectedClient) { setClientTickets([]); return; }
     setTicketsLoading(true);
-    const q = query(
-      collection(db, 'tickets'),
-      where('villaNumber', '==', selectedClient.villaNumber),
-      where('projectId', '==', selectedClient.projectId),
-    );
-    getDocs(q).then(snap => {
-      setClientTickets(snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as ClientTicket)));
-      setTicketsLoading(false);
-    }).catch(() => setTicketsLoading(false));
+    ticketsApi.getAll({ projectId: selectedClient.projectId })
+      .then((all: any[]) => {
+        const filtered = all.filter((t: any) => t.villaNumber === selectedClient.villaNumber);
+        setClientTickets(filtered as ClientTicket[]);
+      })
+      .catch(() => {})
+      .finally(() => setTicketsLoading(false));
   }, [selectedClient]);
 
   const openEdit = (c: any, e: React.MouseEvent) => {
@@ -109,9 +108,10 @@ export default function Clients() {
     if (!editClient) return;
     setEditSaving(true);
     try {
-      await updateDoc(editClient._ref, { name: editName, phone: editPhone, villaNumber: editVilla, blockNumber: editBlock });
+      await clientsApi.update(editClient.id, { name: editName, phone: editPhone, villaNumber: editVilla, blockNumber: editBlock });
       toast.success('تم تحديث بيانات العميل');
       setEditClient(null);
+      loadData();
     } catch { toast.error('فشل التحديث'); }
     finally { setEditSaving(false); }
   };
@@ -132,15 +132,16 @@ export default function Clients() {
       const blockNumber = String(item.blockNumber || item['رقم البلوك'] || item['البلوك'] || (keys.length > 1 ? byIndex(1) : '')).trim();
       const name        = String(item.name        || item['الاسم']      || (keys.length > 2 ? byIndex(2) : '')).trim();
       const phone       = String(item.phone       || item['الجوال']     || item['الهاتف'] || (keys.length > 3 ? byIndex(3) : '')).trim();
-      return addDoc(collection(db, `projects/${importProjectId}/clients`), {
+      return clientsApi.create(importProjectId, {
         name, phone, villaNumber, blockNumber,
         handoverDate: item.handoverDate || '', warrantyExpiryDate: item.warrantyExpiryDate || '',
-        projectId: importProjectId, createdAt: new Date().toISOString(),
+        projectId: importProjectId,
       });
     });
     await Promise.all(batch);
     toast.success(`تم استيراد ${data.length} عميل بنجاح`);
     setImportOpen(false); setImportProjectId('');
+    loadData();
   };
 
   // Unique block numbers for filter

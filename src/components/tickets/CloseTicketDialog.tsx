@@ -23,8 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Ticket, Client, Project } from '@/types';
-import { doc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
-import { getFirestoreDb } from '@/lib/firebase';
+import { ticketsApi, projectsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -158,6 +157,7 @@ export function CloseTicketDialog({
   };
 
   const currentVilla = selectedTickets[0]?.villaNumber;
+  const isMobileDevice = typeof navigator !== 'undefined' && /android|iphone|ipad|ipod/i.test(navigator.userAgent);
   const targetClient = clients.find(c => c.villaNumber === currentVilla);
   // projectName resolved at submit time via getDoc fallback (avoids collection-list permission issues)
   const staticProjectName = selectedTickets[0]?.projectId
@@ -177,14 +177,13 @@ export function CloseTicketDialog({
       // 1. Build report data and call Python backend
       const mainTicket = selectedTickets[0];
 
-      // Resolve project name: use prop if available, otherwise fetch the single doc directly
+      // Resolve project name: use prop if available, otherwise fetch via API
       let projectName = staticProjectName;
       if (!projectName && mainTicket?.projectId) {
         try {
-          const db = getFirestoreDb();
-          const snap = await getDoc(doc(db, 'projects', mainTicket.projectId));
-          if (snap.exists()) projectName = (snap.data() as Project).name;
-        } catch { /* silently ignore — user might lack access */ }
+          const project = await projectsApi.get(mainTicket.projectId);
+          if (project) projectName = (project as Project).name;
+        } catch { /* silently ignore */ }
       }
       const priorityMap: Record<string, string> = {
         low: 'منخفضة', medium: 'متوسطة', high: 'عالية', urgent: 'عاجلة جداً',
@@ -223,8 +222,8 @@ export function CloseTicketDialog({
 
       const blob = await response.blob();
 
-      const ticketIdsList = selectedTickets.map(t => t.ticketId || t.refNumber).join('-');
-      const fileName = `بلاغ-${ticketIdsList}-${new Date().toISOString().slice(0,10)}.jpg`;
+      const firstTicketNo = selectedTickets[0]?.ticketId || selectedTickets[0]?.refNumber || 'ticket';
+      const fileName = `${mainTicket?.villaNumber || 'villa'}-${firstTicketNo}.jpg`;
       let saved = false;
 
       // 1st priority: pre-selected directory handle
@@ -255,8 +254,7 @@ export function CloseTicketDialog({
       }
 
       // 2nd priority: showSaveFilePicker (desktop Chrome/Edge only — skip on mobile)
-      const isMobile = navigator.maxTouchPoints > 0 && /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-      if (!saved && !isMobile && 'showSaveFilePicker' in window) {
+      if (!saved && !isMobileDevice && 'showSaveFilePicker' in window) {
         try {
           const fileHandle = await (window as any).showSaveFilePicker({
             suggestedName: fileName,
@@ -287,18 +285,15 @@ export function CloseTicketDialog({
         toast.success(`تم تنزيل التقرير إلى مجلد التنزيلات`);
       }
 
-      // 2. Close tickets in Firestore — only after successful save
-      const db = getFirestoreDb();
-      const batch = writeBatch(db);
-      selectedTickets.forEach(ticket => {
-        batch.update(doc(db, 'tickets', ticket.id), {
+      // 2. Close tickets via API — only after successful save
+      await Promise.all(selectedTickets.map(ticket =>
+        ticketsApi.update(ticket.id, {
           status: 'closed',
-          closedAt: serverTimestamp(),
+          closedAt: new Date().toISOString(),
           closureNotes: notes,
           maintenanceItems: maintItems
-        });
-      });
-      await batch.commit();
+        })
+      ));
 
       // 3. Open WhatsApp — use native app deep link on mobile
       if (targetClient?.phone) {
@@ -306,7 +301,6 @@ export function CloseTicketDialog({
         const message = `السلام عليكم، بخصوص بلاغ الصيانة رقم ${waIds}، تم الانتهاء من الصيانة المطلوبة بنجاح. نرجو التفضل بالتوقيع على نموذج الإغلاق. شكراً لتعاونكم.`;
         const phone = targetClient.phone.replace(/[^0-9]/g, '');
         const encodedMsg = encodeURIComponent(message);
-        const isMobileDevice = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
         if (isMobileDevice) {
           // whatsapp:// deep link opens native app directly, bypassing the browser
           window.location.href = `whatsapp://send?phone=${phone}&text=${encodedMsg}`;
@@ -423,7 +417,7 @@ export function CloseTicketDialog({
 
         <DialogFooter className="gap-3 pt-4 border-t border-white/5 flex-col sm:flex-row">
           {/* Folder picker — only show on browsers that support it */}
-          {'showDirectoryPicker' in window && (
+          {'showDirectoryPicker' in window && !isMobileDevice && (
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button
                 type="button"

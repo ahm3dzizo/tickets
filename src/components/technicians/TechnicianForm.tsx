@@ -12,45 +12,84 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { techniciansApi } from '@/lib/api';
+import { projectsApi, usersApi } from '@/lib/api';
+import { Project, User } from '@/types';
 import { toast } from 'sonner';
 
 interface TechnicianFormProps {
   trigger?: React.ReactNode;
   nativeButton?: boolean;
+  technician?: any;
+  onSaved?: () => void;
 }
 
-export function TechnicianForm({ trigger, nativeButton }: TechnicianFormProps) {
+export function TechnicianForm({ trigger, nativeButton, technician, onSaved }: TechnicianFormProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [specialty, setSpecialty] = useState('general');
+  const [name, setName] = useState(technician?.name || '');
+  const [phone, setPhone] = useState(technician?.phoneNumber || technician?.phone || '');
+  const [specialty, setSpecialty] = useState(technician?.specialty || 'general');
+  const [projectId, setProjectId] = useState(technician?.projectId || '');
+  const [supervisorId, setSupervisorId] = useState(technician?.supervisorId || '');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [supervisors, setSupervisors] = useState<User[]>([]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    Promise.all([projectsApi.getAll(), usersApi.getAll()])
+      .then(([allProjects, allUsers]) => {
+        setProjects(allProjects as Project[]);
+        setSupervisors((allUsers as User[]).filter(u => u.role === 'supervisor'));
+      })
+      .catch(() => {});
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone) {
+    if (!name || !phone || !projectId || !supervisorId) {
       toast.error('يرجى ملء جميع الحقول المطلوبة');
       return;
     }
 
     setLoading(true);
     try {
-      await addDoc(collection(db, 'technicians'), {
+      const payload = {
         name,
-        phone,
+        phoneNumber: phone,
         specialty,
-        createdAt: new Date().toISOString()
-      });
-      toast.success('تم إضافة الفني بنجاح');
+        projectId,
+        supervisorId,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (technician?.id) {
+        await techniciansApi.update(technician.id, payload);
+        toast.success('تم تحديث بيانات الفني بنجاح');
+      } else {
+        await techniciansApi.create(payload);
+        toast.success('تم إضافة الفني بنجاح');
+      }
+
       setOpen(false);
-      setName('');
-      setPhone('');
-      setSpecialty('general');
+      if (!technician) {
+        setName('');
+        setPhone('');
+        setSpecialty('general');
+        setProjectId('');
+        setSupervisorId('');
+      }
+      onSaved?.();
     } catch (error) {
       console.error('Error adding technician:', error);
-      toast.error('فشل إضافة الفني');
+      const message = error instanceof Error ? error.message : 'فشل حفظ بيانات الفني';
+      toast.error(message || 'فشل حفظ بيانات الفني');
     } finally {
       setLoading(false);
     }
@@ -71,10 +110,44 @@ export function TechnicianForm({ trigger, nativeButton }: TechnicianFormProps) {
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-white text-right">إضافة فني جديد</DialogTitle>
           <DialogDescription className="text-slate-500 text-right">
-            أدخل بيانات الفني وتخصصه المهني.
+            {technician ? 'تعديل بيانات الفني وتخصصه' : 'أدخل بيانات الفني وتخصصه المهني.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
+          <div className="space-y-2">
+            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">المشروع</Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12" />}>
+                <Briefcase className="w-3 h-3 opacity-50" />
+                <span>{projects.find(p => p.id === projectId)?.name || 'اختر المشروع'}</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-card border-border text-slate-200 w-64 max-h-60 overflow-y-auto">
+                {projects.map((p) => (
+                  <DropdownMenuItem key={p.id} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setProjectId(p.id)}>
+                    {p.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">المشرف المسؤول</Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12" />}>
+                <HardHat className="w-3 h-3 opacity-50" />
+                <span>{supervisors.find(s => s.uid === supervisorId)?.displayName || 'اختر المشرف'}</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-card border-border text-slate-200 w-64 max-h-60 overflow-y-auto">
+                {supervisors.map((s) => (
+                  <DropdownMenuItem key={s.uid} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setSupervisorId(s.uid)}>
+                    {s.displayName}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
           <div className="space-y-2">
             <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">اسم الفني</Label>
             <div className="relative">
@@ -126,7 +199,7 @@ export function TechnicianForm({ trigger, nativeButton }: TechnicianFormProps) {
               disabled={loading}
               className="bg-blue-600 hover:bg-blue-700 text-white px-8 rounded-xl h-12 font-bold shadow-lg shadow-blue-500/20 flex-1"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ الفني'}
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : technician ? 'تحديث الفني' : 'حفظ الفني'}
             </Button>
             <Button 
               type="button" 

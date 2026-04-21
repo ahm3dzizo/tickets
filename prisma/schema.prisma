@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  uid              String    @id
+  email            String    @unique
+  passwordHash     String?
+  displayName      String
+  role             String    @default("engineer")
+  employeeId       String?
+  phoneNumber      String?
+  specialty        String?
+  specialties      String[]  @default([])
+  projectIds       String[]  @default([])
+  photoURL         String?
+  profileCompleted Boolean   @default(false)
+  disabled         Boolean   @default(false)
+  notifPrefs       Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Project {
+  id            String     @id @default(cuid())
+  name          String
+  location      String
+  abbreviation  String
+  engineerIds   String[]   @default([])
+  supervisorIds String[]   @default([])
+  createdAt     DateTime   @default(now())
+  clients       Client[]
+}
+
+model Client {
+  id                 String    @id @default(cuid())
+  projectId          String
+  name               String
+  phone              String
+  villaNumber        String
+  blockNumber        String?
+  handoverDate       String?
+  warrantyExpiryDate String?
+  createdAt          DateTime  @default(now())
+  project            Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tickets            Ticket[]
+}
+
+model Ticket {
+  id                     String    @id @default(cuid())
+  ticketId               String
+  refNumber              String
+  projectAbbr            String?
+  projectId              String
+  clientId               String
+  clientName             String
+  villaNumber            String
+  issuedAt               String?
+  description            String
+  type                   String
+  status                 String    @default("open")
+  priority               String    @default("medium")
+  assigneeName           String?
+  assignedSupervisorId   String?
+  assignedSupervisorIds  String[]  @default([])
+  assignedSupervisors    Json?
+  detectedTypes          String[]  @default([])
+  appointmentTime        String?
+  appointmentNotes       String?
+  closureNotes           String?
+  maintenanceItems       Json?
+  createdAt              DateTime  @default(now())
+  closedAt               DateTime?
+  client                 Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model Technician {
+  id              String   @id @default(cuid())
+  employeeId      String?
+  phoneNumber     String?
+  specialty       String?
+  experienceLevel String?
+  supervisorId    String
+  projectId       String
+  name            String
+  idNumber        String?
+  idPhotoUrl      String?
+  documentUrls    String[] @default([])
+  clothingSize    String?
+  shoeSize        String?
+  createdAt       DateTime @default(now())
+}

@@ -121,8 +121,32 @@ def _display(text):
     return arabic(text) if _has_ar(text) else str(text)
 
 
+def _truncate_to_cell(c, text, font, size, max_width):
+    """Return text trimmed to max_width with trailing ... when needed."""
+    raw = "" if text is None else str(text)
+    shown = _display(raw)
+    if c.stringWidth(shown, font, size) <= max_width:
+        return shown
+
+    suffix = "..."
+    lo, hi = 0, len(raw)
+    best = suffix
+
+    # Binary search longest prefix that fits with ellipsis.
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        candidate = _display(raw[:mid] + suffix)
+        if c.stringWidth(candidate, font, size) <= max_width:
+            best = candidate
+            lo = mid + 1
+        else:
+            hi = mid - 1
+
+    return best
+
+
 def draw_cell(c, x, y, w, h, text="", font=FONT, size=11,
-              align="center", fill=None):
+              align="center", fill=None, ellipsis=False):
     """Draw a bordered cell with optional fill and text"""
     c.setStrokeColor(BORDER_COLOR)
     c.setLineWidth(BORDER_INNER)
@@ -134,8 +158,9 @@ def draw_cell(c, x, y, w, h, text="", font=FONT, size=11,
 
     if text:
         c.setFillColor(colors.black)
-        d = _display(text)
         c.setFont(font, size)
+        max_text_w = max(4 * mm, w - 6 * mm)
+        d = _truncate_to_cell(c, text, font, size, max_text_w) if ellipsis else _display(text)
         tw = c.stringWidth(d, font, size)
         ty = y + h / 2 - size * 0.35
 
@@ -324,7 +349,7 @@ def generate_close_report(ticket_num, villa, customer_name, phone,
         desc = maint_items[i][0] if i < len(maint_items) else ""
         st = maint_items[i][1] if i < len(maint_items) else ""
         draw_cell(c, right - desc_col_w, y - row_h, desc_col_w, row_h,
-                  desc, FONT_B, 11, "right")
+                  desc, FONT_B, 11, "right", ellipsis=True)
         draw_cell(c, left, y - row_h, status_col_w, row_h,
                   st, FONT_B, 11, "center")
         y -= row_h
