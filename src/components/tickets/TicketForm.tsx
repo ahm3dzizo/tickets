@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Plus, 
@@ -55,7 +55,7 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
   const [description, setDescription] = useState('');
   const [types, setTypes] = useState<TicketType[]>(['electricity']);
   const [priority, setPriority] = useState<string | number>('3');
-  
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
 
@@ -195,11 +195,23 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
                              projects.find(p => p.abbreviation === item['المشروع']) ||
                              projects[0];
 
+        let finalRef = rawRef;
         let extractedVilla = rawVilla;
-        if (!extractedVilla && rawRef.includes('-')) {
-          const parts = rawRef.split('-');
-          const last = parts[parts.length - 1];
-          if (!isNaN(Number(last))) extractedVilla = last;
+        
+        // إذا لم يتم العثور على رقم فيلا بشكل مباشر، نحاول استخراجه من الرقم المرجعي النهائي (finalRef)
+        if (!extractedVilla) {
+            if (finalRef && finalRef.includes('-')) {
+                const parts = finalRef.split('-');
+                const lastPart = parts[parts.length - 1];
+                if (!isNaN(Number(lastPart))) {
+                    extractedVilla = lastPart;
+                }
+            }
+        }
+
+        // توليد الرقم المرجعي النهائي إذا لم يكن موجوداً
+        if (!finalRef && targetProject && extractedVilla) {
+          finalRef = `${targetProject.abbreviation}-${extractedVilla}`;
         }
 
         const typeMap: Record<string, string> = {
@@ -216,11 +228,6 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
             (rawClientName && rawClientName.includes(c.name ?? ''))
           )
         );
-
-        let finalRef = rawRef;
-        if (!finalRef && targetProject && extractedVilla) {
-          finalRef = `${targetProject.abbreviation}-${extractedVilla}`;
-        }
 
         return {
           ticketId: rawTicketId,
@@ -430,7 +437,7 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="description" className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">وصف المشكلة</Label>
             <textarea 
