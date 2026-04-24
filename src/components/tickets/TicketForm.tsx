@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 ﻿// src/components/tickets/TicketForm.tsx
+=======
+>>>>>>> 400ebaf86f304e5f4fed8121cb4c313df0677667
 import React, { useState, useEffect } from 'react';
 import { 
   X, 
@@ -63,7 +66,11 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
   const [villaNumber, setVillaNumber] = useState('');
   const [description, setDescription] = useState('');
   const [types, setTypes] = useState<TicketType[]>(['electricity']);
+<<<<<<< HEAD
   const [priority, setPriority] = useState<number>(3);
+=======
+  const [priority, setPriority] = useState<string | number>('3');
+>>>>>>> 400ebaf86f304e5f4fed8121cb4c313df0677667
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -177,7 +184,117 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
     setVillaNumber('');
     setDescription('');
     setTypes(['electricity']);
+<<<<<<< HEAD
     setPriority(3);
+=======
+    setPriority('3');
+  };
+
+  const handleImportTickets = async (data: any[]) => {
+    setLoading(true);
+    try {
+      const allClients = await clientsApi.getAll();
+
+      const tickets = data.map(item => {
+        const getValue = (keys: string[], index?: number): string => {
+          for (const key of keys) {
+            if (item[key] !== undefined && item[key] !== null) return String(item[key]).trim();
+          }
+          if (index !== undefined) {
+            const objKeys = Object.keys(item);
+            if (objKeys[index] !== undefined) return String(item[objKeys[index]]).trim();
+          }
+          return '';
+        };
+
+        const rawTicketId   = getValue(['ID', 'ticketId'], 0);
+        const rawRef        = getValue(['المرجع', 'refNumber'], 1);
+        const rawClientName = getValue(['العميل', 'clientName'], 2);
+        const rawVilla      = getValue(['رقم الفيلا', 'villaNumber'], 3);
+        const itemDescription = getValue(['الوصف', 'description'], 4);
+        const itemPriority  = getValue(['الأولوية', 'priority'], 5);
+        const rawAssignee   = getValue(['المسؤول', 'assigneeName'], 6);
+
+        const projectName = item['المشروع'] || item.projectName || '';
+        const targetProject = projects.find(p => p.name === projectName) ||
+                             projects.find(p => p.id === projectId) ||
+                             projects.find(p => p.abbreviation === item['المشروع']) ||
+                             projects[0];
+
+        let finalRef = rawRef;
+        let extractedVilla = rawVilla;
+        
+        // إذا لم يتم العثور على رقم فيلا بشكل مباشر، نحاول استخراجه من الرقم المرجعي النهائي (finalRef)
+        if (!extractedVilla) {
+            if (finalRef && finalRef.includes('-')) {
+                const parts = finalRef.split('-');
+                const lastPart = parts[parts.length - 1];
+                if (!isNaN(Number(lastPart))) {
+                    extractedVilla = lastPart;
+                }
+            }
+        }
+
+        // توليد الرقم المرجعي النهائي إذا لم يكن موجوداً
+        if (!finalRef && targetProject && extractedVilla) {
+          finalRef = `${targetProject.abbreviation}-${extractedVilla}`;
+        }
+
+        const typeMap: Record<string, string> = {
+          'كهرباء': 'electricity', 'سباكة': 'plumbing', 'أبواب': 'doors',
+          'دهانات': 'paints', 'تشققات': 'cracks', 'سيراميك': 'ceramics', 'عزل خزان': 'tank_insulation'
+        };
+        const rawType = item['النوع'] || item.type || '';
+        const mappedType = typeMap[rawType] || rawType || 'electricity';
+
+        const matchedClient = (allClients as Client[]).find(c =>
+          c.projectId === targetProject?.id && (
+            (extractedVilla && String(c.villaNumber) === String(extractedVilla)) ||
+            (rawClientName && c.name?.includes(rawClientName)) ||
+            (rawClientName && rawClientName.includes(c.name ?? ''))
+          )
+        );
+
+        return {
+          ticketId: rawTicketId,
+          refNumber: finalRef || '---',
+          assigneeName: rawAssignee,
+          projectId: targetProject?.id || '',
+          clientId: matchedClient?.id || '',
+          clientName: matchedClient?.name || rawClientName || 'عميل مجهول',
+          villaNumber: extractedVilla || matchedClient?.villaNumber || '',
+          description: itemDescription || 'لا يوجد وصف',
+          type: mappedType,
+          status: 'open',
+          priority: Number(itemPriority || 3),
+          createdAt: new Date().toISOString(),
+          createdBy: user?.uid
+        };
+      });
+
+      const unresolved = tickets.filter(t => !t.clientId || !t.projectId);
+      if (unresolved.length > 0) {
+        toast.error(`تعذر استيراد ${unresolved.length} تذكرة لعدم وجود عميل/مشروع مطابق`);
+        return;
+      }
+
+      const withoutSupervisors = tickets.filter(t => !t.assignedSupervisorIds || t.assignedSupervisorIds.length === 0);
+      if (withoutSupervisors.length > 0) {
+        toast.error(`تعذر استيراد ${withoutSupervisors.length} تذكرة لعدم وجود مشرفين مطابقين`);
+        return;
+      }
+
+      await ticketsApi.bulkCreate(tickets);
+      toast.success(`تم استيراد ${data.length} تذكرة بنجاح`);
+      setOpen(false);
+    } catch (error) {
+      console.error('Import error:', error);
+      const message = error instanceof Error ? error.message : 'حدث خطأ أثناء الاستيراد';
+      toast.error(message || 'حدث خطأ أثناء الاستيراد');
+    } finally {
+      setLoading(false);
+    }
+>>>>>>> 400ebaf86f304e5f4fed8121cb4c313df0677667
   };
 
   // تحديث الترجمة لتشمل الأنواع الجديدة
