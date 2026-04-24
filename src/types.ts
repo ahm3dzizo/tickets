@@ -1,3 +1,4 @@
+// types.ts
 export type UserRole = 'admin' | 'engineer' | 'supervisor';
 export type Specialty = 'mechanics' | 'electricity' | 'general';
 export type ExperienceLevel = 'senior' | 'junior';
@@ -37,30 +38,51 @@ export interface Client {
   warrantyExpiryDate?: string;
 }
 
-export type TicketType = 'electricity' | 'plumbing' | 'doors' | 'paints' | 'cracks' | 'ceramics' | 'tank_insulation';
+// ✅ الأنواع القديمة + الجديدة (تمديد دون إزالة أي شيء)
+export type TicketType = 
+  // الأنواع القديمة (للتوافق مع البيانات الموجودة)
+  | 'electricity'
+  | 'plumbing'
+  | 'doors'
+  | 'paints'
+  | 'cracks'
+  | 'ceramics'
+  | 'tank_insulation'
+  // الأنواع الجديدة (ميكانيكا، كهرباء، عام)
+  | 'drainage'           // صرف صحي وروائح
+  | 'ac_ventilation'     // تكييف وتهوية ومراوح شفط
+  | 'pumps'              // مضخات وعوامات
+  | 'doors_windows'      // أبواب ونوافذ (موسع)
+  | 'waterproofing'      // عزل مائي ورطوبة
+  | 'grading'            // ميول وترويبة وهبوط
+  | 'pest_control'       // مكافحة حشرات (نمل)
+  | 'cleaning'           // تنظيف مخلفات
+  | 'structural'         // إنشائي (أساسات، أعمدة)
+  | 'painting'           // مرادف لـ paints
+  | 'tiles';             // مرادف لـ ceramics
 
 export interface Ticket {
   id: string;
-  ticketId: string; // The display ID like 182787
-  refNumber: string; // Like NTF-685 (projectAbbr + villaNumber)
-  projectAbbr?: string; // e.g. 'NTF' extracted from refNumber
+  ticketId: string;
+  refNumber: string;
+  projectAbbr?: string;
   projectId: string;
   clientId: string;
-  clientName: string; // Store name for quick search/display as in example
+  clientName: string;
   villaNumber: string;
-  issuedAt?: string; // Original issue date from file e.g. '15/3/2025'
+  issuedAt?: string;
   description: string;
   type: TicketType;
   status: 'open' | 'in-progress' | 'pending' | 'completed' | 'closed' | 'waiting' | 'out-of-scope';
-  priority: 'low' | 'medium' | 'high' | 'urgent' | number; // Support numbers 3, 4, 6, 7, 9
+  priority: 'low' | 'medium' | 'high' | 'urgent' | number;
   assigneeName?: string;
   assignedSupervisorId?: string;
-  assignedSupervisorIds?: string[];   // all auto-assigned supervisors
+  assignedSupervisorIds?: string[];
   assignedSupervisors?: { id: string; name: string; specialty?: string }[];
-  detectedTypes?: string[];           // all classified ticket types
+  detectedTypes?: string[];
   appointmentTime?: string;
   appointmentNotes?: string;
-  createdAt: any; // Using any for Firestore Timestamp
+  createdAt: any;
   closedAt?: any;
   closureNotes?: string;
   maintenanceItems?: { description: string; status: string }[];

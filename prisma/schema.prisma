@@ -23,7 +23,9 @@ model User {
   notifPrefs       Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  // لا حقل createdTickets هنا
 }
+
 
 model Project {
   id            String     @id @default(cuid())
@@ -52,7 +54,7 @@ model Client {
 
 model Ticket {
   id                     String    @id @default(cuid())
-  ticketId               String
+  ticketId               String    @unique
   refNumber              String
   projectAbbr            String?
   projectId              String
@@ -63,7 +65,7 @@ model Ticket {
   description            String
   type                   String
   status                 String    @default("open")
-  priority               String    @default("medium")
+  priority               Int       @default(4)        // changed from String to Int
   assigneeName           String?
   assignedSupervisorId   String?
   assignedSupervisorIds  String[]  @default([])
@@ -75,22 +77,41 @@ model Ticket {
   maintenanceItems       Json?
   createdAt              DateTime  @default(now())
   closedAt               DateTime?
+  createdBy              String?                      // new field (user.uid)
   client                 Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
 }
 
 model Technician {
-  id              String   @id @default(cuid())
-  employeeId      String?
-  phoneNumber     String?
+  id              String    @id @default(cuid())
+  employeeId      String?   @unique
+  phoneNumber     String?   @unique
+  name            String
   specialty       String?
   experienceLevel String?
-  supervisorId    String
-  projectId       String
-  name            String
+  supervisorId    String?
+  projectId       String?
   idNumber        String?
   idPhotoUrl      String?
-  documentUrls    String[] @default([])
+  documentUrls    String[]  @default([])
   clothingSize    String?
   shoeSize        String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+enum TicketStatus {
+  open
+  in_progress
+  pending
+  completed
+  closed
+  waiting
+  out_of_scope
+}
+
+enum TicketPriority {
+  low      // 3
+  medium   // 4
+  medium_high // 6
+  high     // 7
+  urgent   // 9
 }

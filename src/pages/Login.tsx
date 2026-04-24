@@ -1,28 +1,42 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Phone, Lock } from 'lucide-react';
+import { Loader2, Mail, Phone, Lock } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+
+type LoginMethod = 'email' | 'phone';
 
 export default function Login() {
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('phone');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const { login, isFirstLogin } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!identifier.trim() || !password.trim()) {
+      toast.error(`يرجى إدخال ${loginMethod === 'email' ? 'البريد الإلكتروني' : 'رقم الهاتف'} وكلمة المرور`);
+      return;
+    }
+
+    // ✨ التحقق من صيغة الإيميل
+    if (loginMethod === 'email' && !identifier.includes('@')) {
+      toast.error('يرجى إدخال بريد إلكتروني صحيح');
+      return;
+    }
+
     setLoading(true);
     try {
       await login(identifier, password);
-      // navigation handled by App route guard once onAuthStateChanged fires
     } catch (error: any) {
       console.error(error);
-      toast.error('فشل تسجيل الدخول. يرجى التحقق من البيانات.');
+      const errorMessage = error.message || 'فشل تسجيل الدخول. يرجى التحقق من البيانات.';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -40,25 +54,74 @@ export default function Login() {
         </div>
 
         <div className="bg-card/85 border border-border p-8 rounded-3xl backdrop-blur-xl shadow-2xl shadow-black/10">
+          {/* ✨ تبويب اختيار طريقة تسجيل الدخول */}
+          <div className="flex gap-2 mb-6 bg-background/50 p-1 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMethod('phone');
+                setIdentifier('');
+              }}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all",
+                loginMethod === 'phone'
+                  ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+              )}
+            >
+              <Phone className="w-4 h-4" />
+              رقم الهاتف
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMethod('email');
+                setIdentifier('');
+              }}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all",
+                loginMethod === 'email'
+                  ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+              )}
+            >
+              <Mail className="w-4 h-4" />
+              البريد الإلكتروني
+            </button>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label className="text-muted-foreground block text-right text-[10px] font-bold uppercase tracking-widest px-1">البريد الإلكتروني أو رقم الموبايل</Label>
+              <Label className="text-muted-foreground block text-right text-[10px] font-bold uppercase tracking-widest px-1">
+                {loginMethod === 'email' ? 'البريد الإلكتروني' : 'رقم الهاتف'}
+              </Label>
               <div className="relative group">
                 <Input 
-                  type="text"
-                  inputMode="email"
-                  placeholder="05xxxxxxxx أو name@example.com"
+                  type={loginMethod === 'email' ? 'email' : 'tel'}
+                  inputMode={loginMethod === 'email' ? 'email' : 'tel'}
+                  placeholder={loginMethod === 'email' ? 'name@example.com' : '05xxxxxxxx'}
                   className="bg-background/70 border-border focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 text-foreground rounded-2xl h-14 pr-12 text-right transition-all"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   required
                 />
-                <Phone className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-blue-500 transition-colors" />
+                {loginMethod === 'email' ? (
+                  <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-blue-500 transition-colors" />
+                ) : (
+                  <Phone className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-blue-500 transition-colors" />
+                )}
               </div>
+              <p className="text-[10px] text-muted-foreground/70 text-right px-1">
+                {loginMethod === 'email' 
+                  ? 'مدير النظام أو المهندسين يسجلوا بالبريد الإلكتروني'
+                  : 'العملاء يسجلوا برقم الهاتف المسجل لدى مدير النظام'}
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-muted-foreground block text-right text-[10px] font-bold uppercase tracking-widest px-1">كلمة المرور</Label>
+              <Label className="text-muted-foreground block text-right text-[10px] font-bold uppercase tracking-widest px-1">
+                كلمة المرور
+              </Label>
               <div className="relative group">
                 <Input 
                   type="password" 
@@ -70,6 +133,11 @@ export default function Login() {
                 />
                 <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-blue-500 transition-colors" />
               </div>
+              <p className="text-[10px] text-muted-foreground/70 text-right px-1">
+                {loginMethod === 'phone' && isFirstLogin 
+                  ? 'أول مرة تسجل؟ اختر كلمة مرور قوية - هتكون كلمة مرورك الدائمة'
+                  : 'أدخل كلمة المرور الخاصة بك'}
+              </p>
             </div>
 
             <Button 
@@ -81,9 +149,12 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-8 text-center text-sm">
-            <span className="text-muted-foreground">ليس لديك حساب؟ </span>
-            <Link to="/register" className="text-blue-400 font-bold hover:text-blue-300 transition-colors underline-offset-4 hover:underline">إنشاء حساب جديد</Link>
+          <div className="mt-6 text-center">
+            <p className="text-xs text-muted-foreground">
+              {loginMethod === 'email' 
+                ? 'الدخول مخصص للموظفين فقط'
+                : 'أول مرة تسجل؟ مدير النظام هيضيف حسابك الأول'}
+            </p>
           </div>
         </div>
 

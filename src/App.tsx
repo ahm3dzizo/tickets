@@ -9,7 +9,6 @@ import { Toaster } from '@/components/ui/sonner';
 
 import Dashboard from '@/pages/Dashboard';
 import Login from '@/pages/Login';
-import Register from '@/pages/Register';
 import TicketsList from '@/pages/TicketsList';
 import TicketDetail from '@/pages/TicketDetail';
 import Team from '@/pages/Team';
@@ -36,7 +35,12 @@ export default function App() {
 }
 
 function AppContent() {
-  const { user, loading, login, needsProfileCompletion } = useAuth();
+  const { user, loading, requiresProfileCompletion, completeProfile } = useAuth();
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  useEffect(() => {
+    setShowProfileModal(requiresProfileCompletion);
+  }, [requiresProfileCompletion]);
 
   if (loading) {
     return (
@@ -50,56 +54,73 @@ function AppContent() {
     );
   }
 
+  const handleProfileComplete = async (data: { displayName: string; email: string; password: string }) => {
+    try {
+      await completeProfile(data);
+      setShowProfileModal(false);
+      // المستخدم بقى نشط، التطبيق هيعمل re-render تلقائي
+    } catch (error) {
+      // الخطأ هيظهر جوه الموديول
+      throw error;
+    }
+  };
+
   return (
     <Router>
       <div className="min-h-screen bg-background text-foreground selection:bg-primary/30">
         <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={user && !requiresProfileCompletion ? <Navigate to="/" /> : <Login />} />
           <Route 
             path="/" 
-            element={user ? <Dashboard /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <Dashboard /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/tickets" 
-            element={user ? <TicketsList /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <TicketsList /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/projects" 
-            element={user ? <Projects /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <Projects /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/projects/:id" 
-            element={user ? <ProjectDetail /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <ProjectDetail /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/clients" 
-            element={user ? <Clients /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <Clients /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/technicians" 
-            element={user ? <Technicians /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <Technicians /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/tickets/:id" 
-            element={user ? <TicketDetail /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <TicketDetail /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/team" 
-            element={user ? <Team /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <Team /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/team/:id" 
-            element={user ? <TeamMemberDetail /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <TeamMemberDetail /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/settings" 
-            element={user ? <Settings /> : <Navigate to="/login" />} 
+            element={user && !requiresProfileCompletion ? <Settings /> : <Navigate to="/login" />} 
           />
+          {/* ⛔️ تمت إزالة Route /register */}
         </Routes>
         <Toaster position="top-right" />
         <PWAInstallPrompt />
-        <ProfileCompletionModal open={needsProfileCompletion} />
+        
+        {showProfileModal && (
+          <ProfileCompletionModal 
+            open={showProfileModal} 
+            onComplete={handleProfileComplete}
+          />
+        )}
       </div>
     </Router>
   );

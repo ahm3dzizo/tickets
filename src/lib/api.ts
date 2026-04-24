@@ -41,10 +41,12 @@ async function request<T>(
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `HTTP ${res.status}`);
   }
+  
   return res.json() as Promise<T>;
 }
 
@@ -54,9 +56,15 @@ const put  = <T>(path: string, body: unknown) => request<T>('PUT', path, body);
 const del  = <T>(path: string)                 => request<T>('DELETE', path);
 const patch = <T>(path: string, body: unknown) => request<T>('PATCH', path, body);
 
+// ── Auth ─────────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (identifier: string, password: string) =>
-    request<{ token: string; user: any }>('POST', '/auth/login', { identifier, password }, { auth: false }),
+    request<{ token: string; user: any; requiresProfileCompletion?: boolean }>(
+      'POST', 
+      '/auth/login', 
+      { identifier, password }, 
+      { auth: false }
+    ),
   register: (data: { displayName: string; email: string; password: string }) =>
     request<{ token: string; user: any }>('POST', '/auth/register', data, { auth: false }),
   changePassword: (currentPassword: string, newPassword: string) =>
@@ -79,6 +87,9 @@ export const usersApi = {
       : `?phoneNumber=${encodeURIComponent(params.phoneNumber ?? '')}`;
     return get<any | null>(`/users/find/by-employee${q}`);
   },
+  // ✨ جديد: إكمال بيانات المستخدم المعلق 
+  completeProfile: (data: { displayName: string; email: string; password: string }) =>
+    post<{ token?: string; user: any }>('/users/complete-profile', data),
 };
 
 // ── Projects ─────────────────────────────────────────────────────────────────
