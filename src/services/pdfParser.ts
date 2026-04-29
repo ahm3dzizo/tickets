@@ -1,4 +1,4 @@
-﻿import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist';
 import PdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorkerUrl;
@@ -16,13 +16,13 @@ export interface ParsedTicketRow {
 
 export type PdfParseProgress = (done: number, total: number) => void;
 
-const GEMINI_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY as string | undefined;
+const GEMINI_KEY = (process as any).env?.GEMINI_API_KEY as string | undefined;
 
-const GEMINI_PROMPT = `هذه صور لكل صفحات تقرير تذاكر صيانة عربي RTL (كل صورة = صفحة واحدة).
-استخرج كل تذكرة صيانة من جميع الصفحات وأعدها كـ JSON array واحد يشمل كل التذاكر.
-لكل تذكرة أرجع هذه الحقول بالضبط:
-- ticketId, refNumber (مثل NTF-123), clientName, date (d/M/yyyy), daysOpen (رقم فقط), description, assigneeName, priority
-أجب بـ JSON array فقط بدون أي نص إضافي أو markdown:
+const GEMINI_PROMPT = `??? ??? ??? ????? ????? ????? ????? ???? RTL (?? ???? = ???? ?????).
+?????? ?? ????? ????? ?? ???? ??????? ?????? ?? JSON array ???? ???? ?? ???????.
+??? ????? ???? ??? ?????? ??????:
+- ticketId, refNumber (??? NTF-123), clientName, date (d/M/yyyy), daysOpen (??? ???), description, assigneeName, priority
+??? ?? JSON array ??? ???? ?? ?? ????? ?? markdown:
 [{"ticketId":"...","refNumber":"...","clientName":"...","date":"...","daysOpen":"...","description":"...","assigneeName":"...","priority":"..."}]`;
 
 async function renderPageToBase64(page: pdfjsLib.PDFPageProxy, scale = 1.2): Promise<string> {
@@ -32,11 +32,11 @@ async function renderPageToBase64(page: pdfjsLib.PDFPageProxy, scale = 1.2): Pro
   canvas.height = viewport.height;
   const ctx = canvas.getContext('2d')!;
   await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-  // JPEG at 70% quality — good enough for Arabic text OCR
+  // JPEG at 70% quality � good enough for Arabic text OCR
   return canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
 }
 
-/** Parse retryDelay string like "35s" or "35.123s" → milliseconds */
+/** Parse retryDelay string like "35s" or "35.123s" ? milliseconds */
 function parseRetryDelayMs(err: any): number {
   try {
     const detail = err?.error?.details?.find((d: any) => d['@type']?.includes('RetryInfo'));
@@ -79,7 +79,7 @@ async function extractBatchWithGemini(
     generationConfig: { temperature: 0, maxOutputTokens: 8192 },
   };
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
   );
   if (!res.ok) {
@@ -89,7 +89,7 @@ async function extractBatchWithGemini(
       // Log full quota violation details
       const violations = err?.error?.details?.find((d: any) => d['@type']?.includes('QuotaFailure'))?.violations ?? [];
       console.warn(`[pdfParser] 429 violations:`, violations.map((v: any) => v.quotaId).join(', '));
-      console.warn(`[pdfParser] 429 — waiting ${Math.round(waitMs / 1000)}s then retry…`);
+      console.warn(`[pdfParser] 429 � waiting ${Math.round(waitMs / 1000)}s then retry�`);
       await new Promise(r => setTimeout(r, waitMs));
       return extractBatchWithGemini(pages, geminiKey, attempt + 1);
     }
@@ -128,9 +128,9 @@ function groupIntoRows(items: RawItem[], yTol = 6): RawItem[][] {
   return [...buckets.entries()].sort(([a], [b]) => b - a).map(([, row]) => row.sort((a, b) => b.x - a.x));
 }
 
-const HEADER_KEYWORDS = ['مسؤول', 'مهندس', 'وصف', 'تاريخ', 'عميل', 'مرجع', 'NTF', 'صيانة', 'أيام', 'الأيام'];
+const HEADER_KEYWORDS = ['?????', '?????', '???', '?????', '????', '????', 'NTF', '?????', '????', '??????'];
 const DATE_RE = /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/;
-const ASSIGNEE_PATTERNS = ['محمد سعد', 'Ahmed Mohamed', 'احمد', 'أحمد', 'محمد', 'مكرره', 'مكرر'];
+const ASSIGNEE_PATTERNS = ['???? ???', 'Ahmed Mohamed', '????', '????', '????', '?????', '????'];
 
 interface ColBounds { minX: number; maxX: number; name: string }
 
@@ -170,7 +170,7 @@ function parseRowRegex(rowText: string): ParsedTicketRow | null {
   let assigneeName = '', descRaw = afterDate;
   for (const p of ASSIGNEE_PATTERNS) {
     const idx = descRaw.lastIndexOf(p);
-    if (idx !== -1) { assigneeName = (p === 'مكرره' || p === 'مكرر') ? '' : p; descRaw = descRaw.slice(0, idx).trim(); break; }
+    if (idx !== -1) { assigneeName = (p === '?????' || p === '????') ? '' : p; descRaw = descRaw.slice(0, idx).trim(); break; }
   }
   const priorityMatches = [...descRaw.matchAll(/(?<!\d)([1-9])(?!\d)/g)];
   const pm = priorityMatches.pop();
@@ -210,28 +210,28 @@ async function parsePdfFallback(pdf: pdfjsLib.PDFDocumentProxy): Promise<ParsedT
           const found = Object.entries(byName).find(([n]) => keys.some(kw => n.includes(kw)));
           return found ? found[1] : '';
         };
-        let assigneeName = getNamed('مسؤول', 'مهندس', 'مشرف');
+        let assigneeName = getNamed('?????', '?????', '????');
         if (!assigneeName) {
           for (const p of ASSIGNEE_PATTERNS) {
-            if (colValues.join(' ').includes(p) && p !== 'مكرره' && p !== 'مكرر') { assigneeName = p; break; }
+            if (colValues.join(' ').includes(p) && p !== '?????' && p !== '????') { assigneeName = p; break; }
           }
         }
-        let description = (getNamed('وصف', 'مشكل') + ' ' + descExtra).replace(/\s+/g, ' ').trim();
+        let description = (getNamed('???', '????') + ' ' + descExtra).replace(/\s+/g, ' ').trim();
         const ntfMatch = rowText.match(/\bNTF-\d+\b/);
         const refNumber = ntfMatch ? ntfMatch[0] : '';
         const idMatch = rowText.match(/\b(\d{5,6})\b/);
         const ticketId = idMatch ? idMatch[1] : '';
         const dateMatch = DATE_RE.exec(rowText);
         const date = dateMatch ? dateMatch[0] : '';
-        let daysOpen = getNamed('أيام', 'الأيام', 'عدد');
+        let daysOpen = getNamed('????', '??????', '???');
         if (!daysOpen) { const m = rowText.match(/\b([1-9]\d{1,2})\b/); if (m) daysOpen = m[1]; }
         daysOpen = daysOpen.replace(/\D/g, '');
-        let clientName = getNamed('عميل', 'الاسم');
+        let clientName = getNamed('????', '?????');
         if (!clientName) {
           const afterNtf = rowText.slice(rowText.indexOf(refNumber) + refNumber.length).trim();
           clientName = date ? afterNtf.slice(0, afterNtf.indexOf(date)).trim() : afterNtf.slice(0, 60).trim();
         }
-        const priority = getNamed('فئة', 'أولوية', 'priority').match(/\b([1-9])\b/)?.[1] ?? '';
+        const priority = getNamed('???', '??????', 'priority').match(/\b([1-9])\b/)?.[1] ?? '';
         if (refNumber) parsed = { ticketId, refNumber, clientName, date, daysOpen, description, priority, assigneeName };
       } else {
         let j = i + 1, combined = rowText;

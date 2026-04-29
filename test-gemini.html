@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>اختبار Gemini API للتصنيف</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 2rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #38bdf8; }
+    p.sub { color: #64748b; font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card-title { font-size: 0.8rem; color: #64748b; font-weight: bold; margin-bottom: 0.75rem; }
+
+    label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.4rem; }
+    textarea, input, select {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 0.7rem;
+      color: #e2e8f0;
+      font-size: 0.95rem;
+      font-family: inherit;
+      margin-bottom: 0.75rem;
+    }
+    textarea { min-height: 80px; resize: vertical; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: #38bdf8; }
+
+    .btn {
+      padding: 0.7rem 1.5rem;
+      border: none;
+      border-radius: 10px;
+      font-weight: bold;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: #334155; color: #94a3b8; }
+    .btn-secondary:hover { background: #475569; color: white; }
+
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: bold; }
+    .badge-blue { background: #1e3a5f; color: #60a5fa; }
+    .badge-green { background: #14532d; color: #4ade80; }
+    .badge-red { background: #450a0a; color: #f87171; }
+
+    .result-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1rem;
+      margin-top: 0.75rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      direction: ltr;
+      text-align: left;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .result-box.success { border-color: #166534; }
+    .result-box.error { border-color: #991b1b; }
+
+    .status-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      margin-left: 0.5rem;
+    }
+    .status-dot.on { background: #4ade80; box-shadow: 0 0 8px #4ade8066; }
+    .status-dot.off { background: #f87171; }
+
+    .flex { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    .mt-1 { margin-top: 0.75rem; }
+    .mb-1 { margin-bottom: 0.75rem; }
+    .text-sm { font-size: 0.8rem; }
+    .text-muted { color: #64748b; }
+    .text-green { color: #4ade80; }
+    .text-red { color: #f87171; }
+    .text-blue { color: #60a5fa; }
+    .text-yellow { color: #fbbf24; }
+    .text-center { text-align: center; }
+    .hidden { display: none; }
+
+    .preset-btn {
+      padding: 0.3rem 0.7rem;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .preset-btn:hover { border-color: #38bdf8; color: #38bdf8; }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: right; padding: 0.5rem; color: #64748b; border-bottom: 1px solid #334155; }
+    td { padding: 0.5rem; border-bottom: 1px solid #1e293b; }
+  </style>
+</head>
+<body>
+  <h1>🧪 اختبار Gemini API للتصنيف</h1>
+  <p class="sub">اختبر تصنيف Gemini AI لتذاكر الصيانة — يحلل النص الكامل مش بس كلمات مفتاحية</p>
+
+  <div class="card">
+    <div class="flex-between mb-1">
+      <span class="card-title">حالة Gemini API</span>
+      <span id="statusBadge"><span class="status-dot off"></span> جارٍ الفحص...</span>
+    </div>
+    <div class="flex">
+      <input type="text" id="apiKeyInput" placeholder="أدخل GEMINI_API_KEY..." style="flex:1;margin:0" value="">
+      <button class="btn btn-secondary" onclick="testApiKey()">تحديث واختبار</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">اختبار تصنيف فردي</div>
+    <label>وصف المشكلة</label>
+    <textarea id="descriptionInput">تسريب مياه من الحمام مع تشققات في الجدران</textarea>
+    <div class="flex mb-1">
+      <button class="preset-btn" onclick="setPreset('تسريب مياه من الحمام مع تشققات في الجدران')">تسريب + تشققات</button>
+      <button class="preset-btn" onclick="setPreset('لمبة الكهرباء في الممر لا تعمل وفيشة الحائط محروقة')">لمبة + فيشة</button>
+      <button class="preset-btn" onclick="setPreset('باب الكراج لا يغلق والمقبض مكسور')">باب كراج</button>
+      <button class="preset-btn" onclick="setPreset('صرف الحمام مسدود وريحة كريهة')">صرف مسدود</button>
+      <button class="preset-btn" onclick="setPreset('عزل سطح المنزل يحتاج تجديد بسبب تسريب أمطار')">عزل سطح</button>
+    </div>
+    <button class="btn btn-primary" id="classifyBtn" onclick="testClassify()">🔍 تصنيف</button>
+    <div id="singleResult" class="hidden">
+      <div class="flex-between mt-1">
+        <span><strong class="text-blue">النتيجة:</strong></span>
+        <span id="sourceBadge"></span>
+      </div>
+      <div class="result-box" id="singleResultBox"></div>
+      <div id="supervisorsList" class="mt-1 text-sm"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">اختبار مقارنة: Gemini vs الكلمات المفتاحية</div>
+    <p class="text-sm text-muted mb-1">نفس الوصف يُرسل إلى الطريقتين — قارن الفرق</p>
+    <div id="compareResult">
+      <p class="text-sm text-muted">اضغط "مقارنة" تحت</p>
+    </div>
+    <button class="btn btn-primary" onclick="testCompare()">🆚 مقارنة</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">اختبار Bulk (تصنيف دفعة واحدة)</div>
+    <label>أدخل وصفاً واحداً لكل سطر</label>
+    <textarea id="bulkInput" style="min-height:120px">تسريب مياه من الحمام
+لمبة الكهرباء لا تعمل
+باب الكراج لا يغلق
+تشققات في جدار غرفة المعيشة
+صرف الحمام مسدود</textarea>
+    <button class="btn btn-primary" onclick="testBulk()">📦 تصنيف دفعة</button>
+    <div id="bulkResult" class="hidden mt-1">
+      <div class="result-box" id="bulkResultBox"></div>
+    </div>
+  </div>
+
+  <script>
+    // Load saved key
+    const savedKey = localStorage.getItem('gemini_test_key') || '';
+    document.getElementById('apiKeyInput').value = savedKey || 'AIzaSyB08crs7qjOcAttdWR8feapcZhOMUFehVs';
+
+    const VALID_TYPES = [
+      "plumbing","electricity","doors_windows","cracks","ceramics",
+      "tank_insulation","drainage","ac_ventilation","pumps",
+      "waterproofing","grading","pest_control","cleaning","structural","paints",
+    ];
+
+    const TYPE_LABELS = {
+      plumbing:'سباكة', electricity:'كهرباء', doors_windows:'أبواب ونوافذ',
+      cracks:'تشققات', ceramics:'سيراميك', tank_insulation:'عزل خزان',
+      drainage:'صرف صحي', ac_ventilation:'تكييف وتهوية', pumps:'مضخات',
+      waterproofing:'عزل مائي', grading:'ميول وترويبة', pest_control:'مكافحة حشرات',
+      cleaning:'تنظيف', structural:'إنشائي', paints:'دهانات',
+    };
+
+    function getKey() {
+      const k = document.getElementById('apiKeyInput').value.trim();
+      localStorage.setItem('gemini_test_key', k);
+      return k;
+    }
+
+    async function testApiKey() {
+      const key = getKey();
+      const badge = document.getElementById('statusBadge');
+      if (!key) { badge.innerHTML = '<span class="status-dot off"></span> الرجاء إدخال المفتاح'; return; }
+      badge.innerHTML = '<span class="status-dot off"></span> جارٍ الاختبار...';
+      try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + key, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'قل "OK" فقط' }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 10 }
+          })
+        });
+        if (res.ok) {
+          badge.innerHTML = '<span class="status-dot on"></span> <span class="text-green">✅ مفعل وشغال</span>';
+        } else if (res.status === 429) {
+          badge.innerHTML = '<span class="status-dot on"></span> <span class="text-yellow">⚠️ شغال لكن فيه Rate Limit (429)</span>';
+        } else {
+          const err = await res.text();
+          badge.innerHTML = `<span class="status-dot off"></span> <span class="text-red">❌ خطأ ${res.status}: ${err.slice(0,60)}</span>`;
+        }
+      } catch(e) {
+        badge.innerHTML = `<span class="status-dot off"></span> <span class="text-red">❌ ${e.message}</span>`;
+      }
+    }
+
+    function setPreset(text) {
+      document.getElementById('descriptionInput').value = text;
+    }
+
+    async function classifyWithGemini(description) {
+      const key = getKey();
+      if (!key) return null;
+      const prompt = `أنت خبير تصنيف تذاكر صيانة المباني. حلل وصف المشكلة التالي واختر التصنيفات المناسبة من القائمة.
+
+أنواع الصيانة المتاحة:
+- plumbing: مشاكل السباكة (تسريب مياه، مواسير، صرف، حمامات، مغاسل)
+- electricity: مشاكل الكهرباء (تماس، فيشة، لمبة، لوحة كهرباء، كيبل)
+- doors_windows: أبواب ونوافذ (باب كراج، نافذة، إغلاق، كيلون، مقبض)
+- cracks: تشققات (شروخ جدران، بروفايل، تصدع)
+- ceramics: سيراميك وبلاط (بلاط مكسور، تطبيل، ميول)
+- tank_insulation: عزل خزان (خزان ماء علوي أو أرضي)
+- drainage: صرف صحي (صرف مسدود، ريحة، بيارة)
+- ac_ventilation: تكييف وتهوية (مكيف، شفط، هواء)
+- pumps: مضخات (مضخة ماء، عطل بالمضخة)
+- waterproofing: عزل مائي (عزل سطح، تسريب أمطار، عزاز)
+- grading: ميول وترويبة (انحدار، تصريف مياه، ترويبة)
+- pest_control: مكافحة حشرات (حشرات، نمل، صراصير، فئران)
+- cleaning: تنظيف (نظافة عامة)
+- structural: إنشائي (هبوط تربة، أساسات، جدار استنادي)
+- paints: دهانات (دهان حائط، بوية)
+
+قواعد مهمة:
+1. اختر TYPE واحد رئيسي فقط إذا كانت المشكلة واضحة
+2. اختر 2-3 أنواع إذا كانت المشكلة مركبة
+3. لا تخلط كهرباء مع سباكة أبداً
+4. أخرِج النتيجة بصيغة JSON فقط
+
+وصف المشكلة: "${description}"
+
+أخرِج JSON فقط بهذا التنسيق:
+{
+  "primaryType": "plumbing",
+  "allTypes": ["plumbing"],
+  "confidence": 9,
+  "reason": "شرح مختصر للسبب"
+}`;
+
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 256 }
+          })
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) return null;
+        const result = JSON.parse(text);
+        if (!result.primaryType || !VALID_TYPES.includes(result.primaryType)) return null;
+        const validTypes = (result.allTypes || []).filter(t => VALID_TYPES.includes(t));
+        if (validTypes.length === 0) validTypes.push(result.primaryType);
+        return {
+          primaryType: result.primaryType,
+          allTypes: validTypes.slice(0, 3),
+          confidence: result.confidence || 5,
+          reason: result.reason || '',
+        };
+      } catch { return null; }
+    }
+
+    function classifyFromKeywords(description) {
+      // محاكاة بسيطة للكلمات المفتاحية
+      const text = description.toLowerCase();
+      const kw = [
+        {kw:'تسريب', t:'plumbing', w:5}, {kw:'مياه', t:'plumbing', w:4},
+        {kw:'مواسير', t:'plumbing', w:4}, {kw:'صرف', t:'drainage', w:5},
+        {kw:'حمام', t:'plumbing', w:3}, {kw:'مطر', t:'waterproofing', w:5},
+        {kw:'تشققات', t:'cracks', w:5}, {kw:'شروخ', t:'cracks', w:5},
+        {kw:'لمبة', t:'electricity', w:5}, {kw:'كهرباء', t:'electricity', w:5},
+        {kw:'فيشة', t:'electricity', w:4}, {kw:'باب', t:'doors_windows', w:4},
+        {kw:'نافذة', t:'doors_windows', w:4}, {kw:'كراج', t:'doors_windows', w:5},
+        {kw:'بلاط', t:'ceramics', w:4}, {kw:'سيراميك', t:'ceramics', w:4},
+        {kw:'دهان', t:'paints', w:4}, {kw:'بوية', t:'paints', w:3},
+        {kw:'خزان', t:'tank_insulation', w:5}, {kw:'عزل', t:'waterproofing', w:5},
+        {kw:'مكيف', t:'ac_ventilation', w:5}, {kw:'مسدود', t:'drainage', w:4},
+        {kw:'ريحة', t:'drainage', w:3}, {kw:'مضخة', t:'pumps', w:5},
+        {kw:'حشرات', t:'pest_control', w:5}, {kw:'نمل', t:'pest_control', w:4},
+      ];
+      const scores = {};
+      for (const {kw:t, ...k} of kw) { if (text.includes(k.kw)) scores[k.t] = (scores[k.t]||0) + k.w; }
+      const sorted = Object.entries(scores).sort((a,b) => b[1]-a[1]);
+      if (sorted.length === 0) return { primaryType:'plumbing', allTypes:['plumbing'], confidence:0 };
+      const max = sorted[0][1];
+      const threshold = Math.max(3, max * 0.5);
+      let candidates = sorted.filter(([,s]) => s >= threshold).map(([t]) => t);
+      if (candidates.length > 3) candidates = candidates.slice(0, 2);
+      return { primaryType: candidates[0], allTypes: candidates, confidence: max };
+    }
+
+    async function testClassify() {
+      const desc = document.getElementById('descriptionInput').value.trim();
+      if (!desc) { alert('الرجاء إدخال وصف المشكلة'); return; }
+      document.getElementById('classifyBtn').disabled = true;
+      document.getElementById('classifyBtn').textContent = '⏳ جارٍ التصنيف...';
+
+      const result = await classifyWithGemini(desc);
+      const resultDiv = document.getElementById('singleResult');
+      const box = document.getElementById('singleResultBox');
+      const badge = document.getElementById('sourceBadge');
+      const supsDiv = document.getElementById('supervisorsList');
+
+      resultDiv.classList.remove('hidden');
+      box.classList.remove('success', 'error');
+
+      if (result) {
+        box.classList.add('success');
+        box.textContent = JSON.stringify(result, null, 2);
+        badge.innerHTML = `<span class="badge badge-green">✅ Gemini AI</span>`;
+        supsDiv.innerHTML = `
+          <span class="text-green">✓ تم التصنيف بنجاح عبر Gemini</span>
+          <br><span class="text-muted">النوع الرئيسي: <strong>${TYPE_LABELS[result.primaryType] || result.primaryType}</strong></span>
+          <br><span class="text-muted">كل الأنواع: ${result.allTypes.map(t => TYPE_LABELS[t] || t).join('، ')}</span>
+          <br><span class="text-muted">الثقة: ${result.confidence}/10</span>
+          <br><span class="text-muted">السبب: ${result.reason}</span>
+        `;
+      } else {
+        box.classList.add('error');
+        box.textContent = '❌ Gemini لم يستجب أو API key غير صالح';
+        badge.innerHTML = `<span class="badge badge-red">❌ فشل</span>`;
+        supsDiv.innerHTML = '<span class="text-red">تأكد من API key أو حاول مرة أخرى (قد يكون rate limit)</span>';
+      }
+
+      document.getElementById('classifyBtn').disabled = false;
+      document.getElementById('classifyBtn').textContent = '🔍 تصنيف';
+    }
+
+    async function testCompare() {
+      const desc = document.getElementById('descriptionInput').value.trim();
+      if (!desc) { alert('الرجاء إدخال وصف المشكلة'); return; }
+      
+      const geminiResult = await classifyWithGemini(desc);
+      const kwResult = classifyFromKeywords(desc);
+
+      const div = document.getElementById('compareResult');
+      div.innerHTML = `
+        <table>
+          <tr><th>المقارنة</th><th>Gemini AI 🤖</th><th>الكلمات المفتاحية 🔑</th></tr>
+          <tr>
+            <td><strong>النوع الرئيسي</strong></td>
+            <td class="${geminiResult ? 'text-green' : 'text-red'}">${geminiResult ? (TYPE_LABELS[geminiResult.primaryType] || geminiResult.primaryType) : '❌ فشل'}</td>
+            <td>${TYPE_LABELS[kwResult.primaryType] || kwResult.primaryType}</td>
+          </tr>
+          <tr>
+            <td><strong>كل الأنواع</strong></td>
+            <td>${geminiResult ? geminiResult.allTypes.map(t => TYPE_LABELS[t] || t).join('، ') : '—'}</td>
+            <td>${kwResult.allTypes.map(t => TYPE_LABELS[t] || t).join('، ')}</td>
+          </tr>
+          <tr>
+            <td><strong>الثقة</strong></td>
+            <td>${geminiResult ? geminiResult.confidence + '/10' : '—'}</td>
+            <td>${kwResult.confidence}</td>
+          </tr>
+          <tr>
+            <td><strong>السبب</strong></td>
+            <td class="text-sm text-muted">${geminiResult ? geminiResult.reason : '—'}</td>
+            <td class="text-sm text-muted">حسب تكرار الكلمات المفتاحية</td>
+          </tr>
+        </table>
+        ${geminiResult ? '<p class="text-green text-sm mt-1">✅ Gemini نجح — تحليل النص الكامل أذكى من الكلمات المفتاحية</p>' : '<p class="text-red text-sm mt-1">❌ Gemini لم ينجح — النظام استخدم الكلمات المفتاحية كاحتياطي</p>'}
+      `;
+    }
+
+    async function testBulk() {
+      const lines = document.getElementById('bulkInput').value.split('\n').filter(l => l.trim());
+      if (lines.length === 0) { alert('الرجاء إدخال وصف واحد على الأقل'); return; }
+      const div = document.getElementById('bulkResult');
+      const box = document.getElementById('bulkResultBox');
+      div.classList.remove('hidden');
+
+      let html = '';
+      for (let i = 0; i < lines.length; i++) {
+        const desc = lines[i].trim();
+        if (!desc) continue;
+        const gemini = await classifyWithGemini(desc);
+        html += `<div class="mb-1" style="border-bottom:1px solid #1e293b;padding-bottom:0.5rem">
+          <span class="text-sm text-muted">#${i+1}: ${desc.slice(0,50)}${desc.length > 50 ? '…' : ''}</span>
+          <br>
+          ${gemini 
+            ? `<span class="badge badge-green">Gemini ✓</span> <strong class="text-blue">${TYPE_LABELS[gemini.primaryType] || gemini.primaryType}</strong> — ${gemini.allTypes.map(t => TYPE_LABELS[t]||t).join('، ')}`
+            : `<span class="badge badge-red">❌ فشل</span>`
+          }
+        </div>`;
+      }
+      box.innerHTML = html;
+    }
+
+    // Auto-test API key on load
+    testApiKey();
+  </script>
+</body>
+</html>

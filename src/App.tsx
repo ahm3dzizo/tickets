@@ -18,6 +18,7 @@ import ProjectDetail from '@/pages/ProjectDetail';
 import Clients from '@/pages/Clients';
 import Technicians from '@/pages/Technicians';
 import TeamMemberDetail from '@/pages/TeamMemberDetail';
+import GeminiTest from '@/pages/GeminiTest';
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -111,6 +112,11 @@ function AppContent() {
             element={user && !requiresProfileCompletion ? <Settings /> : <Navigate to="/login" />} 
           />
           {/* ⛔️ تمت إزالة Route /register */}
+          {/* أي راوتر اختباري للـ Gemini */}
+          <Route
+            path="/gemini-test"
+            element={user && !requiresProfileCompletion ? <GeminiTest /> : <Navigate to="/login" />}
+          />
         </Routes>
         <Toaster position="top-right" />
         <PWAInstallPrompt />

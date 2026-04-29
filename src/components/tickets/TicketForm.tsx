@@ -1,18 +1,10 @@
-<<<<<<< HEAD
-﻿// src/components/tickets/TicketForm.tsx
-=======
->>>>>>> 400ebaf86f304e5f4fed8121cb4c313df0677667
+
 import React, { useState, useEffect } from 'react';
 import { 
-  X, 
   Plus, 
   AlertCircle,
-  Tag,
-  User,
-  Calendar as CalendarIcon,
   Briefcase,
   Home,
-  AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,17 +24,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { Project, Client, TicketType } from '@/types';
-import { classifyTicket, TYPE_TO_SPECIALTY } from '@/services/ticketClassifier';
-import { findMatchingSupervisors } from '@/services/supervisorAssignment';
+import { classifyOnServer } from '@/services/classificationApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -52,12 +36,12 @@ interface TicketFormProps {
   trigger?: React.ReactNode;
   nativeButton?: boolean;
   projectId?: string;
+  onSuccess?: () => void;
 }
 
-export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId }: TicketFormProps) {
+export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId, onSuccess }: TicketFormProps) {
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+    const [open, setOpen] = useState(false);
   const [ticketId, setTicketId] = useState('');
   const [refNumber, setRefNumber] = useState('');
   const [assigneeName, setAssigneeName] = useState('');
@@ -66,11 +50,7 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
   const [villaNumber, setVillaNumber] = useState('');
   const [description, setDescription] = useState('');
   const [types, setTypes] = useState<TicketType[]>(['electricity']);
-<<<<<<< HEAD
-  const [priority, setPriority] = useState<number>(3);
-=======
   const [priority, setPriority] = useState<string | number>('3');
->>>>>>> 400ebaf86f304e5f4fed8121cb4c313df0677667
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -107,12 +87,15 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
     clientsApi.getByProject(projectId).then(setClients).catch(() => {});
   }, [projectId]);
 
-  // Auto-classify description → suggest types
+    // Auto-classify description → suggest types (server-side)
   useEffect(() => {
-    if (!description || description.length < 6) return;
-    const result = classifyTicket(description);
-    if (result.confidence > 0) setTypes(result.allTypes);
-  }, [description]);
+    if (!description || description.length < 6 || !projectId) return;
+    let cancelled = false;
+    classifyOnServer({ description, projectId }).then(result => {
+      if (!cancelled && result.confidence > 0) setTypes(result.allTypes as TicketType[]);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [description, projectId]);
 
   // Auto-generate refNumber
   useEffect(() => {
@@ -124,7 +107,7 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
     }
   }, [projectId, villaNumber, projects]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!projectId || !description) {
       toast.error('يرجى ملء جميع الحقول المطلوبة');
@@ -134,12 +117,11 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
       toast.error('يجب اختيار العميل أولاً قبل إنشاء التذكرة');
       return;
     }
-    setLoading(true);
-
     try {
       const currentClient = clients.find(c => c.id === clientId);
-      const requiredSpecialties = [...new Set(types.map(t => TYPE_TO_SPECIALTY[t]))] as any[];
-      const supervisors = projectId ? await findMatchingSupervisors(projectId, requiredSpecialties) : [];
+      // Classify + get supervisors in one server call
+      const classification = await classifyOnServer({ description, projectId });
+      const supervisors = classification.supervisors;
       if (supervisors.length === 0) {
         toast.error('لا يمكن إنشاء التذكرة: لا يوجد مشرفون مطابقون لهذا النوع في المشروع');
         return;
@@ -153,25 +135,24 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
         clientName: currentClient?.name || '',
         villaNumber,
         description,
-        type: types[0],
-        detectedTypes: types,
+        type: classification.primaryType,
+        detectedTypes: classification.allTypes,
         assignedSupervisorId: supervisors[0]?.id ?? '',
         assignedSupervisorIds: supervisors.map(s => s.id),
         assignedSupervisors: supervisors,
         status: 'open',
-        priority: priority, // رقم مباشرة
+        priority: priority,
         createdAt: new Date().toISOString(),
         createdBy: user?.uid || null,
       });
-      toast.success('تم إنشاء التذكرة بنجاح');
+            toast.success('تم إنشاء التذكرة بنجاح');
       setOpen(false);
       resetForm();
+      onSuccess?.();
     } catch (error) {
       console.error('Error creating ticket:', error);
       const message = error instanceof Error ? error.message : 'فشل إنشاء التذكرة';
       toast.error(message || 'فشل إنشاء التذكرة');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -184,117 +165,7 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
     setVillaNumber('');
     setDescription('');
     setTypes(['electricity']);
-<<<<<<< HEAD
-    setPriority(3);
-=======
     setPriority('3');
-  };
-
-  const handleImportTickets = async (data: any[]) => {
-    setLoading(true);
-    try {
-      const allClients = await clientsApi.getAll();
-
-      const tickets = data.map(item => {
-        const getValue = (keys: string[], index?: number): string => {
-          for (const key of keys) {
-            if (item[key] !== undefined && item[key] !== null) return String(item[key]).trim();
-          }
-          if (index !== undefined) {
-            const objKeys = Object.keys(item);
-            if (objKeys[index] !== undefined) return String(item[objKeys[index]]).trim();
-          }
-          return '';
-        };
-
-        const rawTicketId   = getValue(['ID', 'ticketId'], 0);
-        const rawRef        = getValue(['المرجع', 'refNumber'], 1);
-        const rawClientName = getValue(['العميل', 'clientName'], 2);
-        const rawVilla      = getValue(['رقم الفيلا', 'villaNumber'], 3);
-        const itemDescription = getValue(['الوصف', 'description'], 4);
-        const itemPriority  = getValue(['الأولوية', 'priority'], 5);
-        const rawAssignee   = getValue(['المسؤول', 'assigneeName'], 6);
-
-        const projectName = item['المشروع'] || item.projectName || '';
-        const targetProject = projects.find(p => p.name === projectName) ||
-                             projects.find(p => p.id === projectId) ||
-                             projects.find(p => p.abbreviation === item['المشروع']) ||
-                             projects[0];
-
-        let finalRef = rawRef;
-        let extractedVilla = rawVilla;
-        
-        // إذا لم يتم العثور على رقم فيلا بشكل مباشر، نحاول استخراجه من الرقم المرجعي النهائي (finalRef)
-        if (!extractedVilla) {
-            if (finalRef && finalRef.includes('-')) {
-                const parts = finalRef.split('-');
-                const lastPart = parts[parts.length - 1];
-                if (!isNaN(Number(lastPart))) {
-                    extractedVilla = lastPart;
-                }
-            }
-        }
-
-        // توليد الرقم المرجعي النهائي إذا لم يكن موجوداً
-        if (!finalRef && targetProject && extractedVilla) {
-          finalRef = `${targetProject.abbreviation}-${extractedVilla}`;
-        }
-
-        const typeMap: Record<string, string> = {
-          'كهرباء': 'electricity', 'سباكة': 'plumbing', 'أبواب': 'doors',
-          'دهانات': 'paints', 'تشققات': 'cracks', 'سيراميك': 'ceramics', 'عزل خزان': 'tank_insulation'
-        };
-        const rawType = item['النوع'] || item.type || '';
-        const mappedType = typeMap[rawType] || rawType || 'electricity';
-
-        const matchedClient = (allClients as Client[]).find(c =>
-          c.projectId === targetProject?.id && (
-            (extractedVilla && String(c.villaNumber) === String(extractedVilla)) ||
-            (rawClientName && c.name?.includes(rawClientName)) ||
-            (rawClientName && rawClientName.includes(c.name ?? ''))
-          )
-        );
-
-        return {
-          ticketId: rawTicketId,
-          refNumber: finalRef || '---',
-          assigneeName: rawAssignee,
-          projectId: targetProject?.id || '',
-          clientId: matchedClient?.id || '',
-          clientName: matchedClient?.name || rawClientName || 'عميل مجهول',
-          villaNumber: extractedVilla || matchedClient?.villaNumber || '',
-          description: itemDescription || 'لا يوجد وصف',
-          type: mappedType,
-          status: 'open',
-          priority: Number(itemPriority || 3),
-          createdAt: new Date().toISOString(),
-          createdBy: user?.uid
-        };
-      });
-
-      const unresolved = tickets.filter(t => !t.clientId || !t.projectId);
-      if (unresolved.length > 0) {
-        toast.error(`تعذر استيراد ${unresolved.length} تذكرة لعدم وجود عميل/مشروع مطابق`);
-        return;
-      }
-
-      const withoutSupervisors = tickets.filter(t => !t.assignedSupervisorIds || t.assignedSupervisorIds.length === 0);
-      if (withoutSupervisors.length > 0) {
-        toast.error(`تعذر استيراد ${withoutSupervisors.length} تذكرة لعدم وجود مشرفين مطابقين`);
-        return;
-      }
-
-      await ticketsApi.bulkCreate(tickets);
-      toast.success(`تم استيراد ${data.length} تذكرة بنجاح`);
-      setOpen(false);
-    } catch (error) {
-      console.error('Import error:', error);
-      const message = error instanceof Error ? error.message : 'حدث خطأ أثناء الاستيراد';
-      toast.error(message || 'حدث خطأ أثناء الاستيراد');
-    } finally {
-      setLoading(false);
-    }
->>>>>>> 400ebaf86f304e5f4fed8121cb4c313df0677667
   };
 
   // تحديث الترجمة لتشمل الأنواع الجديدة
@@ -319,12 +190,12 @@ export function TicketForm({ trigger, nativeButton, projectId: defaultProjectId 
     'tiles': 'سيراميك',
   };
 
-  const priorityTranslations: Record<number, string> = {
-    3: '3 - منخفض',
-    4: '4 - عادي',
-    6: '6 - متوسط',
-    7: '7 - مرتفع',
-    9: '9 - عاجل جداً',
+    const priorityTranslations: Record<string, string> = {
+    '3': '3 - منخفض',
+    '4': '4 - عادي',
+    '6': '6 - متوسط',
+    '7': '7 - مرتفع',
+    '9': '9 - عاجل جداً',
   };
 
   return (

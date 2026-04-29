@@ -16,22 +16,31 @@ import {
   Pencil,
   Phone,
   PhoneCall,
+  ChevronDown,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
+import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
-import { TYPE_TO_SPECIALTY } from '@/services/ticketClassifier';
-import { findMatchingSupervisors } from '@/services/supervisorAssignment';
+import { classifyOnServer, learnFromCorrection } from '@/services/classificationApi';
 import { toast } from 'sonner';
 
 export default function TicketDetail() {
@@ -89,9 +98,20 @@ export default function TicketDetail() {
     'plumbing': 'سباكة',
     'doors': 'أبواب',
     'paints': 'دهانات',
+    'painting': 'دهانات',
     'cracks': 'تشققات',
     'ceramics': 'سيراميك',
+    'tiles': 'سيراميك',
     'tank_insulation': 'عزل خزان',
+    'drainage': 'صرف صحي',
+    'ac_ventilation': 'تكييف وتهوية',
+    'pumps': 'مضخات',
+    'doors_windows': 'أبواب ونوافذ',
+    'waterproofing': 'عزل مائي',
+    'grading': 'ميول وترويبة',
+    'pest_control': 'مكافحة حشرات',
+    'cleaning': 'تنظيف',
+    'structural': 'إنشائي',
   };
 
   const statusTranslations: Record<string, string> = {
@@ -135,6 +155,17 @@ export default function TicketDetail() {
   const handleSaveEdit = async () => {
     if (!ticket) return;
     setEditSaving(true);
+
+    // كشف هل تغيرت الأنواع عن القيم الأصلية (يعني المستخدم صحّح التصنيف)
+    const originalTypes = ((ticket.detectedTypes as TicketType[] | undefined)?.length
+      ? (ticket.detectedTypes as TicketType[])
+      : [ticket.type]
+    ).sort();
+    const newTypes = [...editTypes].sort();
+    const typesChanged =
+      originalTypes.length !== newTypes.length ||
+      originalTypes.some((t, i) => t !== newTypes[i]);
+
     try {
       const selectedSupervisors = availableSupervisors.filter(s => editAssignedSupervisorIds.includes(s.id));
       await ticketsApi.update(ticket.id, {
@@ -147,6 +178,19 @@ export default function TicketDetail() {
         assignedSupervisorIds:  editAssignedSupervisorIds,
         assignedSupervisors:    selectedSupervisors,
       });
+
+      // إذا غيّر المستخدم الأنواع → علّم السيرفر
+      if (typesChanged && editTypes.length > 0) {
+        const primaryTypeKey = editTypes[0];
+        learnFromCorrection(ticket.description || primaryTypeKey, primaryTypeKey)
+          .then(result => {
+            console.log(`[Learn] تم تعلم ${result.learned} كلمات جديدة للنوع ${primaryTypeKey}`);
+          })
+          .catch(() => {
+            // فشل التعليم لا يمنع نجاح العملية الأساسية
+          });
+      }
+
       toast.success('تم تحديث التذكرة');
       setEditOpen(false);
       loadData();
@@ -187,11 +231,20 @@ export default function TicketDetail() {
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // Re-fetch matching supervisors whenever types change inside the edit dialog
+  // Re-fetch matching supervisors via server API when types change
   useEffect(() => {
     if (!editOpen || !ticket?.projectId || editTypes.length === 0) return;
-    const requiredSpecialties = [...new Set(editTypes.map(t => TYPE_TO_SPECIALTY[t]))] as any[];
-    findMatchingSupervisors(ticket.projectId, requiredSpecialties).then(setAvailableSupervisors);
+    const primaryType = editTypes[0];
+    classifyOnServer({
+      description: ticket.description || primaryType,
+      projectId: ticket.projectId,
+    }).then(result => {
+      setAvailableSupervisors(result.supervisors.map(s => ({
+        id: s.id,
+        name: s.name,
+        specialties: s.specialties,
+      })));
+    }).catch(() => {});
   }, [editTypes, editOpen, ticket?.projectId]);
 
   if (loading) {
@@ -453,6 +506,7 @@ export default function TicketDetail() {
                   <CalendarDays className="w-4 h-4 mr-2" />
                   تحديد موعد زيارة
                 </Button>
+                <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
                 <Button variant="outline" className="w-full justify-end border-border bg-white/5 text-emerald-400 hover:bg-emerald-500/10 text-xs h-12 rounded-2xl font-bold"
                   onClick={handleWhatsApp}
                 >
@@ -486,34 +540,49 @@ export default function TicketDetail() {
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">الحالة</Label>
-              <select value={editStatus} onChange={e => setEditStatus(e.target.value)}
-                className="w-full bg-white/5 border border-border rounded-xl h-11 px-3 text-right text-slate-200 text-sm">
-                <option value="open">مفتوحة</option>
-                <option value="in-progress">قيد التنفيذ</option>
-                <option value="pending">معلقة</option>
-                <option value="completed">مكتملة</option>
-                <option value="closed">مغلقة</option>
-                <option value="out-of-scope">خارج اختصاص</option>
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-200 rounded-xl h-11 px-3 text-sm" />}
+                  className="w-full"
+                >
+                  {statusTranslations[editStatus] || editStatus || 'اختر الحالة'}
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('open')}>مفتوحة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('in-progress')}>قيد التنفيذ</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('pending')}>معلقة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('completed')}>مكتملة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('closed')}>مغلقة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-red-500/10 cursor-pointer text-right justify-end text-rose-400" onClick={() => setEditStatus('out-of-scope')}>خارج اختصاص</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="space-y-1.5">
               <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">الأولوية</Label>
-              <select value={editPriority} onChange={e => setEditPriority(e.target.value)}
-                className="w-full bg-white/5 border border-border rounded-xl h-11 px-3 text-right text-slate-200 text-sm">
-                <option value="9">9 - عاجل جداً</option>
-                <option value="7">7 - مرتفع</option>
-                <option value="6">6 - متوسط</option>
-                <option value="4">4 - عادي</option>
-                <option value="3">3 - منخفض</option>
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-200 rounded-xl h-11 px-3 text-sm" />}
+                  className="w-full"
+                >
+                  {priorityTranslations[editPriority] || editPriority || 'اختر الأولوية'}
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('9')}>9 - عاجل جداً</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('7')}>7 - مرتفع</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('6')}>6 - متوسط</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('4')}>4 - عادي</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('3')}>3 - منخفض</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="space-y-1.5">
               <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">
                 نوع الصيانة <span className="text-slate-600 normal-case">(يمكن أكثر من نوع)</span>
               </Label>
               <div className="flex flex-wrap gap-1.5">
-                {(['electricity','plumbing','doors','paints','cracks','ceramics','tank_insulation'] as TicketType[]).map(t => {
-                  const labels: Record<string, string> = { electricity:'كهرباء', plumbing:'سباكة', doors:'أبواب', paints:'دهانات', cracks:'تشققات', ceramics:'سيراميك', tank_insulation:'عزل خزان' };
+                {(Object.keys(typeTranslations) as TicketType[]).map(t => {
                   return (
                     <button type="button" key={t}
                       onClick={() => setEditTypes(prev =>
@@ -525,7 +594,7 @@ export default function TicketDetail() {
                           : 'bg-white/5 border-border text-slate-500 hover:border-slate-400'
                       )}
                     >
-                      {labels[t]}
+                      {typeTranslations[t]}
                     </button>
                   );
                 })}

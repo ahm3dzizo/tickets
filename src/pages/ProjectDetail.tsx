@@ -1,51 +1,29 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
-  Briefcase, 
   MapPin, 
   Users, 
   Ticket as TicketIcon,
   Plus,
   UserCheck,
   Clock,
-  CheckCircle2,
-  AlertCircle,
-  MessageCircle,
-  Edit,
-  Trash2,
-  MoreVertical,
-  CheckSquare,
-  Square,
-  CheckCircle,
-  XCircle,
-  Calendar
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Project, Ticket, Client, User, TicketType } from '@/types';
+import { Project, Ticket, Client, User } from '@/types';
 import { ticketsApi, projectsApi, clientsApi, usersApi } from '@/lib/api';
-import { TicketCard } from '@/components/tickets/TicketCard';
+
 import { TicketTable, BulkActionBar } from '@/components/tickets/TicketTable';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
-import { DataImport } from '@/components/ui/DataImport';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { format, differenceInDays, parse, isValid } from 'date-fns';
-import { ar } from 'date-fns/locale';
-import { classifyTicket } from '@/services/ticketClassifier';
-import { findMatchingSupervisors } from '@/services/supervisorAssignment';
+import { ReportsSection } from '@/components/reports/ReportsSection';
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -94,14 +72,6 @@ export default function ProjectDetail() {
   }
 
   if (!project) return null;
-
-  const toggleSelectTicket = (ticketId: string) => {
-    setSelectedTicketIds(prev => 
-      prev.includes(ticketId) 
-        ? prev.filter(id => id !== ticketId)
-        : [...prev, ticketId]
-    );
-  };
 
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedTicketIds.length === 0) return;
@@ -155,148 +125,6 @@ export default function ProjectDetail() {
     window.open(url, '_blank');
   };
 
-  const statusTranslations: Record<string, string> = {
-    'open': 'مفتوحة',
-    'in-progress': 'جاري العمل',
-    'waiting': 'بانتظار الموعد',
-    'closed': 'مغلقة'
-  };
-
-  const typeTranslations: Record<string, string> = {
-    'electricity': 'كهرباء',
-    'plumbing': 'سباكة',
-    'doors': 'أبواب',
-    'paints': 'دهانات',
-    'cracks': 'تشققات',
-    'ceramics': 'سيراميك',
-    'tank_insulation': 'عزل خزان',
-  };
-
-  const specialtyTranslations: Record<string, string> = {
-    'mechanics': 'ميكانيكا',
-    'electricity': 'كهرباء',
-    'general': 'عام',
-  };
-
-  const specialtyColors: Record<string, string> = {
-    'mechanics': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    'electricity': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    'general': 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-  };
-
-  const handleImportClients = async (data: any[]) => {
-    await Promise.all(data.map(item =>
-      clientsApi.create(project.id, {
-        name: item.name || item['الاسم'] || '',
-        phone: String(item.phone || item['الهاتف'] || ''),
-        villaNumber: String(item.villaNumber || item['رقم الفيلا'] || ''),
-        handoverDate: item.handoverDate || item['تاريخ الاستلام'] || '',
-        warrantyExpiryDate: item.warrantyExpiryDate || item['انتهاء الضمان'] || '',
-        projectId: project.id,
-        createdAt: new Date().toISOString()
-      })
-    ));
-    toast.success('تم استيراد العملاء بنجاح');
-    loadData();
-  };
-
-  const handleImportTickets = async (data: any[]) => {
-    if (clients.length === 0) {
-      toast.error('لا يمكن استيراد التذاكر قبل إضافة عملاء لهذا المشروع');
-      return;
-    }
-
-    // Parse 'ABBR-NUMBER' reference → { projectAbbr, villaNumber }
-    const parseTicketRef = (ref: string) => {
-      const m = ref.match(/^([A-Za-z]+)-?(\d+)$/);
-      return m ? { projectAbbr: m[1].toUpperCase(), villaNumber: m[2] } : { projectAbbr: '', villaNumber: '' };
-    };
-
-    // ── Abbreviation mismatch check ──
-    const projectAbbrUpper = project!.abbreviation?.toUpperCase() ?? '';
-    const foreignAbbrs = [...new Set(
-      data
-        .map(item => parseTicketRef(String(item.refNumber ?? '').trim()).projectAbbr)
-        .filter(abbr => abbr && abbr !== projectAbbrUpper)
-    )];
-    if (foreignAbbrs.length > 0) {
-      throw new Error(
-        `هذه التذاكر تابعة لمشروع آخر (${foreignAbbrs.join(', ')}) وليس لمشروع "${project!.abbreviation}". تأكد من الملف الصحيح.`
-      );
-    }
-
-    const arabicTypeMap: Record<string, TicketType> = {
-      'سباكة': 'plumbing', 'كهرباء': 'electricity', 'أبواب': 'doors',
-      'دهانات': 'paints', 'تشققات': 'cracks', 'سيراميك': 'ceramics',
-      'عزل خزان': 'tank_insulation',
-    };
-
-    const ticketData = await Promise.all(data.map(async (item) => {
-      const refNumber    = String(item.refNumber    ?? '').trim();
-      const { projectAbbr, villaNumber: refVilla } = parseTicketRef(refNumber);
-      const villaNumber  = String(item.villaNumber  ?? refVilla).trim();
-      const clientName   = String(item.clientName   ?? '').trim();
-      const issuedAtRaw  = String(item.issuedAt ?? item.date ?? '').trim();
-      const description  = String(item.description  ?? '').trim();
-      const assigneeName = String(item.assigneeName ?? '').trim();
-      const ticketId     = String(item.ticketId     ?? '').trim();
-      const priorityRaw  = String(item.priority     ?? '').trim();
-      const typeRaw      = String(item.ticketType   ?? item.type ?? '').trim();
-      const fileType     = arabicTypeMap[typeRaw] ?? (typeRaw as TicketType) ?? null;
-
-      const classification = classifyTicket(description);
-      const finalType = fileType || classification.primaryType;
-
-      const supervisors = await findMatchingSupervisors(project!.id, classification.requiredSpecialties);
-      const primarySupervisor = supervisors[0];
-
-      // Look up client from already-loaded clients state
-      const matchedClient = clients.find(c => c.villaNumber === villaNumber);
-      const clientId = matchedClient?.id || '';
-      const resolvedClientName = matchedClient?.name || clientName;
-
-      const priorityNum = priorityRaw ? (isNaN(Number(priorityRaw)) ? 3 : Number(priorityRaw)) : 3;
-
-      return {
-        ticketId,
-        refNumber,
-        projectAbbr,
-        issuedAt: issuedAtRaw,
-        assigneeName: assigneeName || primarySupervisor?.name || '',
-        assignedSupervisorId:  primarySupervisor?.id  || '',
-        assignedSupervisorIds: supervisors.map(s => s.id),
-        assignedSupervisors:   supervisors,
-        detectedTypes:         classification.allTypes,
-        projectId:  project!.id,
-        clientId,
-        clientName: resolvedClientName,
-        villaNumber,
-        description,
-        type:   finalType,
-        status: 'open',
-        priority: priorityNum,
-        createdAt: new Date().toISOString(),
-        createdBy: currentUser?.uid,
-      };
-    }));
-
-    const unresolved = ticketData.filter(t => !t.clientId);
-    if (unresolved.length > 0) {
-      toast.error(`تعذر استيراد ${unresolved.length} تذكرة: لا يوجد عميل مطابق لرقم الفيلا`);
-      return;
-    }
-
-    const withoutSupervisors = ticketData.filter(t => !t.assignedSupervisorIds || t.assignedSupervisorIds.length === 0);
-    if (withoutSupervisors.length > 0) {
-      toast.error(`تعذر استيراد ${withoutSupervisors.length} تذكرة: لا يوجد مشرفون مطابقون`);
-      return;
-    }
-
-    await ticketsApi.bulkCreate(ticketData);
-    toast.success(`تم استيراد ${data.length} تذكرة بنجاح`);
-    loadData();
-  };
-
   return (
     <Layout>
       <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-700">
@@ -320,28 +148,19 @@ export default function ProjectDetail() {
             </div>
           </div>
           <div className="flex items-center justify-end gap-2 w-full sm:w-auto sm:mr-auto">
-            {(currentUser?.role === 'admin' || currentUser?.role === 'engineer') && (
+                        {(currentUser?.role === 'admin' || currentUser?.role === 'engineer') && (
               <>
-                <DataImport 
-                  title="استيراد تذاكر"
-                  description="ارفع ملف Excel أو PDF ثم حدد أي عمود يقابل كل حقل."
-                  fieldDefs={[
-                    { key: 'ticketId',     label: 'رقم التذكرة',        aliases: ['#', 'الرقم', 'رقم', 'id', 'ID', 'رقم التذكرة', 'تذكرة'] },
-                    { key: 'refNumber',    label: 'رقم الفيلا / المرجع', aliases: ['NTF', 'المرجع', 'رقم الفيلا', 'الرقم المرجعي', 'ref'] },
-                    { key: 'clientName',   label: 'اسم العميل',         aliases: ['العميل', 'اسم العميل', 'المالك', 'الاسم', 'client', 'name'] },
-                    { key: 'issuedAt',     label: 'تاريخ الإصدار',       aliases: ['التاريخ', 'تاريخ', 'date', 'تاريخ الاصدار'] },
-                    { key: 'description',  label: 'الوصف',              aliases: ['الوصف', 'المشكلة', 'الملاحظات', 'وصف', 'description'] },
-                    { key: 'daysOpen',     label: 'عدد الأيام',         aliases: ['أيام', 'الأيام', 'عدد الأيام', 'days', 'مدة'] },
-                    { key: 'assigneeName', label: 'المسؤول',            aliases: ['المسؤول', 'المهندس', 'المشرف', 'assignee'] },
-                    { key: 'ticketType',   label: 'نوع الصيانة',        aliases: ['النوع', 'نوع', 'type', 'الصيانة', 'التصنيف'] },
-                  ]}
-                  onImport={handleImportTickets}
+                <UnifiedImportModal
                   trigger={
                     <Button variant="outline" className="border-border bg-white/5 text-slate-400 hover:text-white rounded-2xl gap-2 h-10 px-4">
                       <Plus className="w-4 h-4" />
                       استيراد تذاكر
                     </Button>
                   }
+                  projects={project ? [project] : []}
+                  clients={clients}
+                  onImportSuccess={loadData}
+                  currentUserId={currentUser?.uid}
                 />
                 {clients.length === 0 && (
                   <Button
@@ -352,8 +171,8 @@ export default function ProjectDetail() {
                     لا يوجد عملاء - اذهب لصفحة العملاء
                   </Button>
                 )}
-                <ClientForm projectId={project.id} />
-                <TicketForm projectId={project.id} />
+                <ClientForm projectId={project.id} onSuccess={loadData} />
+                <TicketForm projectId={project.id} onSuccess={loadData} />
               </>
             )}
           </div>
@@ -461,10 +280,13 @@ export default function ProjectDetail() {
               </CardContent>
             </Card>
           </div>
-        </div>
+                </div>
       </div>
 
-      <CloseTicketDialog 
+      {/* Reports & Charts Section - Project-specific */}
+      <ReportsSection tickets={tickets} projects={project ? [project] : []} userRole={currentUser?.role} />
+
+      <CloseTicketDialog  
         open={isCloseDialogOpen}
         onOpenChange={setIsCloseDialogOpen}
         selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))}

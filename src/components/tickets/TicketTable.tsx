@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, X, Edit, MessageCircle } from 'lucide-react';
+import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, X, Edit, MessageCircle, Download } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,11 +15,14 @@ import { Ticket, TicketType } from '@/types';
 import { format, differenceInDays, parse, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { ExportTicketsModal } from './ExportTicketsModal';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-export function parseIssuedAt(raw: string | number): Date | null {
+export function parseIssuedAt(raw: unknown): Date | null {
   if (raw === null || raw === undefined || raw === '') return null;
+  // Handle Date objects directly
+  if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
   const num = Number(raw);
   if (!isNaN(num) && num > 1000) {
     const d = new Date((num - 25569) * 86400 * 1000);
@@ -225,14 +228,20 @@ export function TicketTable({
 }: TicketTableProps) {
   const navigate = useNavigate();
 
-  // Local filter state
+    // Local filter state
   const [localSearch, setLocalSearch] = useState('');
   const [localStatus, setLocalStatus] = useState('');
   const [localType, setLocalType] = useState<TicketType | ''>('');
   const [localProject, setLocalProject] = useState('');
+  const [showClosed, setShowClosed] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const closedStatuses = new Set(['closed', 'out-of-scope']);
 
-  const baseTickets = showInlineFilters
+    const baseTickets = showInlineFilters
     ? tickets.filter(t => {
+        const isClosed = closedStatuses.has(t.status);
+        if (!showClosed && isClosed) return false;
+
         const s = localSearch.toLowerCase();
         const matchSearch = !s ||
           t.villaNumber?.toLowerCase().includes(s) ||
@@ -302,9 +311,9 @@ export function TicketTable({
 
   const inSelectionMode = hasSelection && !!selectedIds && selectedIds.length > 0;
 
-  // ─── دالة استخراج أسماء المشرفين فقط ─────────────────────────────────
+    // ─── دالة استخراج أسماء المشرفين ─────────────────────────────────────
   const getSupervisorNames = (ticket: Ticket): string[] => {
-    // الأفضلية لـ supervisorByType إذا وجد (يجمع كل المشرفين من كل التصنيفات بدون تكرار)
+    // supervisorByType (يجمع كل المشرفين من كل التصنيفات بدون تكرار)
     const map = (ticket as any).supervisorByType as Record<string, { name: string }[]> | undefined;
     if (map) {
       const namesSet = new Set<string>();
@@ -314,14 +323,27 @@ export function TicketTable({
       if (namesSet.size > 0) return Array.from(namesSet);
     }
 
-    // الرجوع للطريقة القديمة
-    const supervisorList: { id: string; name: string }[] =
-      ticket.assignedSupervisors?.length
-        ? ticket.assignedSupervisors
-        : ticket.assigneeName && ticket.assigneeName !== '---'
-          ? [{ id: ticket.assignedSupervisorId || '', name: ticket.assigneeName }]
-          : [];
-    return supervisorList.map(s => s.name).filter(Boolean);
+    // assignedSupervisors — يمكن أن يكون array مباشر أو JSON string
+    const rawSups = ticket.assignedSupervisors;
+    if (rawSups) {
+      if (Array.isArray(rawSups)) {
+        const names = rawSups.map((s: any) => s?.name).filter(Boolean);
+        if (names.length > 0) return names;
+      }
+      // لو هو object (مثلاً {0: {name:'أحمد'}, 1: {name:'محمد'}})
+      if (typeof rawSups === 'object' && !Array.isArray(rawSups)) {
+        const names = Object.values(rawSups as Record<string, { name: string }>)
+          .map(s => s?.name)
+          .filter(Boolean);
+        if (names.length > 0) return names;
+      }
+    }
+
+    // Fallback: assigneeName
+    if (ticket.assigneeName && ticket.assigneeName !== '---') {
+      return [ticket.assigneeName];
+    }
+    return [];
   };
 
   if (loading) {
@@ -409,12 +431,39 @@ export function TicketTable({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          {/* زر إظهار/إخفاء المغلقة */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowClosed(prev => !prev)}
+            className={cn(
+              'h-9 rounded-xl gap-1.5 text-xs font-medium',
+              showClosed
+                ? 'border-slate-500/50 bg-slate-500/10 text-slate-300'
+                : 'border-border/50 bg-transparent text-slate-500',
+            )}
+          >
+            <span className="text-[11px]">{showClosed ? '🟢' : '⚪'}</span>
+            المغلقة
+          </Button>
+
           {(localSearch || localStatus || localType || localProject) && (
             <Button variant="ghost" size="sm" className="h-9 rounded-xl text-slate-500 hover:text-white text-xs gap-1 px-2"
               onClick={() => { setLocalSearch(''); setLocalStatus(''); setLocalType(''); setLocalProject(''); }}>
               <X className="w-3 h-3" /> مسح
             </Button>
           )}
+                    {/* زر التصدير */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setExportModalOpen(true)}
+            className="h-9 rounded-xl gap-1.5 text-xs font-medium border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10"
+          >
+            <Download className="w-3.5 h-3.5" />
+            تصدير
+          </Button>
+
           <span className="text-[10px] text-slate-600 font-medium mr-auto">
             {baseTickets.length} / {tickets.length}
           </span>
@@ -433,7 +482,10 @@ export function TicketTable({
               ? (ticket.createdAt as any).toDate()
               : new Date(ticket.createdAt as any);
             const openDate = (ticket.issuedAt ? parseIssuedAt(ticket.issuedAt) : null) ?? createdAt;
-            const daysOpen = differenceInDays(new Date(), openDate);
+            const closeDate = ticket.closedAt ? new Date(ticket.closedAt) : null;
+            const isClosed = ticket.status === 'closed' || ticket.status === 'out-of-scope';
+            const endDate = (isClosed && closeDate) ? closeDate : new Date();
+            const daysOpen = differenceInDays(endDate, openDate);
             const daysBg =
               daysOpen > 30 ? 'bg-red-500/15 text-red-400 border-red-500/20' :
               daysOpen > 14 ? 'bg-amber-500/15 text-amber-400 border-amber-500/20' :
@@ -450,8 +502,7 @@ export function TicketTable({
 
             const supervisorNames = getSupervisorNames(ticket);
 
-            const isSelected = selectedIds?.includes(ticket.id) ?? false;
-            const isClosed = ticket.status === 'closed' || ticket.status === 'out-of-scope';
+                        const isSelected = selectedIds?.includes(ticket.id) ?? false;
             const isOverdue = !isClosed && daysOpen > 6;
             const canSelect = hasSelection && !isClosed;
 
@@ -531,9 +582,9 @@ export function TicketTable({
                   </div>
                   <div className="flex items-end justify-between gap-2 px-3 pb-2.5 pt-1 border-t border-border/30">
                     <div className="flex flex-col gap-0.5 min-w-0">
-                      {ticket.clientName && (
+                                            {ticket.clientName && (
                         <span className="text-[11px] text-slate-400 font-medium truncate">
-                          {ticket.clientName}{ticket.villaNumber ? ` · فيلا ${ticket.villaNumber}` : ''}
+                          {ticket.clientName.split(' ')[0]}{ticket.villaNumber ? ` · فيلا ${ticket.villaNumber}` : ''}
                         </span>
                       )}
                       {supervisorNames.length > 0 && (
@@ -584,19 +635,19 @@ export function TicketTable({
                     </button>
                   </th>
                 )}
-                <th className={thCls}>ID</th>
-                <th className={thCls}>المرجع</th>
-                <th className={thCls}>العميل</th>
-                {!hideProjectColumn && <th className={thCls}>المشروع</th>}
-                <th className={thCls}>التاريخ</th>
-                <th className={cn(thCls, 'min-w-[200px]')}>وصف المشكلة</th>
-                <th className={cn(thCls, 'text-center')}>ف</th>
-                <th className={cn(thCls, 'text-center')}>الأيام</th>
-                {!hideSupervisorColumn && <th className={cn(thCls, 'text-center')}>المسؤول</th>}
-                <th className={cn(thCls, 'text-center')}>التخصص</th>
-                <th className={cn(thCls, 'text-center')}>الحالة</th>
-                <th className={cn(thCls, 'text-center')}>موعد / ملاحظات</th>
-                <th className={cn(thCls, 'text-center border-r border-border/20')}>إجراءات</th>
+                                <th className={cn(thCls, 'w-20')}>ID</th>
+                <th className={cn(thCls, 'w-24')}>المرجع</th>
+                <th className={cn(thCls, 'w-28 max-w-[100px]')}>العميل</th>
+                {!hideProjectColumn && <th className={cn(thCls, 'w-20')}>المشروع</th>}
+                <th className={cn(thCls, 'w-20')}>التاريخ</th>
+                <th className={cn(thCls, 'min-w-[180px]')}>وصف المشكلة</th>
+                <th className={cn(thCls, 'w-12 text-center')}>الحالة</th>
+                <th className={cn(thCls, 'w-10 text-center')}>ف</th>
+                <th className={cn(thCls, 'w-12 text-center')}>الأيام</th>
+                {!hideSupervisorColumn && <th className={cn(thCls, 'w-24 text-center')}>المسؤول</th>}
+                <th className={cn(thCls, 'w-20 text-center')}>التخصص</th>
+                <th className={cn(thCls, 'w-24 text-center')}>موعد</th>
+                <th className={cn(thCls, 'w-14 text-center border-r border-border/20')}>...</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -605,7 +656,10 @@ export function TicketTable({
                   ? (ticket.createdAt as any).toDate()
                   : new Date(ticket.createdAt as any);
                 const openDate = (ticket.issuedAt ? parseIssuedAt(ticket.issuedAt) : null) ?? createdAt;
-                const daysOpen = differenceInDays(new Date(), openDate);
+                const closeDate = ticket.closedAt ? new Date(ticket.closedAt) : null;
+                const isClosed = ticket.status === 'closed' || ticket.status === 'out-of-scope';
+                const endDate = (isClosed && closeDate) ? closeDate : new Date();
+                const daysOpen = differenceInDays(endDate, openDate);
                 const daysBg = daysOpen > 30
                   ? 'text-red-400 font-bold'
                   : daysOpen > 14
@@ -624,9 +678,8 @@ export function TicketTable({
 
                 const supervisorNames = getSupervisorNames(ticket);
 
-                const isSelected = selectedIds?.includes(ticket.id) ?? false;
-                const isClosed = ticket.status === 'closed';
-                const isOverdue = !isClosed && daysOpen > 6;
+                                const isSelected = selectedIds?.includes(ticket.id) ?? false;
+                                const isOverdue = !isClosed && daysOpen > 6;
 
                 return (
                   <React.Fragment key={ticket.id}>
@@ -657,7 +710,7 @@ export function TicketTable({
                         navigate(`/tickets/${ticket.id}`);
                       }}
                     >
-                      {hasSelection && (
+                                            {hasSelection && (
                         <td className="px-4 py-3 text-center" onClick={e => { e.stopPropagation(); toggleOne(ticket.id); }}>
                           <button className="text-slate-600 hover:text-blue-500 transition-colors">
                             {isSelected
@@ -666,40 +719,45 @@ export function TicketTable({
                           </button>
                         </td>
                       )}
-                      <td className="px-4 py-3 text-sm font-medium text-slate-400 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm font-medium text-slate-400 whitespace-nowrap w-20">
                         {ticket.ticketId || ticket.id.slice(0, 6)}
                       </td>
-                      <td className="px-4 py-3 text-sm font-bold text-slate-200 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm font-bold text-slate-200 whitespace-nowrap w-24">
                         {ticket.refNumber || '---'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-300 whitespace-nowrap">
-                        {ticket.clientName || '---'}
+                      <td className="px-4 py-3 text-sm text-slate-300 truncate w-28 max-w-[100px]" title={ticket.clientName || ''}>
+                        {(ticket.clientName || '---').split(' ')[0]}
                       </td>
                       {!hideProjectColumn && (
-                        <td className="px-4 py-3 text-sm text-slate-400 whitespace-nowrap">
-                          {(projects && ticket.projectId && projects[ticket.projectId]?.name) ||
+                        <td className="px-4 py-3 text-sm text-slate-400 whitespace-nowrap w-20">
+                          {(projects && ticket.projectId && projects[ticket.projectId]?.abbreviation) ||
+                            projects?.[ticket.projectId || '']?.name?.slice(0, 6) ||
                             ticket.projectAbbr || '---'}
                         </td>
                       )}
-                      <td className="px-4 py-3 text-sm text-slate-400 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm text-slate-400 whitespace-nowrap w-20">
                         {format(openDate, 'd/M/yyyy')}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-300 max-w-[280px] leading-relaxed">
+                      <td className="px-4 py-3 text-sm text-slate-300 min-w-[180px] max-w-[260px] leading-relaxed">
                         <span className="line-clamp-2">{ticket.description}</span>
                       </td>
-                      <td className={cn('px-3 py-3 text-center font-bold text-sm w-10 border-x border-border/20', priorityCls)}>
+                      <td className="px-4 py-3 text-center w-12">
+                        <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg border inline-block', statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
+                          {statusTranslations[ticket.status] ?? ticket.status}
+                        </span>
+                      </td>
+                      <td className={cn('px-3 py-3 text-center font-bold text-sm w-10', priorityCls)}>
                         {priorityNum}
                       </td>
                       <td className={cn('px-3 py-3 text-center text-sm w-12', daysBg)}>
                         {daysOpen}
                       </td>
-                      {/* عمود المسؤول يظهر الآن الأسماء فقط */}
                       {!hideSupervisorColumn && (
-                        <td className="px-4 py-3 text-center w-28">
+                        <td className="px-4 py-3 text-center w-24">
                           {supervisorNames.length > 0 ? (
                             <div className="flex flex-col gap-1 items-center">
                               {supervisorNames.map((name, i) => (
-                                <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap', i === 0 ? 'bg-amber-200/20 text-amber-200' : 'bg-blue-200/15 text-blue-300')}>
+                                <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap', i === 0 ? 'bg-green-350/20 text-red-500' : 'bg-blue-200/15 text-blue-500')}>
                                   {name}
                                 </span>
                               ))}
@@ -709,7 +767,7 @@ export function TicketTable({
                           )}
                         </td>
                       )}
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center w-20">
                         {typeList.length > 0 ? (
                           <div className="flex flex-col gap-1 items-center">
                             {typeList.map((t, i) => (
@@ -722,12 +780,7 @@ export function TicketTable({
                           <span className="text-[10px] text-slate-600">---</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg border', statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
-                          {statusTranslations[ticket.status] ?? ticket.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center max-w-[130px]">
+                      <td className="px-4 py-3 text-center w-24">
                         {ticket.appointmentTime ? (
                           <span className="text-[11px] text-emerald-400 font-bold">{ticket.appointmentTime}</span>
                         ) : ticket.closureNotes ? (
@@ -736,7 +789,7 @@ export function TicketTable({
                           <span className="text-[10px] text-slate-600">---</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 w-14">
                         <div className="flex justify-center gap-2">
                           <DropdownMenu>
                             <DropdownMenuTrigger render={
@@ -765,7 +818,15 @@ export function TicketTable({
             </tbody>
           </table>
         </div>
-      )}
+            )}
+
+      {/* ── Export Modal ──────────────────────────────────────────────── */}
+      <ExportTicketsModal
+        open={exportModalOpen}
+        onOpenChange={setExportModalOpen}
+        tickets={baseTickets}
+        projects={projects}
+      />
     </>
   );
 }

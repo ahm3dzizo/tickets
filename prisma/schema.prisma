@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -23,7 +24,6 @@ model User {
   notifPrefs       Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
-  // لا حقل createdTickets هنا
 }
 
 
@@ -64,8 +64,9 @@ model Ticket {
   issuedAt               String?
   description            String
   type                   String
+  typeId                 String?
   status                 String    @default("open")
-  priority               Int       @default(4)        // changed from String to Int
+  priority               Int       @default(4)
   assigneeName           String?
   assignedSupervisorId   String?
   assignedSupervisorIds  String[]  @default([])
@@ -77,8 +78,9 @@ model Ticket {
   maintenanceItems       Json?
   createdAt              DateTime  @default(now())
   closedAt               DateTime?
-  createdBy              String?                      // new field (user.uid)
+  createdBy              String?
   client                 Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  ticketType             TicketType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
 }
 
 model Technician {
@@ -98,6 +100,7 @@ model Technician {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
+
 enum TicketStatus {
   open
   in_progress
@@ -109,9 +112,80 @@ enum TicketStatus {
 }
 
 enum TicketPriority {
-  low      // 3
-  medium   // 4
-  medium_high // 6
-  high     // 7
-  urgent   // 9
+  low
+  medium
+  medium_high
+  high
+  urgent
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  جداول التصنيف والتعلم
+// ══════════════════════════════════════════════════════════════════════════════
+
+model Specialty {
+  id        String             @id @default(cuid())
+  key       String             @unique
+  nameAr    String
+  isActive  Boolean            @default(true)
+  sortOrder Int                @default(0)
+  createdAt DateTime           @default(now())
+
+  ticketTypes      TicketType[]
+  ticketSubTypes   TicketSubType[]
+}
+
+model TicketType {
+  id          String             @id @default(cuid())
+  key         String             @unique
+  nameAr      String
+  description String?
+  specialtyId String?
+  specialty   Specialty?         @relation(fields: [specialtyId], references: [id], onDelete: SetNull)
+  isActive    Boolean            @default(true)
+  sortOrder   Int                @default(0)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  keywords  TicketTypeKeyword[]
+  subTypes  TicketSubType[]
+  tickets   Ticket[]
+}
+
+model TicketSubType {
+  id            String             @id @default(cuid())
+  nameAr        String
+  description   String?
+  parentTypeId  String
+  parentType    TicketType         @relation(fields: [parentTypeId], references: [id], onDelete: Cascade)
+  specialtyId   String?
+  specialty     Specialty?         @relation(fields: [specialtyId], references: [id], onDelete: SetNull)
+  isActive      Boolean            @default(true)
+  sortOrder     Int                @default(0)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  keywords TicketTypeKeyword[]
+}
+
+model TicketTypeKeyword {
+  id          String        @id @default(cuid())
+  keyword     String
+  typeId      String?
+  ticketType  TicketType?   @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  subTypeId   String?
+  subType     TicketSubType? @relation(fields: [subTypeId], references: [id], onDelete: Cascade)
+  weight      Float         @default(1.0)
+  isLearned   Boolean       @default(false)
+  usageCount  Int           @default(0)
+  confidence  Float         @default(1.0)
+  source      String        @default("seed")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([keyword, typeId])
+  @@unique([keyword, subTypeId])
+  @@index([keyword])
+  @@index([typeId])
+  @@index([subTypeId])
 }

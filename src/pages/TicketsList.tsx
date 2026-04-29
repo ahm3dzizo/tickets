@@ -26,8 +26,7 @@ import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { Ticket, TicketType, Project, Client } from '@/types';
-import { classifyTicket } from '@/services/ticketClassifier';
-import { findMatchingSupervisors } from '@/services/supervisorAssignment';
+import { classifyOnServer } from '@/services/classificationApi';
 import { WhatsAppService } from '@/services/whatsappService';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -118,15 +117,13 @@ export default function TicketsList() {
       const updates: Promise<any>[] = [];
 
       for (const ticket of unassigned) {
-        const ticketType = (ticket.type || 'plumbing') as TicketType;
         const projectId = ticket.projectId || '';
 
         if (!projectId) { done++; noProjectCount++; continue; }
 
-        const { TYPE_TO_SPECIALTY } = await import('@/services/ticketClassifier');
-        const detectedTypes: TicketType[] = ticket.detectedTypes?.length ? ticket.detectedTypes as TicketType[] : [ticketType];
-        const specialties = [...new Set(detectedTypes.map((t: TicketType) => TYPE_TO_SPECIALTY[t]))] as any[];
-        const supervisors = await findMatchingSupervisors(projectId, specialties);
+        const description = ticket.description || ticket.type || 'plumbing';
+        const classification = await classifyOnServer({ description, projectId });
+        const supervisors = classification.supervisors;
         const primary = supervisors[0];
 
         if (primary) {
@@ -135,6 +132,8 @@ export default function TicketsList() {
             assignedSupervisorId:  primary.id,
             assignedSupervisorIds: supervisors.map((s: any) => s.id),
             assignedSupervisors:   supervisors,
+            detectedTypes:         classification.allTypes,
+            type:                  classification.primaryType,
           }));
         } else {
           noSupervisorCount++;
@@ -244,7 +243,7 @@ export default function TicketsList() {
               />
             )}
             {/* Create ticket manually */}
-            {(user?.role === 'admin' || user?.role === 'engineer') && <TicketForm />}
+            {(user?.role === 'admin' || user?.role === 'engineer') && <TicketForm onSuccess={loadData} />}
             {/* Reassign supervisors button */}
             {(user?.role === 'admin' || user?.role === 'engineer') && (
               <Button

@@ -44,6 +44,7 @@ import { Project, Ticket, Client, TicketType } from '@/types';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { ReportsSection } from '@/components/reports/ReportsSection';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -56,6 +57,7 @@ export default function Dashboard() {
   });
   const [userProjects, setUserProjects] = useState<Project[]>([]);
   const [recentTickets, setRecentTickets] = useState<Ticket[]>([]);
+  const [allTickets, setAllTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
@@ -136,6 +138,7 @@ export default function Dashboard() {
       else if (user.role !== 'admin' && user.projectIds?.length)
         params.projectIds = user.projectIds;
       const allTickets: Ticket[] = await ticketsApi.getAll(params) as Ticket[];
+      setAllTickets(allTickets);
       setRecentTickets(allTickets.slice(0, 10));
       setStats(prev => ({
         ...prev,
@@ -195,12 +198,15 @@ export default function Dashboard() {
         { label: 'إضافة مهندس', icon: UserPlus, component: <Link to="/team" className="w-full"><Button className="w-full justify-end gap-3 h-14 bg-white/5 hover:bg-white/10 text-slate-200 rounded-2xl border border-border">إضافة مهندس <UserPlus className="w-5 h-5 text-emerald-500" /></Button></Link> },
       ],
       engineer: [
-        { label: 'عميل جديد', icon: UserCheck, component: <ClientForm trigger={<Button className="w-full justify-end gap-3 h-14 bg-white/5 hover:bg-white/10 text-slate-200 rounded-2xl border border-border">عميل جديد <UserCheck className="w-5 h-5 text-blue-500" /></Button>} /> },
-        { label: 'تذكرة جديدة', icon: Plus, component: <TicketForm trigger={<Button className="w-full justify-end gap-3 h-14 bg-white/5 hover:bg-white/10 text-slate-200 rounded-2xl border border-border">تذكرة جديدة <Plus className="w-5 h-5 text-orange-500" /></Button>} /> },
+        { label: 'عميل جديد', icon: UserCheck, component: <ClientForm trigger={<Button className="w-full justify-end gap-3 h-14 bg-white/5 hover:bg-white/10 text-slate-200 rounded-2xl border border-border">عميل جديد <UserCheck className="w-5 h-5 text-blue-500" /></Button>} onSuccess={loadDashboard} /> },
+        { label: 'تذكرة جديدة', icon: Plus, component: <TicketForm trigger={<Button className="w-full justify-end gap-3 h-14 bg-white/5 hover:bg-white/10 text-slate-200 rounded-2xl border border-border">تذكرة جديدة <Plus className="w-5 h-5 text-orange-500" /></Button>} onSuccess={loadDashboard} /> },
       ],
       supervisor: [
         { label: 'فني جديد', icon: HardHat, component: <TechnicianForm trigger={<Button className="w-full justify-end gap-3 h-14 bg-white/5 hover:bg-white/10 text-slate-200 rounded-2xl border border-border">فني جديد <HardHat className="w-5 h-5 text-amber-500" /></Button>} /> },
         { label: 'موعد جديد', icon: Calendar, component: <Link to="/tickets" className="w-full"><Button className="w-full justify-end gap-3 h-14 bg-white/5 hover:bg-white/10 text-slate-200 rounded-2xl border border-border">جدولة موعد <Calendar className="w-5 h-5 text-purple-500" /></Button></Link> },
+        { label: 'إعادة تعيين مشرف', icon: UserPlus, component: (
+          <Link to="/tickets" className="w-full"><Button className="w-full justify-end gap-3 h-14 bg-white/5 hover:bg-white/10 text-slate-200 rounded-2xl border border-border">إعادة تعيين مشرف <UserPlus className="w-5 h-5 text-amber-500" /></Button></Link>
+        )},
       ]
     };
 
@@ -230,7 +236,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3 order-1 md:order-2 self-end md:self-auto">
             {user?.role === 'admin' && <ProjectForm />}
-            {(user?.role === 'admin' || user?.role === 'engineer') && <TicketForm />}
+            {(user?.role === 'admin' || user?.role === 'engineer') && <TicketForm onSuccess={loadDashboard} />}
           </div>
         </div>
 
@@ -494,6 +500,10 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Reports & Charts Section - Full width */}
+      <ReportsSection tickets={allTickets} projects={userProjects} userRole={user?.role} />
+
       {/* Floating bulk action bar */}
       {selectedTicketIds.length > 0 && (
         <BulkActionBar
@@ -512,7 +522,7 @@ export default function Dashboard() {
         selectedTickets={recentTickets.filter(t => selectedTicketIds.includes(t.id))}
         clients={Object.values(clients)}
         projects={Object.fromEntries(userProjects.map(p => [p.id, p]))}
-        onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }}
+        onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadDashboard(); }}
       />
     </Layout>
   );

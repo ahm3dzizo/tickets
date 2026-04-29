@@ -10,8 +10,15 @@ import {
   Loader2,
   Copy,
   ExternalLink,
-  FolderOpen
+  FolderOpen,
+  ChevronDown,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { 
   Dialog, 
   DialogContent, 
@@ -226,7 +233,11 @@ export function CloseTicketDialog({
       const fileName = `${mainTicket?.villaNumber || 'villa'}-${firstTicketNo}.jpg`;
       let saved = false;
 
-      // 1st priority: pre-selected directory handle
+      // 1st priority: auto-download to default Downloads folder (works on mobile & desktop)
+      downloadBlob(blob, fileName);
+      toast.success(`تم تنزيل التقرير: ${fileName}`);
+
+      // 2nd priority: try to save to pre-selected directory (enhancement, not blocking)
       const dirHandle = await getSavedDirHandle();
       if (dirHandle) {
         try {
@@ -237,52 +248,11 @@ export function CloseTicketDialog({
             await writable.write(blob);
             await writable.close();
             toast.success(`تم حفظ التقرير في ${dirHandle.name}/${fileName}`);
-            saved = true;
-          } else {
-            await clearDirHandle();
-            setSavedDirName(null);
-            toast.error('تم رفض إذن الوصول للمجلد — لم يتم إغلاق التذاكر');
-            return;
           }
-        } catch (dirErr: any) {
-          console.warn('Dir handle failed:', dirErr);
+        } catch {
           await clearDirHandle();
           setSavedDirName(null);
-          toast.error('فشل الوصول للمجلد المحدد — يرجى إعادة تعيين المجلد');
-          return;
         }
-      }
-
-      // 2nd priority: showSaveFilePicker (desktop Chrome/Edge only — skip on mobile)
-      if (!saved && !isMobileDevice && 'showSaveFilePicker' in window) {
-        try {
-          const fileHandle = await (window as any).showSaveFilePicker({
-            suggestedName: fileName,
-            types: [{ description: 'JPEG Image', accept: { 'image/jpeg': ['.jpg'] } }],
-            startIn: 'downloads',
-          });
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          toast.success(`تم حفظ التقرير: ${fileName}`);
-          saved = true;
-        } catch (fsErr: any) {
-          if (fsErr?.name === 'AbortError') {
-            // User cancelled — block closing
-            toast.warning('تم إلغاء الحفظ — لم يتم إغلاق التذاكر');
-            return;
-          }
-          // Other error — fallback to download
-          downloadBlob(blob, fileName);
-          toast.success(`تم تنزيل التقرير إلى مجلد التنزيلات`);
-          saved = true;
-        }
-      }
-
-      // Fallback: auto-download (mobile / Firefox)
-      if (!saved) {
-        downloadBlob(blob, fileName);
-        toast.success(`تم تنزيل التقرير إلى مجلد التنزيلات`);
       }
 
       // 2. Close tickets via API — only after successful save
@@ -369,16 +339,20 @@ export function CloseTicketDialog({
                   </Button>
                   
                   <div className="flex-1 flex gap-2">
-                    <select 
-                      className="bg-white/5 border-border rounded-xl px-3 text-xs text-white focus:ring-1 focus:ring-blue-500/30 outline-none w-32 h-10 text-right appearance-none"
-                      value={item.status}
-                      onChange={(e) => updateItem(index, 'status', e.target.value)}
-                    >
-                      <option value="تم" className="bg-slate-900">تم</option>
-                      <option value="لم يتم" className="bg-slate-900">لم يتم</option>
-                      <option value="جاري العمل" className="bg-slate-900">جاري</option>
-                      <option value="مرفوض" className="bg-slate-900">مرفوض</option>
-                    </select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={<Button variant="outline" className="w-32 justify-between border-border bg-white/5 text-white rounded-xl h-10 px-3 text-xs" />}
+                      >
+                        {item.status}
+                        <ChevronDown className="w-3 h-3 opacity-60" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => updateItem(index, 'status', 'تم')}>تم</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => updateItem(index, 'status', 'لم يتم')}>لم يتم</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => updateItem(index, 'status', 'جاري العمل')}>جاري</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => updateItem(index, 'status', 'مرفوض')}>مرفوض</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     
                     <Input 
                       placeholder="وصف العمل المنجز" 

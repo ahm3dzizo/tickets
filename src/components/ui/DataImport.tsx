@@ -298,13 +298,13 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
                     <span className="text-sm font-bold text-slate-300 w-28 text-right shrink-0">{fd.label}</span>
                     <div className="w-3 h-px bg-slate-700 shrink-0" />
                     <select
-                      className="flex-1 bg-white/5 border border-border rounded-lg px-3 py-2 text-sm text-slate-300 text-right"
+                      className="flex-1 bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm text-right"
                       value={mapping[fd.key] ?? ''}
                       onChange={e => setMapping(prev => ({ ...prev, [fd.key]: e.target.value }))}
                     >
-                      <option value="" className="bg-slate-900">-- تجاهل --</option>
+                      <option value="" className="bg-background text-foreground">-- تجاهل --</option>
                       {columns.map(c => (
-                        <option key={c} value={c} className="bg-slate-900">{c}</option>
+                        <option key={c} value={c} className="bg-background text-foreground">{c}</option>
                       ))}
                     </select>
                     {mapping[fd.key] && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}

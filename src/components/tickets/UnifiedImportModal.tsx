@@ -1,29 +1,46 @@
 // src/components/tickets/UnifiedImportModal.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ChevronDown, FileUp, AlertTriangle } from 'lucide-react';
+import { ChevronDown, FileUp, AlertTriangle, Plus, User, Phone, Loader2, CheckCircle } from 'lucide-react';
 import { DataImport, FieldDef } from '@/components/ui/DataImport';
-import { Project, Client } from '@/types';
-import { classifyTicket, TYPE_TO_SPECIALTY } from '@/services/ticketClassifier';
-import { findMatchingSupervisors } from '@/services/supervisorAssignment';
-import { ticketsApi } from '@/lib/api';
+import { Project, Client, TicketType } from '@/types';
+import { classifyOnServer, bulkClassifyOnServer, learnFromCorrection, getAuthHeaders } from '@/services/classificationApi';
+import { ticketsApi, clientsApi } from '@/lib/api';
 import { parseIssuedAt } from './TicketTable';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
 // --- Helper functions ---
-const normalizeDate = (dateStr: string): string => {
+const normalizeDate = (dateStr: unknown): string => {
   if (!dateStr) return new Date().toISOString().split('T')[0];
-  const parts = dateStr.split('/');
+  // Handle Date objects
+  if (dateStr instanceof Date && !isNaN(dateStr.getTime())) {
+    return dateStr.toISOString().split('T')[0];
+  }
+  // Handle numbers (Excel serial dates or timestamps)
+  if (typeof dateStr === 'number') {
+    if (dateStr > 1000 && dateStr < 100000) {
+      const d = new Date((dateStr - 25569) * 86400 * 1000);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    }
+    const d = new Date(dateStr > 9999999999 ? dateStr : dateStr * 1000);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    return new Date().toISOString().split('T')[0];
+  }
+  // Force to string for everything else
+  const str = String(dateStr);
+  if (!str) return new Date().toISOString().split('T')[0];
+  const parts = str.split('/');
   if (parts.length === 3) {
     let [day, month, year] = parts;
     if (year.length === 2) year = `20${year}`;
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
-  return dateStr.split('T')[0];
+  return str.split('T')[0];
 };
 
 const normalizeStatus = (status: string): string => {
@@ -40,6 +57,109 @@ const normalizeVillaNumber = (raw: string): string => {
   return cleaned || raw.trim();
 };
 
+// --- Add Client Inline Modal ---
+interface QuickAddClientModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  projectId: string;
+  villaNumber: string;
+  onClientCreated: (client: Client) => void;
+}
+
+const QuickAddClientModal: React.FC<QuickAddClientModalProps> = ({
+  isOpen, onClose, projectId, villaNumber, onClientCreated
+}) => {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setName('');
+      setPhone('');
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !phone) {
+      toast.error('يرجى إدخال اسم العميل ورقم الهاتف');
+      return;
+    }
+    setLoading(true);
+    try {
+      const newClient = await clientsApi.create(projectId, {
+        name,
+        phone,
+        villaNumber,
+        projectId,
+        createdAt: new Date().toISOString()
+      });
+      toast.success(`تم إضافة العميل ${name} بنجاح`);
+      onClientCreated(newClient);
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'فشل إضافة العميل';
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[400px] rounded-3xl">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold text-white text-right flex items-center gap-2">
+            <Plus className="w-5 h-5 text-emerald-400" />
+            إضافة عميل جديد
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div className="bg-white/5 rounded-xl p-3 text-right text-sm">
+            <span className="text-slate-500">رقم الفيلا: </span>
+            <span className="text-white font-bold">{villaNumber}</span>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">اسم العميل</Label>
+            <div className="relative">
+              <Input
+                placeholder="مثال: محمد أحمد"
+                className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-11 text-right pr-12"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+              <User className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">رقم الهاتف</Label>
+            <div className="relative">
+              <Input
+                placeholder="05xxxxxxx"
+                className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-11 text-right pr-12 font-mono"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+              />
+              <Phone className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="submit" disabled={loading} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-xl h-11 font-bold">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'إضافة وربط التذاكر'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={onClose} className="text-slate-500 hover:text-white rounded-xl h-11">
+              إلغاء
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 // --- Manual Matching Modal ---
 interface ManualMatchingModalProps {
   isOpen: boolean;
@@ -48,18 +168,30 @@ interface ManualMatchingModalProps {
   unmatchedTickets: any[];
   clients: Client[];
   projects: Project[];
+  projectId: string;
+  onClientsUpdated: () => void;
 }
 
 const ManualMatchingModal: React.FC<ManualMatchingModalProps> = ({ 
-  isOpen, onClose, onConfirm, unmatchedTickets, clients, projects 
+  isOpen, onClose, onConfirm, unmatchedTickets, clients, projects, projectId, onClientsUpdated 
 }) => {
   const [matchedData, setMatchedData] = useState<any[]>([]);
+  const [currentClients, setCurrentClients] = useState<Client[]>(clients);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddVilla, setQuickAddVilla] = useState('');
+  const [quickAddTicketIdx, setQuickAddTicketIdx] = useState(-1);
+  const [autoResolvedVillas, setAutoResolvedVillas] = useState<Set<string>>(new Set());
+
+  // Keep currentClients in sync when clients prop changes
+  React.useEffect(() => {
+    setCurrentClients(clients);
+  }, [clients]);
 
   React.useEffect(() => {
     if (isOpen) {
       const initialData = unmatchedTickets.map(ticket => {
         const targetProject = projects.find(p => p.abbreviation === ticket.projectPrefix) || projects[0];
-        const projectClients = clients.filter(c => c.projectId === targetProject?.id);
+        const projectClients = currentClients.filter(c => c.projectId === targetProject?.id);
         const autoMatchedClient = projectClients.find(c => 
           ticket.cleanVillaNumber && String(c.villaNumber) === String(ticket.cleanVillaNumber)
         );
@@ -71,13 +203,41 @@ const ManualMatchingModal: React.FC<ManualMatchingModalProps> = ({
         };
       });
       setMatchedData(initialData);
+      setAutoResolvedVillas(new Set());
     }
-  }, [isOpen, unmatchedTickets, clients, projects]);
+  }, [isOpen, unmatchedTickets, currentClients, projects]);
 
   const handleClientChange = (ticketIndex: number, clientId: string) => {
     const updated = [...matchedData];
     updated[ticketIndex].clientId = clientId;
     setMatchedData(updated);
+  };
+
+  const handleOpenQuickAdd = (idx: number, villa: string) => {
+    setQuickAddVilla(villa);
+    setQuickAddTicketIdx(idx);
+    setQuickAddOpen(true);
+  };
+
+  const handleClientCreated = (newClient: Client) => {
+    // Add the new client to current clients list
+    setCurrentClients(prev => [...prev, newClient]);
+
+    // Auto-match ALL tickets that have the same villa number
+    const updated = matchedData.map(ticket => {
+      if (ticket.cleanVillaNumber === quickAddVilla) {
+        return {
+          ...ticket,
+          clientId: newClient.id,
+          availableClients: [...ticket.availableClients, newClient]
+        };
+      }
+      return ticket;
+    });
+    setMatchedData(updated);
+
+    // Track which villa got auto-resolved
+    setAutoResolvedVillas(prev => new Set(prev).add(quickAddVilla));
   };
 
   const handleConfirm = () => {
@@ -88,51 +248,225 @@ const ManualMatchingModal: React.FC<ManualMatchingModalProps> = ({
     }
     const finalTickets = matchedData.map(t => ({
       ...t,
-      clientName: clients.find(c => c.id === t.clientId)?.name || 'عميل مجهول',
-      villaNumber: clients.find(c => c.id === t.clientId)?.villaNumber || t.cleanVillaNumber
+      clientName: currentClients.find(c => c.id === t.clientId)?.name || 'عميل مجهول',
+      villaNumber: currentClients.find(c => c.id === t.clientId)?.villaNumber || t.cleanVillaNumber
     }));
     onConfirm(finalTickets);
+    // Notify parent that clients may have been added
+    onClientsUpdated();
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-white text-right flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-yellow-500" />
-            ربط يدوي للتذاكر غير المتطابقة
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-6 py-4">
-          {matchedData.map((ticket, idx) => (
-            <div key={idx} className="border border-red-500/30 bg-red-500/5 p-4 rounded-lg space-y-3">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-slate-500">رقم التذكرة:</span><span className="font-bold text-white mr-2">{ticket.ticketId || '—'}</span></div>
-                <div><span className="text-slate-500">رقم الفيلا:</span><span className="font-bold text-white mr-2">{ticket.cleanVillaNumber || 'غير معروف'}</span></div>
-                <div className="col-span-2"><span className="text-slate-500">الوصف:</span><span className="text-slate-300 mr-2 line-clamp-2">{ticket.description}</span></div>
-              </div>
-              <div>
-                <Label className="text-slate-500 text-right text-xs">اختر العميل:</Label>
-                <select 
-                  className="w-full bg-white/5 border border-border rounded-xl p-2 text-right mt-1"
-                  value={ticket.clientId}
-                  onChange={(e) => handleClientChange(idx, e.target.value)}
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-white text-right flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              ربط يدوي للتذاكر غير المتطابقة
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            {matchedData.map((ticket, idx) => {
+              const isResolved = autoResolvedVillas.has(ticket.cleanVillaNumber);
+              return (
+                <div 
+                  key={idx} 
+                  className={`p-4 rounded-lg space-y-3 transition-all ${
+                    isResolved 
+                      ? 'border border-emerald-500/30 bg-emerald-500/10' 
+                      : 'border border-red-500/30 bg-red-500/5'
+                  }`}
                 >
-                  <option value="">-- اختر عميل --</option>
-                  {ticket.availableClients.map((c: Client) => (
-                    <option key={c.id} value={c.id}>{c.name} - فيلا {c.villaNumber}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div><span className="text-slate-500">رقم التذكرة:</span><span className="font-bold text-white mr-2">{ticket.ticketId || '—'}</span></div>
+                    <div><span className="text-slate-500">رقم الفيلا:</span><span className="font-bold text-white mr-2">{ticket.cleanVillaNumber || 'غير معروف'}</span></div>
+                    <div className="col-span-2"><span className="text-slate-500">الوصف:</span><span className="text-slate-300 mr-2 line-clamp-2">{ticket.description}</span></div>
+                  </div>
+                  
+                  {isResolved ? (
+                    <div className="flex items-center gap-2 text-emerald-400 text-sm">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>تم الربط تلقائياً مع العميل المضاف</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                          <Label className="text-slate-500 text-right text-xs">اختر العميل:</Label>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-[42px] px-3 text-sm mt-1" />}
+                              className="w-full"
+                            >
+                              {ticket.clientId
+                                ? (ticket.availableClients.find((c: any) => c.id === ticket.clientId)?.name || '') +
+                                  ' - فيلا ' +
+                                  (ticket.availableClients.find((c: any) => c.id === ticket.clientId)?.villaNumber || '')
+                                : '-- اختر عميل --'}
+                              <ChevronDown className="w-3 h-3 opacity-60" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto" align="end">
+                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end text-slate-500" onClick={() => handleClientChange(idx, '')}>-- اختر عميل --</DropdownMenuItem>
+                              {ticket.availableClients.map((c: any) => (
+                                <DropdownMenuItem key={c.id} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => handleClientChange(idx, c.id)}>
+                                  {c.name} - فيلا {c.villaNumber}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="shrink-0 border-dashed border-emerald-500/40 text-emerald-400 hover:text-emerald-300 hover:border-emerald-500 rounded-xl h-[42px] gap-1.5 text-xs font-bold"
+                        onClick={() => handleOpenQuickAdd(idx, ticket.cleanVillaNumber)}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        إضافة عميل
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button onClick={handleConfirm} className="bg-blue-600">تأكيد الربط ومتابعة الاستيراد</Button>
+            <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <QuickAddClientModal
+        isOpen={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+        projectId={projectId}
+        villaNumber={quickAddVilla}
+        onClientCreated={handleClientCreated}
+      />
+    </>
+  );
+};
+
+// ── حاوية لكل بطاقة في الـ Review (عشان قواعد الـ Hooks) ──────────────
+interface ReviewTicketCardProps {
+  ticket: any;
+  index: number;
+  projectId: string;
+  typeTranslations: Record<string, string>;
+  allSupervisors: { id: string; name: string }[];
+  onUpdate: (updated: any) => void;
+}
+
+const ReviewTicketCard: React.FC<ReviewTicketCardProps> = ({
+  ticket, index, projectId, typeTranslations, allSupervisors, onUpdate,
+}) => {
+  const [ticketTypes, setTicketTypes] = useState<TicketType[]>(
+    ticket.detectedTypes || [ticket.type || 'plumbing']
+  );
+  const [selectedSupervisorIds, setSelectedSupervisorIds] = useState<string[]>(
+    ticket.assignedSupervisorIds || []
+  );
+
+  const updateTypes = (newTypes: TicketType[]) => {
+    setTicketTypes(newTypes);
+    const firstType = newTypes[0] || 'plumbing';
+    classifyOnServer({
+      description: ticket.description || firstType,
+      projectId,
+    }).then(result => {
+      const valid = result.supervisors.filter((s: any) => !s.id.startsWith('pending_'));
+      setSelectedSupervisorIds(valid.map((s: any) => s.id));
+      onUpdate({
+        ...ticket,
+        detectedTypes: newTypes,
+        type: firstType,
+        assignedSupervisorIds: valid.map((s: any) => s.id),
+        assignedSupervisors: valid,
+        assigneeName: valid[0]?.name || '',
+        assignedSupervisorId: valid[0]?.id || null,
+      });
+    }).catch(() => {});
+  };
+
+  const toggleSupervisor = (supId: string) => {
+    const newIds = selectedSupervisorIds.includes(supId)
+      ? selectedSupervisorIds.filter(id => id !== supId)
+      : [...selectedSupervisorIds, supId];
+    setSelectedSupervisorIds(newIds);
+    const selectedSups = allSupervisors.filter(s => newIds.includes(s.id));
+    onUpdate({
+      ...ticket,
+      assignedSupervisorIds: newIds,
+      assignedSupervisors: selectedSups,
+      assigneeName: selectedSups[0]?.name || '',
+      assignedSupervisorId: selectedSups[0]?.id || null,
+    });
+  };
+
+  return (
+    <div className="border border-border/60 rounded-xl p-4 bg-white/[0.02] space-y-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+        <div><span className="text-slate-500">رقم التذكرة:</span><span className="text-white font-bold mr-1">{ticket.ticketId || '—'}</span></div>
+        <div><span className="text-slate-500">فيلا:</span><span className="text-white font-bold mr-1">{ticket.cleanVillaNumber || '—'}</span></div>
+        <div className="col-span-2"><span className="text-slate-500">العميل:</span><span className="text-white mr-1">{ticket.clientName || 'غير معروف'}</span></div>
+        <div className="col-span-4 text-xs text-slate-400 line-clamp-2">{ticket.description}</div>
+      </div>
+
+      {/* Types selector */}
+      <div>
+        <Label className="text-slate-500 text-[10px] font-bold uppercase block text-right mb-1">التخصص</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {(Object.entries(typeTranslations) as [string, string][]).map(([typeKey, typeLabel]) => (
+            <button
+              key={typeKey}
+              type="button"
+              onClick={() => {
+                const t = typeKey as TicketType;
+                const newTypes = ticketTypes.includes(t)
+                  ? (ticketTypes.length > 1 ? ticketTypes.filter(x => x !== t) : ticketTypes)
+                  : [...ticketTypes, t];
+                updateTypes(newTypes);
+              }}
+              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
+                ticketTypes.includes(typeKey as TicketType)
+                  ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                  : 'bg-white/5 border-border text-slate-500 hover:border-slate-400'
+              }`}
+            >
+              {typeLabel}
+            </button>
           ))}
         </div>
-        <div className="flex justify-end gap-3 pt-4">
-          <Button onClick={handleConfirm} className="bg-blue-600">تأكيد الربط ومتابعة الاستيراد</Button>
-          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+
+      {/* Supervisors multi-select */}
+      <div>
+        <Label className="text-slate-500 text-[10px] font-bold uppercase block text-right mb-1">
+          المشرفون المختصون {allSupervisors.length > 0 ? `(${allSupervisors.length})` : ''}
+        </Label>
+        {allSupervisors.length === 0 ? (
+          <p className="text-[10px] text-slate-600 text-right">لا يوجد مشرفون في هذا المشروع</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {allSupervisors.map(sup => (
+              <button
+                key={sup.id}
+                type="button"
+                onClick={() => toggleSupervisor(sup.id)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                  selectedSupervisorIds.includes(sup.id)
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                    : 'bg-white/5 border-border text-slate-500 hover:border-slate-400'
+                }`}
+              >
+                {sup.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -158,15 +492,36 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
   const hasClientsInProject = selectedProjectId && clients.some(c => c.projectId === selectedProjectId);
   const projectAbbr = selectedProject?.abbreviation?.toUpperCase() || '';
 
-  const fieldDefs: FieldDef[] = [
+    const fieldDefs: FieldDef[] = [
     { key: 'ticketId',    label: 'رقم التذكرة', aliases: ['ID', 'id', 'رقم التذكرة', 'الرقم', '#'] },
     { key: 'villaNumber', label: 'رقم الفيلا',  aliases: ['فيلا', 'villa', 'رقم الوحدة', 'الوحدة'] },
     { key: 'createdAt',   label: 'تاريخ الإنشاء', aliases: ['التاريخ', 'date', 'تاريخ التذكرة', 'تاريخ الإنشاء', 'issuedAt'] },
     { key: 'description', label: 'الوصف',        aliases: ['الوصف', 'وصف', 'description', 'المشكلة', 'تفاصيل المشكلة'] },
-    { key: 'status',      label: 'الحالة',       aliases: ['الحالة', 'status', 'حالة التذكرة'] },
+    { key: 'status',      label: 'الحالة',       aliases: ['الحالة', 'status', 'حالة التذكرة', 'حالة الاغلاق', 'حالة الإغلاق'] },
+    { key: 'closedAt',    label: 'تاريخ الإغلاق', aliases: ['تاريخ الإغلاق', 'تاريخ الاغلاق', 'تاريخ الغلق', 'closed date', 'close date'] },
   ];
 
-  const handleImport = async (data: any[]) => {
+    // جلب التذاكر الموجودة مسبقاً في قاعدة البيانات للمشروع المحدد
+  const [existingTickets, setExistingTickets] = useState<any[]>([]);
+  useEffect(() => {
+    if (!selectedProjectId) { setExistingTickets([]); return; }
+    ticketsApi.getAll({ projectId: selectedProjectId }).then((list: any[]) => {
+      setExistingTickets(list);
+    }).catch(() => {});
+  }, [selectedProjectId]);
+
+  // New: Review modal state — combined matched + unmatched with editable fields
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewTickets, setReviewTickets] = useState<any[]>([]);
+  const [allSupervisorsForProject, setAllSupervisorsForProject] = useState<{id: string; name: string}[]>([]);
+  const [loadingSupervisors, setLoadingSupervisors] = useState(false);
+
+  // Build a set of existing ticket keys for duplicate detection
+  const existingKeys = new Set(
+    existingTickets.map(t => `${t.ticketId || ''}::${t.villaNumber || ''}`)
+  );
+
+    const handleImport = async (data: any[]) => {
     if (!selectedProjectId) {
       toast.error('يرجى اختيار المشروع أولاً');
       return;
@@ -180,6 +535,32 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     setProgress(0);
     const allClientsArr = clients.filter(c => c.projectId === selectedProjectId);
 
+    // ── جلب كل المشرفين لهذا المشروع (للواجهة فقط) ──
+    setLoadingSupervisors(true);
+    const { usersApi } = await import('@/lib/api');
+    const allUsers = await usersApi.getAll();
+    const projectSupervisors = allUsers.filter(
+      (u: any) => u.role === 'supervisor' && Array.isArray(u.projectIds) && u.projectIds.includes(selectedProjectId)
+    );
+    setAllSupervisorsForProject(projectSupervisors.map((u: any) => ({ id: u.uid, name: u.displayName })));
+    setLoadingSupervisors(false);
+
+    // ── تصنيف الكل دفعة واحدة على السيرفر ──
+    const items = data.map(item => ({
+      description: String(item.description || '').trim(),
+      projectId: selectedProjectId,
+    }));
+
+    let classifications: any[] = [];
+    try {
+      classifications = await bulkClassifyOnServer(items);
+    } catch (err) {
+      toast.error('فشل التصنيف على السيرفر. حاول مرة أخرى.');
+      setLoading(false);
+      return;
+    }
+
+    // ── تجهيز التذاكر ──
     const processed: any[] = [];
     for (let idx = 0; idx < data.length; idx++) {
       const item = data[idx];
@@ -188,12 +569,16 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       const description = String(item.description || '').trim();
       const rawDate = item.createdAt ?? item.issuedAt ?? item.date ?? '';
       const rawStatus = String(item.status || '').trim();
+      const classification = classifications[idx];
 
       const cleanVillaNumber = normalizeVillaNumber(rawVillaNumber);
       const refNumber = cleanVillaNumber ? `${projectAbbr}-${cleanVillaNumber}` : '';
 
-      const classification = classifyTicket(description);
-      const finalType = classification.primaryType;
+      // الكشف عن المكرر
+      const dupKey = `${ticketId}::${cleanVillaNumber}`;
+      const isDuplicate = existingKeys.has(dupKey);
+
+      const finalType = classification?.primaryType || 'plumbing';
 
       let clientId = '';
       let clientName = '';
@@ -207,24 +592,47 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         }
       }
 
-      const requiredSpecialties = [...new Set(classification.allTypes.map(t => TYPE_TO_SPECIALTY[t]))];
-      const supervisors = await findMatchingSupervisors(selectedProjectId, requiredSpecialties);
-      const validSupervisors = supervisors.filter(s => !s.id.startsWith('pending_'));
+      // المشرفون من نتيجة التصنيف على السيرفر
+      const supervisors = classification?.supervisors || [];
+      const validSupervisors = supervisors.filter((s: any) => !s.id.startsWith('pending_'));
       const primary = validSupervisors[0] || null;
-      const supervisorIds = validSupervisors.map(s => s.id);
+      const supervisorIds = validSupervisors.map((s: any) => s.id);
 
-      let issuedAtStr = '';
+                        let issuedAtStr = '';
       if (rawDate) {
-        const d = parseIssuedAt(rawDate);
-        if (d) issuedAtStr = format(d, 'yyyy-MM-dd');
-        else issuedAtStr = normalizeDate(rawDate);
+        // Ensure rawDate is a string or number for parseIssuedAt
+        const normalizedRaw = rawDate instanceof Date ? rawDate.toISOString() : rawDate;
+        const d = parseIssuedAt(normalizedRaw);
+        if (d && !isNaN(d.getTime())) issuedAtStr = format(d, 'yyyy-MM-dd');
+        else issuedAtStr = normalizeDate(normalizedRaw);
       } else {
         issuedAtStr = new Date().toISOString().split('T')[0];
       }
 
-      const status = normalizeStatus(rawStatus);
+            const status = normalizeStatus(rawStatus);
 
-      processed.push({
+                        // Handle closed date from Excel
+            let closedAtStr: string | null = null;
+            const rawClosedAt = item.closedAt || '';
+            if (rawClosedAt) {
+              // Ensure rawClosedAt is a string or number for parseIssuedAt
+              const normalizedClosed = rawClosedAt instanceof Date ? rawClosedAt.toISOString() : rawClosedAt;
+              const d = parseIssuedAt(normalizedClosed);
+              if (d && !isNaN(d.getTime())) closedAtStr = d.toISOString();
+              else {
+                const nd = normalizeDate(normalizedClosed);
+                if (nd) {
+                  const parsed = new Date(nd);
+                  if (!isNaN(parsed.getTime())) closedAtStr = parsed.toISOString();
+                }
+              }
+            }
+            // If status is closed but no closedAt provided, use current time
+            if (status === 'closed' && !closedAtStr) {
+              closedAtStr = new Date().toISOString();
+            }
+
+            processed.push({
         ticketId,
         refNumber,
         cleanVillaNumber,
@@ -233,37 +641,84 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         clientName,
         description,
         status,
+        closedAt: closedAtStr,
         issuedAt: issuedAtStr,
         assigneeName: primary?.name || '',
         assignedSupervisorId: primary?.id || null,
         assignedSupervisorIds: supervisorIds,
         assignedSupervisors: validSupervisors,
-        detectedTypes: classification.allTypes,
+        detectedTypes: classification?.allTypes || [],
         type: finalType,
         priority: 3,
         createdAt: new Date().toISOString(),
         createdBy: currentUserId || null,
         projectPrefix: projectAbbr,
+        isDuplicate,
       });
     }
 
-    const matched = processed.filter(t => t.clientId);
-    const unmatched = processed.filter(t => !t.clientId);
+    const newTickets = processed.filter(t => !t.isDuplicate);
+    const duplicates = processed.filter(t => t.isDuplicate);
 
-    if (unmatched.length > 0) {
-      setPendingMatchedTickets(matched);
-      setUnmatchedTickets(unmatched);
-      setManualModalOpen(true);
-      toast.warning(`${unmatched.length} تذكرة تحتاج إلى ربط يدوي.`);
-      setLoading(false);
-    } else if (matched.length === 0) {
-      toast.error('لا توجد تذاكر صالحة للاستيراد.');
-      setLoading(false);
-    } else {
-      await finalizeImport(matched);
-      setLoading(false);
+    if (duplicates.length > 0) {
+      toast.info(`تم تخطي ${duplicates.length} تذكرة مكررة`);
     }
+
+    if (newTickets.length === 0) {
+      toast.error('جميع التذاكر موجودة مسبقاً (مكررة). لا يوجد جديد للاستيراد.');
+      setLoading(false);
+      return;
+    }
+
+        // Close the import dialog first to avoid Radix UI dialog conflicts
+        setOpen(false);
+
+        // Small delay to let Radix close the parent dialog cleanly
+        setTimeout(() => {
+          setReviewTickets(newTickets);
+          setOriginalTypesMap(
+            Object.fromEntries(newTickets.map((t: any) => [
+              t.ticketId || t.refNumber,
+              Array.isArray(t.detectedTypes) && t.detectedTypes.length > 0
+                ? [...t.detectedTypes]
+                : [t.type || 'plumbing'],
+            ]))
+          );
+          setReviewModalOpen(true);
+          setLoading(false);
+        }, 200);
   };
+
+  // ── حفظ الأنواع الأصلية لكل تذكرة (لتعليم السيرفر عند التعديل) ──
+  const [originalTypesMap, setOriginalTypesMap] = useState<Record<string, string[]>>({});
+
+    // ── جلب أنواع التذاكر من السيرفر بدلاً من الـ hardcoded map ──
+  const [serverTypes, setServerTypes] = useState<{ key: string; nameAr: string }[]>([]);
+  useEffect(() => {
+    fetch('/api/classify/types', {
+      headers: getAuthHeaders(),
+    })
+      .then(res => res.json())
+      .then((types: any[]) => {
+        setServerTypes(types.map(t => ({ key: t.key, nameAr: t.nameAr })));
+      })
+      .catch(() => {
+        // Fallback to hardcoded map if API fails
+        setServerTypes(Object.entries(FALLBACK_TYPE_TRANSLATIONS).map(([key, nameAr]) => ({ key, nameAr })));
+      });
+  }, []);
+
+  const FALLBACK_TYPE_TRANSLATIONS: Record<string, string> = {
+    'electricity': 'كهرباء', 'plumbing': 'سباكة', 'doors': 'أبواب',
+    'paints': 'دهانات', 'painting': 'دهانات', 'cracks': 'تشققات',
+    'ceramics': 'سيراميك', 'tiles': 'سيراميك', 'tank_insulation': 'عزل خزان',
+    'drainage': 'صرف صحي', 'ac_ventilation': 'تكييف وتهوية', 'pumps': 'مضخات',
+    'doors_windows': 'أبواب ونوافذ', 'waterproofing': 'عزل مائي',
+    'grading': 'ميول وترويبة', 'pest_control': 'مكافحة حشرات',
+    'cleaning': 'تنظيف', 'structural': 'إنشائي',
+  };
+  const typeTranslations = Object.fromEntries(serverTypes.map(t => [t.key, t.nameAr]));
+  const allTypeOptions = serverTypes.map(t => t.key);
 
   const finalizeImport = async (ticketsToSave: any[]) => {
     const payload = ticketsToSave.map(t => ({
@@ -273,8 +728,9 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       clientId: t.clientId,
       clientName: t.clientName,
       villaNumber: t.cleanVillaNumber,
-      description: t.description,
+            description: t.description,
       status: t.status,
+      closedAt: t.closedAt,
       priority: Number(t.priority) || 3,
       issuedAt: t.issuedAt,
       createdAt: t.createdAt,
@@ -302,7 +758,36 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       setProgress((i + batch.length) / payload.length);
     }
 
-    if (failCount === 0) {
+        if (failCount === 0) {
+      // ── تعليم السيرفر من التعديلات ──
+      const learnPromises: Promise<any>[] = [];
+      for (const t of ticketsToSave) {
+        const key = t.ticketId || t.refNumber;
+        const originalTypes = originalTypesMap[key] || [];
+        const newTypes: string[] = Array.isArray(t.detectedTypes) && t.detectedTypes.length > 0
+          ? t.detectedTypes
+          : [t.type || 'plumbing'];
+
+        const origSorted = [...originalTypes].sort();
+        const newSorted = [...newTypes].sort();
+        const changed =
+          origSorted.length !== newSorted.length ||
+          origSorted.some((o, i) => o !== newSorted[i]);
+
+        if (changed && newSorted.length > 0 && t.description) {
+          learnPromises.push(
+            learnFromCorrection(t.description, newSorted[0])
+              .catch(() => { /* تعلم فاشل لا يمنع نجاح الاستيراد */ })
+          );
+        }
+      }
+      if (learnPromises.length > 0) {
+        Promise.allSettled(learnPromises).then(results => {
+          const learned = results.filter(r => r.status === 'fulfilled').length;
+          if (learned > 0) console.log(`[Learn] تم تعلم ${learned} تصنيفات من الاستيراد`);
+        });
+      }
+
       toast.success(`تم استيراد ${successCount} تذكرة بنجاح`);
       setOpen(false);
       setSelectedProjectId('');
@@ -320,16 +805,15 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
-  <DialogTrigger asChild>
-    {/* هنا نجعل الـ DialogTrigger يتصرف كأنه Button بالتنسيق الذي تريده */}
-    <Button 
-      variant="outline" 
-      className="border-border bg-white/5 text-slate-300 hover:text-white gap-2 rounded-xl h-11 px-5 font-bold"
-    >
-      {trigger}
-    </Button>
-  </DialogTrigger>
+            <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger render={
+          <Button
+            variant="outline"
+            className="border-border bg-white/5 text-slate-300 hover:text-white gap-2 rounded-xl h-11 px-5 font-bold"
+          >
+            {trigger}
+          </Button>
+        } />
         
         <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[600px] rounded-3xl">
           <DialogHeader>
@@ -400,14 +884,62 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         </DialogContent>
       </Dialog>
 
-      <ManualMatchingModal
+                        <ManualMatchingModal
         isOpen={manualModalOpen}
         onClose={() => setManualModalOpen(false)}
         onConfirm={handleManualConfirm}
         unmatchedTickets={unmatchedTickets}
         clients={clients.filter(c => c.projectId === selectedProjectId)}
         projects={projects}
+        projectId={selectedProjectId}
+        onClientsUpdated={onImportSuccess}
       />
+
+            {/* ── Review & Confirm Modal ───────────────────────────────────── */}
+      <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
+        <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[900px] max-h-[85vh] overflow-y-auto rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-white text-right flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-blue-500" />
+              مراجعة التذاكر الجديدة ({reviewTickets.length})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-xs text-slate-500 text-right">
+              يمكنك تعديل التخصص والمشرفين قبل تأكيد الاستيراد. اختر أكثر من مشرف حسب الحاجة.
+            </p>
+            {reviewTickets.map((ticket, idx) => (
+              <ReviewTicketCard
+                key={idx}
+                ticket={ticket}
+                index={idx}
+                projectId={selectedProjectId}
+                typeTranslations={typeTranslations}
+                allSupervisors={allSupervisorsForProject}
+                onUpdate={(updatedTicket) => { reviewTickets[idx] = updatedTicket; }}
+              />
+            ))}
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl h-11 font-bold"
+              onClick={() => {
+                finalizeImport(reviewTickets);
+                setReviewModalOpen(false);
+              }}
+            >
+              تأكيد واستيراد {reviewTickets.length} تذكرة
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setReviewModalOpen(false)}
+              className="text-slate-500 hover:text-white rounded-xl h-11"
+            >
+              إلغاء
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

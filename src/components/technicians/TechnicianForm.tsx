@@ -18,9 +18,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { techniciansApi } from '@/lib/api';
-import { projectsApi, usersApi } from '@/lib/api';
-import { Project, User } from '@/types';
+import { techniciansApi, projectsApi, usersApi } from '@/lib/api';
+import { Project, User, TicketType } from '@/types';
+import { typeTranslations } from '@/components/tickets/TicketTable';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface TechnicianFormProps {
@@ -178,19 +179,23 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved }: T
 
           <div className="space-y-2">
             <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">التخصص</Label>
-            <div className="relative">
-              <select 
-                className="w-full pr-12 bg-white/5 border-border rounded-xl focus:ring-2 focus:ring-blue-500/20 text-white h-12 transition-all text-right appearance-none"
-                value={specialty}
-                onChange={(e) => setSpecialty(e.target.value)}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12" />}
+                className="w-full"
               >
-                <option value="mechanics" className="bg-slate-900">ميكانيكا</option>
-                <option value="electricity" className="bg-slate-900">كهرباء</option>
-                <option value="plumbing" className="bg-slate-900">سباكة</option>
-                <option value="general" className="bg-slate-900">عام</option>
-              </select>
-              <Briefcase className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            </div>
+                <Briefcase className="w-3 h-3 opacity-50" />
+                <span>{typeTranslations[specialty as keyof typeof typeTranslations] || specialty || 'اختر التخصص'}</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto" align="end">
+                <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setSpecialty('general')}>عام</DropdownMenuItem>
+                {(Object.keys(typeTranslations) as TicketType[]).map(t => (
+                  <DropdownMenuItem key={t} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setSpecialty(t)}>
+                    {typeTranslations[t]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <DialogFooter className="pt-4 gap-3">

@@ -27,9 +27,10 @@ interface ClientFormProps {
   trigger?: React.ReactNode;
   projectId?: string;
   nativeButton?: boolean;
+  onSuccess?: () => void;
 }
 
-export function ClientForm({ trigger, projectId: initialProjectId, nativeButton }: ClientFormProps) {
+export function ClientForm({ trigger, projectId: initialProjectId, nativeButton, onSuccess }: ClientFormProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
@@ -70,6 +71,7 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton 
       toast.success('تم إضافة العميل بنجاح');
       setOpen(false);
       resetForm();
+      onSuccess?.();
     } catch (error) {
       console.error('Error creating client:', error);
       const message = error instanceof Error ? error.message : 'فشل إضافة العميل';
@@ -108,6 +110,7 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton 
     });
     await Promise.all(rows);
     setOpen(false);
+    onSuccess?.();
   };
 
   return (
