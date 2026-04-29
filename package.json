@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "push": "node scripts/deploy.js",
     "dev": "tsx server/main.ts",
     "build": "vite build",
     "seed": "tsx prisma/seed.ts",
