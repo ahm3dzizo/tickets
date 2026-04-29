@@ -1,10 +1,10 @@
 import { execSync } from 'child_process';
-import { createRequire } from 'module';
 
 // ── Config ──────────────────────────────────────────
-const SSH_HOST = 'knot';
-const API_DIR  = '/opt/retal-api';
-const PM2_NAME = 'retal-api';
+const SSH_HOST  = 'knot';
+const API_DIR   = '/opt/retal-api';
+const PM2_NAME  = 'retal-api';
+const GIT_BRANCH = 'main';           // ← غيّره لو الـ branch مختلف
 
 // ── Colors ───────────────────────────────────────────
 const c = {
@@ -63,27 +63,41 @@ if (!status) {
   run(`git commit -m "${msg}"`);
 
   log('رفع الكود على GitHub...');
-  run('git push');
+  run(`git push origin ${GIT_BRANCH}`);
   ok('تم رفع الكود بنجاح ✓');
 }
 
 console.log('');
 
 // ════════════════════════════════════════
-//  PART 2 — SERVER: pull + restart
+//  PART 2 — SERVER via SSH
 // ════════════════════════════════════════
 log(`الاتصال بالسيرفر (${SSH_HOST})...`);
 
-const remoteScript = [
+// كتابة السكريبت في ملف مؤقت على السيرفر وتشغيله
+// عشان نتجنب مشكلة الـ quoting على Windows
+const remoteLines = [
   `cd ${API_DIR}`,
-  'git pull',
-  'npm install --omit=dev --silent',
+  `git fetch origin`,
+  `git checkout ${GIT_BRANCH}`,
+  `git pull origin ${GIT_BRANCH}`,
+  `npm install --omit=dev --silent`,
   `pm2 restart ${PM2_NAME} --update-env`,
-  'echo "✔ API جاهز"',
-  'pm2 list',
-].join(' && ');
+  `pm2 list`,
+];
 
-run(`ssh ${SSH_HOST} "${remoteScript}"`);
+// كتابة كل أمر على سطر منفصل وتمريره عبر stdin
+const remoteScript = remoteLines.join('\n');
+
+try {
+  execSync(`ssh ${SSH_HOST} bash`, {
+    input: remoteScript,
+    stdio: ['pipe', 'inherit', 'inherit'],
+    encoding: 'utf8',
+  });
+} catch {
+  fail('فشل اتصال السيرفر');
+}
 
 console.log('');
 ok('═══════════════════════════════');
