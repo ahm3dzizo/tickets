@@ -162,7 +162,10 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
     const data = req.body;
     const { uid } = req.params;
 
-    const existing = await prisma.user.findUnique({ where: { uid } });
+    const existing = await prisma.user.findUnique({ 
+      where: { uid },
+      include: { projects: true, specialtiesRef: true }
+    });
     if (!existing) {
       res.status(404).json({ error: "المستخدم غير موجود" });
       return;
@@ -181,10 +184,10 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
     const phoneNumber = normalizePhoneNumber(asTrimmedString(data.phoneNumber)) ?? existing.phoneNumber;
     const specialties = sanitizeSpecialties(data.specialties).length > 0
       ? sanitizeSpecialties(data.specialties)
-      : existing.specialties;
+      : existing.specialtiesRef.map(s => s.key);
     const projectIds = Array.isArray(data.projectIds)
       ? data.projectIds.filter((id: unknown) => typeof id === "string" && id.trim().length > 0)
-      : existing.projectIds;
+      : existing.projects.map(p => p.id);
     const photoURL = data.photoURL !== undefined ? asTrimmedString(data.photoURL) : existing.photoURL;
     const disabled = data.disabled !== undefined ? Boolean(data.disabled) : existing.disabled;
 
