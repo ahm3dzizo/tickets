@@ -1,4 +1,3 @@
-// src/components/tickets/TicketTable.tsx
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,12 +15,12 @@ import { format, differenceInDays, parse, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ExportTicketsModal } from './ExportTicketsModal';
+import { useTicketTypes } from '@/contexts/TicketTypesContext';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 export function parseIssuedAt(raw: unknown): Date | null {
   if (raw === null || raw === undefined || raw === '') return null;
-  // Handle Date objects directly
   if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
   const num = Number(raw);
   if (!isNaN(num) && num > 1000) {
@@ -38,26 +37,27 @@ export function parseIssuedAt(raw: unknown): Date | null {
   return isValid(d) ? d : null;
 }
 
-// ترجمات الأنواع
-export const typeTranslations: Record<TicketType, string> = {
-  'electricity': 'كهرباء',
-  'plumbing': 'سباكة',
-  'doors': 'أبواب',
-  'paints': 'دهانات',
-  'cracks': 'تشققات',
-  'ceramics': 'سيراميك',
+// ─── Static fallback translations (للأنواع القديمة / backward compat) ────────
+// هذا الـ object يُستخدم كـ fallback فقط — الأنواع الحديثة تجي من DB عبر useTicketTypes
+export const typeTranslations: Record<string, string> = {
+  'electricity':     'كهرباء',
+  'plumbing':        'سباكة',
+  'doors':           'أبواب',
+  'paints':          'دهانات',
+  'cracks':          'تشققات',
+  'ceramics':        'سيراميك',
   'tank_insulation': 'عزل خزان',
-  'drainage': 'صرف صحي',
-  'ac_ventilation': 'تكييف وتهوية',
-  'pumps': 'مضخات',
-  'doors_windows': 'أبواب ونوافذ',
-  'waterproofing': 'عزل مائي',
-  'grading': 'ميول وترويبة',
-  'pest_control': 'مكافحة حشرات',
-  'cleaning': 'تنظيف',
-  'structural': 'إنشائي',
-  'painting': 'دهانات',
-  'tiles': 'سيراميك',
+  'drainage':        'صرف صحي',
+  'ac_ventilation':  'تكييف وتهوية',
+  'pumps':           'مضخات',
+  'doors_windows':   'أبواب ونوافذ',
+  'waterproofing':   'عزل مائي',
+  'grading':         'ميول وترويبة',
+  'pest_control':    'مكافحة حشرات',
+  'cleaning':        'تنظيف',
+  'structural':      'إنشائي',
+  'painting':        'دهانات',
+  'tiles':           'سيراميك',
 };
 
 export const statusTranslations: Record<string, string> = {
@@ -89,7 +89,8 @@ const priorityBgMap: Record<number, string> = {
   0: 'bg-slate-700 text-white',
 };
 
-const typeBg: Record<TicketType, string> = {
+// Static fallback colors للأنواع القديمة فقط
+const typeBgStatic: Record<string, string> = {
   plumbing:        'bg-blue-500/10 text-blue-400 border-blue-500/20',
   electricity:     'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
   tank_insulation: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
@@ -110,7 +111,7 @@ const typeBg: Record<TicketType, string> = {
   tiles:           'bg-teal-500/10 text-teal-400 border-teal-500/20',
 };
 
-// ─── BulkActionBar (بدون تغيير) ────────────────────────────────────────
+// ─── BulkActionBar ────────────────────────────────────────────────────────────
 const DEFAULT_STATUS_OPTIONS = [
   { key: 'open',          label: 'مفتوحة' },
   { key: 'in-progress',   label: 'قيد التنفيذ' },
@@ -168,38 +169,32 @@ export function BulkActionBar({
           </DropdownMenuContent>
         </DropdownMenu>
         {onAppointment && !isMultiClient && (
-          <Button
-            variant="outline" size="sm"
+          <Button variant="outline" size="sm"
             className="border-green-500/30 bg-green-500/10 text-green-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0"
-            onClick={onAppointment}
-          >
+            onClick={onAppointment}>
             <MessageCircle className="w-3.5 h-3.5" />
             موعد
           </Button>
         )}
         {onClose && !isMultiClient && (
-          <Button
-            variant="outline" size="sm"
+          <Button variant="outline" size="sm"
             className="border-yellow-500/30 bg-yellow-500/10 text-yellow-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0"
-            onClick={onClose}
-          >
+            onClick={onClose}>
             <CheckSquare className="w-3.5 h-3.5" />
             إغلاق
           </Button>
         )}
       </div>
-      <Button
-        variant="ghost" size="icon"
+      <Button variant="ghost" size="icon"
         className="shrink-0 text-slate-500 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
-        onClick={onClear}
-      >
+        onClick={onClear}>
         <X className="w-4 h-4" />
       </Button>
     </div>
   );
 }
 
-// ─── المكون الأساسي ────────────────────────────────────────────────────────
+// ─── TicketTable ──────────────────────────────────────────────────────────────
 
 interface TicketTableProps {
   tickets: Ticket[];
@@ -228,20 +223,30 @@ export function TicketTable({
 }: TicketTableProps) {
   const navigate = useNavigate();
 
-    // Local filter state
-  const [localSearch, setLocalSearch] = useState('');
-  const [localStatus, setLocalStatus] = useState('');
-  const [localType, setLocalType] = useState<TicketType | ''>('');
+  // ── جلب الأنواع من DB (live) ──────────────────────────────────────────────
+  const {
+    typeTranslations: dbTypeTranslations,
+    typeBg: dbTypeBg,
+  } = useTicketTypes();
+
+  // دمج: DB أولاً ثم الـ static fallback
+  const mergedTranslations: Record<string, string> = { ...typeTranslations, ...dbTypeTranslations };
+  const mergedTypeBg: Record<string, string>        = { ...typeBgStatic,    ...dbTypeBg };
+
+  // ── Local filter state ────────────────────────────────────────────────────
+  const [localSearch,  setLocalSearch]  = useState('');
+  const [localStatus,  setLocalStatus]  = useState('');
+  const [localType,    setLocalType]    = useState<string>('');
   const [localProject, setLocalProject] = useState('');
-  const [showClosed, setShowClosed] = useState(false);
+  const [showClosed,   setShowClosed]   = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+
   const closedStatuses = new Set(['closed', 'out-of-scope']);
 
-    const baseTickets = showInlineFilters
+  const baseTickets = showInlineFilters
     ? tickets.filter(t => {
         const isClosed = closedStatuses.has(t.status);
         if (!showClosed && isClosed) return false;
-
         const s = localSearch.toLowerCase();
         const matchSearch = !s ||
           t.villaNumber?.toLowerCase().includes(s) ||
@@ -249,10 +254,8 @@ export function TicketTable({
           t.clientName?.toLowerCase().includes(s) ||
           t.ticketId?.toLowerCase().includes(s) ||
           t.refNumber?.toLowerCase().includes(s);
-        const matchStatus = !localStatus || t.status === localStatus;
-        const matchType = !localType ||
-          t.type === localType ||
-          (t.detectedTypes as string[] | undefined)?.includes(localType);
+        const matchStatus  = !localStatus  || t.status === localStatus;
+        const matchType    = !localType    || t.type === localType || (t.detectedTypes as string[] | undefined)?.includes(localType);
         const matchProject = !localProject || t.projectId === localProject;
         return matchSearch && matchStatus && matchType && matchProject;
       })
@@ -277,10 +280,10 @@ export function TicketTable({
     ? (baseTickets.find(t => (t.clientId || t.villaNumber || t.id) === focalClientKey)?.clientName ?? '')
     : '';
 
-  const focalTickets  = focalClientKey
+  const focalTickets = focalClientKey
     ? sortClosed(baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) === focalClientKey))
     : [];
-  const otherTickets  = focalClientKey
+  const otherTickets = focalClientKey
     ? sortClosed(baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) !== focalClientKey))
     : sortClosed(baseTickets);
 
@@ -304,45 +307,33 @@ export function TicketTable({
   };
 
   const handleWhatsApp = (ticket: Ticket) => {
-    const phone = '966500000000';
+    const phone   = '966500000000';
     const message = `السلام عليكم، بخصوص بلاغ الصيانة رقم ${ticket.ticketId || ticket.id} للفيلا رقم ${ticket.villaNumber}. نرجو إفادتنا بمواعيد تواجدكم في الفيلا لتنسيق موعد الصيانة. شكراً لتعاونكم.`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const inSelectionMode = hasSelection && !!selectedIds && selectedIds.length > 0;
 
-    // ─── دالة استخراج أسماء المشرفين ─────────────────────────────────────
   const getSupervisorNames = (ticket: Ticket): string[] => {
-    // supervisorByType (يجمع كل المشرفين من كل التصنيفات بدون تكرار)
     const map = (ticket as any).supervisorByType as Record<string, { name: string }[]> | undefined;
     if (map) {
       const namesSet = new Set<string>();
-      Object.values(map).forEach(sups => {
-        sups.forEach(s => namesSet.add(s.name));
-      });
+      Object.values(map).forEach(sups => sups.forEach(s => namesSet.add(s.name)));
       if (namesSet.size > 0) return Array.from(namesSet);
     }
-
-    // assignedSupervisors — يمكن أن يكون array مباشر أو JSON string
     const rawSups = ticket.assignedSupervisors;
     if (rawSups) {
       if (Array.isArray(rawSups)) {
         const names = rawSups.map((s: any) => s?.name).filter(Boolean);
         if (names.length > 0) return names;
       }
-      // لو هو object (مثلاً {0: {name:'أحمد'}, 1: {name:'محمد'}})
       if (typeof rawSups === 'object' && !Array.isArray(rawSups)) {
         const names = Object.values(rawSups as Record<string, { name: string }>)
-          .map(s => s?.name)
-          .filter(Boolean);
+          .map(s => s?.name).filter(Boolean);
         if (names.length > 0) return names;
       }
     }
-
-    // Fallback: assigneeName
-    if (ticket.assigneeName && ticket.assigneeName !== '---') {
-      return [ticket.assigneeName];
-    }
+    if (ticket.assigneeName && ticket.assigneeName !== '---') return [ticket.assigneeName];
     return [];
   };
 
@@ -356,9 +347,7 @@ export function TicketTable({
 
   if (!showInlineFilters && displayTickets.length === 0) {
     return (
-      <div className="py-16 text-center text-slate-500 text-sm font-medium">
-        {emptyMessage}
-      </div>
+      <div className="py-16 text-center text-slate-500 text-sm font-medium">{emptyMessage}</div>
     );
   }
 
@@ -368,7 +357,6 @@ export function TicketTable({
     <>
       {showInlineFilters && (
         <div className="flex items-center gap-2 p-3 border-b border-border/50 flex-wrap" dir="rtl">
-          {/* الفلاتر لم تتغير */}
           <div className="relative flex-1 min-w-[140px]">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
             <Input
@@ -378,6 +366,8 @@ export function TicketTable({
               className="pr-9 h-9 bg-transparent border-border/50 rounded-xl text-sm text-white text-right"
             />
           </div>
+
+          {/* فلتر الحالة */}
           <DropdownMenu>
             <DropdownMenuTrigger render={
               <Button variant="outline" size="sm" className={cn(
@@ -395,6 +385,8 @@ export function TicketTable({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* فلتر التخصص — يعرض الأنواع من DB تلقائياً */}
           <DropdownMenu>
             <DropdownMenuTrigger render={
               <Button variant="outline" size="sm" className={cn(
@@ -402,16 +394,18 @@ export function TicketTable({
                 localType ? 'border-blue-500/50 bg-blue-500/10 text-blue-300' : 'bg-transparent text-slate-400',
               )}>
                 <ChevronDown className="w-3 h-3 opacity-60" />
-                {localType ? typeTranslations[localType] : 'التخصص'}
+                {localType ? (mergedTranslations[localType] ?? localType) : 'التخصص'}
               </Button>
             } />
-            <DropdownMenuContent className="bg-card border-border text-slate-200">
+            <DropdownMenuContent className="bg-card border-border text-slate-200 max-h-72 overflow-y-auto">
               <DropdownMenuItem className="hover:bg-white/5 text-right justify-end" onClick={() => setLocalType('')}>كل التخصصات</DropdownMenuItem>
-              {Object.entries(typeTranslations).map(([k, v]) => (
-                <DropdownMenuItem key={k} className="hover:bg-white/5 text-right justify-end" onClick={() => setLocalType(k as TicketType)}>{v}</DropdownMenuItem>
+              {Object.entries(mergedTranslations).map(([k, v]) => (
+                <DropdownMenuItem key={k} className="hover:bg-white/5 text-right justify-end" onClick={() => setLocalType(k)}>{v}</DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* فلتر المشروع */}
           {!hideProjectColumn && projects && Object.keys(projects).length > 1 && (
             <DropdownMenu>
               <DropdownMenuTrigger render={
@@ -431,18 +425,13 @@ export function TicketTable({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {/* زر إظهار/إخفاء المغلقة */}
-          <Button
-            variant="outline"
-            size="sm"
+
+          <Button variant="outline" size="sm"
             onClick={() => setShowClosed(prev => !prev)}
             className={cn(
               'h-9 rounded-xl gap-1.5 text-xs font-medium',
-              showClosed
-                ? 'border-slate-500/50 bg-slate-500/10 text-slate-300'
-                : 'border-border/50 bg-transparent text-slate-500',
-            )}
-          >
+              showClosed ? 'border-slate-500/50 bg-slate-500/10 text-slate-300' : 'border-border/50 bg-transparent text-slate-500',
+            )}>
             <span className="text-[11px]">{showClosed ? '🟢' : '⚪'}</span>
             المغلقة
           </Button>
@@ -453,13 +442,10 @@ export function TicketTable({
               <X className="w-3 h-3" /> مسح
             </Button>
           )}
-                    {/* زر التصدير */}
-          <Button
-            variant="outline"
-            size="sm"
+
+          <Button variant="outline" size="sm"
             onClick={() => setExportModalOpen(true)}
-            className="h-9 rounded-xl gap-1.5 text-xs font-medium border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10"
-          >
+            className="h-9 rounded-xl gap-1.5 text-xs font-medium border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10">
             <Download className="w-3.5 h-3.5" />
             تصدير
           </Button>
@@ -474,19 +460,19 @@ export function TicketTable({
         <div className="py-16 text-center text-slate-500 text-sm font-medium">{emptyMessage}</div>
       )}
 
-      {/* MOBILE CARD VIEW */}
+      {/* ── MOBILE CARD VIEW ─────────────────────────────────────────────── */}
       {displayTickets.length > 0 && (
         <div className="flex flex-col gap-2 p-2 md:hidden" dir="rtl">
           {displayTickets.map((ticket, index) => {
             const createdAt = (ticket.createdAt as any)?.toDate
               ? (ticket.createdAt as any).toDate()
               : new Date(ticket.createdAt as any);
-            const openDate = (ticket.issuedAt ? parseIssuedAt(ticket.issuedAt) : null) ?? createdAt;
+            const openDate  = (ticket.issuedAt ? parseIssuedAt(ticket.issuedAt) : null) ?? createdAt;
             const closeDate = ticket.closedAt ? new Date(ticket.closedAt) : null;
-            const isClosed = ticket.status === 'closed' || ticket.status === 'out-of-scope';
-            const endDate = (isClosed && closeDate) ? closeDate : new Date();
-            const daysOpen = differenceInDays(endDate, openDate);
-            const daysBg =
+            const isClosed  = ticket.status === 'closed' || ticket.status === 'out-of-scope';
+            const endDate   = (isClosed && closeDate) ? closeDate : new Date();
+            const daysOpen  = differenceInDays(endDate, openDate);
+            const daysBg    =
               daysOpen > 30 ? 'bg-red-500/15 text-red-400 border-red-500/20' :
               daysOpen > 14 ? 'bg-amber-500/15 text-amber-400 border-amber-500/20' :
               daysOpen > 6  ? 'bg-orange-500/15 text-orange-400 border-orange-500/20' :
@@ -494,17 +480,14 @@ export function TicketTable({
 
             const priorityNum = typeof ticket.priority === 'number' ? ticket.priority : 3;
             const priorityCls = priorityBgMap[priorityNum] ?? 'bg-slate-700 text-white';
-
-            const typeList: TicketType[] =
+            const typeList: string[] =
               ticket.detectedTypes?.length
-                ? ticket.detectedTypes as TicketType[]
-                : ticket.type ? [ticket.type as TicketType] : [];
-
+                ? ticket.detectedTypes as string[]
+                : ticket.type ? [ticket.type as string] : [];
             const supervisorNames = getSupervisorNames(ticket);
-
-                        const isSelected = selectedIds?.includes(ticket.id) ?? false;
-            const isOverdue = !isClosed && daysOpen > 6;
-            const canSelect = hasSelection && !isClosed;
+            const isSelected  = selectedIds?.includes(ticket.id) ?? false;
+            const isOverdue   = !isClosed && daysOpen > 6;
+            const canSelect   = hasSelection && !isClosed;
 
             const handleCardClick = () => {
               if (canSelect && inSelectionMode) { toggleOne(ticket.id); return; }
@@ -516,7 +499,7 @@ export function TicketTable({
                 {focalClientKey && index === 0 && (
                   <div className="flex items-center gap-2 px-1 pb-0.5 pt-1">
                     <span className="text-[11px] font-bold text-blue-300 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20">
-                      {focalClientName} — {focalCount} تذاكر
+                      📋 {focalClientName} — {focalCount} تذاكر
                     </span>
                   </div>
                 )}
@@ -528,26 +511,22 @@ export function TicketTable({
                 <div
                   className={cn(
                     'relative rounded-2xl border bg-card overflow-hidden transition-all',
-                    canSelect && inSelectionMode && 'cursor-pointer active:scale-[0.99]',
-                    !inSelectionMode && 'cursor-pointer active:scale-[0.99]',
-                    isSelected && 'border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/20',
-                    !isSelected && focalClientKey && index < focalCount && 'border-blue-500/20',
-                    !isSelected && !(focalClientKey && index < focalCount) && isOverdue && 'border-red-500/30',
-                    !isSelected && !(focalClientKey && index < focalCount) && !isOverdue && 'border-border',
-                    isClosed && 'opacity-40',
+                    canSelect && inSelectionMode ? 'cursor-pointer active:scale-[0.99]' : '',
+                    !inSelectionMode ? 'cursor-pointer active:scale-[0.99]' : '',
+                    isSelected ? 'border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/20' : '',
+                    !isSelected && focalClientKey && index < focalCount ? 'border-blue-500/20' : '',
+                    !isSelected && !(focalClientKey && index < focalCount) && isOverdue ? 'border-red-500/30' : '',
+                    !isSelected && !(focalClientKey && index < focalCount) && !isOverdue ? 'border-border' : '',
+                    isClosed ? 'opacity-40' : '',
                   )}
                   onClick={handleCardClick}
                 >
-                  {isOverdue && !isSelected && (
-                    <div className="absolute top-0 right-0 h-full w-0.5 bg-red-500/50" />
-                  )}
+                  {isOverdue && !isSelected && <div className="absolute top-0 right-0 h-full w-0.5 bg-red-500/50" />}
                   <div className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-2">
                     <div className="flex items-center gap-2 leading-tight min-w-0">
                       {canSelect && (
-                        <button
-                          className="text-slate-600 hover:text-blue-400 transition-colors shrink-0 p-0.5"
-                          onClick={e => { e.stopPropagation(); toggleOne(ticket.id); }}
-                        >
+                        <button className="text-slate-600 hover:text-blue-400 transition-colors shrink-0 p-0.5"
+                          onClick={e => { e.stopPropagation(); toggleOne(ticket.id); }}>
                           {isSelected
                             ? <CheckSquare className="w-4 h-4 text-blue-500" />
                             : <Square className="w-4 h-4" />}
@@ -561,47 +540,34 @@ export function TicketTable({
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={cn(
-                        'text-[10px] font-bold px-2 py-0.5 rounded-full border',
-                        statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-                      )}>
+                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
                         {statusTranslations[ticket.status] ?? ticket.status}
                       </span>
-                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', daysBg)}>
-                        {daysOpen}ي
-                      </span>
-                      <span className={cn('text-[10px] font-black px-1.5 py-0.5 rounded-md min-w-[20px] text-center', priorityCls)}>
-                        {priorityNum}
-                      </span>
+                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', daysBg)}>{daysOpen}ي</span>
+                      <span className={cn('text-[10px] font-black px-1.5 py-0.5 rounded-md min-w-[20px] text-center', priorityCls)}>{priorityNum}</span>
                     </div>
                   </div>
                   <div className="px-3 pb-2">
-                    <p className="text-slate-300 text-[13px] leading-relaxed line-clamp-2">
-                      {ticket.description}
-                    </p>
+                    <p className="text-slate-300 text-[13px] leading-relaxed line-clamp-2">{ticket.description}</p>
                   </div>
                   <div className="flex items-end justify-between gap-2 px-3 pb-2.5 pt-1 border-t border-border/30">
                     <div className="flex flex-col gap-0.5 min-w-0">
-                                            {ticket.clientName && (
+                      {ticket.clientName && (
                         <span className="text-[11px] text-slate-400 font-medium truncate">
                           {ticket.clientName.split(' ')[0]}{ticket.villaNumber ? ` · فيلا ${ticket.villaNumber}` : ''}
                         </span>
                       )}
                       {supervisorNames.length > 0 && (
-                        <span className="text-[11px] text-amber-400/80 font-medium truncate">
-                          {supervisorNames.join('، ')}
-                        </span>
+                        <span className="text-[11px] text-amber-400/80 font-medium truncate">{supervisorNames.join('، ')}</span>
                       )}
                       {ticket.appointmentTime && (
-                        <span className="text-[11px] text-emerald-400 font-bold">
-                          {ticket.appointmentTime}
-                        </span>
+                        <span className="text-[11px] text-emerald-400 font-bold">{ticket.appointmentTime}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-1 flex-wrap justify-end shrink-0">
                       {typeList.slice(0, 2).map((t, i) => (
-                        <span key={i} className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-md border', typeBg[t] || 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
-                          {typeTranslations[t] ?? t}
+                        <span key={i} className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-md border', mergedTypeBg[t] || 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
+                          {mergedTranslations[t] ?? t}
                         </span>
                       ))}
                       {!hideProjectColumn && ticket.projectId && projects?.[ticket.projectId] && (
@@ -618,7 +584,7 @@ export function TicketTable({
         </div>
       )}
 
-      {/* DESKTOP TABLE VIEW */}
+      {/* ── DESKTOP TABLE VIEW ───────────────────────────────────────────── */}
       {displayTickets.length > 0 && (
         <div className="hidden md:block overflow-auto" style={{ maxHeight }}>
           <table className="w-full text-right border-collapse">
@@ -635,7 +601,7 @@ export function TicketTable({
                     </button>
                   </th>
                 )}
-                                <th className={cn(thCls, 'w-20')}>ID</th>
+                <th className={cn(thCls, 'w-20')}>ID</th>
                 <th className={cn(thCls, 'w-24')}>المرجع</th>
                 <th className={cn(thCls, 'w-28 max-w-[100px]')}>العميل</th>
                 {!hideProjectColumn && <th className={cn(thCls, 'w-20')}>المشروع</th>}
@@ -655,31 +621,26 @@ export function TicketTable({
                 const createdAt = (ticket.createdAt as any)?.toDate
                   ? (ticket.createdAt as any).toDate()
                   : new Date(ticket.createdAt as any);
-                const openDate = (ticket.issuedAt ? parseIssuedAt(ticket.issuedAt) : null) ?? createdAt;
+                const openDate  = (ticket.issuedAt ? parseIssuedAt(ticket.issuedAt) : null) ?? createdAt;
                 const closeDate = ticket.closedAt ? new Date(ticket.closedAt) : null;
-                const isClosed = ticket.status === 'closed' || ticket.status === 'out-of-scope';
-                const endDate = (isClosed && closeDate) ? closeDate : new Date();
-                const daysOpen = differenceInDays(endDate, openDate);
-                const daysBg = daysOpen > 30
-                  ? 'text-red-400 font-bold'
-                  : daysOpen > 14
-                    ? 'text-amber-400 font-bold'
-                    : daysOpen > 6
-                      ? 'text-orange-400 font-bold'
-                      : 'text-emerald-400';
+                const isClosed  = ticket.status === 'closed' || ticket.status === 'out-of-scope';
+                const endDate   = (isClosed && closeDate) ? closeDate : new Date();
+                const daysOpen  = differenceInDays(endDate, openDate);
+                const daysBg    =
+                  daysOpen > 30 ? 'text-red-400 font-bold' :
+                  daysOpen > 14 ? 'text-amber-400 font-bold' :
+                  daysOpen > 6  ? 'text-orange-400 font-bold' :
+                                  'text-emerald-400';
 
                 const priorityNum = typeof ticket.priority === 'number' ? ticket.priority : 3;
                 const priorityCls = priorityBgMap[priorityNum] ?? 'bg-slate-700 text-white';
-
-                const typeList: TicketType[] =
+                const typeList: string[] =
                   ticket.detectedTypes?.length
-                    ? ticket.detectedTypes as TicketType[]
-                    : ticket.type ? [ticket.type as TicketType] : [];
-
+                    ? ticket.detectedTypes as string[]
+                    : ticket.type ? [ticket.type as string] : [];
                 const supervisorNames = getSupervisorNames(ticket);
-
-                                const isSelected = selectedIds?.includes(ticket.id) ?? false;
-                                const isOverdue = !isClosed && daysOpen > 6;
+                const isSelected = selectedIds?.includes(ticket.id) ?? false;
+                const isOverdue  = !isClosed && daysOpen > 6;
 
                 return (
                   <React.Fragment key={ticket.id}>
@@ -705,17 +666,15 @@ export function TicketTable({
                         isOverdue && 'bg-red-500/5 border-l-2 border-l-red-500/60',
                         isClosed && 'opacity-50',
                       )}
-                      onClick={(e) => {
+                      onClick={e => {
                         if ((e.target as HTMLElement).closest('button')) return;
                         navigate(`/tickets/${ticket.id}`);
                       }}
                     >
-                                            {hasSelection && (
+                      {hasSelection && (
                         <td className="px-4 py-3 text-center" onClick={e => { e.stopPropagation(); toggleOne(ticket.id); }}>
                           <button className="text-slate-600 hover:text-blue-500 transition-colors">
-                            {isSelected
-                              ? <CheckSquare className="w-4 h-4 text-blue-500" />
-                              : <Square className="w-4 h-4" />}
+                            {isSelected ? <CheckSquare className="w-4 h-4 text-blue-500" /> : <Square className="w-4 h-4" />}
                           </button>
                         </td>
                       )}
@@ -725,7 +684,7 @@ export function TicketTable({
                       <td className="px-4 py-3 text-sm font-bold text-slate-200 whitespace-nowrap w-24">
                         {ticket.refNumber || '---'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-300 truncate w-28 max-w-[100px]" title={ticket.clientName || ''}>
+                      <td className="px-4 py-3 text-sm text-slate-300 truncate w-28 max-w-[100px]" title={ticket.clientName}>
                         {(ticket.clientName || '---').split(' ')[0]}
                       </td>
                       {!hideProjectColumn && (
@@ -757,7 +716,8 @@ export function TicketTable({
                           {supervisorNames.length > 0 ? (
                             <div className="flex flex-col gap-1 items-center">
                               {supervisorNames.map((name, i) => (
-                                <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap', i === 0 ? 'bg-green-350/20 text-red-500' : 'bg-blue-200/15 text-blue-500')}>
+                                <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap',
+                                  i === 0 ? 'bg-green-350/20 text-red-500' : 'bg-blue-200/15 text-blue-500')}>
                                   {name}
                                 </span>
                               ))}
@@ -771,8 +731,9 @@ export function TicketTable({
                         {typeList.length > 0 ? (
                           <div className="flex flex-col gap-1 items-center">
                             {typeList.map((t, i) => (
-                              <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap', typeBg[t] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
-                                {typeTranslations[t] ?? t}
+                              <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap',
+                                mergedTypeBg[t] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
+                                {mergedTranslations[t] ?? t}
                               </span>
                             ))}
                           </div>
@@ -793,18 +754,21 @@ export function TicketTable({
                         <div className="flex justify-center gap-2">
                           <DropdownMenu>
                             <DropdownMenuTrigger render={
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-white rounded-lg bg-white/5" />
-                            }>
-                              <MoreHorizontal className="w-4 h-4" />
-                            </DropdownMenuTrigger>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-white rounded-lg bg-white/5">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            } />
                             <DropdownMenuContent align="end" className="bg-card border-border text-slate-200 w-48">
-                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-right justify-end" onClick={() => navigate(`/tickets/${ticket.id}`)}>
+                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-right justify-end"
+                                onClick={() => navigate(`/tickets/${ticket.id}`)}>
                                 عرض التفاصيل <Eye className="w-4 h-4" />
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-right justify-end text-green-400" onClick={() => handleWhatsApp(ticket)}>
+                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-right justify-end text-green-400"
+                                onClick={() => handleWhatsApp(ticket)}>
                                 واتساب <MessageSquare className="w-4 h-4" />
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-right justify-end" onClick={() => navigate(`/tickets/${ticket.id}`)}>
+                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-right justify-end"
+                                onClick={() => navigate(`/tickets/${ticket.id}`)}>
                                 تعديل <Edit2 className="w-4 h-4" />
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -818,9 +782,9 @@ export function TicketTable({
             </tbody>
           </table>
         </div>
-            )}
+      )}
 
-      {/* ── Export Modal ──────────────────────────────────────────────── */}
+      {/* ── Export Modal ─────────────────────────────────────────────────── */}
       <ExportTicketsModal
         open={exportModalOpen}
         onOpenChange={setExportModalOpen}

@@ -2,64 +2,21 @@ import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, asTrimmedString } from "../auth.js";
 import { getIO } from "../socket.js";
-import { classifyTicket, buildTypeToSpecialtyMap, findSupervisorsDB, autoLearnFromClassification, invalidateKeywordCache, invalidateReferenceCache } from "../classifier/classify.js";
-import { loadKeywordsFromDB, classifyFromKeywordsDB } from "../classifier/keywords.js";
-import { classifyWithGeminiEnhanced } from "../classifier/gemini.js";
-import { GEMINI_API_KEY, VALID_TYPES } from "../config.js";
+import { classifyTicket } from "../classifier/classify.js";
+import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
+import { invalidateKeywordCache } from "../classifier/keywords.js";
 
 const router = Router();
 
-// ── وظيفة تصنيف في الخلفية ──────────────────────────────────────────────
-// بتشتغل بعد الاستيراد عشان ما تأخرش المستخدم
 async function classifyInBackground(description: string, ticketId: string, projectId?: string) {
   try {
-    let classification;
-    
-    // 1) حاول بـ Gemini (الـ Rate Limiter جوا classifyWithGeminiEnhanced دلوقتي)
-    if (GEMINI_API_KEY) {
-      const geminiResult = await classifyWithGeminiEnhanced(description, projectId);
-      if (geminiResult && VALID_TYPES.includes(geminiResult.primaryType)) {
-        classification = {
-          primaryType: geminiResult.primaryType,
-          allTypes: geminiResult.allTypes as string[],
-          confidence: geminiResult.confidence,
-          source: "gemini" as const,
-          subType: geminiResult.suggestedNewSubType || null,
-        };
-
-        if (classification.confidence >= 6) {
-          autoLearnFromClassification(description, classification.primaryType, classification.confidence).catch(() => {});
-        }
-
-        if (geminiResult.suggestedNewType) {
-          const { learnNewTypeFromGemini, learnNewSubTypeFromGemini } = await import("../classifier/gemini.js");
-          learnNewTypeFromGemini(geminiResult.suggestedNewType, geminiResult.primaryType, description).catch(() => {});
-          if (geminiResult.suggestedNewSubType) {
-            learnNewSubTypeFromGemini(geminiResult.primaryType, geminiResult.suggestedNewSubType, description).catch(() => {});
-          }
-        }
-      }
-    }
-
-    // 2) فشل Gemini → keywords
-    if (!classification) {
-      const keywords = await loadKeywordsFromDB();
-      const kwResult = classifyFromKeywordsDB(description, keywords);
-      classification = {
-        primaryType: kwResult.primaryType,
-        allTypes: kwResult.allTypes as string[],
-        confidence: kwResult.confidence,
-        source: "keywords" as const,
-        subType: null,
-      };
-    }
+    const classification = await classifyTicket(description, projectId);
 
     // 3) حدّث التذكرة والمشرفين
     const typeToSpecialty = await buildTypeToSpecialtyMap();
     const allTypes: string[] = classification.allTypes;
     const requiredSpecialties = [...new Set(allTypes.map((t: string) => typeToSpecialty[t] || "general"))] as string[];
 
-    // جيب المشرفين
     let supervisorIds: string[] = [];
     let primarySupId: string | null = null;
     let supervisorList: { id: string; name: string; specialty: string }[] = [];
@@ -88,7 +45,7 @@ async function classifyInBackground(description: string, ticketId: string, proje
     invalidateReferenceCache();
     invalidateKeywordCache();
   } catch (err) {
-    console.warn(`  ⚠️ Background classify failed for ticket ${ticketId}:`, err);
+    console.warn(` ⚠️ Background classify failed for ticket ${ticketId}:`, err);
   }
 }
 
@@ -114,7 +71,7 @@ router.get("/:id", requireAuth, async (req, res) => {
   res.json(ticket);
 });
 
-// POST /api/tickets — نشوف التذكرة فوراً والتصنيف في الخلفية
+// POST /api/tickets
 router.post("/", requireAuth, async (req, res) => {
   const data = req.body;
   try {
@@ -144,7 +101,6 @@ router.post("/", requireAuth, async (req, res) => {
       priority = isNaN(parsed) ? 3 : parsed;
     }
 
-    // نشوف التذكرة فوراً بالـ type اللي جايلها (أو general)
     const ticket = await prisma.ticket.create({
       data: {
         ticketId: data.ticketId || String(Date.now()).slice(-6),
@@ -170,7 +126,6 @@ router.post("/", requireAuth, async (req, res) => {
       },
     });
 
-    // التصنيف في الخلفية — ما يأخرش المستخدم
     const description = (data.description || "").trim();
     if (description.length >= 5) {
       classifyInBackground(description, ticket.id, projectId).catch(() => {});
@@ -183,12 +138,11 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/tickets/bulk — نشوف الكل فوراً والتصنيف في الخلفية
+// POST /api/tickets/bulk
 router.post("/bulk", requireAuth, async (req, res) => {
   const tickets: any[] = req.body.tickets;
   if (!Array.isArray(tickets)) { res.status(400).json({ error: "tickets must be array" }); return; }
   try {
-    // نجهز الداتا بسرعة — من غير تصنيف
     const now = Date.now();
     const normalized = tickets.map((t, index) => {
       let assignedSupervisorIds = Array.isArray(t.assignedSupervisorIds)
@@ -225,7 +179,6 @@ router.post("/bulk", requireAuth, async (req, res) => {
       };
     });
 
-    // Validate client-project relationship (ضروري عشان البيانات متصحش)
     const invalidClientRefs: any[] = [];
     const clientCache = new Map<string, boolean>();
     for (const t of normalized) {
@@ -245,13 +198,13 @@ router.post("/bulk", requireAuth, async (req, res) => {
         invalidClientRefs.push(t);
       }
     }
+
     if (invalidClientRefs.length > 0) {
       const sample = invalidClientRefs.slice(0, 5).map(t => t.ticketId || t.refNumber || `row-${t.index+1}`).join(", ");
       res.status(400).json({ error: `هناك ${invalidClientRefs.length} تذاكر بدون عميل أو لا تنتمي لهذا المشروع (نماذج: ${sample})` });
       return;
     }
 
-    // نشوف الكل مرة واحدة
     const created = await prisma.ticket.createMany({
       data: normalized.map(t => ({
         ticketId: t.ticketId, refNumber: t.refNumber, projectAbbr: t.projectAbbr,
@@ -267,9 +220,7 @@ router.post("/bulk", requireAuth, async (req, res) => {
       skipDuplicates: true,
     });
 
-    // التصنيف في الخلفية لكل التذاكر
     if (created.count > 0) {
-      // نجيب IDs التذاكر اللي اتعملت عشان نصنفها
       const ticketIds = normalized.map(t => t.ticketId);
       const createdTickets = await prisma.ticket.findMany({
         where: { ticketId: { in: ticketIds } },

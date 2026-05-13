@@ -2,14 +2,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
-  Clock, 
   User, 
   Tag, 
-  Calendar,
   MessageSquare,
   CheckCircle2,
   AlertCircle,
-  Home,
   Briefcase,
   MapPin,
   CalendarDays,
@@ -40,8 +37,9 @@ import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
-import { classifyOnServer, learnFromCorrection } from '@/services/classificationApi';
+import { learnFromCorrection, getAuthHeaders } from '@/services/classificationApi';
 import { toast } from 'sonner';
+
 
 export default function TicketDetail() {
   const { id } = useParams();
@@ -56,10 +54,10 @@ export default function TicketDetail() {
   const [editStatus, setEditStatus] = useState('');
   const [editPriority, setEditPriority] = useState('');
   const [editTypes, setEditTypes] = useState<TicketType[]>([]);
-  const [editAssignee, setEditAssignee] = useState('');
   const [editSaving, setEditSaving] = useState(false);
-  const [availableSupervisors, setAvailableSupervisors] = useState<{id: string; name: string; specialties: string[]}[]>([]);
+  const [availableSupervisors, setAvailableSupervisors] = useState<{uid: string; displayName: string; specialties: string[]}[]>([]);
   const [editAssignedSupervisorIds, setEditAssignedSupervisorIds] = useState<string[]>([]);
+  const [supervisorsLoading, setSupervisorsLoading] = useState(false);
 
   // ── Appointment dialog state ──
   const [apptOpen, setApptOpen] = useState(false);
@@ -93,7 +91,7 @@ export default function TicketDetail() {
 
   useEffect(() => { loadData(); }, [id, navigate]);
 
-  const typeTranslations: Record<TicketType, string> = {
+  const typeTranslations: Record<string, string> = {
     'electricity': 'كهرباء',
     'plumbing': 'سباكة',
     'doors': 'أبواب',
@@ -135,7 +133,6 @@ export default function TicketDetail() {
     'urgent': 'عاجلة',
   };
 
-  // Open edit dialog pre-filled with current values
   const openEdit = () => {
     if (!ticket) return;
     setEditStatus(ticket.status);
@@ -144,7 +141,6 @@ export default function TicketDetail() {
       ? (ticket.detectedTypes as TicketType[])
       : [ticket.type];
     setEditTypes(initTypes);
-    setEditAssignee(ticket.assigneeName || '');
     setEditAssignedSupervisorIds(
       (ticket.assignedSupervisorIds as string[] | undefined) ??
       (ticket.assignedSupervisorId ? [ticket.assignedSupervisorId as string] : [])
@@ -152,11 +148,23 @@ export default function TicketDetail() {
     setEditOpen(true);
   };
 
+  // ── جلب المشرفين مباشرة من DB عند فتح المودال ──
+  useEffect(() => {
+    if (!editOpen || !ticket?.projectId) return;
+    setSupervisorsLoading(true);
+    fetch(`/api/projects/${ticket.projectId}/supervisors`, {
+      headers: getAuthHeaders(),
+    })
+      .then(r => r.json())
+      .then(data => setAvailableSupervisors(Array.isArray(data) ? data : []))
+      .catch(() => toast.error('تعذر جلب المشرفين'))
+      .finally(() => setSupervisorsLoading(false));
+  }, [editOpen, ticket?.projectId]);
+
   const handleSaveEdit = async () => {
     if (!ticket) return;
     setEditSaving(true);
 
-    // كشف هل تغيرت الأنواع عن القيم الأصلية (يعني المستخدم صحّح التصنيف)
     const originalTypes = ((ticket.detectedTypes as TicketType[] | undefined)?.length
       ? (ticket.detectedTypes as TicketType[])
       : [ticket.type]
@@ -167,28 +175,23 @@ export default function TicketDetail() {
       originalTypes.some((t, i) => t !== newTypes[i]);
 
     try {
-      const selectedSupervisors = availableSupervisors.filter(s => editAssignedSupervisorIds.includes(s.id));
+      const selectedSupervisors = availableSupervisors.filter(s => editAssignedSupervisorIds.includes(s.uid));
       await ticketsApi.update(ticket.id, {
         status:                 editStatus,
         priority:               isNaN(Number(editPriority)) ? editPriority : Number(editPriority),
         type:                   editTypes[0] as TicketType,
         detectedTypes:          editTypes,
-        assigneeName:           editAssignee || (selectedSupervisors[0]?.name ?? ''),
+        assigneeName:           selectedSupervisors[0]?.displayName ?? ticket.assigneeName ?? '',
         assignedSupervisorId:   editAssignedSupervisorIds[0] ?? '',
         assignedSupervisorIds:  editAssignedSupervisorIds,
         assignedSupervisors:    selectedSupervisors,
       });
 
-      // إذا غيّر المستخدم الأنواع → علّم السيرفر
       if (typesChanged && editTypes.length > 0) {
         const primaryTypeKey = editTypes[0];
         learnFromCorrection(ticket.description || primaryTypeKey, primaryTypeKey)
-          .then(result => {
-            console.log(`[Learn] تم تعلم ${result.learned} كلمات جديدة للنوع ${primaryTypeKey}`);
-          })
-          .catch(() => {
-            // فشل التعليم لا يمنع نجاح العملية الأساسية
-          });
+          .then(result => console.log(`[Learn] تم تعلم ${result.learned} كلمات للنوع ${primaryTypeKey}`))
+          .catch(() => {});
       }
 
       toast.success('تم تحديث التذكرة');
@@ -221,7 +224,6 @@ export default function TicketDetail() {
     }
   };
 
-  // helper to get today's date as yyyy-MM-dd for <input type="date">
   const todayStr = () => new Date().toISOString().split('T')[0];
 
   const handleWhatsApp = () => {
@@ -231,27 +233,11 @@ export default function TicketDetail() {
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // Re-fetch matching supervisors via server API when types change
-  useEffect(() => {
-    if (!editOpen || !ticket?.projectId || editTypes.length === 0) return;
-    const primaryType = editTypes[0];
-    classifyOnServer({
-      description: ticket.description || primaryType,
-      projectId: ticket.projectId,
-    }).then(result => {
-      setAvailableSupervisors(result.supervisors.map(s => ({
-        id: s.id,
-        name: s.name,
-        specialties: s.specialties,
-      })));
-    }).catch(() => {});
-  }, [editTypes, editOpen, ticket?.projectId]);
-
   if (loading) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
         </div>
       </Layout>
     );
@@ -264,9 +250,9 @@ export default function TicketDetail() {
       <div className="space-y-6 animate-in fade-in duration-700">
         <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-4">
           <div className="flex items-center gap-4 flex-1">
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               className="text-slate-400 hover:text-white rounded-2xl bg-white/5 order-last sm:order-first"
               onClick={() => navigate('/tickets')}
             >
@@ -285,14 +271,16 @@ export default function TicketDetail() {
             </div>
           </div>
           <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
-            <Button variant="outline" className="border-border bg-white/5 text-slate-400 rounded-xl px-4 sm:px-6 font-bold h-10 sm:h-11 flex-1 sm:flex-none order-2 sm:order-1"
+            <Button
+              variant="outline"
+              className="border-border bg-white/5 text-slate-400 rounded-xl px-4 sm:px-6 font-bold h-10 sm:h-11 flex-1 sm:flex-none order-2 sm:order-1"
               onClick={openEdit}
             >
               <Pencil className="w-4 h-4 ml-2" />
               تعديل
             </Button>
             {ticket.status !== 'closed' && (
-              <Button 
+              <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-xl px-4 sm:px-6 shadow-lg shadow-emerald-500/20 font-bold h-10 sm:h-11 flex-1 sm:flex-none order-1 sm:order-2"
                 onClick={() => setCloseDialogOpen(true)}
               >
@@ -310,9 +298,7 @@ export default function TicketDetail() {
                 <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest text-right">وصف المشكلة</CardTitle>
               </CardHeader>
               <CardContent className="p-8">
-                <p className="text-slate-300 leading-relaxed text-right text-lg">
-                  {ticket.description}
-                </p>
+                <p className="text-slate-300 leading-relaxed text-right text-lg">{ticket.description}</p>
               </CardContent>
             </Card>
 
@@ -333,22 +319,12 @@ export default function TicketDetail() {
                         const intl = raw.startsWith('966') ? raw : raw.startsWith('0') ? '966' + raw.slice(1) : '966' + raw;
                         return (
                           <>
-                            <a
-                              href={`tel:+${intl}`}
-                              onClick={e => e.stopPropagation()}
-                              className="flex items-center justify-center w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
-                              title="اتصال"
-                            >
+                            <a href={`tel:+${intl}`} onClick={e => e.stopPropagation()}
+                              className="flex items-center justify-center w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors" title="اتصال">
                               <PhoneCall className="w-3.5 h-3.5" />
                             </a>
-                            <a
-                              href={`https://wa.me/${intl}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className="flex items-center justify-center w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                              title="واتساب"
-                            >
+                            <a href={`https://wa.me/${intl}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                              className="flex items-center justify-center w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors" title="واتساب">
                               <MessageSquare className="w-3.5 h-3.5" />
                             </a>
                           </>
@@ -416,12 +392,19 @@ export default function TicketDetail() {
                       {priorityTranslations[String(ticket.priority)]}
                     </Badge>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 shrink-0">
                       <Tag className="w-3.5 h-3.5" />
                       النوع
                     </div>
-                    <span className="text-xs text-slate-300 font-bold">{typeTranslations[ticket.type]}</span>
+                    <div className="flex flex-col items-end gap-1">
+                      {((ticket.detectedTypes as string[] | undefined)?.length
+                        ? (ticket.detectedTypes as string[])
+                        : [ticket.type]
+                      ).map((t, i) => (
+                        <span key={i} className="text-xs text-slate-300 font-bold">{typeTranslations[t] || t}</span>
+                      ))}
+                    </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -437,8 +420,6 @@ export default function TicketDetail() {
                     </div>
                     <span className="text-xs text-slate-500">{project?.location || '---'}</span>
                   </div>
-
-                  {/* Assignee */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs text-slate-500">
                       <User className="w-3.5 h-3.5" />
@@ -446,9 +427,7 @@ export default function TicketDetail() {
                     </div>
                     <span className="text-xs text-slate-300 font-bold">{ticket.assigneeName || '---'}</span>
                   </div>
-
-                  {/* All assigned supervisors */}
-                  {ticket.assignedSupervisors && ticket.assignedSupervisors.length > 0 && (
+                  {ticket.assignedSupervisors && (ticket.assignedSupervisors as any[]).length > 0 && (
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2 text-xs text-slate-500 shrink-0">
                         <User className="w-3.5 h-3.5" />
@@ -500,14 +479,23 @@ export default function TicketDetail() {
                 <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest text-right">إجراءات سريعة</CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-2">
-                <Button variant="outline" className="w-full justify-end border-border bg-white/5 text-slate-400 hover:text-white text-xs h-12 rounded-2xl font-bold"
-                  onClick={() => { setApptDate(ticket.appointmentTime?.split(' ')[0] || todayStr()); setApptTime(ticket.appointmentTime?.split(' ')[1] || ''); setApptNotes(ticket.appointmentNotes || ''); setApptOpen(true); }}
+                <Button
+                  variant="outline"
+                  className="w-full justify-end border-border bg-white/5 text-slate-400 hover:text-white text-xs h-12 rounded-2xl font-bold"
+                  onClick={() => {
+                    setApptDate(ticket.appointmentTime?.split(' ')[0] || todayStr());
+                    setApptTime(ticket.appointmentTime?.split(' ')[1] || '');
+                    setApptNotes(ticket.appointmentNotes || '');
+                    setApptOpen(true);
+                  }}
                 >
                   <CalendarDays className="w-4 h-4 mr-2" />
                   تحديد موعد زيارة
                 </Button>
                 <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
-                <Button variant="outline" className="w-full justify-end border-border bg-white/5 text-emerald-400 hover:bg-emerald-500/10 text-xs h-12 rounded-2xl font-bold"
+                <Button
+                  variant="outline"
+                  className="w-full justify-end border-border bg-white/5 text-emerald-400 hover:bg-emerald-500/10 text-xs h-12 rounded-2xl font-bold"
                   onClick={handleWhatsApp}
                 >
                   <Phone className="w-4 h-4 mr-2" />
@@ -524,10 +512,7 @@ export default function TicketDetail() {
           selectedTickets={[ticket]}
           clients={client ? [client] : []}
           projects={project ? { [project.id]: project } : undefined}
-          onSuccess={() => {
-            setCloseDialogOpen(false);
-            loadData();
-          }}
+          onSuccess={() => { setCloseDialogOpen(false); loadData(); }}
         />
       </div>
 
@@ -538,6 +523,8 @@ export default function TicketDetail() {
             <DialogTitle className="text-lg font-bold text-white text-right">تعديل التذكرة</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+
+            {/* الحالة */}
             <div className="space-y-1.5">
               <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">الحالة</Label>
               <DropdownMenu>
@@ -558,6 +545,8 @@ export default function TicketDetail() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+
+            {/* الأولوية */}
             <div className="space-y-1.5">
               <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">الأولوية</Label>
               <DropdownMenu>
@@ -577,69 +566,68 @@ export default function TicketDetail() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+
+            {/* نوع الصيانة */}
             <div className="space-y-1.5">
               <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">
                 نوع الصيانة <span className="text-slate-600 normal-case">(يمكن أكثر من نوع)</span>
               </Label>
               <div className="flex flex-wrap gap-1.5">
-                {(Object.keys(typeTranslations) as TicketType[]).map(t => {
-                  return (
-                    <button type="button" key={t}
-                      onClick={() => setEditTypes(prev =>
-                        prev.includes(t) ? (prev.length > 1 ? prev.filter(x => x !== t) : prev) : [...prev, t]
-                      )}
-                      className={cn('px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all',
-                        editTypes.includes(t)
-                          ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                          : 'bg-white/5 border-border text-slate-500 hover:border-slate-400'
-                      )}
-                    >
-                      {typeTranslations[t]}
-                    </button>
-                  );
-                })}
+                {(Object.keys(typeTranslations) as TicketType[]).map(t => (
+                  <button type="button" key={t}
+                    onClick={() => setEditTypes(prev =>
+                      prev.includes(t) ? (prev.length > 1 ? prev.filter(x => x !== t) : prev) : [...prev, t]
+                    )}
+                    className={cn('px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all',
+                      editTypes.includes(t)
+                        ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                        : 'bg-white/5 border-border text-slate-500 hover:border-slate-400'
+                    )}
+                  >
+                    {typeTranslations[t as string]}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Supervisor picker */}
+            {/* المشرفون */}
             <div className="space-y-1.5">
               <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">
-                المشرفون {availableSupervisors.length > 0 ? `(${availableSupervisors.length} مقترح)` : ''}
+                المشرفون {supervisorsLoading ? '...' : availableSupervisors.length > 0 ? `(${availableSupervisors.length})` : ''}
               </Label>
-              {availableSupervisors.length > 0 ? (
+              {supervisorsLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500" />
+                </div>
+              ) : availableSupervisors.length > 0 ? (
                 <div className="space-y-1 max-h-36 overflow-y-auto">
                   {availableSupervisors.map(s => (
-                    <div key={s.id}
+                    <div
+                      key={s.uid}
                       onClick={() => setEditAssignedSupervisorIds(prev =>
-                        prev.includes(s.id) ? prev.filter(x => x !== s.id) : [...prev, s.id]
+                        prev.includes(s.uid) ? prev.filter(x => x !== s.uid) : [...prev, s.uid]
                       )}
                       className={cn('flex items-center justify-between px-3 py-2 rounded-xl border cursor-pointer transition-all',
-                        editAssignedSupervisorIds.includes(s.id)
+                        editAssignedSupervisorIds.includes(s.uid)
                           ? 'bg-blue-500/10 border-blue-500/30 text-blue-300'
                           : 'bg-white/5 border-border text-slate-400 hover:border-slate-500'
                       )}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold">{s.name}</span>
+                        <span className="text-sm font-bold">{s.displayName}</span>
                         <span className="text-[10px] text-slate-500">{(s.specialties as string[])?.join(' · ')}</span>
                       </div>
                       <div className={cn('w-3.5 h-3.5 rounded border-2 shrink-0',
-                        editAssignedSupervisorIds.includes(s.id) ? 'bg-blue-500 border-blue-500' : 'border-slate-600'
+                        editAssignedSupervisorIds.includes(s.uid) ? 'bg-blue-500 border-blue-500' : 'border-slate-600'
                       )} />
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-[11px] text-slate-600 text-right">لا يوجد مشرفون مخصصون لهذا المشروع بالتخصص المطلوب</p>
+                <p className="text-[11px] text-slate-600 text-right">لا يوجد مشرفون مخصصون لهذا المشروع</p>
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">المسؤول (يدوي)</Label>
-              <Input value={editAssignee} onChange={e => setEditAssignee(e.target.value)}
-                placeholder="اسم المشرف المسؤول"
-                className="bg-white/5 border-border rounded-xl h-11 text-right text-slate-200" />
-            </div>
             <Button onClick={handleSaveEdit} disabled={editSaving}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-12 font-bold mt-2">
               {editSaving ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}

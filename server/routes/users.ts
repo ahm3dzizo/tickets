@@ -13,22 +13,49 @@ const router = Router();
 
 // GET /api/users
 router.get("/", requireAuth, async (_req, res) => {
-  const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
-  res.json(toPublicUsers(users));
+  const users = await prisma.user.findMany({ 
+    include: { projects: true, specialtiesRef: true },
+    orderBy: { createdAt: "asc" } 
+  });
+  const mapped = users.map(u => ({
+    ...u,
+    projectIds: u.projects.map(p => p.id),
+    specialties: u.specialtiesRef.map(s => s.key),
+    projects: undefined, specialtiesRef: undefined
+  }));
+  res.json(toPublicUsers(mapped));
 });
 
 // GET /api/users/me
 router.get("/me", requireAuth, async (req: AuthRequest, res) => {
-  const user = await prisma.user.findUnique({ where: { uid: req.uid! } });
+  const user = await prisma.user.findUnique({ 
+    where: { uid: req.uid! },
+    include: { projects: true, specialtiesRef: true }
+  });
   if (!user) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(toPublicUser(user));
+  const mapped = {
+    ...user,
+    projectIds: user.projects.map(p => p.id),
+    specialties: user.specialtiesRef.map(s => s.key),
+    projects: undefined, specialtiesRef: undefined
+  };
+  res.json(toPublicUser(mapped));
 });
 
 // GET /api/users/:uid
 router.get("/:uid", requireAuth, async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { uid: req.params.uid } });
+  const user = await prisma.user.findUnique({ 
+    where: { uid: req.params.uid },
+    include: { projects: true, specialtiesRef: true }
+  });
   if (!user) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(toPublicUser(user));
+  const mapped = {
+    ...user,
+    projectIds: user.projects.map(p => p.id),
+    specialties: user.specialtiesRef.map(s => s.key),
+    projects: undefined, specialtiesRef: undefined
+  };
+  res.json(toPublicUser(mapped));
 });
 
 // POST /api/users — Create a new user (admin only)
@@ -67,10 +94,13 @@ router.post("/", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
         data: {
           uid, email,
           displayName: displayName || "مستخدم جديد",
-          role, employeeId, phoneNumber, specialty, specialties,
-          projectIds, photoURL, profileCompleted: false,
+          role, employeeId, phoneNumber, specialty,
+          specialtiesRef: { connect: specialties.map(key => ({ key })) },
+          projects: { connect: projectIds.map(id => ({ id })) },
+          photoURL, profileCompleted: false,
           notifPrefs: data.notifPrefs ?? undefined,
         },
+        include: { projects: true, specialtiesRef: true }
       });
     } else {
       if (!employeeId && !phoneNumber) {
@@ -91,21 +121,36 @@ router.post("/", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
       if (existingPending) {
         user = await prisma.user.update({
           where: { uid: existingPending.uid },
-          data: { displayName, role, employeeId, phoneNumber, specialty, specialties, projectIds, photoURL, profileCompleted: data.profileCompleted ?? false, notifPrefs: data.notifPrefs ?? undefined },
+          data: { 
+            displayName, role, employeeId, phoneNumber, specialty,
+            specialtiesRef: { set: specialties.map(key => ({ key })) },
+            projects: { set: projectIds.map(id => ({ id })) },
+            photoURL, profileCompleted: data.profileCompleted ?? false, notifPrefs: data.notifPrefs ?? undefined 
+          },
+          include: { projects: true, specialtiesRef: true }
         });
       } else {
         const uid = `pending_${randomUUID()}`;
         const email = `${uid}@pending.local`;
         user = await prisma.user.create({
           data: {
-            uid, email, displayName, role, employeeId, phoneNumber, specialty, specialties,
-            projectIds, photoURL, profileCompleted: data.profileCompleted ?? false,
+            uid, email, displayName, role, employeeId, phoneNumber, specialty,
+            specialtiesRef: { connect: specialties.map(key => ({ key })) },
+            projects: { connect: projectIds.map(id => ({ id })) },
+            photoURL, profileCompleted: data.profileCompleted ?? false,
             notifPrefs: data.notifPrefs ?? undefined,
           },
+          include: { projects: true, specialtiesRef: true }
         });
       }
     }
-    res.status(201).json(toPublicUser(user));
+    const mapped = {
+      ...user,
+      projectIds: user.projects.map((p: any) => p.id),
+      specialties: user.specialtiesRef.map((s: any) => s.key),
+      projects: undefined, specialtiesRef: undefined
+    };
+    res.status(201).json(toPublicUser(mapped));
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -165,15 +210,22 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
         employeeId,
         phoneNumber,
         specialty,
-        specialties,
-        projectIds,
+        specialtiesRef: data.specialties !== undefined ? { set: specialties.map(key => ({ key })) } : undefined,
+        projects: data.projectIds !== undefined ? { set: projectIds.map(id => ({ id })) } : undefined,
         photoURL,
         disabled,
         notifPrefs: data.notifPrefs ?? existing.notifPrefs ?? undefined,
       },
+      include: { projects: true, specialtiesRef: true }
     });
 
-    res.json(toPublicUser(updated));
+    const mapped = {
+      ...updated,
+      projectIds: updated.projects.map((p: any) => p.id),
+      specialties: updated.specialtiesRef.map((s: any) => s.key),
+      projects: undefined, specialtiesRef: undefined
+    };
+    res.json(toPublicUser(mapped));
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -194,7 +246,10 @@ router.post("/complete-profile", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  const currentUser = await prisma.user.findUnique({ where: { uid: req.uid! } });
+  const currentUser = await prisma.user.findUnique({ 
+    where: { uid: req.uid! },
+    include: { projects: true, specialtiesRef: true }
+  });
   if (!currentUser || !currentUser.uid.startsWith("pending_")) {
     res.status(403).json({ error: "لا يمكنك إكمال بيانات حساب غير معلق" });
     return;
@@ -217,14 +272,22 @@ router.post("/complete-profile", requireAuth, async (req: AuthRequest, res) => {
           uid: newUid, email, passwordHash, displayName,
           role: currentUser.role, employeeId: currentUser.employeeId,
           phoneNumber: currentUser.phoneNumber, specialty: currentUser.specialty,
-          specialties: currentUser.specialties, projectIds: currentUser.projectIds,
+          specialtiesRef: { connect: currentUser.specialtiesRef.map((s:any) => ({ id: s.id })) },
+          projects: { connect: currentUser.projects.map((p:any) => ({ id: p.id })) },
           photoURL: currentUser.photoURL, profileCompleted: true,
           notifPrefs: currentUser.notifPrefs ?? undefined,
         },
+        include: { projects: true, specialtiesRef: true }
       });
     });
+    const mapped = {
+      ...updatedUser,
+      projectIds: updatedUser.projects.map((p:any) => p.id),
+      specialties: updatedUser.specialtiesRef.map((s:any) => s.key),
+      projects: undefined, specialtiesRef: undefined
+    };
     const token = signAppToken({ uid: updatedUser.uid, email: updatedUser.email, type: "app" as const });
-    res.json({ token, user: toPublicUser(updatedUser) });
+    res.json({ token, user: toPublicUser(mapped) });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -250,8 +313,20 @@ router.post("/claim-pending", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  const existing = await prisma.user.findUnique({ where: { uid: req.uid! } });
-  if (existing) { res.json(toPublicUser(existing)); return; }
+  const existing = await prisma.user.findUnique({ 
+    where: { uid: req.uid! },
+    include: { projects: true, specialtiesRef: true }
+  });
+  if (existing) { 
+    const mapped = {
+      ...existing,
+      projectIds: existing.projects.map(p => p.id),
+      specialties: existing.specialtiesRef.map(s => s.key),
+      projects: undefined, specialtiesRef: undefined
+    };
+    res.json(toPublicUser(mapped)); 
+    return; 
+  }
 
   const pending = await prisma.user.findFirst({
     where: {
@@ -261,6 +336,7 @@ router.post("/claim-pending", requireAuth, async (req: AuthRequest, res) => {
         ...(phoneNumber ? [{ phoneNumber }] : []),
       ],
     },
+    include: { projects: true, specialtiesRef: true }
   });
 
   if (!pending) {
@@ -275,14 +351,23 @@ router.post("/claim-pending", requireAuth, async (req: AuthRequest, res) => {
         data: {
           uid: req.uid!, email, displayName, role: pending.role,
           employeeId: pending.employeeId, phoneNumber: pending.phoneNumber,
-          specialty: pending.specialty, specialties: pending.specialties,
-          projectIds: pending.projectIds, photoURL: pending.photoURL,
+          specialty: pending.specialty, 
+          specialtiesRef: { connect: pending.specialtiesRef.map((s:any) => ({ id: s.id })) },
+          projects: { connect: pending.projects.map((p:any) => ({ id: p.id })) },
+          photoURL: pending.photoURL,
           profileCompleted: true, notifPrefs: pending.notifPrefs ?? undefined,
         },
+        include: { projects: true, specialtiesRef: true }
       }),
       prisma.user.delete({ where: { uid: pending.uid } }),
     ]);
-    res.status(201).json(toPublicUser(claimed));
+    const mapped = {
+      ...claimed,
+      projectIds: claimed.projects.map((p:any) => p.id),
+      specialties: claimed.specialtiesRef.map((s:any) => s.key),
+      projects: undefined, specialtiesRef: undefined
+    };
+    res.status(201).json(toPublicUser(mapped));
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

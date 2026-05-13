@@ -76,6 +76,15 @@ git pull
 echo "▶  npm install..."
 npm install --omit=dev --silent
 
+echo "▶  npx prisma db push..."
+npx prisma db push --accept-data-loss
+
+echo "▶  npx prisma generate..."
+npx prisma generate
+
+echo "▶  npm run build..."
+npm run build
+
 echo "▶  pm2 restart $PM2_NAME..."
 pm2 restart "$PM2_NAME" --update-env
 echo -e "\${GREEN}✔  API جاهز\${NC}"

@@ -1,9 +1,11 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import cors from "cors";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import ticketTypesAdminRoutes from "./routes/ticket-types-admin.ts";
 import { PORT, __dirname } from "./config.js";
 import prisma from "./db.js";
 import { setupSocket } from "./socket.js";
@@ -15,7 +17,6 @@ import ticketRoutes from "./routes/tickets.js";
 import technicianRoutes from "./routes/technicians.js";
 import classifyRoutes from "./routes/classify.js";
 import reportRoutes from "./routes/report.js";
-import { runAutoLearnCycle, autoGenerateTypes } from "./classifier/gemini.js";
 import { requireAuth } from "./auth.js";
 
 async function startServer() {
@@ -26,7 +27,26 @@ async function startServer() {
   // Make io accessible to routes
   (global as any).__io = io;
 
-  app.use(cors());
+  // ── Security Middlewares ───────────────────────────────────────────────
+  app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? undefined : false,
+  }));
+
+  const corsOptions = {
+    origin: process.env.NODE_ENV === "production" 
+      ? (process.env.FRONTEND_URL || false) 
+      : "*",
+  };
+  app.use(cors(corsOptions));
+
+  const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // Limit each IP to 1000 requests per `window`
+    message: { error: "تم تجاوز الحد المسموح به من الطلبات، يرجى المحاولة لاحقاً." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use("/api/", globalLimiter);
   app.use(express.json({ limit: "10mb" }));
 
   // ── Health ─────────────────────────────────────────────────────────────
@@ -41,6 +61,7 @@ async function startServer() {
   app.use("/api/technicians", technicianRoutes);
   app.use("/api/classify", classifyRoutes);
   app.use("/api/generate-report", reportRoutes);
+  app.use("/api/admin/ticket-types", ticketTypesAdminRoutes);
 
   // ── Legacy client routes under projects (for backward compat) ──────────
   app.get("/api/projects/:projectId/clients", requireAuth, async (req, res) => {
@@ -82,14 +103,14 @@ async function startServer() {
     });
   }
 
-  // ── Background Jobs ────────────────────────────────────────────────────
-  // Auto-learn after 30 seconds
-  setTimeout(() => runAutoLearnCycle(), 30_000);
-  setInterval(() => runAutoLearnCycle(), 6 * 60 * 60 * 1000);
+  // ── Generic Error Handler ──────────────────────────────────────────────
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("Unhandled Error:", err);
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "حدث خطأ داخلي في الخادم" : err.message });
+  });
 
-  // Auto-generate types after 10 seconds
-  setTimeout(() => autoGenerateTypes(), 10_000);
-  setInterval(() => autoGenerateTypes(), 24 * 60 * 60 * 1000);
+  // ── Background Jobs ────────────────────────────────────────────────────
+  // Removed Gemini auto-learn jobs
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);

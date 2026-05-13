@@ -17,8 +17,6 @@
   "dependencies": {
     "@base-ui/react": "^1.4.0",
     "@fontsource-variable/geist": "^5.2.8",
-    "@google-cloud/vertexai": "^1.12.0",
-    "@google/genai": "^1.29.0",
     "@prisma/adapter-pg": "^5.22.0",
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-select": "^2.2.6",
@@ -32,7 +30,9 @@
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "express": "^4.22.1",
+    "express-rate-limit": "^8.5.1",
     "firebase": "^12.12.0",
+    "helmet": "^8.1.0",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "jsonwebtoken": "^9.0.3",

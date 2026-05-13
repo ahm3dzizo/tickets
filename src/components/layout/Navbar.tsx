@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useTheme } from 'next-themes';
+import { Settings2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,6 +79,7 @@ export function Navbar() {
     { icon: Ticket, label: 'التذاكر', path: '/tickets', roles: ['admin', 'engineer', 'supervisor'] },
     { icon: HardHat, label: 'الفنيين', path: '/technicians', roles: ['admin', 'supervisor'] },
     { icon: Users, label: 'الفريق', path: '/team', roles: ['admin', 'engineer'] },
+    { icon: Settings2, label: 'أنواع التذاكر', path: '/ticket-types', roles: ['admin'] },
     { icon: Settings, label: 'الإعدادات', path: '/settings', roles: ['admin', 'engineer', 'supervisor'] },
   ];
 

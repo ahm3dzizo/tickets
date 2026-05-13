@@ -16,8 +16,10 @@ model User {
   employeeId       String?
   phoneNumber      String?
   specialty        String?
-  specialties      String[]  @default([])
-  projectIds       String[]  @default([])
+  projects         Project[]   @relation("ProjectUsers")
+  specialtiesRef   Specialty[] @relation("UserSpecialties")
+  supervisedTechnicians Technician[] @relation("SupervisorTechnicians")
+  assignedTickets  Ticket[]    @relation("TicketAssignedSupervisor")
   photoURL         String?
   profileCompleted Boolean   @default(false)
   disabled         Boolean   @default(false)
@@ -32,8 +34,9 @@ model Project {
   name          String
   location      String
   abbreviation  String
-  engineerIds   String[]   @default([])
-  supervisorIds String[]   @default([])
+  users         User[]     @relation("ProjectUsers")
+  technicians   Technician[]
+  tickets       Ticket[]
   createdAt     DateTime   @default(now())
   clients       Client[]
 }
@@ -69,6 +72,7 @@ model Ticket {
   priority               Int       @default(4)
   assigneeName           String?
   assignedSupervisorId   String?
+  assignedSupervisor     User?     @relation("TicketAssignedSupervisor", fields: [assignedSupervisorId], references: [uid])
   assignedSupervisorIds  String[]  @default([])
   assignedSupervisors    Json?
   detectedTypes          String[]  @default([])
@@ -80,6 +84,7 @@ model Ticket {
   closedAt               DateTime?
   createdBy              String?
   client                 Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  project                Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
   ticketType             TicketType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
 }
 
@@ -91,7 +96,9 @@ model Technician {
   specialty       String?
   experienceLevel String?
   supervisorId    String?
+  supervisor      User?     @relation("SupervisorTechnicians", fields: [supervisorId], references: [uid])
   projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id])
   idNumber        String?
   idPhotoUrl      String?
   documentUrls    String[]  @default([])
@@ -131,6 +138,7 @@ model Specialty {
   sortOrder Int                @default(0)
   createdAt DateTime           @default(now())
 
+  users            User[]          @relation("UserSpecialties")
   ticketTypes      TicketType[]
   ticketSubTypes   TicketSubType[]
 }

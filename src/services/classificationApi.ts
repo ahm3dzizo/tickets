@@ -33,6 +33,7 @@ export interface ClassificationApiParams {
 export interface ClassificationApiResult {
   primaryType: TicketType;
   allTypes: TicketType[];
+  subType?: string;
   requiredSpecialties: Specialty[];
   confidence: number;
   source?: string;

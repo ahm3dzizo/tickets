@@ -6,7 +6,7 @@ import {
   Navigate 
 } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
-
+import TicketTypesAdminPage from './pages/TicketTypesAdminPage';
 import Dashboard from '@/pages/Dashboard';
 import Login from '@/pages/Login';
 import TicketsList from '@/pages/TicketsList';
@@ -18,8 +18,6 @@ import ProjectDetail from '@/pages/ProjectDetail';
 import Clients from '@/pages/Clients';
 import Technicians from '@/pages/Technicians';
 import TeamMemberDetail from '@/pages/TeamMemberDetail';
-import GeminiTest from '@/pages/GeminiTest';
-
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
@@ -111,12 +109,11 @@ function AppContent() {
             path="/settings" 
             element={user && !requiresProfileCompletion ? <Settings /> : <Navigate to="/login" />} 
           />
-          {/* ⛔️ تمت إزالة Route /register */}
-          {/* أي راوتر اختباري للـ Gemini */}
-          <Route
-            path="/gemini-test"
-            element={user && !requiresProfileCompletion ? <GeminiTest /> : <Navigate to="/login" />}
+          <Route 
+            path="/ticket-types" 
+            element={user && !requiresProfileCompletion ? <TicketTypesAdminPage /> : <Navigate to="/login" />} 
           />
+          {/* ⛔️ تمت إزالة Route /register */}
         </Routes>
         <Toaster position="top-right" />
         <PWAInstallPrompt />

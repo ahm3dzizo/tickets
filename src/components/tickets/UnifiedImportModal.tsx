@@ -411,6 +411,14 @@ const ReviewTicketCard: React.FC<ReviewTicketCardProps> = ({
         <div><span className="text-slate-500">فيلا:</span><span className="text-white font-bold mr-1">{ticket.cleanVillaNumber || '—'}</span></div>
         <div className="col-span-2"><span className="text-slate-500">العميل:</span><span className="text-white mr-1">{ticket.clientName || 'غير معروف'}</span></div>
         <div className="col-span-4 text-xs text-slate-400 line-clamp-2">{ticket.description}</div>
+        {ticket.subType && (
+          <div className="col-span-4 mt-1">
+            <span className="text-slate-500 text-[10px] font-bold uppercase block text-right">النوع الفرعي المكتشف</span>
+            <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-white/90 border border-border">
+              {ticket.subType}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Types selector */}
@@ -649,6 +657,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         assignedSupervisors: validSupervisors,
         detectedTypes: classification?.allTypes || [],
         type: finalType,
+        subType: classification?.subType || null,
         priority: 3,
         createdAt: new Date().toISOString(),
         createdBy: currentUserId || null,
@@ -670,23 +679,32 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       return;
     }
 
-        // Close the import dialog first to avoid Radix UI dialog conflicts
-        setOpen(false);
+    // Close the import dialog first to avoid Radix UI dialog conflicts
+    setOpen(false);
 
-        // Small delay to let Radix close the parent dialog cleanly
-        setTimeout(() => {
-          setReviewTickets(newTickets);
-          setOriginalTypesMap(
-            Object.fromEntries(newTickets.map((t: any) => [
-              t.ticketId || t.refNumber,
-              Array.isArray(t.detectedTypes) && t.detectedTypes.length > 0
-                ? [...t.detectedTypes]
-                : [t.type || 'plumbing'],
-            ]))
-          );
-          setReviewModalOpen(true);
-          setLoading(false);
-        }, 200);
+    const unmatched = newTickets.filter(t => !t.clientId);
+    const matched = newTickets.filter(t => !!t.clientId);
+
+    // Small delay to let Radix close the parent dialog cleanly
+    setTimeout(() => {
+      if (unmatched.length > 0) {
+        setUnmatchedTickets(unmatched);
+        setPendingMatchedTickets(matched);
+        setManualModalOpen(true);
+      } else {
+        setReviewTickets(matched);
+        setOriginalTypesMap(
+          Object.fromEntries(matched.map((t: any) => [
+            t.ticketId || t.refNumber,
+            Array.isArray(t.detectedTypes) && t.detectedTypes.length > 0
+              ? [...t.detectedTypes]
+              : [t.type || 'plumbing'],
+          ]))
+        );
+        setReviewModalOpen(true);
+      }
+      setLoading(false);
+    }, 200);
   };
 
   // ── حفظ الأنواع الأصلية لكل تذكرة (لتعليم السيرفر عند التعديل) ──
@@ -736,6 +754,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       createdAt: t.createdAt,
       type: t.type,
       detectedTypes: t.detectedTypes,
+      subType: t.subType,
       assigneeName: t.assigneeName,
       assignedSupervisorId: t.assignedSupervisorId,
       assignedSupervisorIds: t.assignedSupervisorIds,
@@ -799,8 +818,17 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
 
   const handleManualConfirm = (matchedTickets: any[]) => {
     const all = [...pendingMatchedTickets, ...matchedTickets];
-    finalizeImport(all);
+    setReviewTickets(all);
+    setOriginalTypesMap(
+      Object.fromEntries(all.map((t: any) => [
+        t.ticketId || t.refNumber,
+        Array.isArray(t.detectedTypes) && t.detectedTypes.length > 0
+          ? [...t.detectedTypes]
+          : [t.type || 'plumbing'],
+      ]))
+    );
     setManualModalOpen(false);
+    setTimeout(() => setReviewModalOpen(true), 200);
   };
 
   return (
