@@ -37,7 +37,7 @@ async function autoSendOpening(uid: string, ticket: any) {
       villaNumber: ticket.villaNumber,
       date: new Date().toLocaleDateString('ar-EG'),
     });
-    await sendWAText(uid, client.phone, msg);
+    await sendWAText('session', client.phone, msg);
   } catch {}
 }
 
@@ -56,7 +56,7 @@ async function autoSendClosing(uid: string, ticket: any) {
       villaNumber: ticket.villaNumber,
       closureNotes: ticket.closureNotes,
     });
-    await sendWAText(uid, client.phone, msg);
+    await sendWAText('session', client.phone, msg);
   } catch {}
 }
 

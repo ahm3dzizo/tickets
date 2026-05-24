@@ -81,8 +81,8 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       res.send(jpgData);
 
       // Fire-and-forget: send via WhatsApp in background
-      if (senderUid && whatsappPhone) {
-        sendWAImage(senderUid, whatsappPhone, jpgData, '📊 تقرير الصيانة — فريق ريتال')
+      if (whatsappPhone) {
+        sendWAImage('session', whatsappPhone, jpgData, '📊 تقرير الصيانة — فريق ريتال')
           .catch(() => {});
       }
 

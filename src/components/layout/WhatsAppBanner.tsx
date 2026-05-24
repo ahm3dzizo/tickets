@@ -64,8 +64,9 @@ export function WhatsAppBanner() {
   const verifyConnection = async () => {
     setStep('verifying');
     try {
-      const s = await whatsappApi.getStatus();
-      if (s.connected) {
+      // Use /verify endpoint which polls for up to 30s until API comes up
+      const result = await whatsappApi.verify();
+      if (result.connected) {
         setStep('connected');
         setBanner('dismissed');
         sessionStorage.setItem(DISMISS_KEY, '1');
