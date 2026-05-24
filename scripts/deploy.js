@@ -81,7 +81,8 @@ const remoteLines = [
   `git fetch origin`,
   `git checkout ${GIT_BRANCH}`,
   `git pull origin ${GIT_BRANCH}`,
-  `npm install --omit=dev --silent`,
+  `npm install --silent`,
+  `npm run build`,
   `pm2 restart ${PM2_NAME} --update-env`,
   `pm2 list`,
 ];
