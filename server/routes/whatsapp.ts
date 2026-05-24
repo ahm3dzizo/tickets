@@ -23,7 +23,7 @@ function phoneDigits(phone: string): string {
 /** Write ecosystem config and (re)start wa-automate via PM2 */
 async function restartWA(extraArgs = ''): Promise<void> {
   const baseArgs = `--port ${WA_PORT} --api-key ${WA_KEY} `
-    + `--session-data-path ${SESSIONS_PATH} --use-chrome --no-sandbox --headless`;
+    + `--session-data-path ${SESSIONS_PATH} --use-chrome --no-sandbox --headless --qr-timeout 0 --auth-timeout 0`;
   const args = extraArgs ? `${baseArgs} ${extraArgs}` : baseArgs;
 
   const cfg = `module.exports = {
