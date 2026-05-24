@@ -22,6 +22,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { ProfileCompletionModal } from '@/components/ProfileCompletionModal';
+import { WhatsAppConnectPrompt } from '@/components/whatsapp/WhatsAppConnectPrompt';
 
 export default function App() {
   return (
@@ -117,10 +118,11 @@ function AppContent() {
         </Routes>
         <Toaster position="top-right" />
         <PWAInstallPrompt />
-        
+        <WhatsAppConnectPrompt />
+
         {showProfileModal && (
-          <ProfileCompletionModal 
-            open={showProfileModal} 
+          <ProfileCompletionModal
+            open={showProfileModal}
             onComplete={handleProfileComplete}
           />
         )}

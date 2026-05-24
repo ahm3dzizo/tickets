@@ -214,10 +214,18 @@ export function CloseTicketDialog({
         nhc: mainTicket?.projectAbbr || mainTicket?.refNumber?.split('-')[0] || '',
       };
 
+      const authToken = localStorage.getItem('retal_auth_token');
       const response = await fetch('/api/generate-report', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reportPayload),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          ...reportPayload,
+          // Passed to backend for WhatsApp image sending (stripped before Python)
+          whatsappPhone: targetClient?.phone || '',
+        }),
       });
 
       if (!response.ok) {

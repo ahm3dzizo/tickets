@@ -1,15 +1,16 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import {
   User, Lock, Bell, Shield, LogOut, ChevronDown, ChevronUp,
   Camera, Save, Eye, EyeOff, CheckCircle2, Loader2, Check,
+  MessageSquare, RefreshCw, Wifi, WifiOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { authApi, usersApi } from '@/lib/api';
+import { authApi, usersApi, whatsappApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -184,6 +185,40 @@ export default function Settings() {
       toast.error('فشل الحفظ');
     } finally {
       setSavingNotifs(false);
+    }
+  };
+
+  // ── WhatsApp ───────────────────────────────────────────────────────────────
+  const [waStatus, setWaStatus] = useState<{
+    running: boolean; connected: boolean; state?: string;
+  } | null>(null);
+  const [waQR, setWaQR] = useState<string | null>(null);
+  const [loadingWA, setLoadingWA] = useState(false);
+  const [loadingQR, setLoadingQR] = useState(false);
+
+  const checkWAStatus = useCallback(async () => {
+    setLoadingWA(true);
+    try {
+      const s = await whatsappApi.getStatus();
+      setWaStatus(s);
+      if (s.running && !s.connected) setWaQR(null);
+    } catch {
+      setWaStatus({ running: false, connected: false });
+    } finally {
+      setLoadingWA(false);
+    }
+  }, []);
+
+  const fetchQR = async () => {
+    setLoadingQR(true);
+    try {
+      const data = await whatsappApi.getQR();
+      const qr = data.qr;
+      setWaQR(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'تعذّر جلب رمز QR');
+    } finally {
+      setLoadingQR(false);
     }
   };
 
@@ -434,6 +469,122 @@ export default function Settings() {
               <span className="text-xs font-bold">وصولك مؤمَّن عبر PostgreSQL + JWT</span>
               <CheckCircle2 className="w-4 h-4 shrink-0" />
             </div>
+          </div>
+        </Section>
+
+        {/* ── WhatsApp ────────────────────────────────────────────────────── */}
+        <Section
+          icon={MessageSquare}
+          title="واتساب تلقائي"
+          desc="اربط واتسابك لإرسال رسائل الافتتاح والإغلاق أوتوماتيك"
+          accent="green"
+          open={openSection === 'whatsapp'}
+          onToggle={() => {
+            toggle('whatsapp');
+            if (openSection !== 'whatsapp') checkWAStatus();
+          }}
+        >
+          <div className="space-y-5">
+            {loadingWA && (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+              </div>
+            )}
+
+            {!loadingWA && waStatus && !waStatus.running && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 justify-end">
+                  <div className="text-right">
+                    <p className="text-amber-400 font-bold text-sm">خدمة الواتساب غير متاحة</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">شغّل الخدمة على جهازك بالأمر التالي:</p>
+                  </div>
+                  <WifiOff className="w-5 h-5 text-amber-400 shrink-0" />
+                </div>
+                <div className="bg-muted/80 rounded-xl px-4 py-3 font-mono text-xs text-foreground/80 select-all text-left" dir="ltr">
+                  npx @open-wa/wa-automate --port 8002
+                </div>
+                <Button
+                  onClick={checkWAStatus}
+                  variant="outline"
+                  className="w-full rounded-xl h-10 gap-2 text-sm"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  إعادة الفحص
+                </Button>
+              </div>
+            )}
+
+            {!loadingWA && waStatus?.running && waStatus.connected && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-5 py-4 justify-end">
+                  <div className="text-right">
+                    <p className="text-emerald-400 font-bold text-sm">مرتبط ونشط</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">الرسائل التلقائية تعمل من واتسابك</p>
+                  </div>
+                  <Wifi className="w-5 h-5 text-emerald-400 shrink-0" />
+                </div>
+                <Button
+                  onClick={checkWAStatus}
+                  variant="outline"
+                  className="w-full rounded-xl h-10 gap-2 text-sm"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  تحديث الحالة
+                </Button>
+              </div>
+            )}
+
+            {!loadingWA && waStatus?.running && !waStatus.connected && (
+              <div className="space-y-5">
+                <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl px-5 py-4 justify-end">
+                  <div className="text-right">
+                    <p className="text-blue-400 font-bold text-sm">في انتظار الربط</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">امسح رمز QR من واتساب على هاتفك</p>
+                  </div>
+                  <MessageSquare className="w-5 h-5 text-blue-400 shrink-0" />
+                </div>
+
+                {waQR ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="bg-white p-3 rounded-2xl shadow-lg">
+                      <img src={waQR} alt="QR Code" className="w-48 h-48 object-contain" />
+                    </div>
+                    <p className="text-muted-foreground text-xs text-center">
+                      افتح واتساب ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 py-4">
+                    <div className="w-48 h-48 bg-muted/60 rounded-2xl border border-border flex items-center justify-center">
+                      <MessageSquare className="w-12 h-12 text-muted-foreground/40" />
+                    </div>
+                    <p className="text-muted-foreground text-xs text-center">اضغط الزر لتوليد رمز QR</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button
+                    onClick={checkWAStatus}
+                    variant="outline"
+                    className="flex-1 rounded-xl h-10 gap-2 text-sm"
+                    disabled={loadingQR}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    فحص الاتصال
+                  </Button>
+                  <Button
+                    onClick={fetchQR}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 gap-2 text-sm font-bold"
+                    disabled={loadingQR}
+                  >
+                    {loadingQR
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <MessageSquare className="w-4 h-4" />}
+                    {waQR ? 'تحديث الرمز' : 'توليد QR'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </Section>
 

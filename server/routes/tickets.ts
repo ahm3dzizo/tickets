@@ -5,8 +5,60 @@ import { getIO } from "../socket.js";
 import { classifyTicket } from "../classifier/classify.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
 import { invalidateKeywordCache } from "../classifier/keywords.js";
+import { sendWAText, buildOpeningMsg, buildClosingMsg } from "../whatsapp.js";
 
 const router = Router();
+
+async function shouldAutoSendWA(uid: string): Promise<boolean> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { uid },
+      select: { notifPrefs: true },
+    });
+    const prefs = user?.notifPrefs as Record<string, boolean> | null;
+    return prefs?.whatsapp !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function autoSendOpening(uid: string, ticket: any) {
+  try {
+    if (!(await shouldAutoSendWA(uid))) return;
+    const client = await prisma.client.findUnique({
+      where: { id: ticket.clientId },
+      select: { phone: true, name: true },
+    });
+    if (!client?.phone) return;
+    const msg = buildOpeningMsg({
+      ticketId: ticket.ticketId,
+      clientName: client.name,
+      description: ticket.description,
+      villaNumber: ticket.villaNumber,
+      date: new Date().toLocaleDateString('ar-EG'),
+    });
+    await sendWAText(uid, client.phone, msg);
+  } catch {}
+}
+
+async function autoSendClosing(uid: string, ticket: any) {
+  try {
+    if (!(await shouldAutoSendWA(uid))) return;
+    const client = await prisma.client.findUnique({
+      where: { id: ticket.clientId },
+      select: { phone: true, name: true },
+    });
+    if (!client?.phone) return;
+    const msg = buildClosingMsg({
+      ticketId: ticket.ticketId,
+      clientName: client.name,
+      description: ticket.description,
+      villaNumber: ticket.villaNumber,
+      closureNotes: ticket.closureNotes,
+    });
+    await sendWAText(uid, client.phone, msg);
+  } catch {}
+}
 
 async function classifyInBackground(description: string, ticketId: string, projectId?: string) {
   try {
@@ -131,6 +183,9 @@ router.post("/", requireAuth, async (req, res) => {
       classifyInBackground(description, ticket.id, projectId).catch(() => {});
     }
 
+    const senderUid = (req as AuthRequest).uid;
+    if (senderUid) autoSendOpening(senderUid, ticket).catch(() => {});
+
     getIO().emit("ticket:created", ticket);
     res.status(201).json(ticket);
   } catch (err: any) {
@@ -244,7 +299,7 @@ router.post("/bulk", requireAuth, async (req, res) => {
 });
 
 // PUT /api/tickets/:id
-router.put("/:id", requireAuth, async (req, res) => {
+router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   const data = req.body;
   try {
     const ticket = await prisma.ticket.update({
@@ -265,6 +320,12 @@ router.put("/:id", requireAuth, async (req, res) => {
         type: data.type ?? undefined,
       },
     });
+
+    const closingStatuses = ['closed', 'completed'];
+    if (data.status && closingStatuses.includes(data.status) && req.uid) {
+      autoSendClosing(req.uid, ticket).catch(() => {});
+    }
+
     res.json(ticket);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

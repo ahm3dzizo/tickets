@@ -17,6 +17,7 @@ import ticketRoutes from "./routes/tickets.js";
 import technicianRoutes from "./routes/technicians.js";
 import classifyRoutes from "./routes/classify.js";
 import reportRoutes from "./routes/report.js";
+import whatsappRoutes from "./routes/whatsapp.js";
 import { requireAuth } from "./auth.js";
 
 async function startServer() {
@@ -62,6 +63,7 @@ async function startServer() {
   app.use("/api/classify", classifyRoutes);
   app.use("/api/generate-report", reportRoutes);
   app.use("/api/admin/ticket-types", ticketTypesAdminRoutes);
+  app.use("/api/whatsapp", whatsappRoutes);
 
   // ── Legacy client routes under projects (for backward compat) ──────────
   app.get("/api/projects/:projectId/clients", requireAuth, async (req, res) => {

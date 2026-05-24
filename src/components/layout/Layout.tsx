@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navbar } from './Navbar';
+import { WhatsAppBanner } from './WhatsAppBanner';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 
@@ -24,6 +25,7 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30">
+      <WhatsAppBanner />
       <Navbar />
         <main className="px-4 sm:px-6 py-8 pt-24 md:pt-28 lg:pt-10 lg:pr-[256px] lg:pl-8">
         <div className="relative isolate max-w-[1400px]">

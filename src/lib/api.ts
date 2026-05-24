@@ -135,6 +135,18 @@ export const ticketsApi = {
   deleteAll:    ()                                     => del<any>('/tickets'),
 };
 
+// ── WhatsApp ──────────────────────────────────────────────────────────────────
+export const whatsappApi = {
+  getStatus: () =>
+    get<{ running: boolean; connected: boolean; state?: string }>('/whatsapp/status'),
+  getQR: () =>
+    get<{ qr: string }>('/whatsapp/qr'),
+  pairByPhone: (phone: string) =>
+    post<{ code: string }>('/whatsapp/pair', { phone }),
+  send: (phone: string, message: string) =>
+    post<{ sent: boolean; fallback: boolean }>('/whatsapp/send', { phone, message }),
+};
+
 // ── Technicians ───────────────────────────────────────────────────────────────
 export const techniciansApi = {
   getAll: ()                         => get<any[]>('/technicians'),
