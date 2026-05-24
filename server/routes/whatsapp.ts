@@ -23,7 +23,7 @@ function phoneDigits(phone: string): string {
 /** Write ecosystem config and (re)start wa-automate via PM2 */
 async function restartWA(extraArgs = ''): Promise<void> {
   const baseArgs = `--port ${WA_PORT} --api-key ${WA_KEY} `
-    + `--session-data-path ${SESSIONS_PATH} --use-chrome --no-sandbox --headful`;
+    + `--session-data-path ${SESSIONS_PATH} --use-chrome --no-sandbox --headless`;
   const args = extraArgs ? `${baseArgs} ${extraArgs}` : baseArgs;
 
   const cfg = `module.exports = {
@@ -33,7 +33,6 @@ async function restartWA(extraArgs = ''): Promise<void> {
     args: '${args}',
     cwd: '/opt/retal-api',
     env: {
-      DISPLAY: ':1',
       PUPPETEER_EXECUTABLE_PATH: '/usr/bin/chromium',
       PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true',
       NODE_ENV: 'production'
@@ -151,35 +150,11 @@ router.post('/send', requireAuth, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/whatsapp/pair ─────────────────────────────────────────────────
-// Restarts wa-automate with --link-code PHONE and returns the 8-digit code.
+// Pairing code is currently disabled due to wa-automate/WhatsApp Web compatibility issues.
 router.post('/pair', requireAuth, async (req: AuthRequest, res) => {
-  const { phone } = req.body as { phone?: string };
-  if (!phone?.trim()) {
-    res.status(400).json({ error: 'رقم الهاتف مطلوب' });
-    return;
-  }
-
-  const digits = phoneDigits(phone.trim());
-
-  try {
-    // Restart wa-automate with link-code for this phone number
-    await restartWA(`--link-code ${digits}`);
-
-    // Wait for wa-automate to generate and log the pairing code
-    const code = await waitForLinkCode(50_000);
-
-    if (!code) {
-      res.status(408).json({
-        error: 'انتهت مهلة انتظار كود الربط — تأكد من صحة الرقم وحاول مجدداً',
-      });
-      return;
-    }
-
-    res.json({ code });
-  } catch (err: any) {
-    console.error('WA pair error:', err);
-    res.status(500).json({ error: 'تعذّر بدء عملية الربط' });
-  }
+  res.status(400).json({
+    error: 'طريقة ربط رقم الهاتف غير مدعومة حالياً بسبب تحديثات واتساب ويب. يرجى الانتقال إلى الإعدادات واستخدام رمز QR بدلاً من ذلك.',
+  });
 });
 
 // ─── POST /api/whatsapp/verify ───────────────────────────────────────────────
