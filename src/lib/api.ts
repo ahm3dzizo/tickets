@@ -147,6 +147,10 @@ export const whatsappApi = {
     post<{ sent: boolean; fallback: boolean }>('/whatsapp/send', { phone, message }),
   verify: () =>
     post<{ connected: boolean }>('/whatsapp/verify', {}),
+  start: () =>
+    post<{ success: boolean; message: string }>('/whatsapp/start', {}),
+  restart: () =>
+    post<{ success: boolean; message: string }>('/whatsapp/restart', {}),
 };
 
 // ── Technicians ───────────────────────────────────────────────────────────────

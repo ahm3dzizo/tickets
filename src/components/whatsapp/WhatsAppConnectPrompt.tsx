@@ -3,33 +3,29 @@ import { useAuth } from '@/contexts/AuthContext';
 import { whatsappApi } from '@/lib/api';
 import { toast } from 'sonner';
 import {
-  MessageSquare, Phone, X, Loader2, CheckCircle2, Copy, RefreshCw,
+  MessageSquare, X, Loader2, CheckCircle2, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 type Phase =
   | 'idle'       // initial — checking
   | 'hidden'     // wa not running, already connected, or dismissed
   | 'banner'     // wa running but not connected → show floating banner
-  | 'modal'      // modal open, step 1: enter phone
-  | 'requesting' // calling /pair API
-  | 'code'       // code shown, auto-polling
+  | 'modal'      // modal open, show QR
   | 'connected'; // just connected → brief success then hide
 
 export function WhatsAppConnectPrompt() {
   const { user, requiresProfileCompletion } = useAuth();
   const [phase, setPhase] = useState<Phase>('idle');
-  const [phone, setPhone] = useState('');
-  const [code, setCode] = useState<string | null>(null);
+  const [waQR, setWaQR] = useState<string | null>(null);
+  const [loadingQR, setLoadingQR] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!user || requiresProfileCompletion) return;
-    setPhone(normalizeDisplayPhone(user.phoneNumber ?? ''));
     checkStatus('init');
     return () => stopPolling();
-  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.uid, requiresProfileCompletion]);
 
   function stopPolling() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -40,10 +36,10 @@ export function WhatsAppConnectPrompt() {
       const s = await whatsappApi.getStatus();
       if (!s.running || s.connected) {
         stopPolling();
-        setPhase(s.connected && origin === 'manual' && phase === 'code'
+        setPhase(s.connected && origin === 'manual' && phase === 'modal'
           ? 'connected'
           : 'hidden');
-        if (s.connected && origin === 'manual' && phase === 'code') {
+        if (s.connected && origin === 'manual' && phase === 'modal') {
           toast.success('تم ربط واتساب بنجاح 🎉');
           setTimeout(() => setPhase('hidden'), 2500);
         }
@@ -55,17 +51,17 @@ export function WhatsAppConnectPrompt() {
     }
   }
 
-  async function requestCode() {
-    if (!phone.trim()) { toast.error('أدخل رقم الواتساب أولاً'); return; }
-    setPhase('requesting');
+  async function fetchQR() {
+    setLoadingQR(true);
     try {
-      const data = await whatsappApi.pairByPhone(phone.trim());
-      setCode(formatCode(data.code));
-      setPhase('code');
+      const data = await whatsappApi.getQR();
+      const qr = data.qr;
+      setWaQR(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`);
       startPolling();
     } catch (err: any) {
-      toast.error(err?.message ?? 'تعذّر طلب كود الربط');
-      setPhase('modal');
+      toast.error(err?.message ?? 'تعذّر جلب رمز QR');
+    } finally {
+      setLoadingQR(false);
     }
   }
 
@@ -93,14 +89,13 @@ export function WhatsAppConnectPrompt() {
   }
 
   function openModal() {
-    setCode(null);
+    setWaQR(null);
     setPhase('modal');
+    fetchQR();
   }
 
-  // ── Nothing to render ─────────────────────────────────────────────────────
   if (phase === 'idle' || phase === 'hidden') return null;
 
-  // ── Floating banner ───────────────────────────────────────────────────────
   if (phase === 'banner') {
     return (
       <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:w-80 z-50 animate-in slide-in-from-bottom-3 duration-300">
@@ -132,7 +127,6 @@ export function WhatsAppConnectPrompt() {
     );
   }
 
-  // ── Modal (all modal phases) ──────────────────────────────────────────────
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
@@ -142,7 +136,6 @@ export function WhatsAppConnectPrompt() {
         className="bg-card border border-border rounded-3xl w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-4 duration-300"
         dir="rtl"
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border/40">
           <button
             onClick={dismiss}
@@ -153,7 +146,7 @@ export function WhatsAppConnectPrompt() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <h2 className="font-bold text-foreground text-base">ربط واتساب تلقائي</h2>
-              <p className="text-muted-foreground text-xs">بدون مسح رمز QR</p>
+              <p className="text-muted-foreground text-xs">امسح رمز QR للاتصال</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
               <MessageSquare className="w-5 h-5 text-emerald-400" />
@@ -162,130 +155,76 @@ export function WhatsAppConnectPrompt() {
         </div>
 
         <div className="px-6 pb-6 pt-5 space-y-5">
-
-          {/* ── Step 1: Phone input ─────────────────────────────────────── */}
-          {(phase === 'modal' || phase === 'requesting') && (
+          {phase === 'modal' && (
             <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground block">
-                  رقم واتساب
-                </label>
-                <div className="relative">
-                  <Input
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    placeholder="01xxxxxxxxx"
-                    dir="ltr"
-                    disabled={phase === 'requesting'}
-                    className="h-12 rounded-xl text-left bg-background/70 border-border text-foreground pl-4 pr-11"
-                  />
-                  <Phone className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              {loadingQR ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+                  <p className="text-xs text-muted-foreground">جاري توليد رمز QR...</p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  الرقم الذي تستخدمه على واتساب (بدون مفتاح الدولة)
-                </p>
-              </div>
-
-              <Button
-                onClick={requestCode}
-                disabled={phase === 'requesting'}
-                className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold gap-2 text-sm"
-              >
-                {phase === 'requesting' ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />جاري طلب الكود...</>
-                ) : (
-                  <><MessageSquare className="w-4 h-4" />طلب كود الربط</>
-                )}
-              </Button>
-            </div>
-          )}
-
-          {/* ── Step 2: Show code + instructions ───────────────────────── */}
-          {(phase === 'code' || phase === 'connected') && code && (
-            <div className="space-y-4">
-
-              {/* Code box */}
-              <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-5 text-center">
-                <p className="text-xs text-muted-foreground mb-3">كود الربط (صالح لدقيقتين)</p>
-                <div className="flex items-center justify-center gap-3">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(code.replace('-', ''));
-                      toast.success('تم نسخ الكود');
-                    }}
-                    className="p-2 rounded-lg hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-400 transition-colors"
-                    title="نسخ الكود"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                  <span className="text-4xl font-black text-emerald-400 tracking-[0.25em] font-mono select-all">
-                    {code}
-                  </span>
-                </div>
-              </div>
-
-              {/* Instructions */}
-              <div className="bg-muted/50 rounded-2xl p-4 space-y-2.5">
-                <p className="text-xs font-bold text-foreground mb-1">الخطوات على تليفونك:</p>
-                {[
-                  'افتح واتساب على تليفونك',
-                  'اضغط ⋮ ← الإعدادات (أو iPhone: الإعدادات)',
-                  'اختر الأجهزة المرتبطة',
-                  'اضغط ربط جهاز',
-                  'اختر استخدام رقم الهاتف بدلاً من رمز QR',
-                  `أدخل الكود: ${code}`,
-                ].map((step, i) => (
-                  <div key={i} className="flex items-start gap-2.5 text-xs text-muted-foreground">
-                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold shrink-0 mt-px">
-                      {i + 1}
-                    </span>
-                    <span className="leading-relaxed">{step}</span>
+              ) : waQR ? (
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="bg-white p-3 rounded-2xl shadow-lg">
+                      <img src={waQR} alt="QR Code" className="w-48 h-48 object-contain" />
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center">
+                      افتح واتساب ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز
+                    </p>
                   </div>
-                ))}
-              </div>
 
-              {/* Status row */}
-              <div className="flex items-center justify-center gap-2 py-1">
-                {phase === 'connected' ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span className="text-sm font-bold text-emerald-400">تم الربط بنجاح!</span>
-                  </>
-                ) : (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">في انتظار إدخال الكود على تليفونك...</span>
-                  </>
-                )}
-              </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={fetchQR}
+                      variant="outline"
+                      className="flex-1 h-11 rounded-xl text-xs gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      تحديث الرمز
+                    </Button>
+                    <Button
+                      onClick={() => checkStatus('manual')}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 gap-1.5 text-xs font-bold"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      فحص الاتصال
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 space-y-3">
+                  <p className="text-sm text-muted-foreground">تعذر تحميل رمز QR تلقائياً.</p>
+                  <Button
+                    onClick={fetchQR}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 px-6 font-bold text-xs"
+                  >
+                    توليد رمز QR
+                  </Button>
+                </div>
+              )}
 
-              {/* Manual check */}
-              {phase === 'code' && (
-                <Button
-                  onClick={() => checkStatus('manual')}
-                  variant="outline"
-                  className="w-full h-10 rounded-xl text-sm gap-2"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  تحقق من الاتصال يدوياً
-                </Button>
+              {waQR && !loadingQR && (
+                <div className="flex items-center justify-center gap-2 py-1 mt-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">في انتظار مسح الرمز على هاتفك...</span>
+                </div>
               )}
             </div>
           )}
 
+          {phase === 'connected' && (
+            <div className="flex flex-col items-center justify-center py-8 gap-4">
+              <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+              </div>
+              <div className="text-center">
+                <h3 className="font-bold text-foreground text-lg">تم الربط بنجاح!</h3>
+                <p className="text-muted-foreground text-sm mt-1">الرسائل التلقائية تعمل الآن</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatCode(raw: string): string {
-  const clean = raw.replace(/\W/g, '').toUpperCase();
-  return clean.length >= 8 ? `${clean.slice(0, 4)}-${clean.slice(4, 8)}` : raw.toUpperCase();
-}
-
-function normalizeDisplayPhone(phone: string): string {
-  return phone.replace(/^\+/, '').replace(/^00/, '');
 }

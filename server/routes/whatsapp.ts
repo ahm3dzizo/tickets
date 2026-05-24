@@ -12,6 +12,8 @@ const WA_PORT = 8002;
 const SESSIONS_PATH = '/opt/retal-api/wa-sessions';
 const ECOSYSTEM_PATH = '/opt/retal-api/wa-ecosystem.config.cjs';
 
+let latestQR: string | null = null;
+
 /** Normalise Egyptian phone → international digits only (no @c.us) */
 function phoneDigits(phone: string): string {
   let d = phone.replace(/\D/g, '').replace(/^00/, '');
@@ -21,9 +23,11 @@ function phoneDigits(phone: string): string {
 }
 
 /** Write ecosystem config and (re)start wa-automate via PM2 */
-async function restartWA(extraArgs = ''): Promise<void> {
+async function restartWA(extraArgs = '', cleanSession = true): Promise<void> {
+  latestQR = null;
   const baseArgs = `--port ${WA_PORT} --api-key ${WA_KEY} `
-    + `--session-data-path ${SESSIONS_PATH} --use-chrome --no-sandbox --headless --qr-timeout 0 --auth-timeout 0`;
+    + `--session-data-path ${SESSIONS_PATH} --use-chrome --no-sandbox --headless --qr-timeout 0 --auth-timeout 0 `
+    + `--ev http://localhost:3001/api/whatsapp/event?key=${WA_KEY} --ef qr,STARTUP,qrUrl`;
   const args = extraArgs ? `${baseArgs} ${extraArgs}` : baseArgs;
 
   const cfg = `module.exports = {
@@ -47,9 +51,13 @@ async function restartWA(extraArgs = ''): Promise<void> {
   const fs = await import('fs');
   fs.writeFileSync(ECOSYSTEM_PATH, cfg, 'utf8');
 
-  // stop + clear sessions + start
+  // stop + start
   await execAsync('pm2 stop wa-automate').catch(() => {});
-  await execAsync(`rm -rf ${SESSIONS_PATH} && mkdir -p ${SESSIONS_PATH}`);
+  if (cleanSession) {
+    await execAsync(`rm -rf ${SESSIONS_PATH} && mkdir -p ${SESSIONS_PATH}`);
+  } else {
+    await execAsync(`mkdir -p ${SESSIONS_PATH}`);
+  }
   await execAsync('pm2 flush wa-automate').catch(() => {});
   await execAsync(`pm2 start ${ECOSYSTEM_PATH}`);
 }
@@ -87,6 +95,9 @@ router.get('/status', requireAuth, async (_req: AuthRequest, res) => {
     return;
   }
   const state = await getSessionState('session');
+  if (state === 'CONNECTED') {
+    latestQR = null;
+  }
   res.json({ running: true, connected: state === 'CONNECTED', state });
 });
 
@@ -94,6 +105,11 @@ router.get('/status', requireAuth, async (_req: AuthRequest, res) => {
 router.get('/qr', requireAuth, async (_req: AuthRequest, res) => {
   const running = await isWAAvailable();
   if (!running) {
+    if (latestQR) {
+      res.json({ qr: latestQR });
+      return;
+    }
+
     // Check PM2 status to give a more descriptive error
     let detail = 'خدمة الواتساب التلقائي غير متاحة حالياً';
     let pm2Status = 'unknown';
@@ -173,6 +189,60 @@ router.post('/verify', requireAuth, async (_req: AuthRequest, res) => {
     await new Promise(r => setTimeout(r, 2000));
   }
   res.json({ connected: false });
+});
+
+// ─── POST /api/whatsapp/start ────────────────────────────────────────────────
+router.post('/start', requireAuth, async (_req: AuthRequest, res) => {
+  try {
+    await restartWA('', false);
+    res.json({ success: true, message: 'جاري تشغيل خدمة الواتساب...' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/whatsapp/restart ──────────────────────────────────────────────
+router.post('/restart', requireAuth, async (_req: AuthRequest, res) => {
+  try {
+    await restartWA('', true);
+    res.json({ success: true, message: 'تمت إعادة تهيئة الخدمة وجاري توليد رمز QR جديد...' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/whatsapp/event ────────────────────────────────────────────────
+router.post('/event', async (req, res) => {
+  try {
+    const { key } = req.query;
+    const isAuthorized = (WA_KEY && key === WA_KEY) || 
+                         req.ip === '127.0.0.1' || 
+                         req.ip === '::1' || 
+                         req.ip === '::ffff:127.0.0.1';
+    
+    if (!isAuthorized) {
+      console.warn(`[WA-Event] Unauthorized access attempt from IP: ${req.ip}`);
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    const { event, data } = req.body;
+    
+    if (event === 'qr' || event === 'qrUrl') {
+      if (typeof data === 'string') {
+        latestQR = data;
+      } else if (data && typeof data === 'object' && typeof (data as any).qr === 'string') {
+        latestQR = (data as any).qr;
+      }
+    } else if (event === 'STARTUP') {
+      // Service started
+    }
+    
+    res.sendStatus(200);
+  } catch (err: any) {
+    console.error('[WA-Event] Error processing event:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

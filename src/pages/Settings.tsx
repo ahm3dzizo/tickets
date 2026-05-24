@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
@@ -195,6 +195,36 @@ export default function Settings() {
   const [waQR, setWaQR] = useState<string | null>(null);
   const [loadingWA, setLoadingWA] = useState(false);
   const [loadingQR, setLoadingQR] = useState(false);
+  const [startingWA, setStartingWA] = useState(false);
+  const [restartingWA, setRestartingWA] = useState(false);
+
+  const startWAService = async () => {
+    setStartingWA(true);
+    try {
+      const data = await whatsappApi.start();
+      toast.success(data.message || 'جاري تشغيل الخدمة...');
+      setTimeout(checkWAStatus, 5000);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'تعذّر تشغيل الخدمة');
+    } finally {
+      setStartingWA(false);
+    }
+  };
+
+  const restartWAService = async () => {
+    if (!window.confirm('هل أنت متأكد من إعادة تهيئة الجلسة؟ سيؤدي ذلك إلى مسح البيانات الحالية وطلب مسح QR جديد.')) return;
+    setRestartingWA(true);
+    try {
+      const data = await whatsappApi.restart();
+      toast.success(data.message || 'تمت إعادة تهيئة الخدمة');
+      setWaQR(null);
+      setTimeout(checkWAStatus, 5000);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'تعذّر إعادة تهيئة الخدمة');
+    } finally {
+      setRestartingWA(false);
+    }
+  };
 
   const checkWAStatus = useCallback(async () => {
     setLoadingWA(true);
@@ -495,22 +525,35 @@ export default function Settings() {
               <div className="space-y-4">
                 <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 justify-end">
                   <div className="text-right">
-                    <p className="text-amber-400 font-bold text-sm">خدمة الواتساب غير متاحة</p>
-                    <p className="text-muted-foreground text-xs mt-0.5">شغّل الخدمة على جهازك بالأمر التالي:</p>
+                    <p className="text-amber-400 font-bold text-sm">خدمة الواتساب التلقائي متوقفة</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">يمكنك تشغيل الخدمة مباشرة من هنا أو فحص حالتها</p>
                   </div>
                   <WifiOff className="w-5 h-5 text-amber-400 shrink-0" />
                 </div>
-                <div className="bg-muted/80 rounded-xl px-4 py-3 font-mono text-xs text-foreground/80 select-all text-left" dir="ltr">
-                  npx @open-wa/wa-automate --port 8002
+                
+                <div className="flex gap-3">
+                  <Button
+                    onClick={checkWAStatus}
+                    variant="outline"
+                    className="flex-1 rounded-xl h-10 gap-2 text-sm"
+                    disabled={startingWA}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    إعادة الفحص
+                  </Button>
+                  <Button
+                    onClick={startWAService}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 gap-2 text-sm font-bold"
+                    disabled={startingWA}
+                  >
+                    {startingWA ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Wifi className="w-4 h-4" />
+                    )}
+                    تشغيل الخدمة
+                  </Button>
                 </div>
-                <Button
-                  onClick={checkWAStatus}
-                  variant="outline"
-                  className="w-full rounded-xl h-10 gap-2 text-sm"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  إعادة الفحص
-                </Button>
               </div>
             )}
 
@@ -523,14 +566,31 @@ export default function Settings() {
                   </div>
                   <Wifi className="w-5 h-5 text-emerald-400 shrink-0" />
                 </div>
-                <Button
-                  onClick={checkWAStatus}
-                  variant="outline"
-                  className="w-full rounded-xl h-10 gap-2 text-sm"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  تحديث الحالة
-                </Button>
+                
+                <div className="flex gap-3">
+                  <Button
+                    onClick={checkWAStatus}
+                    variant="outline"
+                    className="flex-1 rounded-xl h-10 gap-2 text-sm"
+                    disabled={restartingWA}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    تحديث الحالة
+                  </Button>
+                  <Button
+                    onClick={restartWAService}
+                    variant="destructive"
+                    className="flex-1 rounded-xl h-10 gap-2 text-sm font-bold"
+                    disabled={restartingWA}
+                  >
+                    {restartingWA ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <WifiOff className="w-4 h-4" />
+                    )}
+                    قطع الاتصال / إعادة ضبط
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -567,7 +627,7 @@ export default function Settings() {
                     onClick={checkWAStatus}
                     variant="outline"
                     className="flex-1 rounded-xl h-10 gap-2 text-sm"
-                    disabled={loadingQR}
+                    disabled={loadingQR || restartingWA}
                   >
                     <RefreshCw className="w-4 h-4" />
                     فحص الاتصال
@@ -575,7 +635,7 @@ export default function Settings() {
                   <Button
                     onClick={fetchQR}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 gap-2 text-sm font-bold"
-                    disabled={loadingQR}
+                    disabled={loadingQR || restartingWA}
                   >
                     {loadingQR
                       ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -583,6 +643,15 @@ export default function Settings() {
                     {waQR ? 'تحديث الرمز' : 'توليد QR'}
                   </Button>
                 </div>
+                
+                <Button
+                  onClick={restartWAService}
+                  variant="ghost"
+                  className="w-full text-xs text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-xl h-8 mt-1"
+                  disabled={loadingQR || restartingWA}
+                >
+                  إعادة تهيئة الجلسة بالكامل
+                </Button>
               </div>
             )}
           </div>
