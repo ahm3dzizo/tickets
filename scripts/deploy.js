@@ -77,14 +77,20 @@ log(`الاتصال بالسيرفر (${SSH_HOST})...`);
 // كتابة السكريبت في ملف مؤقت على السيرفر وتشغيله
 // عشان نتجنب مشكلة الـ quoting على Windows
 const remoteLines = [
+  `set -e`,                                             // وقف عند أي خطأ
   `cd ${API_DIR}`,
+  `echo "▶  git pull..."`,
   `git fetch origin`,
   `git checkout ${GIT_BRANCH}`,
   `git pull origin ${GIT_BRANCH}`,
+  `echo "▶  npm install..."`,
   `npm install --silent`,
-  `npm run build`,
-  `sudo cp -r dist/* /var/www/retal/`,
-  `pm2 restart ${PM2_NAME} --update-env`,
+  `echo "▶  npm run build (frontend + backend)..."`,
+  `npm run build`,                                      // vite build → dist/
+  `echo "✔  Build جاهز"`,
+  `echo "▶  pm2 restart..."`,
+  `pm2 restart ${PM2_NAME} --update-env`,               // الـ express بيخدم dist/ مباشرة
+  `echo "✔  API جاهز"`,
   `pm2 list`,
 ];
 

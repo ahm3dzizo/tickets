@@ -95,7 +95,29 @@ router.get('/status', requireAuth, async (_req: AuthRequest, res) => {
 router.get('/qr', requireAuth, async (_req: AuthRequest, res) => {
   const running = await isWAAvailable();
   if (!running) {
-    res.status(503).json({ error: 'خدمة الواتساب التلقائي غير متاحة حالياً' });
+    // Check PM2 status to give a more descriptive error
+    let detail = 'خدمة الواتساب التلقائي غير متاحة حالياً';
+    let pm2Status = 'unknown';
+    let restarts = 0;
+    try {
+      const { stdout } = await execAsync('pm2 jlist 2>&1');
+      const list = JSON.parse(stdout) as any[];
+      const wa = list.find((p: any) => p.name === 'wa-automate');
+      if (wa) {
+        pm2Status = wa.pm2_env?.status ?? 'unknown';
+        restarts = wa.pm2_env?.restart_time ?? 0;
+        if (pm2Status === 'online') {
+          detail = 'الخدمة تعمل لكن لم تتصل بعد — انتظر لحظة وأعد المحاولة';
+        } else if (pm2Status === 'errored') {
+          detail = `الخدمة توقفت بسبب خطأ (restarts: ${restarts}) — تحقق من السيرفر`;
+        } else {
+          detail = `حالة الخدمة: ${pm2Status} (restarts: ${restarts})`;
+        }
+      } else {
+        detail = 'خدمة wa-automate غير موجودة في PM2';
+      }
+    } catch { /* ignore */ }
+    res.status(503).json({ error: detail, pm2Status, restarts });
     return;
   }
   const qr = await getQRCode('session');
@@ -104,6 +126,17 @@ router.get('/qr', requireAuth, async (_req: AuthRequest, res) => {
     return;
   }
   res.json({ qr });
+});
+
+// ─── GET /api/whatsapp/logs ───────────────────────────────────────────────────
+// Returns last 50 lines of wa-automate PM2 logs for debugging
+router.get('/logs', requireAuth, async (_req: AuthRequest, res) => {
+  try {
+    const { stdout } = await execAsync('pm2 logs wa-automate --lines 50 --nostream 2>&1');
+    res.json({ logs: stdout });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── POST /api/whatsapp/send ─────────────────────────────────────────────────
