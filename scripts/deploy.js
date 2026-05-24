@@ -83,6 +83,7 @@ const remoteLines = [
   `git pull origin ${GIT_BRANCH}`,
   `npm install --silent`,
   `npm run build`,
+  `sudo cp -r dist/* /var/www/retal/`,
   `pm2 restart ${PM2_NAME} --update-env`,
   `pm2 list`,
 ];
