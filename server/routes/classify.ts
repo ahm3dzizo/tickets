@@ -204,11 +204,12 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (_req, res) => {
   try {
     const failedTickets = await prisma.ticket.findMany({
       where: {
-        type: { in: ["general", "plumbing"] },
         status: { not: "closed" },
         OR: [
           { detectedTypes: { equals: [] } },
-          { detectedTypes: { equals: ["plumbing"] } },
+          { type: "unclassified" },
+          { type: null },
+          { AND: [{ type: { in: ["plumbing", "general"] } }, { detectedTypes: { equals: ["plumbing"] } }] },
         ],
       },
       take: 100,
@@ -230,14 +231,14 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (_req, res) => {
 
       const classification = await classifyTicket(ticket.description, ticket.projectId || undefined, { forceReclassify: true });
 
-      if (classification.confidence >= 3 && classification.primaryType !== "general") {
+      if (classification.confidence >= 3 && classification.primaryType !== "unclassified") {
         const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
         
         await prisma.ticket.update({
           where: { id: ticket.id },
           data: {
             type: classification.primaryType,
-            detectedTypes: classification.allTypes,
+            detectedTypes: classification.allTypes.filter((t: string) => t !== "unclassified"),
           },
         });
 
@@ -369,7 +370,8 @@ router.post("/import", requireAuth, async (req, res) => {
       if (!matchedClientId && villaNumber) matchedClientId = clientByVilla[villaNumber]?.id || "";
 
       const classification = classifyFromKeywordsDB(description, keywords);
-      const type = raw.type || classification.primaryType;
+      const rawType = classification.primaryType === "unclassified" ? null : classification.primaryType;
+      const type = raw.type || rawType;
 
       const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
       const matchedSups = allSups.filter((s: any) => getSpecs(s).some((sp: string) => requiredSpecialties.includes(sp)));

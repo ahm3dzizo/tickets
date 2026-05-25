@@ -1,7 +1,10 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download } from 'lucide-react';
+import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2 } from 'lucide-react';
+import { classifyOnServer } from '@/services/classificationApi';
+import { ticketsApi } from '@/lib/api';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -207,6 +210,7 @@ interface TicketTableProps {
   hideProjectColumn?: boolean;
   projects?: Record<string, { name: string; abbreviation?: string }>;
   showInlineFilters?: boolean;
+  onRefresh?: () => void;
 }
 
 export function TicketTable({
@@ -220,6 +224,7 @@ export function TicketTable({
   hideProjectColumn = false,
   projects,
   showInlineFilters = false,
+  onRefresh,
 }: TicketTableProps) {
   const navigate = useNavigate();
 
@@ -346,6 +351,39 @@ export function TicketTable({
     onSelectionChange(
       selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]
     );
+  };
+
+  // ── Quick Classify ────────────────────────────────────────────────────────
+  const [classifyingId, setClassifyingId] = useState<string | null>(null);
+
+  const handleAutoClassify = async (ticket: Ticket) => {
+    if (!ticket.description || !ticket.projectId) {
+      toast.error('الوصف أو المشروع غير متاح للتصنيف');
+      return;
+    }
+    setClassifyingId(ticket.id);
+    try {
+      const result = await classifyOnServer({ description: ticket.description, projectId: ticket.projectId });
+      if (!result.primaryType || result.primaryType === 'unclassified') {
+        toast.warning('لم يُتعرَّف على نوع التذكرة — جرب التصنيف اليدوي');
+        return;
+      }
+      await ticketsApi.update(ticket.id, {
+        type: result.primaryType,
+        detectedTypes: result.allTypes,
+        ...(result.supervisors.length > 0 && {
+          assignedSupervisorId:  result.supervisors[0].id,
+          assignedSupervisorIds: result.supervisors.map(s => s.id),
+          assignedSupervisors:   result.supervisors.map(s => ({ id: s.id, name: s.name, specialty: s.specialties[0] ?? 'general' })),
+        }),
+      });
+      toast.success(`✅ تم التصنيف: ${mergedTranslations[result.primaryType] ?? result.primaryType}`);
+      onRefresh?.();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'فشل التصنيف التلقائي');
+    } finally {
+      setClassifyingId(null);
+    }
   };
 
   const handleWhatsApp = (ticket: Ticket) => {
@@ -640,7 +678,11 @@ export function TicketTable({
                       )}
                     </div>
                     <div className="flex items-center gap-1 flex-wrap justify-end shrink-0">
-                      {typeList.slice(0, 2).map((t, i) => (
+                      {typeList.length === 0 ? (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-orange-500/10 text-orange-400 border-orange-500/20">
+                          غير مصنف
+                        </span>
+                      ) : typeList.slice(0, 2).map((t, i) => (
                         <span key={i} className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-md border', mergedTypeBg[t] || 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
                           {mergedTranslations[t] ?? t}
                         </span>
@@ -844,7 +886,9 @@ export function TicketTable({
                             ))}
                           </div>
                         ) : (
-                          <span className="text-[10px] text-slate-600">---</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-orange-500/10 text-orange-400 border-orange-500/20 whitespace-nowrap">
+                            غير مصنف
+                          </span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-center w-24">
@@ -864,18 +908,27 @@ export function TicketTable({
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             } />
-                            <DropdownMenuContent align="end" className="bg-card border-border text-slate-200 w-48">
+                            <DropdownMenuContent align="end" className="bg-card border-border text-slate-200 w-52">
                               <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start"
                                 onClick={() => navigate(`/tickets/${ticket.id}`)}>
                                 عرض التفاصيل <Eye className="w-4 h-4" />
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start text-green-400"
-                                onClick={() => handleWhatsApp(ticket)}>
-                                واتساب <MessageSquare className="w-4 h-4" />
-                              </DropdownMenuItem>
                               <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start"
                                 onClick={() => navigate(`/tickets/${ticket.id}`)}>
                                 تعديل <Edit2 className="w-4 h-4" />
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="hover:bg-orange-500/10 cursor-pointer gap-2 text-start justify-start text-orange-400 disabled:opacity-50"
+                                onClick={() => handleAutoClassify(ticket)}
+                                disabled={classifyingId === ticket.id}
+                              >
+                                {classifyingId === ticket.id
+                                  ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ التصنيف...</>
+                                  : <><Sparkles className="w-4 h-4" /> تصنيف تلقائي</>}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start text-green-400"
+                                onClick={() => handleWhatsApp(ticket)}>
+                                واتساب <MessageSquare className="w-4 h-4" />
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

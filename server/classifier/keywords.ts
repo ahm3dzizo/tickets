@@ -61,26 +61,43 @@ export function invalidateKeywordCache() {
 export function normalizeArabic(text: string): string {
   if (!text) return "";
   let normalized = text.toLowerCase();
-  
-  // Remove diacritics
-  normalized = normalized.replace(/[\u0617-\u061A\u064B-\u0652]/g, "");
-  
-  // Normalize Alef
-  normalized = normalized.replace(/[أإآ]/g, "ا");
-  
-  // Normalize Ta-Marbuta to Ha
-  normalized = normalized.replace(/ة/g, "ه");
-  
-  // Normalize Ya/Alif-Maksura
-  normalized = normalized.replace(/[ىي]/g, "ي");
-  
-  // Clean punctuations and extra spaces
-  normalized = normalized.replace(/[^\w\s\u0600-\u06FF]/g, " ");
-  normalized = normalized.replace(/\s+/g, " ").trim();
-  
-  return normalized;
-}
 
+  // Remove diacritics (tashkeel)
+  normalized = normalized.replace(/[ؗ-ًؚ-ْ]/g, "");
+
+  // Normalize Alef variants → ا
+  normalized = normalized.replace(/[أإآ]/g, "ا");
+
+  // Normalize Ta-Marbuta → ه
+  normalized = normalized.replace(/ة/g, "ه");
+
+  // Normalize Ya / Alif-Maksura → ي
+  normalized = normalized.replace(/[ىي]/g, "ي");
+
+  // Strip Waw-al-jama3a / Ya-al-nisbah suffixes for better conjugation matching
+  normalized = normalized.replace(/ون(s|$)/g, " ");
+  normalized = normalized.replace(/ين(s|$)/g, " ");
+
+  // Clean punctuation — keep Arabic letters + spaces + alphanumeric
+  normalized = normalized.replace(/[^ws؀-ۿ]/g, " ");
+  normalized = normalized.replace(/s+/g, " ").trim();
+
+  // Strip Arabic definite article and common preposition+article combos (word by word)
+  // e.g. "الكهرباء" → "كهرباء", "بالتسريب" → "تسريب"
+  normalized = normalized
+    .split(" ")
+    .map((word) => {
+      if (word.length <= 2) return word;
+      if (word.length > 5 && (word.startsWith("بال") || word.startsWith("وال") || word.startsWith("فال") || word.startsWith("كال")))
+        return word.slice(3);
+      if (word.length > 4 && word.startsWith("لل")) return word.slice(2);
+      if (word.length > 4 && word.startsWith("ال")) return word.slice(2);
+      return word;
+    })
+    .join(" ");
+
+  return normalized.replace(/s+/g, " ").trim();
+}
 // ── Classification from Keywords ────────────────────────────────────────────
 export function classifyFromKeywordsDB(
   description: string,
@@ -109,9 +126,12 @@ export function classifyFromKeywordsDB(
       const matches = normalizedDesc.match(regex);
       if (matches) {
         matchCount = matches.length;
+      } else if (normalizedDesc.includes(kw.keyword) && kw.keyword.length >= 6) {
+        // Partial match for long words (conjugated Arabic forms) — stronger signal
+        matchCount = 0.7;
       } else if (normalizedDesc.includes(kw.keyword) && kw.keyword.length >= 4) {
-        // Fallback for long words that might be conjugated
-        matchCount = 0.5;
+        // Short partial match — weak signal
+        matchCount = 0.4;
       }
     }
 
@@ -126,12 +146,20 @@ export function classifyFromKeywordsDB(
     }
   }
 
+  const MIN_CLASSIFY_SCORE = 3; // At least this score required to classify
+
   const sortedTypes = Object.entries(typeScores).sort((a, b) => b[1] - a[1]);
   if (sortedTypes.length === 0) {
-    return { primaryType: "plumbing", allTypes: ["plumbing"], subType: null, confidence: 0 };
+    return { primaryType: "unclassified", allTypes: [], subType: null, confidence: 0 };
   }
 
   const maxScore = sortedTypes[0][1];
+
+  // Not enough evidence to classify — return unclassified instead of forcing a wrong type
+  if (maxScore < MIN_CLASSIFY_SCORE) {
+    return { primaryType: "unclassified", allTypes: [], subType: null, confidence: maxScore };
+  }
+
   const threshold = Math.max(3, maxScore * 0.5);
 
   let candidates = sortedTypes.filter(([, s]) => s >= threshold).map(([t]) => t);

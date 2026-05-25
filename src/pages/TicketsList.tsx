@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
-import { AlertTriangle, FileUp, User, UserPlus } from 'lucide-react';
+import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -157,8 +157,43 @@ export default function TicketsList() {
     finally { setAutoLinking(false); }
   };
 
-  const unlinkedTickets = tickets.filter(t => !t.clientId);
-  const linkedTickets   = tickets.filter(t => !!t.clientId);
+  const unlinkedTickets      = tickets.filter(t => !t.clientId);
+  const linkedTickets        = tickets.filter(t => !!t.clientId);
+  // Unclassified = no type OR explicitly "unclassified" (new fallback)
+  const unclassifiedTickets  = tickets.filter(t => !t.type || t.type === 'unclassified');
+
+  const [bulkClassifying, setBulkClassifying] = useState(false);
+
+  const handleBulkReclassify = async () => {
+    if (unclassifiedTickets.length === 0) return;
+    setBulkClassifying(true);
+    const toastId = 'bulk-classify';
+    toast.loading(`⚙ تصنيف ${unclassifiedTickets.length} تذكرة...`, { id: toastId, duration: Infinity });
+    let done = 0, failed = 0;
+    for (const ticket of unclassifiedTickets) {
+      if (!ticket.description || !ticket.projectId) { failed++; done++; continue; }
+      try {
+        const result = await classifyOnServer({ description: ticket.description, projectId: ticket.projectId });
+        if (result.primaryType && result.primaryType !== 'unclassified') {
+          await ticketsApi.update(ticket.id, {
+            type: result.primaryType,
+            detectedTypes: result.allTypes,
+            ...(result.supervisors.length > 0 && {
+              assignedSupervisorId:  result.supervisors[0].id,
+              assignedSupervisorIds: result.supervisors.map(s => s.id),
+              assignedSupervisors:   result.supervisors.map(s => ({ id: s.id, name: s.name, specialty: s.specialties[0] ?? 'general' })),
+            }),
+          });
+          done++;
+        } else { failed++; done++; }
+      } catch { failed++; done++; }
+      if (done % 5 === 0)
+        toast.loading(`⚙ جارٍ التصنيف: ${done} / ${unclassifiedTickets.length}`, { id: toastId, duration: Infinity });
+    }
+    toast.success(`✅ تم تصنيف ${done - failed} تذكرة — ${failed} لم يُصنَّف`, { id: toastId, duration: 8000 });
+    setBulkClassifying(false);
+    loadData();
+  };
 
   const distinctProjectIds = new Set(tickets.map(t => t.projectId).filter(Boolean));
   const showProjectColumn = user?.role === 'admin' || distinctProjectIds.size > 1;
@@ -245,6 +280,17 @@ export default function TicketsList() {
                   </Badge>
                 </TabsTrigger>
               )}
+              {unclassifiedTickets.length > 0 && (
+                <TabsTrigger
+                  value="unclassified"
+                  className="rounded-xl text-sm font-bold px-4 data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-2 transition-all"
+                >
+                  غير مصنفة
+                  <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-orange-500 text-white border-0">
+                    {unclassifiedTickets.length}
+                  </Badge>
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="unlinked" className="mt-0">
@@ -302,6 +348,37 @@ export default function TicketsList() {
                 hideProjectColumn={!showProjectColumn}
                 projects={projects}
                 showInlineFilters
+                onRefresh={loadData}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="unclassified" className="mt-0">
+            <div className="bg-card border border-orange-500/25 rounded-3xl overflow-hidden shadow-sm">
+              <div className="p-3 bg-orange-500/8 border-b border-orange-500/20 flex items-center justify-between gap-3">
+                <Button
+                  onClick={handleBulkReclassify}
+                  disabled={bulkClassifying || unclassifiedTickets.length === 0}
+                  size="sm"
+                  className="bg-orange-500 hover:bg-orange-600 text-white font-bold h-9 rounded-xl shadow-md gap-2 shrink-0"
+                >
+                  {bulkClassifying
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> جارٍ التصنيف...</>
+                    : <><HelpCircle className="w-3.5 h-3.5" /> تصنيف الكل تلقائياً</>}
+                </Button>
+                <div className="flex items-center gap-2 text-orange-500 text-sm font-semibold">
+                  <HelpCircle className="w-4 h-4 shrink-0" />
+                  <span>هذه التذاكر لم تُصنَّف — يمكن تصنيفها تلقائياً أو يدوياً من قائمة كل تذكرة</span>
+                </div>
+              </div>
+              <TicketTable
+                tickets={unclassifiedTickets}
+                selectedIds={selectedTicketIds}
+                onSelectionChange={setSelectedTicketIds}
+                hideProjectColumn={!showProjectColumn}
+                projects={projects}
+                showInlineFilters
+                onRefresh={loadData}
               />
             </div>
           </TabsContent>
