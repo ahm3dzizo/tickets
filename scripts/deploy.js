@@ -79,9 +79,11 @@ log(`الاتصال بالسيرفر (${SSH_HOST})...`);
 const remoteLines = [
   `set -e`,                                             // وقف عند أي خطأ
   `cd ${API_DIR}`,
-  `echo "▶  git pull..."`,
+  `echo "▶  Cleaning up and pulling..."`,
+  `rm -f open-wa-session.*`,
   `git fetch origin`,
   `git checkout ${GIT_BRANCH}`,
+  `git reset --hard origin/${GIT_BRANCH}`,
   `git pull origin ${GIT_BRANCH}`,
   `echo "▶  npm install..."`,
   `npm install --silent`,

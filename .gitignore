@@ -9,3 +9,4 @@ coverage/
 
 /src/generated/prisma
 wa-sessions/
+open-wa-session.*
