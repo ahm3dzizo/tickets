@@ -18,6 +18,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { TicketForm } from '@/components/tickets/TicketForm';
@@ -213,8 +215,12 @@ export default function TicketsList() {
   const uniqueClientIds = new Set(selectedTickets.map(t => t.clientId || t.villaNumber || 'unknown'));
   const isMultiClient = uniqueClientIds.size > 1;
 
-  // Sort tickets: closed at bottom
-  const sortedTickets = [...tickets].sort((a, b) => {
+  // Split tickets based on clientId
+  const unlinkedTickets = tickets.filter(t => !t.clientId);
+  const linkedTickets = tickets.filter(t => !!t.clientId);
+
+  // Sort linked tickets: closed at bottom
+  const sortedLinkedTickets = [...linkedTickets].sort((a, b) => {
     const aClosed = a.status === 'closed' ? 1 : 0;
     const bClosed = b.status === 'closed' ? 1 : 0;
     if (aClosed !== bClosed) return aClosed - bClosed;
@@ -227,6 +233,30 @@ export default function TicketsList() {
 
   const distinctProjectIds = new Set(tickets.map(t => t.projectId).filter(Boolean));
   const showProjectColumn = user?.role === 'admin' || distinctProjectIds.size > 1;
+
+  const [autoLinking, setAutoLinking] = useState(false);
+  const handleAutoLink = async () => {
+    setAutoLinking(true);
+    try {
+      const response = await fetch('/api/tickets/auto-link', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      
+      toast.success(data.message);
+      if (data.count > 0) loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'فشل عملية الربط التلقائي');
+    } finally {
+      setAutoLinking(false);
+    }
+  };
 
   return (
     <Layout>
@@ -298,16 +328,63 @@ export default function TicketsList() {
           />
         )}
 
-        <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl shadow-black/40">
-          <TicketTable
-            tickets={sortedTickets}
-            selectedIds={selectedTicketIds}
-            onSelectionChange={setSelectedTicketIds}
-            hideProjectColumn={!showProjectColumn}
-            projects={projects}
-            showInlineFilters
-          />
-        </div>
+        <Tabs defaultValue="linked" className="w-full">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <TabsList className="bg-white/5 border border-border h-11 p-1 rounded-xl">
+              <TabsTrigger value="linked" className="rounded-lg text-sm font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+                التذاكر المربوطة ({linkedTickets.length})
+              </TabsTrigger>
+              {unlinkedTickets.length > 0 && (
+                <TabsTrigger value="unlinked" className="rounded-lg text-sm font-bold data-[state=active]:bg-red-600 data-[state=active]:text-white gap-2">
+                  تذاكر غير مربوطة
+                  <Badge variant="destructive" className="h-5 px-1.5 min-w-5 flex items-center justify-center text-[10px]">
+                    {unlinkedTickets.length}
+                  </Badge>
+                </TabsTrigger>
+              )}
+            </TabsList>
+            
+            <TabsContent value="unlinked" className="mt-0">
+              <Button 
+                onClick={handleAutoLink} 
+                disabled={autoLinking || unlinkedTickets.length === 0}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 rounded-xl shadow-lg"
+              >
+                {autoLinking ? 'جارٍ الربط...' : 'محاولة الربط التلقائي ⚡'}
+              </Button>
+            </TabsContent>
+          </div>
+
+          <TabsContent value="linked" className="mt-0">
+            <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl shadow-black/40">
+              <TicketTable
+                tickets={sortedLinkedTickets}
+                selectedIds={selectedTicketIds}
+                onSelectionChange={setSelectedTicketIds}
+                hideProjectColumn={!showProjectColumn}
+                projects={projects}
+                showInlineFilters
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="unlinked" className="mt-0">
+            <div className="bg-card border border-red-500/30 rounded-3xl overflow-hidden shadow-2xl shadow-black/40">
+              <div className="p-4 bg-red-500/10 border-b border-red-500/20 text-red-400 font-bold flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" />
+                هذه التذاكر لا تحتوي على بيانات العميل أو أن الفيلا المكتوبة غير مسجلة في قائمة عملاء المشروع
+              </div>
+              <TicketTable
+                tickets={unlinkedTickets}
+                selectedIds={selectedTicketIds}
+                onSelectionChange={setSelectedTicketIds}
+                hideProjectColumn={!showProjectColumn}
+                projects={projects}
+                showInlineFilters
+              />
+            </div>
+          </TabsContent>
+        </Tabs>
 
         <CloseTicketDialog
           open={closeDialogOpen}

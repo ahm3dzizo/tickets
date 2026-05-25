@@ -367,7 +367,6 @@ router.post("/import", requireAuth, async (req, res) => {
 
       let matchedClientId = clientId;
       if (!matchedClientId && villaNumber) matchedClientId = clientByVilla[villaNumber]?.id || "";
-      if (!matchedClientId) { errors.push({ index: i, reason: "No client found for villa " + villaNumber }); continue; }
 
       const classification = classifyFromKeywordsDB(description, keywords);
       const type = raw.type || classification.primaryType;
@@ -383,7 +382,7 @@ router.post("/import", requireAuth, async (req, res) => {
       ticketsToCreate.push({
         ticketId: raw.ticketId || String(Date.now() + i).slice(-6),
         refNumber: raw.refNumber || "", projectAbbr: null,
-        projectId, clientId: matchedClientId,
+        projectId, clientId: matchedClientId || null,
         clientName: clientByVilla[villaNumber]?.name || raw.clientName || "",
         villaNumber, issuedAt: raw.issuedAt || null,
         description, type, status: "open",

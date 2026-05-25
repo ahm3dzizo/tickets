@@ -158,18 +158,20 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     const projectId = asTrimmedString(data.projectId);
     const clientId = asTrimmedString(data.clientId);
-    if (!projectId || !clientId) {
-      res.status(400).json({ error: "يجب تحديد المشروع والعميل لإنشاء التذكرة" });
+    if (!projectId) {
+      res.status(400).json({ error: "يجب تحديد المشروع لإنشاء التذكرة" });
       return;
     }
 
-    const client = await prisma.client.findUnique({
-      where: { id: clientId },
-      select: { id: true, projectId: true },
-    });
-    if (!client || client.projectId !== projectId) {
-      res.status(400).json({ error: "العميل المحدد غير موجود أو لا ينتمي لهذا المشروع" });
-      return;
+    if (clientId) {
+      const client = await prisma.client.findUnique({
+        where: { id: clientId },
+        select: { id: true, projectId: true },
+      });
+      if (!client || client.projectId !== projectId) {
+        res.status(400).json({ error: "العميل المحدد غير موجود أو لا ينتمي لهذا المشروع" });
+        return;
+      }
     }
 
     const assignedSupervisorIds = Array.isArray(data.assignedSupervisorIds)
@@ -187,7 +189,7 @@ router.post("/", requireAuth, async (req, res) => {
         ticketId: data.ticketId || String(Date.now()).slice(-6),
         refNumber: data.refNumber,
         projectAbbr: data.projectAbbr || null,
-        projectId, clientId,
+        projectId, clientId: clientId || null,
         clientName: data.clientName, villaNumber: data.villaNumber,
         issuedAt: data.issuedAt || null,
         description: data.description,
@@ -280,7 +282,7 @@ router.post("/bulk", requireAuth, async (req, res) => {
           clientCache.set(cacheKey, valid);
         }
         if (!valid) invalidClientRefs.push(t);
-      } else {
+      } else if (!t.projectId) {
         invalidClientRefs.push(t);
       }
     }
@@ -294,7 +296,7 @@ router.post("/bulk", requireAuth, async (req, res) => {
     const created = await prisma.ticket.createMany({
       data: normalized.map(t => ({
         ticketId: t.ticketId, refNumber: t.refNumber, projectAbbr: t.projectAbbr,
-        projectId: t.projectId, clientId: t.clientId, clientName: t.clientName,
+        projectId: t.projectId, clientId: t.clientId || null, clientName: t.clientName,
         villaNumber: t.villaNumber, issuedAt: t.issuedAt, description: t.description,
         type: t.type, status: t.status, priority: t.priority,
         assigneeName: t.assigneeName, assignedSupervisorId: t.assignedSupervisorId,
@@ -349,6 +351,9 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         closedAt: data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
         description: data.description ?? undefined,
         type: data.type ?? undefined,
+        clientId: data.clientId ?? undefined,
+        clientName: data.clientName ?? undefined,
+        villaNumber: data.villaNumber ?? undefined,
       },
     });
 
@@ -368,6 +373,58 @@ router.patch("/bulk-status", requireAuth, async (req, res) => {
   const { ids, status } = req.body as { ids: string[]; status: string };
   await prisma.ticket.updateMany({ where: { id: { in: ids } }, data: { status } });
   res.json({ count: ids.length });
+});
+
+// POST /api/tickets/auto-link
+router.post("/auto-link", requireAuth, async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    const where: any = { clientId: null };
+    if (projectId) where.projectId = projectId;
+
+    const unlinkedTickets = await prisma.ticket.findMany({
+      where,
+      select: { id: true, villaNumber: true, projectId: true }
+    });
+
+    if (unlinkedTickets.length === 0) {
+      return res.json({ count: 0, message: "لا توجد تذاكر غير مربوطة." });
+    }
+
+    const projectsToFetch = projectId ? [projectId] : [...new Set(unlinkedTickets.map(t => t.projectId))];
+    const clients = await prisma.client.findMany({
+      where: { projectId: { in: projectsToFetch } },
+      select: { id: true, projectId: true, villaNumber: true, name: true }
+    });
+
+    const clientMap = new Map();
+    for (const c of clients) {
+      const key = `${c.projectId}:${(c.villaNumber || "").trim()}`;
+      clientMap.set(key, c);
+    }
+
+    let linkedCount = 0;
+    for (const ticket of unlinkedTickets) {
+      const villa = (ticket.villaNumber || "").trim();
+      const key = `${ticket.projectId}:${villa}`;
+      const matchedClient = clientMap.get(key);
+
+      if (matchedClient) {
+        await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            clientId: matchedClient.id,
+            clientName: matchedClient.name,
+          }
+        });
+        linkedCount++;
+      }
+    }
+
+    res.json({ count: linkedCount, message: `تم ربط ${linkedCount} تذاكر بنجاح.` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE /api/tickets/:id
