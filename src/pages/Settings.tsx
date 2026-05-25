@@ -5,7 +5,7 @@ import { useLocation } from 'react-router-dom';
 import {
   User, Lock, Bell, Shield, LogOut, ChevronDown, ChevronUp,
   Camera, Save, Eye, EyeOff, CheckCircle2, Loader2, Check,
-  MessageSquare, RefreshCw, Wifi, WifiOff,
+  MessageSquare, RefreshCw, Wifi, WifiOff, Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -520,6 +520,41 @@ export default function Settings() {
                 {savingNotifs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 حفظ التفضيلات
               </Button>
+            </div>
+
+            <div className="border-t border-border/40 pt-4 mt-4 space-y-3">
+              <p className="text-foreground font-bold text-sm text-right">إعدادات المتصفح والتطبيق</p>
+              
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={async () => {
+                    if (!('Notification' in window)) {
+                      toast.error('المتصفح لا يدعم الإشعارات');
+                      return;
+                    }
+                    const p = await Notification.requestPermission();
+                    if (p === 'granted') toast.success('تم تفعيل إشعارات المتصفح بنجاح');
+                    else toast.error('تم رفض صلاحية الإشعارات');
+                  }}
+                  variant="outline"
+                  className="rounded-xl h-11 justify-between px-4"
+                >
+                  <Bell className="w-4 h-4 ml-2" />
+                  <span className="flex-1 text-right text-sm">طلب صلاحية إشعارات المتصفح</span>
+                </Button>
+
+                <Button
+                  onClick={() => {
+                    localStorage.removeItem('retal:pwa-prompt-disabled');
+                    toast.success('تم إعادة تفعيل ظهور شاشة تثبيت التطبيق، قم بتحديث الصفحة.');
+                  }}
+                  variant="outline"
+                  className="rounded-xl h-11 justify-between px-4"
+                >
+                  <Download className="w-4 h-4 ml-2" />
+                  <span className="flex-1 text-right text-sm">إعادة إظهار رسالة التثبيت (PWA)</span>
+                </Button>
+              </div>
             </div>
           </div>
         </Section>

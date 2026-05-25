@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import {
   DropdownMenu,
@@ -20,6 +20,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
+import { toast } from 'sonner';
 
 /* ── nav items ─────────────────────────────────────────────────── */
 const allNavItems = [
@@ -46,6 +47,25 @@ export function Navbar() {
   const { resolvedTheme, setTheme } = useTheme();
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(user?.uid ?? null);
   const isLight = resolvedTheme === 'light';
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      const shown = sessionStorage.getItem('notif_prompt_shown');
+      if (!shown) {
+        toast('هل ترغب في تفعيل إشعارات المتصفح؟', {
+          duration: 10000,
+          action: {
+            label: 'تفعيل',
+            onClick: async () => {
+              const p = await Notification.requestPermission();
+              if (p === 'granted') toast.success('تم تفعيل الإشعارات بنجاح');
+            }
+          }
+        });
+        sessionStorage.setItem('notif_prompt_shown', 'true');
+      }
+    }
+  }, []);
 
   const toggleTheme = () => setTheme(isLight ? 'dark' : 'light');
 
