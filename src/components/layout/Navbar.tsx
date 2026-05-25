@@ -48,24 +48,7 @@ export function Navbar() {
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(user?.uid ?? null);
   const isLight = resolvedTheme === 'light';
 
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      const shown = sessionStorage.getItem('notif_prompt_shown');
-      if (!shown) {
-        toast('هل ترغب في تفعيل إشعارات المتصفح؟', {
-          duration: 10000,
-          action: {
-            label: 'تفعيل',
-            onClick: async () => {
-              const p = await Notification.requestPermission();
-              if (p === 'granted') toast.success('تم تفعيل الإشعارات بنجاح');
-            }
-          }
-        });
-        sessionStorage.setItem('notif_prompt_shown', 'true');
-      }
-    }
-  }, []);
+  // Notification prompt logic has been moved to PWAInstallPrompt
 
   const toggleTheme = () => setTheme(isLight ? 'dark' : 'light');
 
@@ -255,7 +238,7 @@ export function Navbar() {
           {/* More / Avatar */}
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<button className="flex-1 flex flex-col items-center justify-center h-full gap-0.5" />}
+              className="flex-1 flex flex-col items-center justify-center h-full gap-0.5"
             >
               <div className="w-12 h-9 rounded-2xl flex items-center justify-center hover:bg-muted/60 transition-colors">
                 <Avatar className="w-7 h-7 ring-1 ring-border">
@@ -353,9 +336,7 @@ export function Navbar() {
           {/* User dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-muted transition-colors" />
-              }
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-muted transition-colors"
             >
               <Avatar className="w-8 h-8 shrink-0 ring-1 ring-border">
                 <AvatarImage src={user?.photoURL} />
