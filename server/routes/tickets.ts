@@ -368,7 +368,8 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     const closingStatuses = ['closed', 'completed'];
     if (data.status && closingStatuses.includes(data.status) && req.uid) {
-      autoSendClosing(req.uid, ticket).catch(() => {});
+      // بناءً على طلب المستخدم: تم إيقاف إرسال رسالة الإغلاق التلقائية، والاكتفاء بصورة التقرير
+      // autoSendClosing(req.uid, ticket).catch(() => {});
     }
 
     res.json(ticket);
