@@ -644,20 +644,6 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     }
   };
 
-  const handleManualConfirm = (matchedTickets: any[]) => {
-    const all = [...pendingMatchedTickets, ...matchedTickets];
-    setReviewTickets(all);
-    setOriginalTypesMap(
-      Object.fromEntries(all.map((t: any) => [
-        t.ticketId || t.refNumber,
-        Array.isArray(t.detectedTypes) && t.detectedTypes.length > 0
-          ? [...t.detectedTypes]
-          : [t.type || 'plumbing'],
-      ]))
-    );
-    setManualModalOpen(false);
-    setTimeout(() => setReviewModalOpen(true), 200);
-  };
 
   return (
     <>
@@ -733,16 +719,6 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         </DialogContent>
       </Dialog>
 
-                        <ManualMatchingModal
-        isOpen={manualModalOpen}
-        onClose={() => setManualModalOpen(false)}
-        onConfirm={handleManualConfirm}
-        unmatchedTickets={unmatchedTickets}
-        clients={clients.filter(c => c.projectId === selectedProjectId)}
-        projects={projects}
-        projectId={selectedProjectId}
-        onClientsUpdated={onImportSuccess}
-      />
 
             {/* ── Review & Confirm Modal ───────────────────────────────────── */}
       <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>

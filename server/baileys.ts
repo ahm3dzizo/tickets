@@ -16,7 +16,7 @@ const statuses = new Map<string, WAStatus>();
 const qrCodes = new Map<string, string | null>();
 const linkedPhones = new Map<string, string | null>();
 
-const logger = pino({ level: 'silent' });
+const logger = pino({ level: 'info' });
 
 export function getWAStatus(userId: string): WAStatus {
   return statuses.get(userId) || 'DISCONNECTED';
