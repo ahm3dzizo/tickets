@@ -88,6 +88,8 @@ const remoteLines = [
   `echo "▶  npm install..."`,
   `npm install --silent`,
   `echo "▶  npm run build (frontend + backend)..."`,
+  `rm -rf dist`,
+  `rm -rf node_modules/.vite`,
   `npm run build`,                                      // vite build → dist/
   `echo "✔  Build جاهز"`,
   `echo "▶  pm2 restart..."`,
