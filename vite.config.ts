@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['logo.jpg'],
+        includeAssets: ['logo.jpg', 'logo-192.png', 'logo-512.png'],
         manifest: {
           name: 'Retal Maintenance System',
           short_name: 'Retal',
@@ -24,20 +24,22 @@ export default defineConfig(({ mode }) => {
           start_url: '/',
           icons: [
             {
-              src: '/logo.jpg',
+              src: '/logo-192.png',
               sizes: '192x192',
-              type: 'image/jpeg',
+              type: 'image/png',
+              purpose: 'any',
             },
             {
-              src: '/logo.jpg',
+              src: '/logo-512.png',
               sizes: '512x512',
-              type: 'image/jpeg',
+              type: 'image/png',
+              purpose: 'any',
             },
             {
-              src: '/logo.jpg',
+              src: '/logo-512.png',
               sizes: '512x512',
-              type: 'image/jpeg',
-              purpose: 'any maskable',
+              type: 'image/png',
+              purpose: 'maskable',
             },
           ],
         },
