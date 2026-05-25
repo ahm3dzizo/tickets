@@ -81,18 +81,18 @@ export async function buildTypeToSpecialtyMap() {
 export async function findSupervisorsDB(projectId: string, requiredSpecialties: string[]) {
   const allUsers = await prisma.user.findMany({
     where: { role: "supervisor" },
-    select: { uid: true, displayName: true, specialties: true, specialty: true, projectIds: true },
+    include: { projects: { select: { id: true } }, specialtiesRef: { select: { key: true } } },
   });
 
   const activeUsers = allUsers.filter((u: any) => !u.uid.startsWith("pending_"));
 
   let projectSups = activeUsers.filter(
-    (u: any) => Array.isArray(u.projectIds) && u.projectIds.includes(projectId)
+    (u: any) => u.projects && u.projects.some((p: any) => p.id === projectId)
   );
   if (projectSups.length === 0) projectSups = activeUsers;
 
   const getSpecs = (u: any): string[] => {
-    if (Array.isArray(u.specialties) && u.specialties.length > 0) return u.specialties;
+    if (u.specialtiesRef && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
     if (u.specialty) return [u.specialty];
     return ["general"];
   };

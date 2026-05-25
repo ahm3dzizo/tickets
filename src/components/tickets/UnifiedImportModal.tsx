@@ -834,14 +834,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
   return (
     <>
             <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger render={
-          <Button
-            variant="outline"
-            className="border-border bg-white/5 text-slate-300 hover:text-white gap-2 rounded-xl h-11 px-5 font-bold"
-          >
-            {trigger}
-          </Button>
-        } />
+        <DialogTrigger render={trigger} />
         
         <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[600px] rounded-3xl">
           <DialogHeader>

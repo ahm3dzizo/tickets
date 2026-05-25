@@ -5,7 +5,7 @@ import { getIO } from "../socket.js";
 import { classifyTicket } from "../classifier/classify.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
 import { invalidateKeywordCache } from "../classifier/keywords.js";
-import { sendWAText, buildOpeningMsg, buildClosingMsg } from "../whatsapp.js";
+import { sendWAText, buildOpeningMsg, buildClosingMsg } from "../baileys.js";
 
 const router = Router();
 
@@ -30,14 +30,14 @@ async function autoSendOpening(uid: string, ticket: any) {
       select: { phone: true, name: true },
     });
     if (!client?.phone) return;
-    const msg = buildOpeningMsg({
+    const msg = await buildOpeningMsg({
       ticketId: ticket.ticketId,
       clientName: client.name,
       description: ticket.description,
       villaNumber: ticket.villaNumber,
       date: new Date().toLocaleDateString('ar-EG'),
     });
-    await sendWAText('session', client.phone, msg);
+    await sendWAText(uid, client.phone, msg);
   } catch {}
 }
 
@@ -49,18 +49,18 @@ async function autoSendClosing(uid: string, ticket: any) {
       select: { phone: true, name: true },
     });
     if (!client?.phone) return;
-    const msg = buildClosingMsg({
+    const msg = await buildClosingMsg({
       ticketId: ticket.ticketId,
       clientName: client.name,
       description: ticket.description,
       villaNumber: ticket.villaNumber,
       closureNotes: ticket.closureNotes,
     });
-    await sendWAText('session', client.phone, msg);
+    await sendWAText(uid, client.phone, msg);
   } catch {}
 }
 
-async function classifyInBackground(description: string, ticketId: string, projectId?: string) {
+async function classifyInBackground(description: string, ticketId: string, projectId?: string, keepManualSupervisors?: boolean) {
   try {
     const classification = await classifyTicket(description, projectId);
 
@@ -83,15 +83,20 @@ async function classifyInBackground(description: string, ticketId: string, proje
       primarySupId = supervisorList[0]?.id || null;
     }
 
+    const updateData: any = {
+      type: classification.primaryType,
+      detectedTypes: classification.allTypes,
+    };
+
+    if (!keepManualSupervisors) {
+      updateData.assignedSupervisorId = primarySupId;
+      updateData.assignedSupervisorIds = supervisorIds;
+      updateData.assignedSupervisors = supervisorList.length > 0 ? supervisorList : undefined;
+    }
+
     await prisma.ticket.updateMany({
       where: { id: ticketId },
-      data: {
-        type: classification.primaryType,
-        detectedTypes: classification.allTypes,
-        assignedSupervisorId: primarySupId,
-        assignedSupervisorIds: supervisorIds,
-        assignedSupervisors: supervisorList.length > 0 ? supervisorList : undefined,
-      },
+      data: updateData,
     });
 
     invalidateReferenceCache();
@@ -114,6 +119,30 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     orderBy: { createdAt: "desc" },
   });
   res.json(tickets);
+});
+
+// GET /api/tickets/next-id
+router.get("/next-id", requireAuth, async (req, res) => {
+  const { projectId } = req.query as { projectId?: string };
+  try {
+    const where = projectId ? { projectId } : {};
+    const lastTicket = await prisma.ticket.findFirst({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: { ticketId: true },
+    });
+    
+    let nextId = 1;
+    if (lastTicket && lastTicket.ticketId) {
+      const parsed = parseInt(lastTicket.ticketId, 10);
+      if (!isNaN(parsed)) {
+        nextId = parsed + 1;
+      }
+    }
+    res.json({ nextId: nextId.toString() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/tickets/:id
@@ -178,9 +207,11 @@ router.post("/", requireAuth, async (req, res) => {
       },
     });
 
+    const hasManualSups = assignedSupervisorIds.length > 0;
+
     const description = (data.description || "").trim();
     if (description.length >= 5) {
-      classifyInBackground(description, ticket.id, projectId).catch(() => {});
+      classifyInBackground(description, ticket.id, projectId, hasManualSups).catch(() => {});
     }
 
     const senderUid = (req as AuthRequest).uid;

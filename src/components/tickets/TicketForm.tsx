@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Briefcase,
   Home,
+  Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
+import { ticketsApi, projectsApi, clientsApi, usersApi } from '@/lib/api';
 import { Project, Client, TicketType } from '@/types';
 import { classifyOnServer } from '@/services/classificationApi';
 import { useAuth } from '@/contexts/AuthContext';
@@ -83,11 +84,10 @@ export function TicketForm({
 
   /* ── Form fields ──────────────────────────────────────────── */
   const [ticketId,     setTicketId]     = useState('');
-  const [refNumber,    setRefNumber]    = useState('');
-  const [assigneeName, setAssigneeName] = useState('');
   const [projectId,    setProjectId]    = useState(defaultProjectId || '');
   const [clientId,     setClientId]     = useState('');
   const [villaNumber,  setVillaNumber]  = useState('');
+  const [clientSearch, setClientSearch] = useState('');
   const [description,  setDescription]  = useState('');
   const [types,        setTypes]        = useState<TicketType[]>(['electricity']);
   const [priority,     setPriority]     = useState<string | number>('3');
@@ -99,6 +99,8 @@ export function TicketForm({
   ─────────────────────────────────────────────────────────── */
   const [projects,    setProjects]    = useState<Project[]>([]);
   const [formClients, setFormClients] = useState<Client[]>([]);
+  const [projectSupervisors, setProjectSupervisors] = useState<{id: string, name: string}[]>([]);
+  const [selectedSupervisors, setSelectedSupervisors] = useState<string[]>([]);
   const [allClients,  setAllClients]  = useState<Client[]>([]); // للـ UnifiedImportModal
 
   /* ── Load projects ────────────────────────────────────────── */
@@ -117,12 +119,32 @@ export function TicketForm({
     if (defaultProjectId) setProjectId(defaultProjectId);
   }, [defaultProjectId]);
 
-  /* ── Load form clients (مفلترة بالمشروع المختار فقط) ──────── */
+  /* ── Load form clients (مفلترة بالمشروع المختار ومترتبة برقم الفيلا) ──────── */
   useEffect(() => {
     if (!projectId) { setFormClients([]); return; }
     clientsApi.getByProject(projectId)
-      .then(setFormClients)
+      .then(clients => {
+        const sorted = clients.sort((a, b) => {
+          const numA = parseInt(a.villaNumber, 10) || 0;
+          const numB = parseInt(b.villaNumber, 10) || 0;
+          return numA - numB;
+        });
+        setFormClients(sorted);
+      })
       .catch(() => {});
+      
+    // Fetch Next ID for this project
+    ticketsApi.getNextId(projectId).then(nextId => setTicketId(nextId)).catch(() => {});
+
+    // Fetch Supervisors for this project
+    usersApi.getAll().then(allUsers => {
+      const sups = allUsers.filter(u => 
+        (u.role === 'supervisor' || u.role === 'engineer' || u.role === 'admin') && 
+        (u.projectIds?.includes(projectId) || u.role === 'admin')
+      );
+      setProjectSupervisors(sups.map(u => ({ id: u.uid, name: u.displayName || u.email })));
+      setSelectedSupervisors([]);
+    }).catch(() => {});
   }, [projectId]);
 
   /* ── Load all clients — للـ UnifiedImportModal فقط ────────── */
@@ -141,12 +163,17 @@ export function TicketForm({
     return () => { cancelled = true; };
   }, [description, projectId]);
 
-  /* ── Auto-generate refNumber ──────────────────────────────── */
-  useEffect(() => {
-    if (!projectId || !villaNumber) return;
-    const proj = projects.find(p => p.id === projectId);
-    if (proj) setRefNumber(`${proj.abbreviation}-${villaNumber}`);
-  }, [projectId, villaNumber, projects]);
+  /* ── Auto-select client by villa number ───────────────────── */
+  const handleVillaChange = (val: string) => {
+    setVillaNumber(val);
+    if (!val) { setClientId(''); return; }
+    const match = formClients.find(c => c.villaNumber.trim() === val.trim());
+    if (match) {
+      setClientId(match.id);
+    } else {
+      setClientId(''); // Reset if no match
+    }
+  };
 
   /* ── Submit ───────────────────────────────────────────────── */
   const handleSubmit = async (e: React.SyntheticEvent) => {
@@ -161,16 +188,25 @@ export function TicketForm({
     }
     try {
       const currentClient = formClients.find(c => c.id === clientId);
+      const proj = projects.find(p => p.id === projectId);
+      const autoRefNumber = proj ? `${proj.abbreviation}-${villaNumber}` : villaNumber;
+
       const classification = await classifyOnServer({ description, projectId });
       const supervisors = classification.supervisors;
-      if (supervisors.length === 0) {
-        toast.error('لا يمكن إنشاء التذكرة: لا يوجد مشرفون مطابقون لهذا النوع في المشروع');
+
+      const finalSupervisors = selectedSupervisors.length > 0 
+        ? projectSupervisors.filter(s => selectedSupervisors.includes(s.id)).map(s => ({ id: s.id, name: s.name, specialty: 'general' }))
+        : supervisors;
+
+      if (finalSupervisors.length === 0) {
+        toast.error('لا يمكن إنشاء التذكرة: لم يتم العثور على مشرفين');
         return;
       }
+      
       await ticketsApi.create({
         ticketId,
-        refNumber,
-        assigneeName: assigneeName || (supervisors[0]?.name ?? ''),
+        refNumber: autoRefNumber,
+        assigneeName: finalSupervisors.map(s => s.name).join('، '),
         projectId,
         clientId,
         clientName: currentClient?.name || '',
@@ -178,9 +214,9 @@ export function TicketForm({
         description,
         type: classification.primaryType,
         detectedTypes: classification.allTypes,
-        assignedSupervisorId: supervisors[0]?.id ?? '',
-        assignedSupervisorIds: supervisors.map(s => s.id),
-        assignedSupervisors: supervisors,
+        assignedSupervisorId: finalSupervisors[0]?.id ?? '',
+        assignedSupervisorIds: finalSupervisors.map(s => s.id),
+        assignedSupervisors: finalSupervisors,
         status: 'open',
         priority,
         createdAt: new Date().toISOString(),
@@ -199,8 +235,7 @@ export function TicketForm({
 
   const resetForm = () => {
     setTicketId('');
-    setRefNumber('');
-    setAssigneeName('');
+    setSelectedSupervisors([]);
     setProjectId(defaultProjectId || '');
     setClientId('');
     setVillaNumber('');
@@ -263,25 +298,71 @@ export function TicketForm({
 
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
 
-          {/* ── Row 1: ID / Ref / Assignee ─────────────────────── */}
+          {/* ── Row 1: ID / Villa / Assignee ─────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { label: 'ID',       value: ticketId,     setter: setTicketId,     placeholder: '182787' },
-              { label: 'المرجع',   value: refNumber,    setter: setRefNumber,    placeholder: 'NTF-685' },
-              { label: 'المسؤول',  value: assigneeName, setter: setAssigneeName, placeholder: 'أحمد' },
-            ].map(({ label, value, setter, placeholder }) => (
-              <div key={label} className="space-y-2">
-                <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
-                  {label}
-                </Label>
-                <Input
-                  value={value}
-                  onChange={e => setter(e.target.value)}
-                  placeholder={placeholder}
-                  className="bg-white/5 border-border text-slate-300 rounded-xl h-12 text-right"
+            <div className="space-y-2">
+              <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">ID</Label>
+              <Input
+                value={ticketId}
+                onChange={e => setTicketId(e.target.value)}
+                placeholder="تلقائي"
+                className="bg-white/5 border-border text-slate-300 rounded-xl h-12 text-right"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">رقم الفيلا</Label>
+              <Input
+                value={villaNumber}
+                onChange={e => handleVillaChange(e.target.value)}
+                placeholder="اكتب رقم الفيلا لجلب العميل"
+                className="bg-white/5 border-border text-slate-300 rounded-xl h-12 text-right"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">المسؤول (اختياري)</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12"
+                      disabled={!projectId}
+                    >
+                      <Briefcase className="w-3 h-3 opacity-50 shrink-0" />
+                      <span className="truncate flex-1 text-right mr-2">
+                        {selectedSupervisors.length > 0
+                          ? projectSupervisors.filter(s => selectedSupervisors.includes(s.id)).map(s => s.name).join('، ')
+                          : projectId ? 'تلقائي بناءً على العطل' : 'اختر المشروع'}
+                      </span>
+                    </Button>
+                  }
                 />
-              </div>
-            ))}
+                <DropdownMenuContent className="bg-card border-border text-slate-200 w-64 max-h-[300px] overflow-y-auto">
+                  {projectSupervisors.length === 0 ? (
+                    <DropdownMenuItem disabled className="text-slate-500 text-right justify-end">
+                      لا يوجد مشرفين في المشروع
+                    </DropdownMenuItem>
+                  ) : (
+                    projectSupervisors.map(s => (
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-end px-2 py-2 hover:bg-white/5 cursor-pointer rounded-sm border-b border-border/50 last:border-0"
+                        onClick={() => {
+                          setSelectedSupervisors(prev => 
+                            prev.includes(s.id) ? prev.filter(x => x !== s.id) : [...prev, s.id]
+                          );
+                        }}
+                      >
+                        <span className="mr-3 text-sm">{s.name}</span>
+                        <div className={cn("w-4 h-4 border rounded flex items-center justify-center shrink-0 transition-colors", selectedSupervisors.includes(s.id) ? "bg-blue-500 border-blue-500" : "border-slate-500")}>
+                          {selectedSupervisors.includes(s.id) && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
 
           {/* ── Row 2: Project / Client ─────────────────────────── */}
@@ -321,7 +402,7 @@ export function TicketForm({
             {/* Client — مفلتر بالمشروع المختار */}
             <div className="space-y-2">
               <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
-                العميل / الفيلا
+                العميل
               </Label>
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -340,13 +421,23 @@ export function TicketForm({
                     </Button>
                   }
                 />
-                <DropdownMenuContent className="bg-card border-border text-slate-200 w-64">
+                <DropdownMenuContent className="bg-card border-border text-slate-200 w-64 max-h-[300px] overflow-y-auto">
+                  <div className="p-2 border-b border-white/10 sticky top-0 bg-card z-10">
+                    <Input 
+                      placeholder="ابحث بالاسم أو الفيلا..."
+                      value={clientSearch}
+                      onChange={e => setClientSearch(e.target.value)}
+                      className="h-8 bg-white/5 border-border text-right"
+                    />
+                  </div>
                   {formClients.length === 0 ? (
                     <DropdownMenuItem disabled className="text-slate-500 text-right justify-end">
                       لا يوجد عملاء في هذا المشروع
                     </DropdownMenuItem>
                   ) : (
-                    formClients.map(c => (
+                    formClients
+                      .filter(c => c.name.includes(clientSearch) || c.villaNumber.includes(clientSearch))
+                      .map(c => (
                       <DropdownMenuItem
                         key={c.id}
                         className="hover:bg-white/5 cursor-pointer text-right justify-end"

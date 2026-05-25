@@ -129,16 +129,19 @@ export const ticketsApi = {
   get:          (id: string)                           => get<any>(`/tickets/${id}`),
   create:       (data: any)                            => post<any>('/tickets', data),
   bulkCreate:   (tickets: any[])                       => post<{ count: number }>('/tickets/bulk', { tickets }),
-  update:       (id: string, data: any)                => put<any>(`/tickets/${id}`, data),
+  update: async (id: string, updates: Partial<any>): Promise<any> => {
+    return put<any>(`/tickets/${id}`, updates);
+  },
   bulkStatus:   (ids: string[], status: string)        => patch<any>('/tickets/bulk-status', { ids, status }),
   delete:       (id: string)                           => del<any>(`/tickets/${id}`),
   deleteAll:    ()                                     => del<any>('/tickets'),
+  getNextId:    (projectId: string)                    => get<{ nextId: string }>(`/tickets/next-id?projectId=${projectId}`).then(res => res.nextId),
 };
 
 // ── WhatsApp ──────────────────────────────────────────────────────────────────
 export const whatsappApi = {
   getStatus: () =>
-    get<{ running: boolean; connected: boolean; state?: string }>('/whatsapp/status'),
+    get<{ running: boolean; connected: boolean; state?: string; linkedPhone?: string | null }>('/whatsapp/status'),
   getQR: () =>
     get<{ qr: string }>('/whatsapp/qr'),
   pairByPhone: (phone: string) =>
@@ -151,6 +154,14 @@ export const whatsappApi = {
     post<{ success: boolean; message: string }>('/whatsapp/start', {}),
   restart: () =>
     post<{ success: boolean; message: string }>('/whatsapp/restart', {}),
+};
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+export const settingsApi = {
+  getWhatsAppTemplates: () =>
+    get<{ openingMsg: string; closingMsg: string }>('/settings/whatsapp-templates'),
+  updateWhatsAppTemplates: (data: { openingMsg: string; closingMsg: string }) =>
+    put<{ openingMsg: string; closingMsg: string }>('/settings/whatsapp-templates', data),
 };
 
 // ── Technicians ───────────────────────────────────────────────────────────────

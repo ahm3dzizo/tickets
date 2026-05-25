@@ -5,7 +5,7 @@ import path from "path";
 import { __dirname } from "../config.js";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth } from "../auth.js";
-import { sendWAImage } from "../whatsapp.js";
+import { sendWAImage } from "../baileys.js";
 
 const router = Router();
 
@@ -42,8 +42,10 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 
   // Extract WhatsApp fields from body (not forwarded to Python)
   const whatsappPhone: string | undefined = body.whatsappPhone;
+  const whatsappMessage: string | undefined = body.whatsappMessage;
   const senderUid = req.uid;
   delete body.whatsappPhone;
+  delete body.whatsappMessage;
 
   const scriptPath = path.join(__dirname, "report_generator.py");
   const pythonBin = process.platform === 'win32' ? 'python' : 'python3';
@@ -81,9 +83,10 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       res.send(jpgData);
 
       // Fire-and-forget: send via WhatsApp in background
-      if (whatsappPhone) {
-        sendWAImage('session', whatsappPhone, jpgData, '📊 تقرير الصيانة — فريق ريتال')
-          .catch(() => {});
+      if (whatsappPhone && req.uid) {
+        sendWAImage(req.uid, whatsappPhone, jpgData, whatsappMessage || '📊 تقرير الصيانة — فريق ريتال')
+          .then((res: any) => console.log('WA report image sent:', res))
+          .catch((err: any) => console.error('WA report error:', err));
       }
 
       try { unlinkSync(jpgPath); } catch { /* ignore */ }

@@ -1,4 +1,4 @@
-﻿// src/pages/TicketsList.tsx
+// src/pages/TicketsList.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
@@ -178,7 +178,7 @@ export default function TicketsList() {
     }
   };
 
-  const handleSendAppointment = () => {
+  const handleSendAppointment = async () => {
     const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
     if (selected.length === 0) return;
     const byClient = new Map<string, typeof selected>();
@@ -187,13 +187,24 @@ export default function TicketsList() {
       if (!byClient.has(key)) byClient.set(key, []);
       byClient.get(key)!.push(t);
     });
+
+    const templates = await WhatsAppService.getTemplates();
+
     byClient.forEach((clientTickets, key) => {
       const first = clientTickets[0];
       const phone =
         clients[first?.clientId]?.phone ??
         Object.values(clients).find(c => c.villaNumber === first?.villaNumber)?.phone ?? '';
       const ids = clientTickets.map(t => t.ticketId || t.refNumber || t.id).join('، ');
-      const msg = `السلام عليكم، بخصوص بلاغ الصيانة رقم ${ids}، نرجو إفادتنا بمواعيد تواجدكم في الفيلا لتنسيق موعد الصيانة. شكراً لتعاونكم.`;
+      
+      const msg = WhatsAppService.processTemplate(templates.openingMsg, {
+        clientName: clients[first?.clientId]?.name || '',
+        ticketId: ids,
+        description: first?.description || '',
+        villaNumber: first?.villaNumber || '',
+        date: new Date().toLocaleDateString('ar-SA'),
+      });
+      
       WhatsAppService.sendUpdate(phone, msg);
     });
   };
@@ -230,11 +241,10 @@ export default function TicketsList() {
             {(user?.role === 'admin' || user?.role === 'engineer') && (
               <UnifiedImportModal
                 trigger={
-                  // مررنا الأيقونة والنص فقط بدون وسم <Button>
-                  <>
+                  <Button variant="outline" className="border-border bg-white/5 text-slate-300 hover:text-white gap-2 rounded-xl h-11 px-5 font-bold">
                     <FileUp className="w-4 h-4" /> 
                     <span>استيراد تذاكر</span>
-                  </>
+                  </Button>
                 }
                 projects={Object.values(projects)}
                 clients={Object.values(clients)}

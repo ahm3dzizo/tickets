@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { whatsappApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { io } from 'socket.io-client';
+import { useAuth } from '@/contexts/AuthContext';
 
 type BannerState = 'hidden' | 'visible' | 'dismissed';
 type DialogStep = 'phone' | 'code' | 'verifying' | 'connected';
@@ -21,19 +23,40 @@ export function WhatsAppBanner() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const { user } = useAuth();
+
   // Check WA status once on mount
   const checkStatus = useCallback(async () => {
     if (sessionStorage.getItem(DISMISS_KEY)) return;
     try {
       const s = await whatsappApi.getStatus();
-      if (s.running && !s.connected) setBanner('visible');
-      // If not running or already connected → keep hidden
-    } catch {
-      // wa-automate not reachable → keep hidden
-    }
+      if (!s.connected) setBanner('visible');
+    } catch {}
   }, []);
 
   useEffect(() => { checkStatus(); }, [checkStatus]);
+
+  // ── Socket.IO Real-time Updates ──────────────────────────────────────────
+  useEffect(() => {
+    if (!user?.uid) return;
+    const socket = io(window.location.origin, {
+      auth: { token: localStorage.getItem('retal_auth_token') }
+    });
+
+    socket.on(`wa-status-${user.uid}`, (newStatus: any) => {
+      if (newStatus.connected) {
+        setStep('connected');
+        setBanner('dismissed');
+        sessionStorage.setItem(DISMISS_KEY, '1');
+      } else if (!newStatus.connected) {
+        if (!sessionStorage.getItem(DISMISS_KEY)) {
+          setBanner('visible');
+        }
+      }
+    });
+
+    return () => socket.disconnect();
+  }, [user?.uid]);
 
   const dismiss = () => {
     sessionStorage.setItem(DISMISS_KEY, '1');

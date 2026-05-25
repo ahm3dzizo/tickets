@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   CheckCircle2, 
   X, 
@@ -33,6 +33,8 @@ import { Ticket, Client, Project } from '@/types';
 import { ticketsApi, projectsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+
+import { WhatsAppService } from '@/services/whatsappService';
 
 // ── IndexedDB helpers for persisting directory handle ──────────────────────
 const IDB_NAME = 'tickets-app';
@@ -123,6 +125,27 @@ export function CloseTicketDialog({
     getSavedDirHandle().then(h => setSavedDirName(h?.name ?? null));
   }, []);
 
+  const [closingMsgTemplate, setClosingMsgTemplate] = useState('');
+  React.useEffect(() => {
+    if (open) {
+      WhatsAppService.getTemplates().then(t => setClosingMsgTemplate(t.closingMsg));
+    }
+  }, [open]);
+
+  const currentVilla = selectedTickets[0]?.villaNumber;
+  const targetClient = clients.find(c => c.villaNumber === currentVilla);
+  const mainTicket = selectedTickets[0];
+  const waIds = selectedTickets.map(t => t.ticketId || t.refNumber).join('، ');
+
+  const previewMessage = WhatsAppService.processTemplate(closingMsgTemplate, {
+    clientName: targetClient?.name || mainTicket?.clientName || '',
+    ticketId: waIds,
+    description: mainTicket?.description || '',
+    villaNumber: targetClient?.villaNumber || mainTicket?.villaNumber || '',
+    closureNotes: notes || 'تم الإنجاز',
+    date: new Date().toLocaleDateString('ar-SA'),
+  });
+
   // Sync items if selectedTickets changes
   React.useEffect(() => {
     setMaintItems(selectedTickets.map(t => ({ description: t.description, status: 'تم' })));
@@ -163,9 +186,7 @@ export function CloseTicketDialog({
     setMaintItems(newItems);
   };
 
-  const currentVilla = selectedTickets[0]?.villaNumber;
   const isMobileDevice = typeof navigator !== 'undefined' && /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-  const targetClient = clients.find(c => c.villaNumber === currentVilla);
   // projectName resolved at submit time via getDoc fallback (avoids collection-list permission issues)
   const staticProjectName = selectedTickets[0]?.projectId
     ? projects?.[selectedTickets[0].projectId]?.name
@@ -182,7 +203,6 @@ export function CloseTicketDialog({
 
     try {
       // 1. Build report data and call Python backend
-      const mainTicket = selectedTickets[0];
 
       // Resolve project name: use prop if available, otherwise fetch via API
       let projectName = staticProjectName;
@@ -225,6 +245,7 @@ export function CloseTicketDialog({
           ...reportPayload,
           // Passed to backend for WhatsApp image sending (stripped before Python)
           whatsappPhone: targetClient?.phone || '',
+          whatsappMessage: previewMessage,
         }),
       });
 
@@ -241,11 +262,8 @@ export function CloseTicketDialog({
       const fileName = `${mainTicket?.villaNumber || 'villa'}-${firstTicketNo}.jpg`;
       let saved = false;
 
-      // 1st priority: auto-download to default Downloads folder (works on mobile & desktop)
-      downloadBlob(blob, fileName);
-      toast.success(`تم تنزيل التقرير: ${fileName}`);
-
-      // 2nd priority: try to save to pre-selected directory (enhancement, not blocking)
+      // We no longer automatically download the blob to avoid cluttering the user's PC.
+      // If the user picked a folder via directory picker, we still save it there silently.
       const dirHandle = await getSavedDirHandle();
       if (dirHandle) {
         try {
@@ -273,19 +291,8 @@ export function CloseTicketDialog({
         })
       ));
 
-      // 3. Open WhatsApp — use native app deep link on mobile
-      if (targetClient?.phone) {
-        const waIds = selectedTickets.map(t => t.ticketId || t.refNumber).join('، ');
-        const message = `السلام عليكم، بخصوص بلاغ الصيانة رقم ${waIds}، تم الانتهاء من الصيانة المطلوبة بنجاح. نرجو التفضل بالتوقيع على نموذج الإغلاق. شكراً لتعاونكم.`;
-        const phone = targetClient.phone.replace(/[^0-9]/g, '');
-        const encodedMsg = encodeURIComponent(message);
-        if (isMobileDevice) {
-          // whatsapp:// deep link opens native app directly, bypassing the browser
-          window.location.href = `whatsapp://send?phone=${phone}&text=${encodedMsg}`;
-        } else {
-          window.open(`https://wa.me/${phone}?text=${encodedMsg}`, '_blank');
-        }
-      }
+      // 3. The Backend already sends the WhatsApp message + Image via Baileys API silently!
+      // (We passed whatsappPhone in the /api/generate-report payload)
 
       toast.success('تم إغلاق التذاكر بنجاح');
       onSuccess();
@@ -391,8 +398,8 @@ export function CloseTicketDialog({
               <span className="text-[10px] font-black uppercase tracking-widest">معاينة رسالة الإغلاق</span>
               <MessageCircle className="w-3.5 h-3.5" />
             </div>
-            <p className="text-right text-[11px] text-slate-400 leading-relaxed italic">
-              "السلام عليكم، بخصوص بلاغ الصيانة رقم {selectedTickets.map(t => t.ticketId || t.refNumber).join('، ')}، تم الانتهاء من الصيانة المطلوبة بنجاح. نرجو التفضل بالتوقيع على نموذج الإغلاق. شكراً لتعاونكم."
+            <p className="text-right text-[11px] text-slate-400 leading-relaxed italic whitespace-pre-wrap">
+              "{previewMessage || 'جاري التحميل...'}"
             </p>
           </div>
         </div>

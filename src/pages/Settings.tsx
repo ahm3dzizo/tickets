@@ -10,8 +10,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { authApi, usersApi, whatsappApi } from '@/lib/api';
+import { Textarea } from '@/components/ui/textarea';
+import { authApi, usersApi, whatsappApi, settingsApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { io } from 'socket.io-client';
 import { cn } from '@/lib/utils';
 
 // ── Role / specialty labels ──────────────────────────────────────────────────
@@ -190,13 +192,45 @@ export default function Settings() {
 
   // ── WhatsApp ───────────────────────────────────────────────────────────────
   const [waStatus, setWaStatus] = useState<{
-    running: boolean; connected: boolean; state?: string;
+    running: boolean; connected: boolean; state?: string; linkedPhone?: string | null;
   } | null>(null);
   const [waQR, setWaQR] = useState<string | null>(null);
   const [loadingWA, setLoadingWA] = useState(false);
   const [loadingQR, setLoadingQR] = useState(false);
   const [startingWA, setStartingWA] = useState(false);
   const [restartingWA, setRestartingWA] = useState(false);
+
+  // ── Socket.IO Real-time Updates ──────────────────────────────────────────
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    // Connect to same origin
+    const socket = io(window.location.origin, {
+      auth: { token: localStorage.getItem('retal_auth_token') }
+    });
+
+    socket.on(`wa-status-${user.uid}`, (newStatus: any) => {
+      setWaStatus(prev => ({
+        ...prev,
+        running: newStatus.running,
+        connected: newStatus.connected,
+        state: newStatus.state,
+        linkedPhone: newStatus.linkedPhone
+      }));
+
+      if (newStatus.qr) {
+        const qrUrl = newStatus.qr.startsWith('data:') ? newStatus.qr : `data:image/png;base64,${newStatus.qr}`;
+        setWaQR(qrUrl);
+      } else if (newStatus.connected) {
+        setWaQR(null);
+        toast.success('تم ربط واتساب بنجاح (تحديث لحظي) ✅');
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [user?.uid]);
 
   const startWAService = async () => {
     setStartingWA(true);
@@ -250,6 +284,47 @@ export default function Settings() {
     } finally {
       setLoadingQR(false);
     }
+  };
+
+  // ── WA Templates ──────────────────────────────────────────────────────────
+  const [openingMsg, setOpeningMsg] = useState('');
+  const [closingMsg, setClosingMsg] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [savingTemplates, setSavingTemplates] = useState(false);
+
+  useEffect(() => {
+    if (user?.role === 'admin' && openSection === 'templates') {
+      loadTemplates();
+    }
+  }, [openSection, user?.role]);
+
+  const loadTemplates = async () => {
+    setLoadingTemplates(true);
+    try {
+      const data = await settingsApi.getWhatsAppTemplates();
+      setOpeningMsg(data.openingMsg);
+      setClosingMsg(data.closingMsg);
+    } catch {
+      toast.error('تعذر تحميل القوالب');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const saveTemplates = async () => {
+    setSavingTemplates(true);
+    try {
+      await settingsApi.updateWhatsAppTemplates({ openingMsg, closingMsg });
+      toast.success('تم حفظ القوالب بنجاح');
+    } catch {
+      toast.error('تعذر حفظ القوالب');
+    } finally {
+      setSavingTemplates(false);
+    }
+  };
+
+  const insertVar = (setter: React.Dispatch<React.SetStateAction<string>>, variable: string) => {
+    setter(prev => prev + variable);
   };
 
   // ── Initials avatar ────────────────────────────────────────────────────────
@@ -562,7 +637,9 @@ export default function Settings() {
                 <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-5 py-4 justify-end">
                   <div className="text-right">
                     <p className="text-emerald-400 font-bold text-sm">مرتبط ونشط</p>
-                    <p className="text-muted-foreground text-xs mt-0.5">الرسائل التلقائية تعمل من واتسابك</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">
+                      {waStatus.linkedPhone ? `مربوط برقم: ${waStatus.linkedPhone}` : 'الرسائل التلقائية تعمل من واتسابك'}
+                    </p>
                   </div>
                   <Wifi className="w-5 h-5 text-emerald-400 shrink-0" />
                 </div>
@@ -656,6 +733,65 @@ export default function Settings() {
             )}
           </div>
         </Section>
+
+        {/* ── WA Templates ────────────────────────────────────────────────── */}
+        {user?.role === 'admin' && (
+          <Section icon={MessageSquare} title="قوالب رسائل الواتساب" desc="تخصيص الرسائل التلقائية التي تصل للعميل (للمدراء فقط)"
+            accent="blue" open={openSection === 'templates'} onToggle={() => toggle('templates')}>
+            <div className="space-y-6">
+              {loadingTemplates ? (
+                <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>
+              ) : (
+                <>
+                  <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4 space-y-2">
+                    <p className="text-sm font-bold text-blue-400 text-right">متغيرات متاحة (اضغط للإدراج):</p>
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {[
+                        { label: 'اسم العميل', val: '{clientName}' },
+                        { label: 'رقم التذكرة', val: '{ticketId}' },
+                        { label: 'الوصف', val: '{description}' },
+                        { label: 'رقم الفيلا', val: '{villaNumber}' },
+                        { label: 'ملاحظات الإغلاق', val: '{closureNotes}' },
+                        { label: 'التاريخ', val: '{date}' },
+                      ].map(v => (
+                        <button key={v.val} onClick={() => insertVar(setOpeningMsg, v.val)} className="text-xs font-mono bg-background border border-border px-2 py-1 rounded-lg hover:bg-blue-500/10 transition-colors">
+                          {v.label} <span className="text-muted-foreground">{v.val}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground text-xs font-bold text-right block">رسالة الموعد (تنسيق الصيانة)</Label>
+                    <Textarea 
+                      value={openingMsg} 
+                      onChange={e => setOpeningMsg(e.target.value)}
+                      className="min-h-[120px] text-right bg-background/70"
+                      dir="rtl"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground text-xs font-bold text-right block">رسالة إغلاق التذكرة</Label>
+                    <Textarea 
+                      value={closingMsg} 
+                      onChange={e => setClosingMsg(e.target.value)}
+                      className="min-h-[120px] text-right bg-background/70"
+                      dir="rtl"
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={saveTemplates} disabled={savingTemplates} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-6 font-bold">
+                      {savingTemplates ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 ml-2" />}
+                      حفظ القوالب
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </Section>
+        )}
 
         {/* ── Logout ──────────────────────────────────────────────────────── */}
         <div className="bg-red-500/5 border border-red-500/10 rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">

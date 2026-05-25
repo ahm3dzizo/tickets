@@ -26,15 +26,22 @@ export class WhatsAppService {
     return false;
   }
 
-  static async notifyTicketCreated(phoneNumber: string, ticketId: string, title: string) {
-    const message =
-      `مرحباً 👋\nتم فتح تذكرة صيانة جديدة\n\n📋 رقم: #${ticketId}\n📝 ${title}\n\nسيتواصل معكم فريق الصيانة قريباً 🌟`;
-    return this.sendUpdate(phoneNumber, message);
+  static processTemplate(template: string, data: Record<string, string>): string {
+    let text = template;
+    const isMultiple = data.ticketId && (data.ticketId.includes('،') || data.ticketId.includes(','));
+    if (isMultiple) {
+      text = text.replace(/بلاغ الصيانة رقم/g, 'بلاغات الصيانة أرقام');
+    }
+    return text.replace(/{(\w+)}/g, (_, key) => data[key] || '');
   }
 
-  static async notifyTicketResolved(phoneNumber: string, ticketId: string, title: string) {
-    const message =
-      `مرحباً 👋\nتمت معالجة تذكرتكم بنجاح ✅\n\n📋 رقم: #${ticketId}\n📝 ${title}\n\nشكراً لصبركم وتعاونكم 🌟`;
-    return this.sendUpdate(phoneNumber, message);
+  static async getTemplates() {
+    try {
+      const res = await fetch('/api/settings/whatsapp-templates', {
+        headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` }
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { openingMsg: '', closingMsg: '' };
   }
 }

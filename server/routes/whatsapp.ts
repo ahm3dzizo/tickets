@@ -1,190 +1,91 @@
 import { Router } from 'express';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { AuthRequest, requireAuth } from '../auth.js';
-import { isWAAvailable, getSessionState, getQRCode, sendWAText } from '../whatsapp.js';
+import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, sendWAText, pairWACode } from '../baileys.js';
+import qrcode from 'qrcode';
 
-const execAsync = promisify(exec);
 const router = Router();
 
-const WA_KEY  = process.env.WA_AUTOMATE_KEY ?? '';
-const WA_PORT = 8002;
-const SESSIONS_PATH = '/opt/retal-api/wa-sessions';
-const ECOSYSTEM_PATH = '/opt/retal-api/wa-ecosystem.config.cjs';
-
-let latestQR: string | null = null;
-
-/** Normalise Egyptian phone → international digits only (no @c.us) */
-function phoneDigits(phone: string): string {
-  let d = phone.replace(/\D/g, '').replace(/^00/, '');
-  if (d.startsWith('0') && d.length === 11) d = '2' + d;
-  if (!d.startsWith('2')) d = '2' + d;
-  return d;
-}
-
-/** Write ecosystem config and (re)start wa-automate via PM2 */
-async function restartWA(extraArgs = '', cleanSession = true): Promise<void> {
-  latestQR = null;
-  const baseArgs = `--port ${WA_PORT} --api-key ${WA_KEY} `
-    + `--session-data-path ${SESSIONS_PATH} --use-chrome --no-sandbox --headless --qr-timeout 0 --auth-timeout 0 `
-    + `--ev http://localhost:3001/api/whatsapp/event?key=${WA_KEY} --ef qr,STARTUP,qrUrl`;
-  const args = extraArgs ? `${baseArgs} ${extraArgs}` : baseArgs;
-
-  const cfg = `module.exports = {
-  apps: [{
-    name: 'wa-automate',
-    script: '/opt/retal-api/node_modules/.bin/wa-automate',
-    args: '${args}',
-    cwd: '/opt/retal-api',
-    env: {
-      PUPPETEER_EXECUTABLE_PATH: '/usr/bin/chromium',
-      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true',
-      NODE_ENV: 'production'
-    },
-    autorestart: true,
-    restart_delay: 10000,
-    max_restarts: 5
-  }]
-};`;
-
-  // write config
-  const fs = await import('fs');
-  fs.writeFileSync(ECOSYSTEM_PATH, cfg, 'utf8');
-
-  // stop + start
-  await execAsync('pm2 stop wa-automate').catch(() => {});
-  if (cleanSession) {
-    await execAsync(`rm -rf ${SESSIONS_PATH} && mkdir -p ${SESSIONS_PATH}`);
-  } else {
-    await execAsync(`mkdir -p ${SESSIONS_PATH}`);
-  }
-  await execAsync('pm2 flush wa-automate').catch(() => {});
-  await execAsync(`pm2 start ${ECOSYSTEM_PATH}`);
-}
-
-/** Poll PM2 logs until the Link Code line appears (up to maxWaitMs) */
-async function waitForLinkCode(maxWaitMs = 45_000): Promise<string | null> {
-  const deadline = Date.now() + maxWaitMs;
-  while (Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, 2000));
-    try {
-      const { stdout } = await execAsync('pm2 logs wa-automate --lines 80 --nostream 2>&1');
-      // wa-automate logs: "- Link Code please use this to login … : ABCD-EFGH"
-      const m = stdout.match(/Link Code please use this to login[^:]*:\s*([A-Z0-9]{4}[-– ]?[A-Z0-9]{4})/i);
-      if (m) return m[1].replace(/[-– ]/g, '-');
-    } catch { /* ignore */ }
-  }
-  return null;
-}
-
 // ─── GET /api/whatsapp/status ────────────────────────────────────────────────
-router.get('/status', requireAuth, async (_req: AuthRequest, res) => {
-  const running = await isWAAvailable();
-  if (!running) {
-    // Check if PM2 process is at least running (waiting for auth)
-    try {
-      const { stdout } = await execAsync('pm2 jlist 2>&1');
-      const list = JSON.parse(stdout) as any[];
-      const wa = list.find((p: any) => p.name === 'wa-automate');
-      if (wa && wa.pm2_env?.status === 'online') {
-        res.json({ running: true, connected: false, state: 'WAITING_AUTH' });
-        return;
-      }
-    } catch { /* ignore */ }
-    res.json({ running: false, connected: false });
-    return;
-  }
-  const state = await getSessionState('session');
-  if (state === 'CONNECTED') {
-    latestQR = null;
-  }
-  res.json({ running: true, connected: state === 'CONNECTED', state });
+router.get('/status', requireAuth, async (req: AuthRequest, res) => {
+  const uid = req.uid!;
+  const status = getWAStatus(uid);
+  res.json({ 
+    running: status !== 'DISCONNECTED', 
+    connected: status === 'CONNECTED', 
+    state: status,
+    linkedPhone: getLinkedPhone(uid)
+  });
 });
 
 // ─── GET /api/whatsapp/qr ────────────────────────────────────────────────────
-router.get('/qr', requireAuth, async (_req: AuthRequest, res) => {
-  const running = await isWAAvailable();
-  if (!running) {
-    if (latestQR) {
-      res.json({ qr: latestQR });
-      return;
-    }
+router.get('/qr', requireAuth, async (req: AuthRequest, res) => {
+  const uid = req.uid!;
+  const status = getWAStatus(uid);
 
-    // Check PM2 status to give a more descriptive error
-    let detail = 'خدمة الواتساب التلقائي غير متاحة حالياً';
-    let pm2Status = 'unknown';
-    let restarts = 0;
-    try {
-      const { stdout } = await execAsync('pm2 jlist 2>&1');
-      const list = JSON.parse(stdout) as any[];
-      const wa = list.find((p: any) => p.name === 'wa-automate');
-      if (wa) {
-        pm2Status = wa.pm2_env?.status ?? 'unknown';
-        restarts = wa.pm2_env?.restart_time ?? 0;
-        if (pm2Status === 'online') {
-          detail = 'الخدمة تعمل لكن لم تتصل بعد — انتظر لحظة وأعد المحاولة';
-        } else if (pm2Status === 'errored') {
-          detail = `الخدمة توقفت بسبب خطأ (restarts: ${restarts}) — تحقق من السيرفر`;
-        } else {
-          detail = `حالة الخدمة: ${pm2Status} (restarts: ${restarts})`;
-        }
-      } else {
-        detail = 'خدمة wa-automate غير موجودة في PM2';
-      }
-    } catch { /* ignore */ }
-    res.status(503).json({ error: detail, pm2Status, restarts });
+  if (status === 'DISCONNECTED') {
+    res.status(503).json({ error: 'خدمة الواتساب غير مشغلة. اضغط تشغيل أولاً.' });
     return;
   }
-  const qr = await getQRCode('session');
-  if (!qr) {
-    res.status(404).json({ error: 'لا يوجد QR متاح — ربما الجلسة مرتبطة بالفعل' });
+  if (status === 'CONNECTED') {
+    res.json({ qr: null, state: 'CONNECTED' });
     return;
   }
-  res.json({ qr });
+  
+  const qrCodeStr = getWAQRCode(uid);
+  if (!qrCodeStr) {
+    res.json({ qr: null, state: 'STARTING' });
+    return;
+  }
+  
+  try {
+    const dataUrl = await qrcode.toDataURL(qrCodeStr);
+    res.json({ qr: dataUrl, state: 'WAITING_AUTH' });
+  } catch (err) {
+    res.status(500).json({ error: 'فشل توليد صورة QR' });
+  }
 });
 
 // ─── GET /api/whatsapp/logs ───────────────────────────────────────────────────
-// Returns last 50 lines of wa-automate PM2 logs for debugging
 router.get('/logs', requireAuth, async (_req: AuthRequest, res) => {
-  try {
-    const { stdout } = await execAsync('pm2 logs wa-automate --lines 50 --nostream 2>&1');
-    res.json({ logs: stdout });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ logs: "Logs are managed via internal server console now." });
 });
 
 // ─── POST /api/whatsapp/send ─────────────────────────────────────────────────
 router.post('/send', requireAuth, async (req: AuthRequest, res) => {
+  const uid = req.uid!;
   const { phone, message } = req.body as { phone?: string; message?: string };
   if (!phone?.trim() || !message?.trim()) {
     res.status(400).json({ error: 'phone و message مطلوبان' });
     return;
   }
-  const result = await sendWAText('session', phone.trim(), message.trim());
+  const result = await sendWAText(uid, phone.trim(), message.trim());
   res.json(result);
 });
 
 // ─── POST /api/whatsapp/pair ─────────────────────────────────────────────────
-// Pairing code is currently disabled due to wa-automate/WhatsApp Web compatibility issues.
 router.post('/pair', requireAuth, async (req: AuthRequest, res) => {
-  res.status(400).json({
-    error: 'طريقة ربط رقم الهاتف غير مدعومة حالياً بسبب تحديثات واتساب ويب. يرجى الانتقال إلى الإعدادات واستخدام رمز QR بدلاً من ذلك.',
-  });
+  const uid = req.uid!;
+  const { phone } = req.body as { phone?: string };
+  if (!phone) {
+    res.status(400).json({ error: 'رقم الهاتف مطلوب' });
+    return;
+  }
+  try {
+    const code = await pairWACode(uid, phone);
+    res.json({ code });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── POST /api/whatsapp/verify ───────────────────────────────────────────────
-// Called after the user enters the code in WhatsApp — waits for API to come up
-router.post('/verify', requireAuth, async (_req: AuthRequest, res) => {
+router.post('/verify', requireAuth, async (req: AuthRequest, res) => {
+  const uid = req.uid!;
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
-    const ok = await isWAAvailable();
-    if (ok) {
-      const state = await getSessionState('session');
-      if (state === 'CONNECTED') {
-        res.json({ connected: true });
-        return;
-      }
+    if (getWAStatus(uid) === 'CONNECTED') {
+      res.json({ connected: true });
+      return;
     }
     await new Promise(r => setTimeout(r, 2000));
   }
@@ -192,9 +93,10 @@ router.post('/verify', requireAuth, async (_req: AuthRequest, res) => {
 });
 
 // ─── POST /api/whatsapp/start ────────────────────────────────────────────────
-router.post('/start', requireAuth, async (_req: AuthRequest, res) => {
+router.post('/start', requireAuth, async (req: AuthRequest, res) => {
+  const uid = req.uid!;
   try {
-    await restartWA('', false);
+    startWA(uid); // start in background
     res.json({ success: true, message: 'جاري تشغيل خدمة الواتساب...' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -202,45 +104,13 @@ router.post('/start', requireAuth, async (_req: AuthRequest, res) => {
 });
 
 // ─── POST /api/whatsapp/restart ──────────────────────────────────────────────
-router.post('/restart', requireAuth, async (_req: AuthRequest, res) => {
+router.post('/restart', requireAuth, async (req: AuthRequest, res) => {
+  const uid = req.uid!;
   try {
-    await restartWA('', true);
+    await stopWA(uid, true); // clean session
+    startWA(uid);
     res.json({ success: true, message: 'تمت إعادة تهيئة الخدمة وجاري توليد رمز QR جديد...' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ─── POST /api/whatsapp/event ────────────────────────────────────────────────
-router.post('/event', async (req, res) => {
-  try {
-    const { key } = req.query;
-    const isAuthorized = (WA_KEY && key === WA_KEY) || 
-                         req.ip === '127.0.0.1' || 
-                         req.ip === '::1' || 
-                         req.ip === '::ffff:127.0.0.1';
-    
-    if (!isAuthorized) {
-      console.warn(`[WA-Event] Unauthorized access attempt from IP: ${req.ip}`);
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-    
-    const { event, data } = req.body;
-    
-    if (event === 'qr' || event === 'qrUrl') {
-      if (typeof data === 'string') {
-        latestQR = data;
-      } else if (data && typeof data === 'object' && typeof (data as any).qr === 'string') {
-        latestQR = (data as any).qr;
-      }
-    } else if (event === 'STARTUP') {
-      // Service started
-    }
-    
-    res.sendStatus(200);
-  } catch (err: any) {
-    console.error('[WA-Event] Error processing event:', err);
     res.status(500).json({ error: err.message });
   }
 });
