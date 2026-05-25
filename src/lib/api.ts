@@ -129,10 +129,10 @@ export const ticketsApi = {
   get:          (id: string)                           => get<any>(`/tickets/${id}`),
   create:       (data: any)                            => post<any>('/tickets', data),
   bulkCreate:   (tickets: any[])                       => post<{ count: number }>('/tickets/bulk', { tickets }),
-  update: async (id: string, updates: Partial<any>): Promise<any> => {
-    return put<any>(`/tickets/${id}`, updates);
-  },
-  bulkStatus:   (ids: string[], status: string)        => patch<any>('/tickets/bulk-status', { ids, status }),
+  update:       (id: string, data: any)                => put<any>(`/tickets/${id}`, data),
+  bulkStatus:   (ids: string[], status: string)        => patch<{count: number}>('/tickets/bulk-status', { ids, status }),
+  bulkUpdateImported: (updates: { id: string; status: string; closedAt?: string | null }[]) => 
+    post<{count: number}>('/tickets/bulk-update-imported', { updates }),
   delete:       (id: string)                           => del<any>(`/tickets/${id}`),
   deleteAll:    ()                                     => del<any>('/tickets'),
   getNextId:    (projectId: string)                    => get<{ nextId: string }>(`/tickets/next-id?projectId=${projectId}`).then(res => res.nextId),

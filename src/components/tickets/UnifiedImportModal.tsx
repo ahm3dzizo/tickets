@@ -508,12 +508,42 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     const newTickets = processed.filter(t => !t.isDuplicate);
     const duplicates = processed.filter(t => t.isDuplicate);
 
-    if (duplicates.length > 0) {
-      toast.info(`تم تخطي ${duplicates.length} تذكرة مكررة`);
+    const updates: { id: string; status: string; closedAt?: string | null }[] = [];
+    duplicates.forEach(dup => {
+      const existing = existingTickets.find(t => 
+        (dup.ticketId && String(t.ticketId).trim() === dup.ticketId) || 
+        (dup.refNumber && String(t.refNumber).trim() === dup.refNumber)
+      );
+      if (existing && existing.status !== dup.status) {
+        updates.push({
+          id: existing.id,
+          status: dup.status,
+          closedAt: dup.closedAt
+        });
+      }
+    });
+
+    if (updates.length > 0) {
+      try {
+        await ticketsApi.bulkUpdateImported(updates);
+        toast.success(`تم تحديث حالة ${updates.length} تذكرة موجودة مسبقاً بناءً على الإكسل`);
+      } catch (err) {
+        toast.error('حدث خطأ أثناء محاولة تحديث التذاكر الموجودة');
+      }
+    }
+
+    const skippedCount = duplicates.length - updates.length;
+    if (skippedCount > 0) {
+      toast.info(`تم تخطي ${skippedCount} تذكرة مكررة لم تتغير حالتها`);
     }
 
     if (newTickets.length === 0) {
-      toast.error('جميع التذاكر موجودة مسبقاً (مكررة). لا يوجد جديد للاستيراد.');
+      if (updates.length > 0) {
+        setOpen(false);
+        onImportSuccess();
+      } else {
+        toast.error('جميع التذاكر موجودة مسبقاً ولم يحدث تغيير على حالتها. لا يوجد جديد للاستيراد.');
+      }
       setLoading(false);
       return;
     }

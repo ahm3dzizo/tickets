@@ -375,6 +375,27 @@ router.patch("/bulk-status", requireAuth, async (req, res) => {
   res.json({ count: ids.length });
 });
 
+// POST /api/tickets/bulk-update-imported
+router.post("/bulk-update-imported", requireAuth, async (req, res) => {
+  const { updates } = req.body as { updates: { id: string; status: string; closedAt?: string | null }[] };
+  if (!Array.isArray(updates)) { res.status(400).json({ error: "updates must be array" }); return; }
+  try {
+    const updatePromises = updates.map(u => 
+      prisma.ticket.update({
+        where: { id: u.id },
+        data: {
+          status: u.status,
+          closedAt: u.closedAt ? new Date(u.closedAt) : null,
+        }
+      })
+    );
+    await Promise.all(updatePromises);
+    res.json({ count: updates.length });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // POST /api/tickets/auto-link
 router.post("/auto-link", requireAuth, async (req, res) => {
   try {
