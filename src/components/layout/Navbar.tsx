@@ -1,28 +1,13 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Ticket, 
-  Users, 
-  Settings, 
-  LogOut,
-  Bell,
-  Wrench,
-  Menu,
-  X,
-  Briefcase,
-  UserCheck,
-  HardHat,
-  CalendarClock,
-  ClipboardList,
-  CheckCheck,
-  Moon,
-  Sun,
+import {
+  LayoutDashboard, Ticket, Users, Settings, LogOut, Bell,
+  Briefcase, UserCheck, HardHat, CalendarClock, ClipboardList,
+  CheckCheck, Moon, Sun, Settings2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Settings2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,287 +18,373 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
 
+/* ── nav items definition ─────────────────────────────────────────────── */
+const allNavItems = [
+  { icon: LayoutDashboard, label: 'لوحة التحكم', path: '/',              roles: ['admin', 'engineer', 'supervisor'] },
+  { icon: Briefcase,       label: 'المشاريع',    path: '/projects',      roles: ['admin', 'engineer', 'supervisor'] },
+  { icon: UserCheck,       label: 'العملاء',     path: '/clients',       roles: ['admin', 'engineer', 'supervisor'] },
+  { icon: Ticket,          label: 'التذاكر',     path: '/tickets',       roles: ['admin', 'engineer', 'supervisor'] },
+  { icon: HardHat,         label: 'الفنيين',     path: '/technicians',   roles: ['admin', 'supervisor'] },
+  { icon: Users,           label: 'الفريق',      path: '/team',          roles: ['admin', 'engineer'] },
+  { icon: Settings2,       label: 'أنواع التذاكر', path: '/ticket-types', roles: ['admin'] },
+  { icon: Settings,        label: 'الإعدادات',   path: '/settings',      roles: ['admin', 'engineer', 'supervisor'] },
+];
+
+/* ── helpers ──────────────────────────────────────────────────────────── */
+const roleLabel: Record<string, string> = {
+  admin: 'مدير النظام',
+  engineer: 'مهندس',
+  supervisor: 'مشرف',
+};
+
 export function Navbar() {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const location  = useLocation();
+  const navigate  = useNavigate();
   const { user, logout } = useAuth();
-  const [isOpen, setIsOpen] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(user?.uid ?? null);
   const isLight = resolvedTheme === 'light';
 
-  const navigateToSettings = (hash?: 'profile') => {
-    navigate(hash ? `/settings#${hash}` : '/settings');
-    setIsOpen(false);
-  };
+  const toggleTheme = () => setTheme(isLight ? 'dark' : 'light');
 
-  const toggleTheme = () => {
-    setTheme(isLight ? 'dark' : 'light');
-  };
+  const isActive = (path: string) =>
+    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
-  const formatTimeAgo = (ts: any): string => {
+  const filteredNav = allNavItems.filter(item => user && item.roles.includes(user.role));
+
+  /* mobile bottom bar: 4 items based on role */
+  const bottomItems = (() => {
+    const picks: typeof filteredNav = [];
+    const push = (path: string) => {
+      const it = filteredNav.find(i => i.path === path);
+      if (it) picks.push(it);
+    };
+    push('/');
+    push('/tickets');
+    if (user?.role === 'engineer') push('/clients');
+    else push('/projects');
+    push('/settings');
+    return picks.slice(0, 4);
+  })();
+
+  const secondaryItems = filteredNav.filter(i => !bottomItems.some(b => b.path === i.path));
+
+  const initials = user?.displayName
+    ?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '??';
+
+  const formatAgo = (ts: any) => {
     if (!ts) return '';
     try {
-      const d: Date = ts.toDate ? ts.toDate() : new Date(ts);
-      const diffH = Math.floor((Date.now() - d.getTime()) / 3600000);
-      if (diffH < 1) return 'الآن';
-      if (diffH < 24) return `منذ ${diffH} س`;
-      return `منذ ${Math.floor(diffH / 24)} يوم`;
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      const h = Math.floor((Date.now() - d.getTime()) / 3600000);
+      if (h < 1) return 'الآن';
+      if (h < 24) return `${h}س`;
+      return `${Math.floor(h / 24)}ي`;
     } catch { return ''; }
   };
 
   const handleNotifClick = async (n: AppNotification) => {
     if (!n.read) await markRead(n.id);
     if (n.ticketDocId) navigate(`/tickets/${n.ticketDocId}`);
-    setIsOpen(false);
   };
 
-  const navItems = [
-    { icon: LayoutDashboard, label: 'لوحة التحكم', path: '/', roles: ['admin', 'engineer', 'supervisor'] },
-    { icon: Briefcase, label: 'المشاريع', path: '/projects', roles: ['admin', 'engineer', 'supervisor'] },
-    { icon: UserCheck, label: 'العملاء', path: '/clients', roles: ['admin', 'engineer', 'supervisor'] },
-    { icon: Ticket, label: 'التذاكر', path: '/tickets', roles: ['admin', 'engineer', 'supervisor'] },
-    { icon: HardHat, label: 'الفنيين', path: '/technicians', roles: ['admin', 'supervisor'] },
-    { icon: Users, label: 'الفريق', path: '/team', roles: ['admin', 'engineer'] },
-    { icon: Settings2, label: 'أنواع التذاكر', path: '/ticket-types', roles: ['admin'] },
-    { icon: Settings, label: 'الإعدادات', path: '/settings', roles: ['admin', 'engineer', 'supervisor'] },
-  ];
+  /* ── Notification Dropdown ───────────────────────────────────────────── */
+  const NotifBell = ({ side = 'left' }: { side?: 'left' | 'right' | 'top' | 'bottom' }) => (
+    <DropdownMenu onOpenChange={open => { if (open) markAllRead(); }}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl h-9 w-9"
+        >
+          <Bell className="w-4.5 h-4.5" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side={side as any}
+        sideOffset={10}
+        align="end"
+        className="!w-80 !min-w-0 bg-popover border-border rounded-2xl shadow-2xl shadow-black/20 overflow-hidden p-0"
+      >
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <span className="text-[11px] text-muted-foreground font-medium">
+            {unreadCount > 0 ? `${unreadCount} غير مقروء` : 'كل شيء مقروء'}
+          </span>
+          <span className="text-sm font-bold text-foreground">الإشعارات</span>
+        </div>
 
-  const filteredNavItems = navItems.filter(item => user && item.roles.includes(user.role));
-
-  const NavContent = () => (
-    <>
-      <div className="flex items-center gap-3 mb-12">
-        <img src="/logo.jpg" alt="Retal" className="w-9 h-9 object-contain" />
-        <span className="font-extrabold text-lg tracking-tight text-foreground">Retal Maintenance System</span>
-      </div>
-
-      <div className="flex-1 space-y-2">
-        {filteredNavItems.map((item) => (
-          <Link key={item.path} to={item.path} onClick={() => setIsOpen(false)}>
-            <Button
-              variant="ghost"
-              className={cn(
-                'w-full justify-start gap-3 px-4 py-6 text-muted-foreground hover:text-foreground hover:bg-muted transition-all font-medium',
-                location.pathname === item.path && 'text-blue-500 bg-blue-500/10 hover:bg-blue-500/15'
-              )}
-            >
-              <item.icon className="w-4 h-4" />
-              {item.label}
-            </Button>
-          </Link>
-        ))}
-      </div>
-
-      <div className="mt-auto pt-6 border-t border-border">
-          <div className="flex items-center justify-between mb-4 px-2 gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={toggleTheme}
-              aria-label={isLight ? 'تفعيل الوضع الداكن' : 'تفعيل الوضع الفاتح'}
-              title={isLight ? 'الوضع الداكن' : 'الوضع الفاتح'}
-            >
-              {isLight ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-            </Button>
-            {/* ── Notification Bell ── */}
-            <DropdownMenu onOpenChange={(open) => { if (open) markAllRead(); }}>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-foreground relative"
-                  />
-                }
-              >
-                <Bell className="w-5 h-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 left-1 min-w-[16px] h-4 bg-red-500 rounded-full border-2 border-card flex items-center justify-center text-[9px] font-bold text-white px-0.5 leading-none">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="left"
-                sideOffset={12}
-                align="end"
-                className="!w-80 !min-w-0 bg-popover border-border text-popover-foreground rounded-2xl shadow-2xl shadow-black/20 overflow-hidden p-0"
-              >
-                {/* Header */}
-                <div className="p-4 border-b border-border flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground font-bold">
-                    {unreadCount > 0 ? `${unreadCount} غير مقروء` : 'لا يوجد جديد'}
-                  </span>
-                  <span className="text-sm font-bold text-foreground">الإشعارات</span>
-                </div>
-
-                {/* Notification list */}
-                <div className="max-h-[340px] overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <div className="py-12 text-center text-muted-foreground text-sm">
-                      <Bell className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                      لا توجد إشعارات
-                    </div>
-                  ) : (
-                    notifications.map(n => (
-                      <div
-                        key={n.id}
-                        className={cn(
-                          'px-4 py-3 border-b border-border/40 cursor-pointer hover:bg-muted transition-colors flex gap-3 items-start',
-                          !n.read && 'bg-blue-500/5'
-                        )}
-                        onClick={() => handleNotifClick(n)}
-                      >
-                        {/* Icon */}
-                        <div
-                          className={cn(
-                            'mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center shrink-0',
-                            n.type === 'appointment_reminder'
-                              ? 'bg-amber-500/10 text-amber-400'
-                              : 'bg-blue-500/10 text-blue-400'
-                          )}
-                        >
-                          {n.type === 'appointment_reminder'
-                            ? <CalendarClock className="w-4 h-4" />
-                            : <ClipboardList className="w-4 h-4" />}
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 text-right min-w-0">
-                          <div className="flex items-center justify-between gap-1 mb-0.5">
-                            <div className="flex items-center gap-1">
-                              {!n.read && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                              )}
-                              <span className="text-[10px] text-muted-foreground font-mono">
-                                {formatTimeAgo(n.createdAt)}
-                              </span>
-                            </div>
-                            <p className="text-[13px] font-semibold text-foreground leading-tight truncate">
-                              {n.title}
-                            </p>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground line-clamp-2 text-right">
-                            {n.body}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Footer */}
-                {notifications.length > 0 && (
-                  <div className="p-3 border-t border-border">
-                    <button
-                      onClick={markAllRead}
-                      className="w-full text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      <CheckCheck className="w-3.5 h-3.5" />
-                      تحديد الكل كمقروء
-                    </button>
-                  </div>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" className="w-full justify-start gap-3 px-2 h-14 hover:bg-muted" />}>
-            <Avatar className="w-9 h-9 border border-border">
-              <AvatarImage src={user?.photoURL} />
-              <AvatarFallback className="bg-muted text-muted-foreground">
-                {user?.displayName?.slice(0, 2).toUpperCase() || '??'}
-              </AvatarFallback>
-            </Avatar>
-              <div className="flex flex-col items-end text-xs">
-              <span className="font-semibold text-foreground truncate max-w-[110px]">{user?.displayName}</span>
-              <span className="text-muted-foreground uppercase tracking-widest text-[9px] font-bold">
-                {user?.role === 'admin' ? 'مدير النظام' : user?.role === 'engineer' ? 'مهندس مشروع' : 'مشرف'}
-              </span>
+        <div className="max-h-80 overflow-y-auto">
+          {notifications.length === 0 ? (
+            <div className="py-10 text-center text-muted-foreground text-sm">
+              <Bell className="w-7 h-7 mx-auto mb-2 opacity-20" />
+              لا توجد إشعارات بعد
             </div>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 bg-card border-border text-card-foreground">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-muted-foreground text-right">حسابي</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem
-                className="hover:bg-muted cursor-pointer text-right justify-end"
-                onClick={() => navigateToSettings('profile')}
+          ) : (
+            notifications.map(n => (
+              <div
+                key={n.id}
+                onClick={() => handleNotifClick(n)}
+                className={cn(
+                  'px-4 py-3 border-b border-border/40 cursor-pointer hover:bg-muted/50 flex gap-3 items-start transition-colors',
+                  !n.read && 'bg-primary/5'
+                )}
               >
-                الملف الشخصي
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="hover:bg-muted cursor-pointer text-right justify-end"
-                onClick={() => navigateToSettings()}
-              >
-                الإعدادات
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem 
-              className="text-red-400 hover:bg-red-500/10 cursor-pointer text-right justify-end"
-              onClick={() => logout()}
+                <div className={cn(
+                  'mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center shrink-0',
+                  n.type === 'appointment_reminder'
+                    ? 'bg-amber-500/10 text-amber-500'
+                    : 'bg-primary/10 text-primary'
+                )}>
+                  {n.type === 'appointment_reminder'
+                    ? <CalendarClock className="w-4 h-4" />
+                    : <ClipboardList className="w-4 h-4" />}
+                </div>
+                <div className="flex-1 text-right min-w-0">
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className="text-[10px] text-muted-foreground tabular-nums">{formatAgo(n.createdAt)}</span>
+                    <p className="text-[13px] font-semibold text-foreground leading-tight truncate">{n.title}</p>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground line-clamp-2">{n.body}</p>
+                </div>
+                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-2" />}
+              </div>
+            ))
+          )}
+        </div>
+
+        {notifications.length > 0 && (
+          <div className="p-3 border-t border-border">
+            <button
+              onClick={markAllRead}
+              className="w-full text-[11px] text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 transition-colors py-1"
             >
-              تسجيل الخروج
-              <LogOut className="w-4 h-4 mr-2" />
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </>
+              <CheckCheck className="w-3.5 h-3.5" />
+              تحديد الكل كمقروء
+            </button>
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   return (
     <>
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 border-b border-border bg-card px-4 flex items-center justify-between z-50">
-        <div className="flex items-center gap-2">
-          <img src="/logo.jpg" alt="Retal" className="w-7 h-7 object-contain" />
-          <span className="font-bold text-foreground">Retal Maintenance System</span>
-        </div>
-        <div className="flex items-center gap-1">
+      {/* ═══════════════ MOBILE TOP BAR ═══════════════ */}
+      <header className="lg:hidden fixed top-0 inset-x-0 z-50 h-14 glass bg-card/90 border-b border-border px-3 flex items-center justify-between">
+        {/* LEFT: Actions */}
+        <div className="flex items-center gap-0.5">
+          <NotifBell side="bottom" />
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleTheme}
-            aria-label={isLight ? 'تفعيل الوضع الداكن' : 'تفعيل الوضع الفاتح'}
-            title={isLight ? 'الوضع الداكن' : 'الوضع الفاتح'}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl h-9 w-9"
           >
-            {isLight ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)}>
-            {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </Button>
         </div>
-      </div>
 
-      {/* Desktop Sidebar */}
-      <nav className="hidden lg:flex fixed right-0 top-0 h-full w-[240px] border-l border-border bg-card p-6 flex-col z-40">
-        <NavContent />
+        {/* RIGHT: Logo */}
+        <Link to="/" className="flex items-center gap-2">
+          <span className="font-extrabold text-sm text-foreground tracking-tight">Retal Maintenance</span>
+          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center p-1 shrink-0">
+            <img src="/logo.jpg" alt="Retal" className="w-full h-full object-contain rounded-md" />
+          </div>
+        </Link>
+      </header>
+
+      {/* ═══════════════ MOBILE BOTTOM NAV ═══════════════ */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 glass bg-card/95 border-t border-border safe-area-pb">
+        <div className="flex items-center h-16 px-1">
+          {bottomItems.map(item => {
+            const active = isActive(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className="flex-1 flex flex-col items-center justify-center h-full gap-0.5 transition-all duration-200"
+              >
+                <div className={cn(
+                  'w-12 h-9 rounded-2xl flex items-center justify-center transition-all duration-200',
+                  active ? 'bg-primary/15' : 'hover:bg-muted/60'
+                )}>
+                  <item.icon
+                    className={cn('w-5 h-5 transition-all duration-200', active ? 'text-primary scale-110' : 'text-muted-foreground')}
+                    strokeWidth={active ? 2.5 : 1.75}
+                  />
+                </div>
+                <span className={cn(
+                  'text-[9px] font-bold transition-all duration-200 leading-none',
+                  active ? 'text-primary' : 'text-muted-foreground'
+                )}>
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+
+          {/* More / Avatar */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex-1 flex flex-col items-center justify-center h-full gap-0.5">
+                <div className="w-12 h-9 rounded-2xl flex items-center justify-center hover:bg-muted/60 transition-colors">
+                  <Avatar className="w-7 h-7 ring-1 ring-border">
+                    <AvatarImage src={user?.photoURL} />
+                    <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">{initials}</AvatarFallback>
+                  </Avatar>
+                </div>
+                <span className="text-[9px] font-bold text-muted-foreground leading-none">المزيد</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              side="top"
+              sideOffset={8}
+              className="w-56 mb-1 bg-card border-border rounded-2xl shadow-2xl shadow-black/20"
+            >
+              <DropdownMenuLabel className="text-right text-xs text-muted-foreground px-3 py-2 font-medium">
+                {user?.displayName}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-border" />
+              {secondaryItems.map(item => (
+                <DropdownMenuItem
+                  key={item.path}
+                  className="text-right justify-end gap-2.5 cursor-pointer hover:bg-muted rounded-xl mx-1 my-0.5"
+                  onClick={() => navigate(item.path)}
+                >
+                  <item.icon className="w-4 h-4 text-muted-foreground" />
+                  <span>{item.label}</span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem
+                className="text-right justify-end gap-2.5 text-red-500 hover:bg-red-500/10 cursor-pointer rounded-xl mx-1 my-0.5"
+                onClick={() => logout()}
+              >
+                <LogOut className="w-4 h-4" />
+                تسجيل الخروج
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </nav>
 
-      {/* Mobile Sidebar Overlay */}
-      {isOpen && (
-        <div 
-          className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
+      {/* ═══════════════ DESKTOP SIDEBAR ═══════════════ */}
+      <aside className="hidden lg:flex fixed right-0 top-0 h-full w-60 bg-card border-l border-border flex-col z-40">
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-5 pt-6 pb-4 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center p-1.5 shrink-0">
+            <img src="/logo.jpg" alt="Retal" className="w-full h-full object-contain rounded-lg" />
+          </div>
+          <div className="min-w-0 leading-tight">
+            <div className="font-extrabold text-sm text-foreground tracking-tight">Retal</div>
+            <div className="text-[10px] text-muted-foreground font-medium">Maintenance System</div>
+          </div>
+        </div>
 
-      {/* Mobile Sidebar */}
-      <nav className={cn(
-        "lg:hidden fixed right-0 top-0 h-full w-[280px] bg-card p-6 flex flex-col z-50 transition-transform duration-300 ease-in-out",
-        isOpen ? "translate-x-0" : "translate-x-full"
-      )}>
-        <NavContent />
-      </nav>
+        {/* Nav items */}
+        <div className="flex-1 overflow-y-auto no-scrollbar px-3 space-y-0.5 pb-2">
+          {filteredNav.map(item => {
+            const active = isActive(item.path);
+            return (
+              <Link key={item.path} to={item.path}>
+                <div className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 cursor-pointer',
+                  active
+                    ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}>
+                  <item.icon
+                    className="w-4 h-4 shrink-0"
+                    strokeWidth={active ? 2.5 : 1.75}
+                  />
+                  <span>{item.label}</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Bottom section */}
+        <div className="px-3 pb-4 pt-3 border-t border-border space-y-1 shrink-0">
+          {/* Theme + Bell */}
+          <div className="flex items-center gap-1 px-1 mb-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="flex-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl h-9"
+              title={isLight ? 'الوضع الداكن' : 'الوضع الفاتح'}
+            >
+              {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            </Button>
+            <div className="flex-1 flex justify-center">
+              <NotifBell side="left" />
+            </div>
+          </div>
+
+          {/* User dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-muted transition-colors group">
+                <Avatar className="w-8 h-8 shrink-0 ring-1 ring-border">
+                  <AvatarImage src={user?.photoURL} />
+                  <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">{initials}</AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col items-end min-w-0 flex-1 text-right leading-tight">
+                  <span className="font-semibold text-foreground text-sm truncate w-full">
+                    {user?.displayName}
+                  </span>
+                  <span className="text-muted-foreground text-[10px] font-medium">
+                    {roleLabel[user?.role ?? ''] ?? user?.role}
+                  </span>
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              side="top"
+              sideOffset={8}
+              className="w-52 mb-1 bg-card border-border rounded-2xl shadow-2xl shadow-black/20"
+            >
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-muted-foreground text-right text-xs font-medium px-3 py-2">
+                  حسابي
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-border" />
+                <DropdownMenuItem
+                  className="hover:bg-muted cursor-pointer text-right justify-end rounded-xl mx-1 my-0.5"
+                  onClick={() => navigate('/settings#profile')}
+                >
+                  الملف الشخصي
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="hover:bg-muted cursor-pointer text-right justify-end rounded-xl mx-1 my-0.5"
+                  onClick={() => navigate('/settings')}
+                >
+                  الإعدادات
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem
+                className="text-red-500 hover:bg-red-500/10 cursor-pointer text-right justify-end gap-2 rounded-xl mx-1 my-0.5"
+                onClick={() => logout()}
+              >
+                تسجيل الخروج
+                <LogOut className="w-4 h-4" />
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </aside>
     </>
   );
 }

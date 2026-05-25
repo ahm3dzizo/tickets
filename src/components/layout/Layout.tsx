@@ -13,8 +13,11 @@ export function Layout({ children }: LayoutProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-dvh bg-background flex items-center justify-center">
+        <div className="relative">
+          <div className="w-12 h-12 rounded-full border-2 border-border" />
+          <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        </div>
       </div>
     );
   }
@@ -24,11 +27,18 @@ export function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30">
+    <div className="min-h-dvh bg-background text-foreground font-sans selection:bg-primary/25">
       <WhatsAppBanner />
       <Navbar />
-        <main className="px-4 sm:px-6 py-8 pt-24 md:pt-28 lg:pt-10 lg:pr-[256px] lg:pl-8">
-        <div className="relative isolate max-w-[1400px]">
+      {/* Desktop: right padding for sidebar (w-60 = 240px = 15rem)
+          Mobile:  top padding for top bar + bottom padding for bottom nav */}
+      <main className="
+        pt-14 pb-safe
+        px-4 sm:px-5
+        lg:pt-0 lg:pb-6 lg:pr-60 lg:pl-5
+        min-h-dvh
+      ">
+        <div className="max-w-[1400px] py-6 lg:py-8 page-in">
           {children}
         </div>
       </main>

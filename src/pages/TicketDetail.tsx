@@ -36,7 +36,7 @@ import { ReassignSupervisorButton } from '@/components/tickets/ReassignSuperviso
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
+import { ticketsApi, projectsApi, clientsApi, whatsappApi } from '@/lib/api';
 import { learnFromCorrection, getAuthHeaders } from '@/services/classificationApi';
 import { toast } from 'sonner';
 
