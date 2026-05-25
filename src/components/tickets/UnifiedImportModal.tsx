@@ -146,7 +146,7 @@ const QuickAddClientModal: React.FC<QuickAddClientModalProps> = ({
               <Phone className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-start gap-3 pt-2">
             <Button type="submit" disabled={loading} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-xl h-11 font-bold">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'إضافة وربط التذاكر'}
             </Button>
@@ -745,7 +745,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
               />
             ))}
           </div>
-          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+          <div className="flex justify-start gap-3 pt-4 border-t border-border">
             <Button
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl h-11 font-bold"
               onClick={() => {

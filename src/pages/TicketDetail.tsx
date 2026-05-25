@@ -258,13 +258,13 @@ export default function TicketDetail() {
             <Button
               variant="ghost"
               size="icon"
-              className="text-slate-400 hover:text-white rounded-2xl bg-white/5 order-last sm:order-first"
+              className="text-slate-400 hover:text-white rounded-2xl bg-white/5 order-first"
               onClick={() => navigate('/tickets')}
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
             </Button>
-            <div className="text-right flex-1">
-              <div className="flex items-center gap-2 mb-1 justify-end">
+            <div className="text-start flex-1">
+              <div className="flex items-center gap-2 mb-1 justify-start">
                 <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest leading-none">{ticket.refNumber || ticket.id.slice(0, 8)}</span>
                 <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] uppercase font-bold px-3 py-0.5 h-auto">
                   {statusTranslations[ticket.status]}
@@ -278,10 +278,10 @@ export default function TicketDetail() {
           <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
-              className="border-border bg-white/5 text-slate-400 rounded-xl px-4 sm:px-6 font-bold h-10 sm:h-11 flex-1 sm:flex-none order-2 sm:order-1"
+              className="border-border bg-white/5 text-slate-400 rounded-xl px-4 sm:px-6 font-bold h-10 sm:h-11 flex-1 sm:flex-none"
               onClick={openEdit}
             >
-              <Pencil className="w-4 h-4 ml-2" />
+              <Pencil className="w-4 h-4 me-2" />
               تعديل
             </Button>
             {ticket.status !== 'closed' && (
@@ -318,6 +318,13 @@ export default function TicketDetail() {
                     <span className="text-white font-bold">{client?.name || '---'}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col items-start">
+                      <span className="text-slate-500 text-xs mb-0.5">رقم الهاتف</span>
+                      {client?.phone
+                        ? <a href={`tel:${client.phone}`} onClick={e => e.stopPropagation()} className="text-blue-400 font-mono text-sm hover:text-blue-300 transition-colors">{client.phone}</a>
+                        : <span className="text-slate-500 font-mono">---</span>
+                      }
+                    </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {client?.phone && (() => {
                         const raw = String(client.phone).replace(/\D/g, '');
@@ -335,13 +342,6 @@ export default function TicketDetail() {
                           </>
                         );
                       })()}
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-slate-500 text-xs mb-0.5">رقم الهاتف</span>
-                      {client?.phone
-                        ? <a href={`tel:${client.phone}`} onClick={e => e.stopPropagation()} className="text-blue-400 font-mono text-sm hover:text-blue-300 transition-colors">{client.phone}</a>
-                        : <span className="text-slate-500 font-mono">---</span>
-                      }
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
@@ -486,7 +486,7 @@ export default function TicketDetail() {
               <CardContent className="p-4 space-y-2">
                 <Button
                   variant="outline"
-                  className="w-full justify-end border-border bg-white/5 text-slate-400 hover:text-white text-xs h-12 rounded-2xl font-bold"
+                  className="w-full justify-start border-border bg-white/5 text-slate-400 hover:text-white text-xs h-12 rounded-2xl font-bold"
                   onClick={() => {
                     setApptDate(ticket.appointmentTime?.split(' ')[0] || todayStr());
                     setApptTime(ticket.appointmentTime?.split(' ')[1] || '');
@@ -494,16 +494,16 @@ export default function TicketDetail() {
                     setApptOpen(true);
                   }}
                 >
-                  <CalendarDays className="w-4 h-4 mr-2" />
+                  <CalendarDays className="w-4 h-4 me-2" />
                   تحديد موعد زيارة
                 </Button>
                 <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
                 <Button
                   variant="outline"
-                  className="w-full justify-end border-border bg-white/5 text-emerald-400 hover:bg-emerald-500/10 text-xs h-12 rounded-2xl font-bold"
+                  className="w-full justify-start border-border bg-white/5 text-emerald-400 hover:bg-emerald-500/10 text-xs h-12 rounded-2xl font-bold"
                   onClick={handleWhatsApp}
                 >
-                  <Phone className="w-4 h-4 mr-2" />
+                  <Phone className="w-4 h-4 me-2" />
                   إرسال تحديث للعميل
                 </Button>
               </CardContent>
@@ -541,12 +541,12 @@ export default function TicketDetail() {
                   <ChevronDown className="w-3 h-3 opacity-60" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('open')}>مفتوحة</DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('in-progress')}>قيد التنفيذ</DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('pending')}>معلقة</DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('completed')}>مكتملة</DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditStatus('closed')}>مغلقة</DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-red-500/10 cursor-pointer text-right justify-end text-rose-400" onClick={() => setEditStatus('out-of-scope')}>خارج اختصاص</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('open')}>مفتوحة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('in-progress')}>قيد التنفيذ</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('pending')}>معلقة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('completed')}>مكتملة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('closed')}>مغلقة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-red-500/10 cursor-pointer text-start justify-start text-rose-400" onClick={() => setEditStatus('out-of-scope')}>خارج اختصاص</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -563,11 +563,11 @@ export default function TicketDetail() {
                   <ChevronDown className="w-3 h-3 opacity-60" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('9')}>9 - عاجل جداً</DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('7')}>7 - مرتفع</DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('6')}>6 - متوسط</DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('4')}>4 - عادي</DropdownMenuItem>
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setEditPriority('3')}>3 - منخفض</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditPriority('9')}>9 - عاجل جداً</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditPriority('7')}>7 - مرتفع</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditPriority('6')}>6 - متوسط</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditPriority('4')}>4 - عادي</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditPriority('3')}>3 - منخفض</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

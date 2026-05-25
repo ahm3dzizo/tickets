@@ -339,14 +339,14 @@ export function TicketForm({
                 />
                 <DropdownMenuContent className="bg-card border-border text-slate-200 w-64 max-h-[300px] overflow-y-auto">
                   {projectSupervisors.length === 0 ? (
-                    <DropdownMenuItem disabled className="text-slate-500 text-right justify-end">
+                    <DropdownMenuItem disabled className="text-slate-500 text-start justify-start">
                       لا يوجد مشرفين في المشروع
                     </DropdownMenuItem>
                   ) : (
                     projectSupervisors.map(s => (
                       <div
                         key={s.id}
-                        className="flex items-center justify-end px-2 py-2 hover:bg-white/5 cursor-pointer rounded-sm border-b border-border/50 last:border-0"
+                        className="flex items-center justify-start px-2 py-2 hover:bg-white/5 cursor-pointer rounded-sm border-b border-border/50 last:border-0"
                         onClick={() => {
                           setSelectedSupervisors(prev => 
                             prev.includes(s.id) ? prev.filter(x => x !== s.id) : [...prev, s.id]
@@ -389,7 +389,7 @@ export function TicketForm({
                   {projects.map(p => (
                     <DropdownMenuItem
                       key={p.id}
-                      className="hover:bg-white/5 cursor-pointer text-right justify-end"
+                      className="hover:bg-white/5 cursor-pointer text-start justify-start"
                       onClick={() => { setProjectId(p.id); setClientId(''); setVillaNumber(''); }}
                     >
                       {p.name}
@@ -431,7 +431,7 @@ export function TicketForm({
                     />
                   </div>
                   {formClients.length === 0 ? (
-                    <DropdownMenuItem disabled className="text-slate-500 text-right justify-end">
+                    <DropdownMenuItem disabled className="text-slate-500 text-start justify-start">
                       لا يوجد عملاء في هذا المشروع
                     </DropdownMenuItem>
                   ) : (
@@ -440,7 +440,7 @@ export function TicketForm({
                       .map(c => (
                       <DropdownMenuItem
                         key={c.id}
-                        className="hover:bg-white/5 cursor-pointer text-right justify-end"
+                        className="hover:bg-white/5 cursor-pointer text-start justify-start"
                         onClick={() => { setClientId(c.id); setVillaNumber(c.villaNumber); }}
                       >
                         {c.name} - {c.villaNumber}
@@ -504,7 +504,7 @@ export function TicketForm({
                 {(['9','7','6','4','3'] as const).map(p => (
                   <DropdownMenuItem
                     key={p}
-                    className="hover:bg-white/5 cursor-pointer text-right justify-end"
+                    className="hover:bg-white/5 cursor-pointer text-start justify-start"
                     onClick={() => setPriority(p)}
                   >
                     {PRIORITY_LABELS[p]}

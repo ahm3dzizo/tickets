@@ -312,7 +312,7 @@ export function CloseTicketDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[700px] rounded-3xl shadow-2xl shadow-black/40 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center gap-3 mb-2 justify-end">
+          <div className="flex items-center gap-3 mb-2 justify-start">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
               <CheckCircle2 className="w-6 h-6" />
             </div>
@@ -363,10 +363,10 @@ export function CloseTicketDialog({
                         <ChevronDown className="w-3 h-3 opacity-60" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
-                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => updateItem(index, 'status', 'تم')}>تم</DropdownMenuItem>
-                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => updateItem(index, 'status', 'لم يتم')}>لم يتم</DropdownMenuItem>
-                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => updateItem(index, 'status', 'جاري العمل')}>جاري</DropdownMenuItem>
-                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => updateItem(index, 'status', 'مرفوض')}>مرفوض</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'تم')}>تم</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'لم يتم')}>لم يتم</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'جاري العمل')}>جاري</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'مرفوض')}>مرفوض</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     
@@ -395,7 +395,7 @@ export function CloseTicketDialog({
 
           {/* WhatsApp Message Preview */}
           <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col gap-2">
-            <div className="flex items-center gap-2 justify-end text-[#25D366] mb-1">
+            <div className="flex items-center gap-2 justify-start text-[#25D366] mb-1">
               <span className="text-[10px] font-black uppercase tracking-widest">معاينة رسالة الإغلاق</span>
               <MessageCircle className="w-3.5 h-3.5" />
             </div>
