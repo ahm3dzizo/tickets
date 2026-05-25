@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Download, X, Share, BellRing, Check } from 'lucide-react';
+import { Download, X, Share, BellRing, Check, MoreVertical, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -8,10 +8,13 @@ const DRAG_DISMISS_THRESHOLD = 80;
 
 function getPlatform() {
   const ua = navigator.userAgent;
-  const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
-  const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+  const isIOS       = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  const isSafari    = /^((?!chrome|android).)*safari/i.test(ua);
   const isMacSafari = !isIOS && isSafari && /Macintosh/.test(ua);
-  return { isIOS, isSafari: isIOS && isSafari, isMacSafari };
+  const isAndroid   = /Android/.test(ua);
+  const isChrome    = /Chrome/.test(ua) && !/Edg/.test(ua) && !/OPR/.test(ua);
+  const isFirefox   = /Firefox/.test(ua);
+  return { isIOS, isSafari: isIOS && isSafari, isMacSafari, isAndroid, isChrome, isFirefox };
 }
 
 export function PWAInstallPrompt() {
@@ -23,8 +26,8 @@ export function PWAInstallPrompt() {
   const [notifGranted, setNotifGranted]     = useState(false);
 
   /* ── Drag state ──────────────────────────────────────────────────────── */
-  const cardRef      = useRef<HTMLDivElement>(null);
-  const dragStartX   = useRef<number | null>(null);
+  const cardRef    = useRef<HTMLDivElement>(null);
+  const dragStartX = useRef<number | null>(null);
   const [dragX, setDragX]           = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -33,7 +36,6 @@ export function PWAInstallPrompt() {
     const p = getPlatform();
     setPlatform(p);
 
-    // Don't show if user previously dismissed permanently
     if (localStorage.getItem(PROMPT_DISABLED_KEY) === 'true') return;
 
     const isPWAInstalled  = window.matchMedia('(display-mode: standalone)').matches;
@@ -43,21 +45,20 @@ export function PWAInstallPrompt() {
     setNeedsNotif(notifNeeded);
     setNeedsPWA(!isPWAInstalled);
 
-    // Nothing to show
     if (isPWAInstalled && !notifNeeded) return;
 
-    // ── Pick up deferred prompt that was captured before React mounted ──
+    // Pick up deferred prompt captured in main.tsx before React mounted
     const earlyPrompt = (window as any).__deferredPWAPrompt;
     if (earlyPrompt) setDeferredPrompt(earlyPrompt);
 
-    // Listen in case the prompt arrives after we mount
-    const onPromptCaptured = () => {
-      const prompt = (window as any).__deferredPWAPrompt;
-      if (prompt) setDeferredPrompt(prompt);
+    // Listen for prompt arriving after mount
+    const onCaptured = () => {
+      const p2 = (window as any).__deferredPWAPrompt;
+      if (p2) setDeferredPrompt(p2);
     };
-    window.addEventListener('pwa-prompt-captured', onPromptCaptured);
+    window.addEventListener('pwa-prompt-captured', onCaptured);
 
-    // Native beforeinstallprompt (handles the case where it fires after mount)
+    // Native listener (fires if Chrome decides to offer install after mount)
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       (window as any).__deferredPWAPrompt = e;
@@ -65,13 +66,13 @@ export function PWAInstallPrompt() {
     };
     window.addEventListener('beforeinstallprompt', onBeforeInstall);
 
-    // Show the card after a short delay regardless of prompt state
-    // — so notification section always surfaces when needed
+    // Always show after a short delay — even without deferred prompt
+    // (we'll show manual instructions instead)
     const delay = p.isIOS || p.isMacSafari ? 1500 : 2500;
     const timer = setTimeout(() => setVisible(true), delay);
 
     return () => {
-      window.removeEventListener('pwa-prompt-captured', onPromptCaptured);
+      window.removeEventListener('pwa-prompt-captured', onCaptured);
       window.removeEventListener('beforeinstallprompt', onBeforeInstall);
       clearTimeout(timer);
     };
@@ -97,9 +98,7 @@ export function PWAInstallPrompt() {
       toast.success('تم تفعيل الإشعارات بنجاح 🎉');
       setNotifGranted(true);
       setNeedsNotif(false);
-      if (!needsPWA || (!deferredPrompt && !platform?.isIOS && !platform?.isMacSafari)) {
-        setTimeout(() => setVisible(false), 1200);
-      }
+      if (!needsPWA) setTimeout(() => setVisible(false), 1200);
     } else {
       toast.error('لم يتم تفعيل الإشعارات');
     }
@@ -111,7 +110,7 @@ export function PWAInstallPrompt() {
     setVisible(false);
   };
 
-  /* ── Drag handlers ───────────────────────────────────────────────────── */
+  /* ── Drag ────────────────────────────────────────────────────────────── */
   const onDragStart = (x: number) => { dragStartX.current = x; setIsDragging(true); };
   const onDragMove  = (x: number) => {
     if (dragStartX.current === null) return;
@@ -119,24 +118,29 @@ export function PWAInstallPrompt() {
   };
   const onDragEnd = () => {
     if (Math.abs(dragX) >= DRAG_DISMISS_THRESHOLD) setVisible(false);
-    setDragX(0);
-    setIsDragging(false);
-    dragStartX.current = null;
+    setDragX(0); setIsDragging(false); dragStartX.current = null;
   };
 
-  /* ── Computed ────────────────────────────────────────────────────────── */
+  /* ── Render guards ───────────────────────────────────────────────────── */
+  if (!platform || !visible) return null;
+
+  // Show notif section if permission is default
+  const showNotifSection = needsNotif;
+  // Show PWA section whenever the app isn't installed in standalone mode
+  // (with or without deferred prompt — we'll show manual instructions as fallback)
+  const showPWASection = needsPWA;
+  const shouldShow     = showNotifSection || showPWASection;
+
+  if (!shouldShow) return null;
+
+  /* ── Install mode ────────────────────────────────────────────────────── */
+  // Can trigger native install dialog
+  const hasNativePrompt = deferredPrompt !== null;
+  // Show manual steps for these platforms
+  const showManualSteps = !hasNativePrompt && !platform.isIOS && !platform.isMacSafari;
+
   const opacity = Math.max(0, 1 - Math.abs(dragX) / (DRAG_DISMISS_THRESHOLD * 1.5));
   const rotate  = dragX * 0.04;
-
-  // Decide what sections to render
-  const hasInstallOption = deferredPrompt !== null || platform?.isIOS || platform?.isMacSafari;
-  const showNotifSection = needsNotif;
-  const showPWASection   = needsPWA && hasInstallOption;
-  const shouldShow       = showNotifSection || showPWASection;
-
-  if (!platform || !visible || !shouldShow) return null;
-
-  const isNativeInstall = !platform.isIOS && !platform.isMacSafari;
 
   return (
     <div
@@ -157,18 +161,16 @@ export function PWAInstallPrompt() {
       }}
       className="fixed bottom-24 left-1/2 z-[9999] w-[calc(100%-2rem)] max-w-sm
                  bg-card border border-border rounded-2xl shadow-2xl shadow-black/40
-                 px-4 py-3 animate-in slide-in-from-bottom-4 duration-300
-                 select-none"
+                 px-4 py-3 animate-in slide-in-from-bottom-4 duration-300 select-none"
     >
       {/* Drag handle */}
       <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-border/60" />
 
-      {/* Close button */}
+      {/* Close */}
       <button
         onMouseDown={e => e.stopPropagation()}
         onClick={handleClose}
         className="absolute top-3 left-3 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        aria-label="إغلاق"
       >
         <X className="w-4 h-4" />
       </button>
@@ -176,8 +178,7 @@ export function PWAInstallPrompt() {
       {/* Header */}
       <div className="flex items-center gap-3 mt-3 mb-4">
         <img
-          src="/logo.jpg"
-          alt="Retal"
+          src="/logo.jpg" alt="Retal"
           className="w-10 h-10 object-contain shrink-0 rounded-xl shadow-sm border border-border/40"
         />
         <div className="flex-1 text-right">
@@ -190,7 +191,7 @@ export function PWAInstallPrompt() {
 
       <div className="space-y-2">
 
-        {/* ── Notification section ── */}
+        {/* ── Notifications ── */}
         {showNotifSection && (
           <div className="bg-muted/40 border border-border/50 rounded-xl p-3 flex items-center gap-3">
             <Button
@@ -204,28 +205,25 @@ export function PWAInstallPrompt() {
             </Button>
             <div className="flex-1 text-right min-w-0">
               <p className="text-sm font-bold text-foreground leading-tight">إشعارات المتصفح</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                ليصلك كل جديد حول التذاكر والمواعيد
-              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">ليصلك كل جديد حول التذاكر</p>
             </div>
           </div>
         )}
 
-        {/* Granted confirmation */}
         {notifGranted && !needsNotif && (
           <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-2">
             <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-            <p className="text-emerald-600 dark:text-emerald-400 text-xs font-bold">
-              تم تفعيل الإشعارات بنجاح
-            </p>
+            <p className="text-emerald-600 dark:text-emerald-400 text-xs font-bold">تم تفعيل الإشعارات بنجاح</p>
           </div>
         )}
 
-        {/* ── PWA Install section ── */}
+        {/* ── PWA Install ── */}
         {showPWASection && (
           <div className="bg-muted/40 border border-border/50 rounded-xl p-3 space-y-2.5">
+
+            {/* Title row + install button */}
             <div className="flex items-center gap-3">
-              {isNativeInstall && deferredPrompt && (
+              {hasNativePrompt && (
                 <Button
                   size="sm"
                   className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shrink-0 gap-1.5"
@@ -238,32 +236,66 @@ export function PWAInstallPrompt() {
               )}
               <div className="flex-1 text-right min-w-0">
                 <p className="text-sm font-bold text-foreground leading-tight">تثبيت التطبيق</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                  للوصول السريع وتجربة أفضل بدون متصفح
-                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">وصول سريع وتجربة أفضل بدون متصفح</p>
               </div>
             </div>
 
-            {/* iOS manual steps */}
+            {/* iOS Safari */}
             {platform.isIOS && (
-              <div className="bg-background/70 border border-border/40 rounded-lg px-3 py-2 text-right space-y-1">
-                <p className="text-[10px] text-muted-foreground font-bold mb-1.5">خطوات التثبيت للآيفون:</p>
-                <p className="text-[10px] text-foreground">
-                  ١. اضغط على زر <span className="font-bold">المشاركة</span>{' '}
-                  <Share className="inline w-3 h-3 mb-0.5 text-blue-500" /> أسفل الشاشة
+              <div className="bg-background/70 border border-border/40 rounded-lg px-3 py-2.5 text-right space-y-1.5">
+                <p className="text-[10px] text-muted-foreground font-bold">خطوات التثبيت على الآيفون:</p>
+                <p className="text-[10px] text-foreground flex items-center justify-end gap-1">
+                  اضغط على زر المشاركة
+                  <Share className="w-3 h-3 text-blue-500 shrink-0" />
+                  <span className="text-muted-foreground">١.</span>
                 </p>
                 <p className="text-[10px] text-foreground">
-                  ٢. اختر <span className="font-bold">"إضافة إلى الشاشة الرئيسية"</span>
+                  <span className="text-muted-foreground">٢. </span>
+                  اختر <span className="font-bold">"إضافة إلى الشاشة الرئيسية"</span>
                 </p>
               </div>
             )}
 
-            {/* macOS Safari manual steps */}
+            {/* macOS Safari */}
             {platform.isMacSafari && (
-              <div className="bg-background/70 border border-border/40 rounded-lg px-3 py-2 text-right space-y-1">
-                <p className="text-[10px] text-muted-foreground font-bold mb-1.5">خطوات التثبيت للماك:</p>
+              <div className="bg-background/70 border border-border/40 rounded-lg px-3 py-2.5 text-right space-y-1.5">
+                <p className="text-[10px] text-muted-foreground font-bold">خطوات التثبيت على الماك:</p>
                 <p className="text-[10px] text-foreground">
-                  ١. من القائمة: <span className="font-bold">File ← Add to Dock</span>
+                  <span className="text-muted-foreground">١. </span>
+                  من القائمة: <span className="font-bold">File ← Add to Dock</span>
+                </p>
+              </div>
+            )}
+
+            {/* Chrome / Edge desktop — no deferred prompt */}
+            {showManualSteps && !platform.isAndroid && (
+              <div className="bg-background/70 border border-border/40 rounded-lg px-3 py-2.5 text-right space-y-1.5">
+                <p className="text-[10px] text-muted-foreground font-bold">خطوات التثبيت على الكمبيوتر:</p>
+                <p className="text-[10px] text-foreground flex items-center justify-end gap-1">
+                  افتح قائمة المتصفح
+                  <MoreVertical className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">١.</span>
+                </p>
+                <p className="text-[10px] text-foreground">
+                  <span className="text-muted-foreground">٢. </span>
+                  اضغط على <span className="font-bold">"تثبيت التطبيق"</span> أو{' '}
+                  <span className="font-bold">"Install App"</span>
+                </p>
+              </div>
+            )}
+
+            {/* Chrome Android — no deferred prompt */}
+            {showManualSteps && platform.isAndroid && (
+              <div className="bg-background/70 border border-border/40 rounded-lg px-3 py-2.5 text-right space-y-1.5">
+                <p className="text-[10px] text-muted-foreground font-bold">خطوات التثبيت على الأندرويد:</p>
+                <p className="text-[10px] text-foreground flex items-center justify-end gap-1">
+                  افتح قائمة المتصفح
+                  <Menu className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">١.</span>
+                </p>
+                <p className="text-[10px] text-foreground">
+                  <span className="text-muted-foreground">٢. </span>
+                  اضغط <span className="font-bold">"إضافة إلى الشاشة الرئيسية"</span>
                 </p>
               </div>
             )}
