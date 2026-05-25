@@ -137,7 +137,10 @@ export function PWAInstallPrompt() {
   const opacity = Math.max(0, 1 - Math.abs(dragX) / (DRAG_DISMISS_THRESHOLD * 1.5));
   const rotate = dragX * 0.04;
 
-  if (!visible || !platform || (!needsNotif && !needsPWA)) return null;
+  const hasPWAContent = platform.isIOS || platform.isMacSafari || deferredPrompt !== null;
+  const shouldShow = needsNotif || (needsPWA && hasPWAContent);
+
+  if (!visible || !platform || !shouldShow) return null;
 
   const isNativePrompt = !platform.isIOS && !platform.isMacSafari;
 
@@ -208,14 +211,14 @@ export function PWAInstallPrompt() {
         )}
 
         {/* PWA Install */}
-        {needsPWA && (
+        {needsPWA && (deferredPrompt || platform.isIOS || platform.isMacSafari) && (
           <div className="bg-muted/40 border border-border/50 rounded-xl p-3">
             <div className="flex items-center justify-between gap-3 mb-2">
               <div className="flex-1 text-right">
                 <p className="text-sm font-bold text-foreground">تثبيت التطبيق</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">للوصول السريع وتجربة استخدام أفضل</p>
               </div>
-              {isNativePrompt && (
+              {isNativePrompt && deferredPrompt && (
                 <Button
                   size="sm"
                   className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shrink-0 shadow-sm"
