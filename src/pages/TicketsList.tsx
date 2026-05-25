@@ -159,16 +159,6 @@ export default function TicketsList() {
 
   const unlinkedTickets = tickets.filter(t => !t.clientId);
   const linkedTickets   = tickets.filter(t => !!t.clientId);
-  const sortedLinkedTickets = [...linkedTickets].sort((a, b) => {
-    const aClosed = a.status === 'closed' ? 1 : 0;
-    const bClosed = b.status === 'closed' ? 1 : 0;
-    if (aClosed !== bClosed) return aClosed - bClosed;
-    const getMs = (t: Ticket) => {
-      if (t.issuedAt) { const d = parseIssuedAt(t.issuedAt); if (d) return d.getTime(); }
-      return new Date(t.createdAt as any).getTime() ?? 0;
-    };
-    return getMs(a) - getMs(b);
-  });
 
   const distinctProjectIds = new Set(tickets.map(t => t.projectId).filter(Boolean));
   const showProjectColumn = user?.role === 'admin' || distinctProjectIds.size > 1;
@@ -289,7 +279,7 @@ export default function TicketsList() {
           <TabsContent value="linked" className="mt-0">
             <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
               <TicketTable
-                tickets={sortedLinkedTickets}
+                tickets={linkedTickets}
                 selectedIds={selectedTicketIds}
                 onSelectionChange={setSelectedTicketIds}
                 hideProjectColumn={!showProjectColumn}

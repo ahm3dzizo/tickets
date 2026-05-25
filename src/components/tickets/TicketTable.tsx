@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, X, Edit, MessageCircle, Download } from 'lucide-react';
+import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -241,6 +241,54 @@ export function TicketTable({
   const [showClosed,   setShowClosed]   = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
 
+  // ── Sort state (default: oldest first) ───────────────────────────────────
+  type SortKey = 'date' | 'days' | 'priority' | 'status' | 'ref' | 'client';
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return <ChevronsUpDown className="w-3 h-3 opacity-30 inline shrink-0" />;
+    return sortDir === 'asc'
+      ? <ChevronUp className="w-3 h-3 text-blue-400 inline shrink-0" />
+      : <ChevronDown className="w-3 h-3 text-blue-400 inline shrink-0" />;
+  };
+
+  const getTicketSortVal = (t: Ticket, key: SortKey): number | string => {
+    const ca = (t.createdAt as any)?.toDate ? (t.createdAt as any).toDate() : new Date(t.createdAt as any);
+    const openDate = (t.issuedAt ? parseIssuedAt(t.issuedAt) : null) ?? ca;
+    const closeDate = t.closedAt ? new Date(t.closedAt) : null;
+    const isClosed = t.status === 'closed' || t.status === 'out-of-scope';
+    const endDate = (isClosed && closeDate) ? closeDate : new Date();
+    switch (key) {
+      case 'date':     return openDate.getTime();
+      case 'days':     return differenceInDays(endDate, openDate);
+      case 'priority': return typeof t.priority === 'number' ? t.priority : 3;
+      case 'status':   return t.status ?? '';
+      case 'ref':      return t.refNumber ?? t.ticketId ?? '';
+      case 'client':   return t.clientName ?? '';
+    }
+  };
+
+  const applySortAndGroup = (arr: Ticket[]) => {
+    const closedSet = new Set(['closed', 'out-of-scope']);
+    const open   = arr.filter(t => !closedSet.has(t.status));
+    const closed = arr.filter(t =>  closedSet.has(t.status));
+    const cmp = (a: Ticket, b: Ticket) => {
+      const av = getTicketSortVal(a, sortKey);
+      const bv = getTicketSortVal(b, sortKey);
+      const diff = typeof av === 'number' && typeof bv === 'number'
+        ? av - bv
+        : String(av).localeCompare(String(bv), 'ar');
+      return sortDir === 'asc' ? diff : -diff;
+    };
+    return [...open].sort(cmp).concat([...closed].sort(cmp));
+  };
+
   const closedStatuses = new Set(['closed', 'out-of-scope']);
 
   const baseTickets = showInlineFilters
@@ -261,12 +309,6 @@ export function TicketTable({
       })
     : tickets;
 
-  const sortClosed = (arr: Ticket[]) =>
-    [...arr].sort((a, b) => {
-      const ac = a.status === 'closed' || a.status === 'out-of-scope' ? 1 : 0;
-      const bc = b.status === 'closed' || b.status === 'out-of-scope' ? 1 : 0;
-      return ac - bc;
-    });
 
   const focalClientKey = (() => {
     if (!selectedIds || selectedIds.length === 0) return null;
@@ -281,11 +323,11 @@ export function TicketTable({
     : '';
 
   const focalTickets = focalClientKey
-    ? sortClosed(baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) === focalClientKey))
+    ? applySortAndGroup(baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) === focalClientKey))
     : [];
   const otherTickets = focalClientKey
-    ? sortClosed(baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) !== focalClientKey))
-    : sortClosed(baseTickets);
+    ? applySortAndGroup(baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) !== focalClientKey))
+    : applySortAndGroup(baseTickets);
 
   const displayTickets = focalClientKey ? [...focalTickets, ...otherTickets] : otherTickets;
   const focalCount     = focalTickets.length;
@@ -460,6 +502,39 @@ export function TicketTable({
         <div className="py-16 text-center text-slate-500 text-sm font-medium">{emptyMessage}</div>
       )}
 
+      {/* ── MOBILE SORT BAR ──────────────────────────────────────────────── */}
+      {displayTickets.length > 0 && (
+        <div className="flex items-center gap-1.5 px-2 py-2 overflow-x-auto no-scrollbar border-b border-border/30 md:hidden" dir="rtl">
+          <span className="text-[10px] text-slate-500 font-bold shrink-0">ترتيب:</span>
+          {([
+            { key: 'date' as SortKey,     label: 'التاريخ'   },
+            { key: 'days' as SortKey,     label: 'الأيام'    },
+            { key: 'priority' as SortKey, label: 'الأولوية'  },
+            { key: 'status' as SortKey,   label: 'الحالة'    },
+            { key: 'client' as SortKey,   label: 'العميل'    },
+            { key: 'ref' as SortKey,      label: 'المرجع'    },
+          ]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => handleSort(key)}
+              className={cn(
+                'shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors',
+                sortKey === key
+                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                  : 'bg-transparent text-slate-500 border-border/30 hover:text-slate-300',
+              )}
+            >
+              {label}
+              {sortKey === key && (
+                sortDir === 'asc'
+                  ? <ChevronUp className="w-2.5 h-2.5" />
+                  : <ChevronDown className="w-2.5 h-2.5" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── MOBILE CARD VIEW ─────────────────────────────────────────────── */}
       {displayTickets.length > 0 && (
         <div className="flex flex-col gap-2 p-2 md:hidden" dir="rtl">
@@ -602,14 +677,45 @@ export function TicketTable({
                   </th>
                 )}
                 <th className={cn(thCls, 'w-20')}>ID</th>
-                <th className={cn(thCls, 'w-24')}>المرجع</th>
-                <th className={cn(thCls, 'w-28 max-w-[100px]')}>العميل</th>
+                <th
+                  className={cn(thCls, 'w-24 cursor-pointer hover:text-slate-200 select-none')}
+                  onClick={() => handleSort('ref')}
+                >
+                  <span className="flex items-center gap-1">المرجع <SortIcon col="ref" /></span>
+                </th>
+                <th
+                  className={cn(thCls, 'w-28 max-w-[100px] cursor-pointer hover:text-slate-200 select-none')}
+                  onClick={() => handleSort('client')}
+                >
+                  <span className="flex items-center gap-1">العميل <SortIcon col="client" /></span>
+                </th>
                 {!hideProjectColumn && <th className={cn(thCls, 'w-20')}>المشروع</th>}
-                <th className={cn(thCls, 'w-20')}>التاريخ</th>
+                <th
+                  className={cn(thCls, 'w-20 cursor-pointer hover:text-slate-200 select-none')}
+                  onClick={() => handleSort('date')}
+                >
+                  <span className="flex items-center gap-1">التاريخ <SortIcon col="date" /></span>
+                </th>
                 <th className={cn(thCls, 'min-w-[180px]')}>وصف المشكلة</th>
-                <th className={cn(thCls, 'w-12 text-center')}>الحالة</th>
-                <th className={cn(thCls, 'w-10 text-center')}>ف</th>
-                <th className={cn(thCls, 'w-12 text-center')}>الأيام</th>
+                <th
+                  className={cn(thCls, 'w-12 text-center cursor-pointer hover:text-slate-200 select-none')}
+                  onClick={() => handleSort('status')}
+                >
+                  <span className="flex items-center justify-center gap-1">الحالة <SortIcon col="status" /></span>
+                </th>
+                <th
+                  className={cn(thCls, 'w-10 text-center cursor-pointer hover:text-slate-200 select-none')}
+                  onClick={() => handleSort('priority')}
+                  title="الأولوية"
+                >
+                  <span className="flex items-center justify-center gap-1">ف <SortIcon col="priority" /></span>
+                </th>
+                <th
+                  className={cn(thCls, 'w-12 text-center cursor-pointer hover:text-slate-200 select-none')}
+                  onClick={() => handleSort('days')}
+                >
+                  <span className="flex items-center justify-center gap-1">الأيام <SortIcon col="days" /></span>
+                </th>
                 {!hideSupervisorColumn && <th className={cn(thCls, 'w-24 text-center')}>المسؤول</th>}
                 <th className={cn(thCls, 'w-20 text-center')}>التخصص</th>
                 <th className={cn(thCls, 'w-24 text-center')}>موعد</th>
