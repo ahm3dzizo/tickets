@@ -532,21 +532,40 @@ export default function Settings() {
                       toast.error('المتصفح لا يدعم الإشعارات');
                       return;
                     }
+                    if (Notification.permission === 'denied') {
+                      toast.error('الإشعارات محظورة — افتح إعدادات المتصفح لتفعيلها يدويًا');
+                      return;
+                    }
                     const p = await Notification.requestPermission();
-                    if (p === 'granted') toast.success('تم تفعيل إشعارات المتصفح بنجاح');
+                    if (p === 'granted') toast.success('تم تفعيل إشعارات المتصفح بنجاح 🎉');
                     else toast.error('تم رفض صلاحية الإشعارات');
                   }}
                   variant="outline"
                   className="rounded-xl h-11 justify-between px-4"
                 >
                   <Bell className="w-4 h-4 ml-2" />
-                  <span className="flex-1 text-right text-sm">طلب صلاحية إشعارات المتصفح</span>
+                  <span className="flex-1 text-right text-sm">
+                    طلب صلاحية إشعارات المتصفح
+                    {typeof window !== 'undefined' && 'Notification' in window && (
+                      <span className={cn(
+                        'mr-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                        Notification.permission === 'granted'
+                          ? 'bg-emerald-500/10 text-emerald-500'
+                          : Notification.permission === 'denied'
+                            ? 'bg-red-500/10 text-red-500'
+                            : 'bg-amber-500/10 text-amber-500',
+                      )}>
+                        {Notification.permission === 'granted' ? 'مفعّل' : Notification.permission === 'denied' ? 'محظور' : 'غير محدد'}
+                      </span>
+                    )}
+                  </span>
                 </Button>
 
                 <Button
                   onClick={() => {
-                    localStorage.removeItem('retal:pwa-prompt-disabled');
-                    toast.success('تم إعادة تفعيل ظهور شاشة تثبيت التطبيق، قم بتحديث الصفحة.');
+                    // Key must match PROMPT_DISABLED_KEY in PWAInstallPrompt.tsx
+                    localStorage.removeItem('retal:onboarding-prompt-disabled');
+                    toast.success('تم إعادة تفعيل شاشة التثبيت — قم بتحديث الصفحة');
                   }}
                   variant="outline"
                   className="rounded-xl h-11 justify-between px-4"

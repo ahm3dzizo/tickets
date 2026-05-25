@@ -53,7 +53,7 @@ export function ReportsCharts({
         <CardContent className="p-5">
           <h3 className="text-white font-bold text-lg text-right mb-4">التذاكر حسب الحالة</h3>
           <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={statusData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="label" stroke="#94a3b8" />
@@ -70,7 +70,7 @@ export function ReportsCharts({
         <CardContent className="p-5">
           <h3 className="text-white font-bold text-lg text-right mb-4">التذاكر حسب التخصص</h3>
           <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie
                   data={typeData}
@@ -96,7 +96,7 @@ export function ReportsCharts({
         <CardContent className="p-5">
           <h3 className="text-white font-bold text-lg text-right mb-4">أنواع الصيانة العامة</h3>
           <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={maintenanceGENERALData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="label" stroke="#94a3b8" />
@@ -120,7 +120,7 @@ export function ReportsCharts({
         <CardContent className="p-5">
           <h3 className="text-white font-bold text-lg text-right mb-4">التذاكر حسب المشروع</h3>
           <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={projectData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="label" stroke="#94a3b8" />
@@ -137,7 +137,7 @@ export function ReportsCharts({
         <CardContent className="p-5">
           <h3 className="text-white font-bold text-lg text-right mb-4">الاتجاه الزمني العام للتذاكر</h3>
           <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <LineChart data={timelineData.map((i) => ({ date: i.label, total: i.value }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="date" stroke="#94a3b8" />
@@ -160,7 +160,7 @@ export function ReportsCharts({
           </p>
 
           <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <LineChart data={projectCumulativeTimeline}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="date" stroke="#94a3b8" />
