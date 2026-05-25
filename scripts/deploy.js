@@ -1,23 +1,23 @@
 import { execSync } from 'child_process';
 
 // ── Config ──────────────────────────────────────────
-const SSH_HOST  = 'knot';
-const API_DIR   = '/opt/retal-api';
-const PM2_NAME  = 'retal-api';
+const SSH_HOST = 'knot';
+const API_DIR = '/opt/retal-api';
+const PM2_NAME = 'retal-api';
 const GIT_BRANCH = 'main';           // ← غيّره لو الـ branch مختلف
 
 // ── Colors ───────────────────────────────────────────
 const c = {
-  green:  (s) => `\x1b[32m${s}\x1b[0m`,
-  cyan:   (s) => `\x1b[36m${s}\x1b[0m`,
+  green: (s) => `\x1b[32m${s}\x1b[0m`,
+  cyan: (s) => `\x1b[36m${s}\x1b[0m`,
   yellow: (s) => `\x1b[33m${s}\x1b[0m`,
-  red:    (s) => `\x1b[31m${s}\x1b[0m`,
+  red: (s) => `\x1b[31m${s}\x1b[0m`,
 };
 
-const log  = (s) => console.log(c.cyan  (`▶  ${s}`));
-const ok   = (s) => console.log(c.green (`✔  ${s}`));
+const log = (s) => console.log(c.cyan(`▶  ${s}`));
+const ok = (s) => console.log(c.green(`✔  ${s}`));
 const warn = (s) => console.log(c.yellow(`⚠  ${s}`));
-const fail = (s) => { console.log(c.red (`✘  ${s}`)); process.exit(1); };
+const fail = (s) => { console.log(c.red(`✘  ${s}`)); process.exit(1); };
 
 const run = (cmd) => {
   try {
@@ -29,7 +29,7 @@ const run = (cmd) => {
 
 const runCapture = (cmd) => {
   try {
-    return execSync(cmd, { encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim();
+    return execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
   } catch {
     return '';
   }
@@ -37,8 +37,8 @@ const runCapture = (cmd) => {
 
 // ── Commit message ────────────────────────────────────
 const args = process.argv.slice(2);
-const now  = new Date().toLocaleString('sv').replace('T', ' ').slice(0, 16);
-const msg  = args[0] || `update: ${now}`;
+const now = new Date().toLocaleString('sv').replace('T', ' ').slice(0, 16);
+const msg = args[0] || `update: ${now}`;
 
 console.log('');
 console.log(c.cyan('══════════════════════════════════════'));
@@ -92,6 +92,9 @@ const remoteLines = [
   `rm -rf node_modules/.vite`,
   `npm run build`,                                      // vite build → dist/
   `echo "✔  Build جاهز"`,
+  `echo "▶  Copying frontend to Nginx root..."`,
+  `rm -rf /var/www/retal/*`,
+  `cp -r dist/* /var/www/retal/`,
   `echo "▶  pm2 restart..."`,
   `pm2 restart ${PM2_NAME} --update-env`,               // الـ express بيخدم dist/ مباشرة
   `echo "✔  API جاهز"`,

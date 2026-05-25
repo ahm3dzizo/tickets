@@ -1,4 +1,4 @@
-﻿import React, { useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { FileUp, Loader2, Check, FileSpreadsheet, ChevronLeft, FileText, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { parsePdfTickets, type PdfParseProgress } from '@/services/pdfParser';
@@ -254,7 +254,7 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
                 className="border-2 border-dashed border-border rounded-2xl p-10 text-center hover:border-blue-500/50 transition-all cursor-pointer bg-white/5"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls,.csv,.pdf" onChange={handleFileChange} />
+                <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls,.xlsm,.csv,.pdf" onChange={handleFileChange} />
                 {loading ? (
                   <div className="text-center">
                     <Loader2 className="w-10 h-10 text-blue-400 mx-auto mb-3 animate-spin" />
