@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -194,7 +194,7 @@ export default function TicketDetail() {
           .catch(() => {});
       }
 
-      toast.success('تم تحديث التذكرة');
+      toast.success(`تم تحديث حالة التذكرة إلى: ${statusTranslations[editStatus] || editStatus}`);
       setEditOpen(false);
       loadData();
     } catch {
@@ -214,7 +214,7 @@ export default function TicketDetail() {
         appointmentNotes: apptNotes,
         status: ticket.status === 'open' ? 'pending' : ticket.status,
       });
-      toast.success('تم تحديد الموعد');
+      toast.success(`تم تحديد موعد الزيارة ${appointmentTime ? `يوم ${appointmentTime}` : ''} بنجاح 📅`);
       setApptOpen(false);
       loadData();
     } catch {
@@ -230,7 +230,12 @@ export default function TicketDetail() {
     const phone = client?.phone?.replace(/\D/g, '') || '';
     if (!phone) { toast.error('رقم الهاتف غير متوفر'); return; }
     const msg = `السلام عليكم ${client?.name || ''}\nبخصوص طلب الصيانة رقم ${ticket?.ticketId || ''} - فيلا ${ticket?.villaNumber}\n${ticket?.appointmentTime ? `موعد الزيارة: ${ticket.appointmentTime}` : 'سيتم التواصل معكم لتحديد موعد الزيارة'}\nشكراً لكم.`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    
+    toast.promise(whatsappApi.send(phone, msg), {
+      loading: 'جارٍ إرسال التحديث للعميل عبر الواتساب...',
+      success: 'تم إرسال رسالة التحديث بنجاح 💬',
+      error: 'فشل إرسال الرسالة. تأكد من اتصال الواتساب.'
+    });
   };
 
   if (loading) {

@@ -294,7 +294,8 @@ export function CloseTicketDialog({
       // 3. The Backend already sends the WhatsApp message + Image via Baileys API silently!
       // (We passed whatsappPhone in the /api/generate-report payload)
 
-      toast.success('تم إغلاق التذاكر بنجاح');
+      const isWhatsAppSent = targetClient?.phone && previewMessage;
+      toast.success(`تم إغلاق التذاكر بنجاح${isWhatsAppSent ? ' وجارٍ إرسال التقرير للعميل 💬' : ''}`);
       onSuccess();
       onOpenChange(false);
     } catch (error) {

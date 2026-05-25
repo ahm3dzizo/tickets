@@ -222,7 +222,7 @@ export function TicketForm({
         createdAt: new Date().toISOString(),
         createdBy: user?.uid || null,
       });
-      toast.success('تم إنشاء التذكرة بنجاح');
+      toast.success(`تم إنشاء التذكرة بنجاح${finalSupervisors.length > 0 ? ` وتعيين المشرف: ${finalSupervisors.map(s => s.name).join('، ')}` : ''}`);
       setOpen(false);
       resetForm();
       onSuccess?.();
