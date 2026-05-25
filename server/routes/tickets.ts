@@ -225,7 +225,8 @@ router.post("/", requireAuth, async (req, res) => {
     }
 
     const senderUid = (req as AuthRequest).uid;
-    if (senderUid) autoSendOpening(senderUid, ticket).catch(() => {});
+    // بناءً على طلب المستخدم: تم إيقاف إرسال رسالة الترحيب التلقائية عند إنشاء التذكرة
+    // if (senderUid) autoSendOpening(senderUid, ticket).catch(() => {});
 
     getIO().emit("ticket:created", ticket);
     res.status(201).json(ticket);
