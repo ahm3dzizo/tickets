@@ -1,8 +1,8 @@
 // src/pages/TicketsList.tsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
-import { AlertTriangle, FileUp } from 'lucide-react';
+import { AlertTriangle, FileUp, User, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/TicketTable';
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
+import { ClientForm } from '@/components/clients/ClientForm';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { Ticket, Project, Client } from '@/types';
 import { classifyOnServer } from '@/services/classificationApi';
@@ -257,13 +258,31 @@ export default function TicketsList() {
             </TabsList>
 
             <TabsContent value="unlinked" className="mt-0">
-              <Button
-                onClick={handleAutoLink}
-                disabled={autoLinking || unlinkedTickets.length === 0}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-10 rounded-2xl shadow-md"
-              >
-                {autoLinking ? 'جارٍ الربط...' : '⚡ ربط تلقائي'}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={handleAutoLink}
+                  disabled={autoLinking || unlinkedTickets.length === 0}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-10 rounded-2xl shadow-md"
+                >
+                  {autoLinking ? 'جارٍ الربط...' : '⚡ ربط تلقائي'}
+                </Button>
+                
+                <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
+
+                <ClientForm trigger={
+                  <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all">
+                    <UserPlus className="w-4 h-4 ml-2 text-primary" />
+                    إضافة عميل جديد
+                  </Button>
+                } onSuccess={loadData} />
+
+                <Link to="/clients">
+                  <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all">
+                    <User className="w-4 h-4 ml-2 text-slate-400" />
+                    صفحة العملاء
+                  </Button>
+                </Link>
+              </div>
             </TabsContent>
           </div>
 

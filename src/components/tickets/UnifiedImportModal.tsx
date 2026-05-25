@@ -335,10 +335,9 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
   const [allSupervisorsForProject, setAllSupervisorsForProject] = useState<{id: string; name: string}[]>([]);
   const [loadingSupervisors, setLoadingSupervisors] = useState(false);
 
-  // Build a set of existing ticket keys for duplicate detection
-  const existingKeys = new Set(
-    existingTickets.map(t => `${t.ticketId || ''}::${t.villaNumber || ''}`)
-  );
+  // Build sets for duplicate detection
+  const existingTicketIds = new Set(existingTickets.map(t => String(t.ticketId || '').trim()).filter(Boolean));
+  const existingRefNumbers = new Set(existingTickets.map(t => String(t.refNumber || '').trim()).filter(Boolean));
 
     const handleImport = async (data: any[]) => {
     if (!selectedProjectId) {
@@ -370,8 +369,11 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       const ticketId = String(item.ticketId || '').trim();
       const rawVillaNumber = String(item.villaNumber || '').trim();
       const cleanVillaNumber = normalizeVillaNumber(rawVillaNumber);
-      const dupKey = `${ticketId}::${cleanVillaNumber}`;
-      const isDuplicate = existingKeys.has(dupKey);
+      const refNumberCandidate = cleanVillaNumber ? `${projectAbbr}-${cleanVillaNumber}` : '';
+      
+      const isDuplicate = 
+        (ticketId && existingTicketIds.has(ticketId)) || 
+        (refNumberCandidate && existingRefNumbers.has(refNumberCandidate));
       
       if (!isDuplicate) {
         newItemsToClassify.push({
