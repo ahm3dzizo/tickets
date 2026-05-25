@@ -16,20 +16,21 @@ import clientRoutes from "./routes/clients.js";
 import ticketRoutes from "./routes/tickets.js";
 import technicianRoutes from "./routes/technicians.js";
 import classifyRoutes from "./routes/classify.js";
-import { startPushSubscriptionCron } from "./push-cron.js";
 import reportRoutes from "./routes/report.js";
 import whatsappRoutes from "./routes/whatsapp.js";
 import settingsRoutes from "./routes/settings.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 
+let globalIo: any = null;
+
 async function startServer() {
   const app = express();
   const httpServer = createServer(app);
-  const io = setupSocket(httpServer);
+  globalIo = setupSocket(httpServer);
   
   // Make io accessible to routes
-  (global as any).__io = io;
+  (global as any).__io = globalIo;
 
   // ── Security Middlewares ───────────────────────────────────────────────
   app.use(helmet({
@@ -125,7 +126,7 @@ async function startServer() {
 }
 
 export { prisma };
-export { io as getIO };
+export { globalIo as getIO };
 
 startServer().catch((err) => {
   console.error("Error starting server:", err);

@@ -50,19 +50,19 @@ router.post("/bulk", requireAuth, async (req, res) => {
 
     for (const pid of projectIds) {
       supervisorCache[pid] = await prisma.user.findMany({
-        where: { role: "supervisor", projectIds: { has: pid } },
-        select: { uid: true, displayName: true, specialties: true, specialty: true },
+        where: { role: "supervisor", projects: { some: { id: pid } } },
+        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
       });
       if (supervisorCache[pid].length === 0) {
         supervisorCache[pid] = await prisma.user.findMany({
           where: { role: "supervisor" },
-          select: { uid: true, displayName: true, specialties: true, specialty: true },
+          select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
         });
       }
     }
 
     const getSpecs = (u: any): string[] => {
-      if (Array.isArray(u.specialties) && u.specialties.length > 0) return u.specialties;
+      if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
       if (u.specialty) return [u.specialty];
       return ["general"];
     };
@@ -339,19 +339,19 @@ router.post("/import", requireAuth, async (req, res) => {
     const clientByVilla = Object.fromEntries(projectClients.map((c: any) => [c.villaNumber, c]));
 
     const projectSups = await prisma.user.findMany({
-      where: { role: "supervisor", projectIds: { has: projectId } },
-      select: { uid: true, displayName: true, specialties: true, specialty: true },
+      where: { role: "supervisor", projects: { some: { id: projectId } } },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
     });
     const allSups = projectSups.length > 0 ? projectSups : await prisma.user.findMany({
       where: { role: "supervisor" },
-      select: { uid: true, displayName: true, specialties: true, specialty: true },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
     });
 
     const keywords = await loadKeywordsFromDB();
     const typeToSpecialty = await buildTypeToSpecialtyMap();
 
     const getSpecs = (u: any): string[] => {
-      if (Array.isArray(u.specialties) && u.specialties.length > 0) return u.specialties;
+      if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
       if (u.specialty) return [u.specialty];
       return ["general"];
     };
