@@ -372,7 +372,7 @@ const TypeCard = ({ type, specialties, onRefresh }: {
             {/* Right: type info */}
             <div className="flex items-center gap-3 text-right">
               <div>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-start gap-2">
                   <p className="text-white font-semibold">{type.nameAr}</p>
                   <button onClick={toggleActive}>
                     {type.isActive
@@ -380,7 +380,7 @@ const TypeCard = ({ type, specialties, onRefresh }: {
                       : <ToggleLeft className="w-4 h-4 text-slate-500" />}
                   </button>
                 </div>
-                <div className="flex items-center justify-end gap-2 mt-1">
+                <div className="flex items-center justify-start gap-2 mt-1">
                   <code className="text-[10px] text-slate-500 font-mono bg-white/5 px-1.5 py-0.5 rounded">{type.key}</code>
                   {type.specialty && (
                     <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', spColor)}>
@@ -398,7 +398,7 @@ const TypeCard = ({ type, specialties, onRefresh }: {
           </div>
 
           {/* ── Stats row ── */}
-          <div className="flex items-center justify-end gap-4 px-4 pb-3">
+          <div className="flex items-center justify-start gap-4 px-4 pb-3">
             <div className="flex items-center gap-1.5 text-slate-500 text-xs">
               <span>{type._count?.tickets ?? 0} تذكرة</span>
               <CheckCircle2 className="w-3 h-3" />

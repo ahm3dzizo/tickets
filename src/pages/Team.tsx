@@ -140,7 +140,7 @@ export default function Team() {
                     >
                       {/* Name */}
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3 justify-end">
+                        <div className="flex items-center gap-3 justify-start">
                           <div className="text-right">
                             <div className="font-semibold text-foreground text-sm">{t.displayName}</div>
                             <div className="text-[10px] text-muted-foreground font-mono">{t.employeeId ? `#${t.employeeId}` : ''}</div>
@@ -161,7 +161,7 @@ export default function Team() {
                       {/* Specialties */}
                       <td className="px-5 py-3.5 hidden sm:table-cell">
                         {specs.length > 0 ? (
-                          <div className="flex flex-wrap gap-1 justify-end">
+                          <div className="flex flex-wrap gap-1 justify-start">
                             {specs.map((sp: string) => (
                               <span key={sp} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg border', specialtyColor[sp] ?? specialtyColor.general)}>
                                 {specialtyLabel[sp] ?? sp}
@@ -174,7 +174,7 @@ export default function Team() {
                       {/* Projects */}
                       <td className="px-5 py-3.5 hidden md:table-cell max-w-[180px]">
                         {memberProjects.length > 0 ? (
-                          <div className="flex flex-wrap gap-1 justify-end">
+                          <div className="flex flex-wrap gap-1 justify-start">
                             {memberProjects.slice(0, 2).map((name: string) => (
                               <span key={name} className="text-[10px] bg-muted border border-border text-muted-foreground px-2 py-0.5 rounded-lg font-medium">
                                 {name}
@@ -190,12 +190,12 @@ export default function Team() {
                       {/* Contact */}
                       <td className="px-5 py-3.5 hidden lg:table-cell">
                         <div className="space-y-1 text-right">
-                          <div className="flex items-center gap-1.5 justify-end text-xs text-muted-foreground font-mono">
+                          <div className="flex items-center gap-1.5 justify-start text-xs text-muted-foreground font-mono">
                             <span className="truncate max-w-[150px]">{t.email}</span>
                             <Mail className="w-3 h-3 shrink-0" />
                           </div>
                           {t.phoneNumber && (
-                            <div className="flex items-center gap-1.5 justify-end text-xs text-muted-foreground font-mono">
+                            <div className="flex items-center gap-1.5 justify-start text-xs text-muted-foreground font-mono">
                               <span>{t.phoneNumber}</span>
                               <Phone className="w-3 h-3 shrink-0" />
                             </div>
@@ -223,7 +223,7 @@ export default function Team() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="bg-card border-border w-48 rounded-2xl">
-                            <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end rounded-xl mx-1 my-0.5" onClick={() => navigate(`/team/${t.id}`)}>
+                            <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start rounded-xl mx-1 my-0.5" onClick={() => navigate(`/team/${t.id}`)}>
                               عرض الملف الشخصي
                             </DropdownMenuItem>
                             {isAdmin && (
@@ -231,7 +231,7 @@ export default function Team() {
                                 <UserForm
                                   user={t}
                                   trigger={
-                                    <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end rounded-xl mx-1 my-0.5" onSelect={e => e.preventDefault()}>
+                                    <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start rounded-xl mx-1 my-0.5" onSelect={e => e.preventDefault()}>
                                       تعديل البيانات
                                     </DropdownMenuItem>
                                   }
@@ -240,7 +240,7 @@ export default function Team() {
                             )}
                             {isAdmin && (
                               <DropdownMenuItem
-                                className={cn('hover:bg-muted cursor-pointer text-right justify-end rounded-xl mx-1 my-0.5',
+                                className={cn('hover:bg-muted cursor-pointer text-start justify-start rounded-xl mx-1 my-0.5',
                                   t.disabled ? 'text-emerald-500' : 'text-red-500')}
                                 onClick={() => handleToggleStatus(t)}
                               >

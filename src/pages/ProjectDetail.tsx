@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -129,17 +129,17 @@ export default function ProjectDetail() {
     <Layout>
       <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-700">
         <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-4">
-          <div className="flex items-center gap-4 w-full sm:w-auto">
+          <div className="flex items-center gap-4 w-full sm:w-auto flex-1">
             <Button 
               variant="ghost" 
               size="icon" 
-              className="text-slate-400 hover:text-white rounded-2xl bg-white/5 order-last sm:order-first"
+              className="text-slate-400 hover:text-white rounded-2xl bg-white/5 order-first"
               onClick={() => navigate('/projects')}
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
             </Button>
-            <div className="text-right flex-1">
-              <div className="flex items-center gap-2 mb-1 justify-end">
+            <div className="text-start flex-1">
+              <div className="flex items-center gap-2 mb-1 justify-start">
                 <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] uppercase font-bold px-3">
                   {project.abbreviation}
                 </Badge>
@@ -147,7 +147,7 @@ export default function ProjectDetail() {
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">{project.name}</h1>
             </div>
           </div>
-          <div className="flex items-center justify-end gap-2 w-full sm:w-auto sm:mr-auto">
+          <div className="flex items-center justify-start gap-2 w-full sm:w-auto sm:mr-auto">
                         {(currentUser?.role === 'admin' || currentUser?.role === 'engineer') && (
               <>
                 <UnifiedImportModal

@@ -145,7 +145,7 @@ export default function Dashboard() {
   /* ── Quick actions per role ───────────────────────────────────── */
   const QuickActions = () => {
     if (!user) return null;
-    const btnBase = 'w-full justify-end gap-3 h-12 rounded-2xl border border-border bg-card hover:bg-muted text-foreground font-semibold transition-all';
+    const btnBase = 'w-full justify-start gap-3 h-12 rounded-2xl border border-border bg-card hover:bg-muted text-foreground font-semibold transition-all';
 
     const actions: Record<string, React.ReactNode[]> = {
       admin: [

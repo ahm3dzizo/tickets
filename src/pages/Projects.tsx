@@ -93,7 +93,7 @@ export default function Projects() {
                     <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors leading-snug">
                       {project.name}
                     </h3>
-                    <div className="flex items-center gap-1.5 justify-end mt-1.5 text-muted-foreground">
+                    <div className="flex items-center gap-1.5 justify-start mt-1.5 text-muted-foreground">
                       <span className="text-sm">{project.location}</span>
                       <MapPin className="w-3.5 h-3.5 shrink-0" />
                     </div>

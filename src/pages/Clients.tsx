@@ -173,7 +173,7 @@ export default function Clients() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="bg-card border-border w-72">
                           {projects.map(p => (
-                            <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-right justify-end" onClick={() => setImportProjectId(p.id)}>
+                            <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-start justify-start" onClick={() => setImportProjectId(p.id)}>
                               {p.name}
                             </DropdownMenuItem>
                           ))}
@@ -233,9 +233,9 @@ export default function Clients() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="bg-card border-border w-52">
-                    <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end text-muted-foreground" onClick={() => setFilterProject('')}>كل المشاريع</DropdownMenuItem>
+                    <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start text-muted-foreground" onClick={() => setFilterProject('')}>كل المشاريع</DropdownMenuItem>
                     {projects.map(p => (
-                      <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-right justify-end" onClick={() => setFilterProject(p.id)}>{p.name}</DropdownMenuItem>
+                      <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-start justify-start" onClick={() => setFilterProject(p.id)}>{p.name}</DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -249,9 +249,9 @@ export default function Clients() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="bg-card border-border w-40 max-h-56 overflow-y-auto">
-                      <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end text-muted-foreground" onClick={() => setFilterBlock('')}>كل البلوكات</DropdownMenuItem>
+                      <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start text-muted-foreground" onClick={() => setFilterBlock('')}>كل البلوكات</DropdownMenuItem>
                       {blockNumbers.map(b => (
-                        <DropdownMenuItem key={b} className="hover:bg-muted cursor-pointer text-right justify-end" onClick={() => setFilterBlock(b)}>بلوك {b}</DropdownMenuItem>
+                        <DropdownMenuItem key={b} className="hover:bg-muted cursor-pointer text-start justify-start" onClick={() => setFilterBlock(b)}>بلوك {b}</DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -303,7 +303,7 @@ export default function Clients() {
                     onClick={() => setSelectedClient(c)}
                   >
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3 justify-end">
+                      <div className="flex items-center gap-3 justify-start">
                         <div className="text-right">
                           <div className="font-semibold text-foreground text-sm">{c.name}</div>
                         </div>
@@ -334,11 +334,11 @@ export default function Clients() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="bg-card border-border w-44 rounded-2xl">
                             {canWrite && (
-                              <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end gap-2 rounded-xl mx-1 my-0.5" onClick={e => openEdit(c, e)}>
+                              <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start gap-2 rounded-xl mx-1 my-0.5" onClick={e => openEdit(c, e)}>
                                 <Pencil className="w-3.5 h-3.5" /> تعديل البيانات
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem className="hover:bg-muted cursor-pointer text-emerald-500 text-right justify-end gap-2 rounded-xl mx-1 my-0.5" onClick={e => openWhatsApp(c, e)}>
+                            <DropdownMenuItem className="hover:bg-muted cursor-pointer text-emerald-500 text-start justify-start gap-2 rounded-xl mx-1 my-0.5" onClick={e => openWhatsApp(c, e)}>
                               <Phone className="w-3.5 h-3.5" /> واتساب
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -358,7 +358,7 @@ export default function Clients() {
         <DialogContent className="bg-card border-border sm:max-w-[600px] rounded-3xl shadow-2xl max-h-[90dvh] overflow-y-auto">
           {selectedClient && (<>
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-foreground text-right flex items-center gap-3 justify-end">
+              <DialogTitle className="text-xl font-bold text-foreground text-start flex items-center gap-3 justify-start">
                 <span>{selectedClient.name}</span>
                 <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
                   <UserCheck className="w-5 h-5" />
@@ -381,7 +381,7 @@ export default function Clients() {
               ))}
               <div className="bg-muted/50 rounded-2xl p-3.5 text-right">
                 <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mb-1">رقم الجوال</p>
-                <div className="flex items-center gap-2 justify-end">
+                <div className="flex items-center gap-2 justify-start">
                   <button onClick={e => openWhatsApp(selectedClient, e)} className="text-emerald-500 hover:text-emerald-400 transition-colors">
                     <Phone className="w-4 h-4" />
                   </button>

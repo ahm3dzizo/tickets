@@ -393,7 +393,7 @@ export default function Settings() {
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-start">
               <Button
                 onClick={handleSaveProfile}
                 disabled={savingProfile}
@@ -479,7 +479,7 @@ export default function Settings() {
               <p className="text-red-400 text-xs text-right">كلمة المرور يجب أن تكون 6 أحرف على الأقل</p>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex justify-start">
               <Button
                 onClick={handleChangePassword}
                 disabled={savingPass || !currentPass || !newPass || !confirmPass}
@@ -511,7 +511,7 @@ export default function Settings() {
               </div>
             ))}
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-start pt-2">
               <Button
                 onClick={handleSaveNotifs}
                 disabled={savingNotifs}
@@ -539,7 +539,7 @@ export default function Settings() {
             {/* Specialties */}
             {(user?.specialties?.length || user?.specialty) && (
               <div className="flex items-center justify-between bg-muted/70 rounded-2xl px-5 py-4 border border-border/60">
-                <div className="flex gap-2 flex-wrap justify-end">
+                <div className="flex gap-2 flex-wrap justify-start">
                   {(user?.specialties?.length ? user.specialties : [user.specialty!]).map(s => (
                     <span key={s} className="text-xs font-bold px-3 py-1 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
                       {specialtyLabels[s] ?? s}
@@ -570,7 +570,7 @@ export default function Settings() {
               </div>
             )}
 
-            <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl px-5 py-3 justify-end">
+            <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl px-5 py-3 justify-start">
               <span className="text-xs font-bold">وصولك مؤمَّن عبر PostgreSQL + JWT</span>
               <CheckCircle2 className="w-4 h-4 shrink-0" />
             </div>
@@ -598,7 +598,7 @@ export default function Settings() {
 
             {!loadingWA && waStatus && !waStatus.running && (
               <div className="space-y-4">
-                <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 justify-end">
+                <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 justify-start">
                   <div className="text-right">
                     <p className="text-amber-400 font-bold text-sm">خدمة الواتساب التلقائي متوقفة</p>
                     <p className="text-muted-foreground text-xs mt-0.5">يمكنك تشغيل الخدمة مباشرة من هنا أو فحص حالتها</p>
@@ -634,7 +634,7 @@ export default function Settings() {
 
             {!loadingWA && waStatus?.running && waStatus.connected && (
               <div className="space-y-4">
-                <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-5 py-4 justify-end">
+                <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-5 py-4 justify-start">
                   <div className="text-right">
                     <p className="text-emerald-400 font-bold text-sm">مرتبط ونشط</p>
                     <p className="text-muted-foreground text-xs mt-0.5">
@@ -673,7 +673,7 @@ export default function Settings() {
 
             {!loadingWA && waStatus?.running && !waStatus.connected && (
               <div className="space-y-5">
-                <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl px-5 py-4 justify-end">
+                <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl px-5 py-4 justify-start">
                   <div className="text-right">
                     <p className="text-blue-400 font-bold text-sm">في انتظار الربط</p>
                     <p className="text-muted-foreground text-xs mt-0.5">امسح رمز QR من واتساب على هاتفك</p>
@@ -745,7 +745,7 @@ export default function Settings() {
                 <>
                   <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4 space-y-2">
                     <p className="text-sm font-bold text-blue-400 text-right">متغيرات متاحة (اضغط للإدراج):</p>
-                    <div className="flex flex-wrap gap-2 justify-end">
+                    <div className="flex flex-wrap gap-2 justify-start">
                       {[
                         { label: 'اسم العميل', val: '{clientName}' },
                         { label: 'رقم التذكرة', val: '{ticketId}' },
@@ -781,7 +781,7 @@ export default function Settings() {
                     />
                   </div>
 
-                  <div className="flex justify-end pt-2">
+                  <div className="flex justify-start pt-2">
                     <Button onClick={saveTemplates} disabled={savingTemplates} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-6 font-bold">
                       {savingTemplates ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 ml-2" />}
                       حفظ القوالب

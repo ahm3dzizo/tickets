@@ -75,7 +75,7 @@ export default function Technicians() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="border border-border rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center gap-3 justify-end">
+                    <div className="flex items-center gap-3 justify-start">
                       <div className="space-y-1 text-right"><div className="h-4 shimmer rounded w-20" /><div className="h-3 shimmer rounded w-14" /></div>
                       <div className="w-10 h-10 shimmer rounded-full shrink-0" />
                     </div>
@@ -111,7 +111,7 @@ export default function Technicians() {
                               technician={t}
                               onSaved={loadTechs}
                               trigger={
-                                <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end rounded-xl mx-1 my-0.5" onSelect={e => e.preventDefault()}>
+                                <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start rounded-xl mx-1 my-0.5" onSelect={e => e.preventDefault()}>
                                   تعديل البيانات
                                 </DropdownMenuItem>
                               }
@@ -120,7 +120,7 @@ export default function Technicians() {
                         </DropdownMenuContent>
                       </DropdownMenu>
 
-                      <div className="flex items-center gap-3 flex-1 justify-end">
+                      <div className="flex items-center gap-3 flex-1 justify-start">
                         <div className="text-right min-w-0">
                           <div className="font-semibold text-foreground text-sm truncate">{t.name}</div>
                           <div className="text-[10px] text-muted-foreground font-mono">#{t.id.slice(0, 6)}</div>
@@ -136,7 +136,7 @@ export default function Technicians() {
                         {specialtyLabels[t.specialty] ?? t.specialty ?? 'عام'}
                       </span>
                       {(t.phoneNumber || t.phone) && (
-                        <div className="flex items-center gap-1.5 justify-end text-xs text-muted-foreground font-mono">
+                        <div className="flex items-center gap-1.5 justify-start text-xs text-muted-foreground font-mono">
                           <span>{t.phoneNumber || t.phone}</span>
                           <Phone className="w-3 h-3 shrink-0" />
                         </div>
