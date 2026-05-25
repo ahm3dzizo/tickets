@@ -133,6 +133,16 @@ export async function stopWA(userId: string, cleanSession = false) {
   }
 }
 
+export async function closeAllSessions() {
+  for (const [userId, sock] of sessions.entries()) {
+    try {
+      sock.end(undefined);
+    } catch (err) {
+      console.error(`Error closing session for ${userId}:`, err);
+    }
+  }
+}
+
 function cleanPhone(phone: string): string {
   let d = phone.replace(/\D/g, '');
   if (d.startsWith('00')) d = d.slice(2);

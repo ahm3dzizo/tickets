@@ -132,3 +132,14 @@ startServer().catch((err) => {
   console.error("Error starting server:", err);
   process.exit(1);
 });
+
+import { closeAllSessions } from './baileys.js';
+
+async function shutdown() {
+  console.log('Shutting down gracefully, closing WA sessions...');
+  await closeAllSessions();
+  process.exit(0);
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
