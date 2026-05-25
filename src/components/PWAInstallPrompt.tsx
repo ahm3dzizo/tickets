@@ -137,10 +137,12 @@ export function PWAInstallPrompt() {
   const opacity = Math.max(0, 1 - Math.abs(dragX) / (DRAG_DISMISS_THRESHOLD * 1.5));
   const rotate = dragX * 0.04;
 
+  if (!platform || !visible) return null;
+
   const hasPWAContent = platform.isIOS || platform.isMacSafari || deferredPrompt !== null;
   const shouldShow = needsNotif || (needsPWA && hasPWAContent);
 
-  if (!visible || !platform || !shouldShow) return null;
+  if (!shouldShow) return null;
 
   const isNativePrompt = !platform.isIOS && !platform.isMacSafari;
 
