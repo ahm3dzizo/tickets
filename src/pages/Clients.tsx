@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { clientsApi, projectsApi, ticketsApi } from '@/lib/api';
-import { Search, MoreHorizontal, UserCheck, FileUp, ChevronDown, X, TicketCheck, ExternalLink, Pencil, Phone } from 'lucide-react';
+import {
+  Search, MoreHorizontal, UserCheck, FileUp, ChevronDown, X,
+  TicketCheck, ExternalLink, Pencil, Phone, Building2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,27 +15,21 @@ import { Project, Ticket as ClientTicket } from '@/types';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { cn } from '@/lib/utils';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
 const statusColors: Record<string, string> = {
-  open: 'bg-red-500/10 text-red-400 border-red-500/20',
-  'in-progress': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  pending: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  completed: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  closed: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-  waiting: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  open:        'bg-red-500/10 text-red-500 border-red-500/20',
+  'in-progress':'bg-amber-500/10 text-amber-500 border-amber-500/20',
+  pending:     'bg-primary/10 text-primary border-primary/20',
+  completed:   'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+  closed:      'bg-muted text-muted-foreground border-border',
+  waiting:     'bg-purple-500/10 text-purple-500 border-purple-500/20',
 };
 const statusLabels: Record<string, string> = {
   open: 'مفتوحة', 'in-progress': 'جاري', pending: 'معلقة',
@@ -40,39 +37,31 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function Clients() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const canWrite = user?.role === 'admin' || user?.role === 'engineer';
-  const [clients, setClients]       = useState<any[]>([]);
-  const [projects, setProjects]     = useState<Project[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [search, setSearch]         = useState('');
+  const navigate  = useNavigate();
+  const { user }  = useAuth();
+  const canWrite  = user?.role === 'admin' || user?.role === 'engineer';
+
+  const [clients, setClients]           = useState<any[]>([]);
+  const [projects, setProjects]         = useState<Project[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState('');
   const [filterProject, setFilterProject] = useState('');
-  const [filterBlock, setFilterBlock]     = useState('');
-
-  // Import dialog
-  const [importOpen, setImportOpen]         = useState(false);
+  const [filterBlock, setFilterBlock]   = useState('');
+  const [importOpen, setImportOpen]     = useState(false);
   const [importProjectId, setImportProjectId] = useState('');
-
-  // Client detail dialog
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [clientTickets, setClientTickets]   = useState<ClientTicket[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
-
-  // Edit dialog
-  const [editClient, setEditClient]   = useState<any | null>(null);
-  const [editName, setEditName]       = useState('');
-  const [editPhone, setEditPhone]     = useState('');
-  const [editVilla, setEditVilla]     = useState('');
-  const [editBlock, setEditBlock]     = useState('');
-  const [editSaving, setEditSaving]   = useState(false);
+  const [editClient, setEditClient]     = useState<any | null>(null);
+  const [editName, setEditName]         = useState('');
+  const [editPhone, setEditPhone]       = useState('');
+  const [editVilla, setEditVilla]       = useState('');
+  const [editBlock, setEditBlock]       = useState('');
+  const [editSaving, setEditSaving]     = useState(false);
 
   const loadData = async () => {
     try {
-      const [allClients, allProjects] = await Promise.all([
-        clientsApi.getAll(),
-        projectsApi.getAll(),
-      ]);
+      const [allClients, allProjects] = await Promise.all([clientsApi.getAll(), projectsApi.getAll()]);
       const sorted = [...allClients].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', 'ar'));
       setClients(sorted);
       setProjects(allProjects as Project[]);
@@ -82,26 +71,19 @@ export default function Clients() {
 
   useEffect(() => { loadData(); }, []);
 
-  // Load tickets when a client is selected
   useEffect(() => {
     if (!selectedClient) { setClientTickets([]); return; }
     setTicketsLoading(true);
     ticketsApi.getAll({ projectId: selectedClient.projectId })
-      .then((all: any[]) => {
-        const filtered = all.filter((t: any) => t.villaNumber === selectedClient.villaNumber);
-        setClientTickets(filtered as ClientTicket[]);
-      })
+      .then((all: any[]) => setClientTickets(all.filter((t: any) => t.villaNumber === selectedClient.villaNumber) as ClientTicket[]))
       .catch(() => {})
       .finally(() => setTicketsLoading(false));
   }, [selectedClient]);
 
   const openEdit = (c: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditClient(c);
-    setEditName(c.name || '');
-    setEditPhone(c.phone || '');
-    setEditVilla(c.villaNumber || '');
-    setEditBlock(c.blockNumber || '');
+    setEditClient(c); setEditName(c.name || ''); setEditPhone(c.phone || '');
+    setEditVilla(c.villaNumber || ''); setEditBlock(c.blockNumber || '');
   };
 
   const saveEdit = async () => {
@@ -110,14 +92,13 @@ export default function Clients() {
     try {
       await clientsApi.update(editClient.id, { name: editName, phone: editPhone, villaNumber: editVilla, blockNumber: editBlock });
       toast.success('تم تحديث بيانات العميل');
-      setEditClient(null);
-      loadData();
+      setEditClient(null); loadData();
     } catch { toast.error('فشل التحديث'); }
     finally { setEditSaving(false); }
   };
 
-  const openWhatsApp = (c: any, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const openWhatsApp = (c: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const num = String(c.phone || '').replace(/\D/g, '');
     const intl = num.startsWith('966') ? num : num.startsWith('0') ? '966' + num.slice(1) : '966' + num;
     window.open(`https://wa.me/${intl}`, '_blank');
@@ -139,14 +120,11 @@ export default function Clients() {
       });
     });
     await Promise.all(batch);
-    toast.success(`تم استيراد ${data.length} عميل بنجاح`);
-    setImportOpen(false); setImportProjectId('');
-    loadData();
+    toast.success(`تم استيراد ${data.length} عميل`);
+    setImportOpen(false); setImportProjectId(''); loadData();
   };
 
-  // Unique block numbers for filter
   const blockNumbers = [...new Set(clients.map(c => c.blockNumber).filter(Boolean))].sort();
-
   const accessibleProjectIds = user?.role !== 'admin' ? (user?.projectIds ?? []) : null;
   const filtered = clients.filter(c => {
     if (accessibleProjectIds && !accessibleProjectIds.includes(c.projectId)) return false;
@@ -163,120 +141,128 @@ export default function Clients() {
 
   return (
     <Layout>
-      <div className="space-y-8">
+      <div className="space-y-6 page-in">
+
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="text-right order-2 md:order-1">
-            <h1 className="text-3xl font-extrabold text-white">العملاء</h1>
-            <p className="text-slate-500 mt-1">إدارة بيانات أصحاب الفلل والتواصل معهم</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="text-right">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">العملاء</h1>
+            <p className="text-muted-foreground mt-1 text-sm">إدارة بيانات أصحاب الفلل والتواصل معهم</p>
           </div>
-          <div className="order-1 md:order-2 self-end md:self-auto flex gap-3">
-            {/* Import dialog */}
-            {canWrite && <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportProjectId(''); }}>
-              <DialogTrigger render={
-                <Button variant="outline" className="border-border bg-white/5 text-slate-300 hover:text-white gap-2 rounded-xl h-12 px-5 font-bold">
-                  <FileUp className="w-4 h-4" /> استيراد عملاء
-                </Button>
-              } />
-              <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[520px] rounded-3xl shadow-2xl shadow-black/40">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-bold text-white text-right">استيراد عملاء من ملف</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-5 py-2">
-                  <div className="space-y-2">
-                    <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">اختر المشروع أولاً</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger render={
-                        <Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12">
-                          <ChevronDown className="w-4 h-4 opacity-50" />
-                          <span>{projects.find(p => p.id === importProjectId)?.name || 'اختر المشروع'}</span>
-                        </Button>
-                      } />
-                      <DropdownMenuContent className="bg-card border-border text-slate-200 w-72">
-                        {projects.map(p => (
-                          <DropdownMenuItem key={p.id} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setImportProjectId(p.id)}>
-                            {p.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+          <div className="flex gap-2 self-end sm:self-auto">
+            {canWrite && (
+              <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportProjectId(''); }}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="gap-2 rounded-2xl h-10 font-bold border-border">
+                    <FileUp className="w-4 h-4" /> استيراد
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-card border-border sm:max-w-[520px] rounded-3xl shadow-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-bold text-foreground text-right">استيراد عملاء من ملف</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-5 py-2">
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground text-[10px] font-black uppercase tracking-widest block text-right">اختر المشروع أولاً</Label>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="w-full justify-between border-border rounded-xl h-11">
+                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-foreground">{projects.find(p => p.id === importProjectId)?.name || 'اختر المشروع'}</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="bg-card border-border w-72">
+                          {projects.map(p => (
+                            <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-right justify-end" onClick={() => setImportProjectId(p.id)}>
+                              {p.name}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <div className={importProjectId ? '' : 'opacity-40 pointer-events-none select-none'}>
+                      {!importProjectId && <p className="text-amber-500 text-xs text-right mb-2 font-medium">⚠ اختر المشروع أولاً لتفعيل الاستيراد</p>}
+                      <DataImport
+                        title="استيراد عملاء"
+                        description="ارفع ملف Excel — A=رقم الفيلا، B=رقم البلوك، C=الاسم، D=الجوال"
+                        fieldDefs={[
+                          { key: 'villaNumber', label: 'رقم الفيلا',   aliases: ['رقم الفيلا','الفيلا','فيلا','villa','A','__EMPTY'] },
+                          { key: 'blockNumber', label: 'رقم البلوك',   aliases: ['رقم البلوك','البلوك','بلوك','رقم القطعة','block','B','__EMPTY_1'] },
+                          { key: 'name',        label: 'الاسم',         aliases: ['الاسم','اسم العميل','name','C','__EMPTY_2'] },
+                          { key: 'phone',       label: 'رقم الجوال',   aliases: ['الجوال','رقم الجوال','الهاتف','phone','D','__EMPTY_3'] },
+                          { key: 'handoverDate',        label: 'تاريخ التسليم', aliases: ['تاريخ التسليم','handover','E','__EMPTY_4'] },
+                          { key: 'warrantyExpiryDate',  label: 'انتهاء الضمان', aliases: ['انتهاء الضمان','warranty','F','__EMPTY_5'] },
+                        ]}
+                        onImport={handleImportClients}
+                        trigger={
+                          <Button className="w-full bg-primary hover:bg-primary/90 text-white gap-2 rounded-xl h-11 font-bold">
+                            <FileUp className="w-4 h-4" /> رفع ملف Excel
+                          </Button>
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className={importProjectId ? '' : 'opacity-40 pointer-events-none select-none'}>
-                    {!importProjectId && <p className="text-amber-400 text-xs text-right mb-2 font-medium">⚠ اختر المشروع أولاً لتفعيل الاستيراد</p>}
-                    <DataImport
-                      title="استيراد عملاء"
-                      description="ارفع ملف Excel — A=رقم الفيلا، B=رقم البلوك، C=الاسم، D=الجوال"
-                      fieldDefs={[
-                        { key: 'villaNumber', label: 'رقم الفيلا', aliases: ['رقم الفيلا','الفيلا','فيلا','villa','A','__EMPTY'] },
-                        { key: 'blockNumber', label: 'رقم البلوك', aliases: ['رقم البلوك','البلوك','بلوك','رقم القطعة','block','B','__EMPTY_1'] },
-                        { key: 'name',        label: 'الاسم',      aliases: ['الاسم','اسم العميل','name','C','__EMPTY_2'] },
-                        { key: 'phone',       label: 'رقم الجوال', aliases: ['الجوال','رقم الجوال','الهاتف','phone','D','__EMPTY_3'] },
-                        { key: 'handoverDate', label: 'تاريخ التسليم', aliases: ['تاريخ التسليم','handover','E','__EMPTY_4'] },
-                        { key: 'warrantyExpiryDate', label: 'انتهاء الضمان', aliases: ['انتهاء الضمان','warranty','F','__EMPTY_5'] },
-                      ]}
-                      onImport={handleImportClients}
-                      trigger={
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2 rounded-xl h-12 font-bold">
-                          <FileUp className="w-4 h-4" /> رفع ملف Excel
-                        </Button>
-                      }
-                    />
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>}
+                </DialogContent>
+              </Dialog>
+            )}
             {canWrite && <ClientForm />}
           </div>
         </div>
 
-        {/* Table card */}
-        <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl">
+        {/* Main card */}
+        <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
+
           {/* Search + Filters */}
-          <div className="p-5 border-b border-border bg-white/5 flex flex-col gap-3">
-            <div className="flex flex-col md:flex-row gap-3 items-center">
-              {/* Search */}
-              <div className="relative w-full md:w-80">
-                <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <Input placeholder="البحث باسم أو رقم فيلا أو جوال..." className="bg-white/5 border-border pr-12 text-right rounded-xl h-10 text-sm" value={search} onChange={e => setSearch(e.target.value)} />
+          <div className="p-4 border-b border-border flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1 sm:max-w-xs">
+                <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="البحث باسم أو فيلا أو جوال..."
+                  className="bg-muted/50 border-transparent focus:border-primary/30 pr-10 text-right rounded-xl h-10 text-sm"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
               </div>
-              {/* Project filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger render={
-                  <Button variant="outline" className="border-border bg-white/5 text-slate-400 rounded-xl h-10 px-4 gap-2 text-sm font-medium min-w-[160px] justify-between">
-                    <ChevronDown className="w-3 h-3" />
-                    <span>{filterProject ? projectName(filterProject) : 'كل المشاريع'}</span>
-                  </Button>
-                } />
-                <DropdownMenuContent className="bg-card border-border text-slate-200 w-56">
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end text-slate-400" onClick={() => setFilterProject('')}>كل المشاريع</DropdownMenuItem>
-                  {projects.map(p => (
-                    <DropdownMenuItem key={p.id} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setFilterProject(p.id)}>{p.name}</DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              {/* Block filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger render={
-                  <Button variant="outline" className="border-border bg-white/5 text-slate-400 rounded-xl h-10 px-4 gap-2 text-sm font-medium min-w-[140px] justify-between">
-                    <ChevronDown className="w-3 h-3" />
-                    <span>{filterBlock ? `بلوك ${filterBlock}` : 'كل البلوكات'}</span>
-                  </Button>
-                } />
-                <DropdownMenuContent className="bg-card border-border text-slate-200 w-44 max-h-60 overflow-y-auto">
-                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end text-slate-400" onClick={() => setFilterBlock('')}>كل البلوكات</DropdownMenuItem>
-                  {blockNumbers.map(b => (
-                    <DropdownMenuItem key={b} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setFilterBlock(b)}>بلوك {b}</DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              {/* Active filters / count */}
-              <div className="flex items-center gap-2 mr-auto">
+              <div className="flex items-center gap-2 flex-wrap">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="border-border rounded-xl h-10 px-3 gap-2 text-sm font-medium min-w-[130px] justify-between">
+                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span>{filterProject ? projectName(filterProject) : 'كل المشاريع'}</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="bg-card border-border w-52">
+                    <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end text-muted-foreground" onClick={() => setFilterProject('')}>كل المشاريع</DropdownMenuItem>
+                    {projects.map(p => (
+                      <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-right justify-end" onClick={() => setFilterProject(p.id)}>{p.name}</DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {blockNumbers.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="border-border rounded-xl h-10 px-3 gap-2 text-sm font-medium min-w-[120px] justify-between">
+                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span>{filterBlock ? `بلوك ${filterBlock}` : 'كل البلوكات'}</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="bg-card border-border w-40 max-h-56 overflow-y-auto">
+                      <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end text-muted-foreground" onClick={() => setFilterBlock('')}>كل البلوكات</DropdownMenuItem>
+                      {blockNumbers.map(b => (
+                        <DropdownMenuItem key={b} className="hover:bg-muted cursor-pointer text-right justify-end" onClick={() => setFilterBlock(b)}>بلوك {b}</DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+
                 {(filterProject || filterBlock) && (
-                  <Button variant="ghost" size="sm" className="text-slate-500 hover:text-white h-8 px-2 gap-1 text-xs" onClick={() => { setFilterProject(''); setFilterBlock(''); }}>
-                    <X className="w-3 h-3" /> مسح الفلاتر
+                  <Button variant="ghost" size="sm" className="h-10 px-3 text-muted-foreground hover:text-foreground gap-1 text-xs" onClick={() => { setFilterProject(''); setFilterBlock(''); }}>
+                    <X className="w-3.5 h-3.5" /> مسح
                   </Button>
                 )}
-                <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">{filtered.length} عميل</span>
+                <span className="text-muted-foreground text-xs font-bold mr-auto">{filtered.length} عميل</span>
               </div>
             </div>
           </div>
@@ -284,55 +270,76 @@ export default function Clients() {
           {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-right border-collapse">
-              <thead className="bg-[#1e293b] text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-border">
-                <tr>
-                  <th className="px-6 py-4">العميل</th>
-                  <th className="px-6 py-4">رقم الفيلا</th>
-                  <th className="px-6 py-4">رقم البلوك</th>
-                  <th className="px-6 py-4">رقم الهاتف</th>
-                  <th className="px-6 py-4">المشروع</th>
-                  <th className="px-6 py-4 text-center">الإجراءات</th>
+              <thead>
+                <tr className="bg-muted/50 text-muted-foreground text-[10px] font-black uppercase tracking-widest border-b border-border">
+                  <th className="px-5 py-3.5">العميل</th>
+                  <th className="px-5 py-3.5">رقم الفيلا</th>
+                  <th className="px-5 py-3.5 hidden sm:table-cell">رقم البلوك</th>
+                  <th className="px-5 py-3.5 hidden md:table-cell">رقم الهاتف</th>
+                  <th className="px-5 py-3.5 hidden lg:table-cell">المشروع</th>
+                  <th className="px-5 py-3.5 text-center w-16">...</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/40">
+              <tbody className="divide-y divide-border/50">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" /></td></tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-5 py-4"><div className="flex items-center gap-3 justify-end"><div className="h-4 shimmer rounded w-24" /><div className="w-8 h-8 shimmer rounded-full shrink-0" /></div></td>
+                      <td className="px-5 py-4"><div className="h-4 shimmer rounded w-16 ml-auto" /></td>
+                      <td className="px-5 py-4 hidden sm:table-cell"><div className="h-4 shimmer rounded w-12 ml-auto" /></td>
+                      <td className="px-5 py-4 hidden md:table-cell"><div className="h-4 shimmer rounded w-28 ml-auto" /></td>
+                      <td className="px-5 py-4 hidden lg:table-cell"><div className="h-4 shimmer rounded w-20 ml-auto" /></td>
+                      <td className="px-5 py-4"><div className="w-6 h-6 shimmer rounded mx-auto" /></td>
+                    </tr>
+                  ))
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500">لا يوجد عملاء</td></tr>
+                  <tr>
+                    <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">لا يوجد عملاء مطابقين</td>
+                  </tr>
                 ) : filtered.map(c => (
                   <tr
                     key={c.id}
-                    className="group hover:bg-white/[0.03] transition-colors cursor-pointer"
+                    className="group hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => setSelectedClient(c)}
                   >
-                    <td className="px-6 py-4">
+                    <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3 justify-end">
                         <div className="text-right">
-                          <div className="font-bold text-white text-sm">{c.name}</div>
+                          <div className="font-semibold text-foreground text-sm">{c.name}</div>
                         </div>
-                        <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-blue-400 border border-border shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
                           <UserCheck className="w-4 h-4" />
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-300">فيلا {c.villaNumber}</td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-400">{c.blockNumber || '---'}</td>
-                    <td className="px-6 py-4 text-xs font-mono text-slate-400 dir-ltr text-left">{c.phone || '---'}</td>
-                    <td className="px-6 py-4 text-xs text-slate-500">{projectName(c.projectId)}</td>
-                    <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
+                    <td className="px-5 py-3.5">
+                      <span className="text-sm font-bold text-foreground">فيلا {c.villaNumber}</span>
+                    </td>
+                    <td className="px-5 py-3.5 hidden sm:table-cell">
+                      <span className="text-sm text-muted-foreground">{c.blockNumber || '---'}</span>
+                    </td>
+                    <td className="px-5 py-3.5 hidden md:table-cell">
+                      <span className="text-sm font-mono text-muted-foreground dir-ltr">{c.phone || '---'}</span>
+                    </td>
+                    <td className="px-5 py-3.5 hidden lg:table-cell">
+                      <span className="text-sm text-muted-foreground">{projectName(c.projectId)}</span>
+                    </td>
+                    <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-center">
                         <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-white" />}>
-                            <MoreHorizontal className="w-4 h-4" />
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-card border-border text-slate-200 w-44">
+                          <DropdownMenuContent align="end" className="bg-card border-border w-44 rounded-2xl">
                             {canWrite && (
-                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end gap-2" onClick={e => openEdit(c, e)}>
+                              <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end gap-2 rounded-xl mx-1 my-0.5" onClick={e => openEdit(c, e)}>
                                 <Pencil className="w-3.5 h-3.5" /> تعديل البيانات
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-emerald-400 text-right justify-end gap-2" onClick={e => openWhatsApp(c, e)}>
-                              <Phone className="w-3.5 h-3.5" /> تواصل واتساب
+                            <DropdownMenuItem className="hover:bg-muted cursor-pointer text-emerald-500 text-right justify-end gap-2 rounded-xl mx-1 my-0.5" onClick={e => openWhatsApp(c, e)}>
+                              <Phone className="w-3.5 h-3.5" /> واتساب
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -346,80 +353,66 @@ export default function Clients() {
         </div>
       </div>
 
-      {/* ── Client Detail Dialog ── */}
+      {/* ── Client Detail Dialog ────────────────────────────────────── */}
       <Dialog open={!!selectedClient} onOpenChange={v => { if (!v) setSelectedClient(null); }}>
-        <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[640px] rounded-3xl shadow-2xl shadow-black/40 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-card border-border sm:max-w-[600px] rounded-3xl shadow-2xl max-h-[90dvh] overflow-y-auto">
           {selectedClient && (<>
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-white text-right flex items-center gap-3 justify-end">
+              <DialogTitle className="text-xl font-bold text-foreground text-right flex items-center gap-3 justify-end">
                 <span>{selectedClient.name}</span>
-                <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
                   <UserCheck className="w-5 h-5" />
                 </div>
               </DialogTitle>
             </DialogHeader>
 
-            {/* Client info cards */}
             <div className="grid grid-cols-2 gap-3 mt-2">
-              <div className="bg-white/5 rounded-2xl p-4 text-right">
-                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">رقم الفيلا</p>
-                <p className="text-white font-bold text-lg">فيلا {selectedClient.villaNumber}</p>
-              </div>
-              <div className="bg-white/5 rounded-2xl p-4 text-right">
-                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">رقم البلوك</p>
-                <p className="text-white font-bold text-lg">{selectedClient.blockNumber || '---'}</p>
-              </div>
-              <div className="bg-white/5 rounded-2xl p-4 text-right">
-                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">رقم الجوال</p>
-                <div className="flex items-center gap-2 justify-end mt-1">
-                  <button onClick={e => openWhatsApp(selectedClient, e)} className="text-emerald-400 hover:text-emerald-300 transition-colors">
+              {[
+                { label: 'رقم الفيلا',   value: `فيلا ${selectedClient.villaNumber}` },
+                { label: 'رقم البلوك',   value: selectedClient.blockNumber || '---' },
+                { label: 'المشروع',      value: projectName(selectedClient.projectId) },
+                { label: 'تاريخ التسليم', value: selectedClient.handoverDate || '---', hidden: !selectedClient.handoverDate },
+                { label: 'انتهاء الضمان', value: selectedClient.warrantyExpiryDate || '---', hidden: !selectedClient.warrantyExpiryDate },
+              ].filter(f => !f.hidden).map(field => (
+                <div key={field.label} className="bg-muted/50 rounded-2xl p-3.5 text-right">
+                  <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mb-1">{field.label}</p>
+                  <p className="text-foreground font-bold">{field.value}</p>
+                </div>
+              ))}
+              <div className="bg-muted/50 rounded-2xl p-3.5 text-right">
+                <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mb-1">رقم الجوال</p>
+                <div className="flex items-center gap-2 justify-end">
+                  <button onClick={e => openWhatsApp(selectedClient, e)} className="text-emerald-500 hover:text-emerald-400 transition-colors">
                     <Phone className="w-4 h-4" />
                   </button>
-                  <p className="text-white font-mono font-bold">{selectedClient.phone || '---'}</p>
+                  <p className="text-foreground font-mono font-bold">{selectedClient.phone || '---'}</p>
                 </div>
               </div>
-              <div className="bg-white/5 rounded-2xl p-4 text-right">
-                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">المشروع</p>
-                <p className="text-white font-bold">{projectName(selectedClient.projectId)}</p>
-              </div>
-              {selectedClient.handoverDate && (
-                <div className="bg-white/5 rounded-2xl p-4 text-right">
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">تاريخ التسليم</p>
-                  <p className="text-white font-bold">{selectedClient.handoverDate}</p>
-                </div>
-              )}
-              {selectedClient.warrantyExpiryDate && (
-                <div className="bg-white/5 rounded-2xl p-4 text-right">
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">انتهاء الضمان</p>
-                  <p className="text-white font-bold">{selectedClient.warrantyExpiryDate}</p>
-                </div>
-              )}
             </div>
 
-            {/* Tickets */}
-            <div className="mt-5">
+            <div className="mt-4">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-slate-500 text-xs font-bold">{clientTickets.length} تذكرة</span>
-                <h3 className="text-slate-300 font-bold text-sm flex items-center gap-2">
-                  <TicketCheck className="w-4 h-4 text-blue-400" /> تذاكر الصيانة
+                <span className="text-muted-foreground text-xs font-bold">{clientTickets.length} تذكرة</span>
+                <h3 className="text-foreground font-bold text-sm flex items-center gap-2">
+                  <TicketCheck className="w-4 h-4 text-primary" /> تذاكر الصيانة
                 </h3>
               </div>
               {ticketsLoading ? (
-                <div className="flex justify-center py-6"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" /></div>
+                <div className="flex justify-center py-5"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
               ) : clientTickets.length === 0 ? (
-                <div className="bg-white/5 rounded-2xl p-6 text-center text-slate-500 text-sm">لا توجد تذاكر لهذا العميل</div>
+                <div className="bg-muted/50 rounded-2xl p-6 text-center text-muted-foreground text-sm">لا توجد تذاكر لهذا العميل</div>
               ) : (
                 <div className="space-y-2">
                   {clientTickets.map(t => (
                     <div
                       key={t.id}
-                      className="bg-white/5 rounded-xl p-4 flex items-center justify-between gap-3 hover:bg-white/10 cursor-pointer transition-colors"
+                      className="bg-muted/50 rounded-xl p-3.5 flex items-center justify-between gap-3 hover:bg-muted cursor-pointer transition-colors"
                       onClick={() => { setSelectedClient(null); navigate(`/tickets/${t.id}`); }}
                     >
-                      <ExternalLink className="w-4 h-4 text-slate-600 shrink-0" />
-                      <div className="flex-1 text-right">
-                        <div className="text-sm text-white font-medium line-clamp-1">{t.description}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{t.refNumber || t.ticketId}</div>
+                      <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 text-right min-w-0">
+                        <div className="text-sm text-foreground font-medium line-clamp-1">{t.description}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{t.refNumber || t.ticketId}</div>
                       </div>
                       <Badge className={`text-[10px] font-bold border shrink-0 ${statusColors[t.status] || statusColors.open}`}>
                         {statusLabels[t.status] || t.status}
@@ -430,14 +423,13 @@ export default function Clients() {
               )}
             </div>
 
-            {/* Footer actions */}
             <div className="flex gap-2 mt-4 pt-4 border-t border-border">
               {canWrite && (
-                <Button variant="ghost" className="text-slate-300 hover:text-white gap-2 rounded-xl mr-auto" onClick={e => { setSelectedClient(null); openEdit(selectedClient, e); }}>
+                <Button variant="ghost" className="gap-2 rounded-xl mr-auto" onClick={e => { setSelectedClient(null); openEdit(selectedClient, e); }}>
                   <Pencil className="w-4 h-4" /> تعديل
                 </Button>
               )}
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-xl" onClick={e => openWhatsApp(selectedClient, e)}>
+              <Button className="bg-emerald-500 hover:bg-emerald-600 text-white gap-2 rounded-xl" onClick={e => openWhatsApp(selectedClient, e)}>
                 <Phone className="w-4 h-4" /> واتساب
               </Button>
             </div>
@@ -445,38 +437,35 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Edit Dialog ── */}
+      {/* ── Edit Dialog ────────────────────────────────────────────── */}
       <Dialog open={!!editClient} onOpenChange={v => { if (!v) setEditClient(null); }}>
-        <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[460px] rounded-3xl shadow-2xl shadow-black/40">
+        <DialogContent className="bg-card border-border sm:max-w-[440px] rounded-3xl shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-white text-right">تعديل بيانات العميل</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-foreground text-right">تعديل بيانات العميل</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-3 py-2">
             {[
-              { label: 'الاسم', value: editName, set: setEditName, placeholder: 'اسم العميل' },
-              { label: 'رقم الجوال', value: editPhone, set: setEditPhone, placeholder: '05xxxxxxxx' },
-              { label: 'رقم الفيلا', value: editVilla, set: setEditVilla, placeholder: '12' },
-              { label: 'رقم البلوك', value: editBlock, set: setEditBlock, placeholder: 'A' },
-            ].map(({ label, value, set, placeholder }) => (
+              { label: 'الاسم',        value: editName,  set: setEditName,  ph: 'اسم العميل' },
+              { label: 'رقم الجوال',  value: editPhone, set: setEditPhone, ph: '05xxxxxxxx' },
+              { label: 'رقم الفيلا',  value: editVilla, set: setEditVilla, ph: '12' },
+              { label: 'رقم البلوك',  value: editBlock, set: setEditBlock, ph: 'A' },
+            ].map(({ label, value, set, ph }) => (
               <div key={label} className="space-y-1.5">
-                <Label className="text-slate-500 text-[10px] font-black uppercase tracking-widest block text-right">{label}</Label>
-                <Input value={value} onChange={e => set(e.target.value)} placeholder={placeholder} className="bg-white/5 border-border text-white rounded-xl h-11 text-right" />
+                <Label className="text-muted-foreground text-[10px] font-black uppercase tracking-widest block text-right">{label}</Label>
+                <Input value={value} onChange={e => set(e.target.value)} placeholder={ph}
+                  className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-right" />
               </div>
             ))}
           </div>
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" className="border-border text-slate-400 rounded-xl flex-1" onClick={() => setEditClient(null)}>إلغاء</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex-1 gap-2" onClick={saveEdit} disabled={editSaving}>
-              {editSaving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
-              حفظ التغييرات
+            <Button variant="outline" className="border-border rounded-xl flex-1" onClick={() => setEditClient(null)}>إلغاء</Button>
+            <Button className="bg-primary hover:bg-primary/90 text-white rounded-xl flex-1 gap-2" onClick={saveEdit} disabled={editSaving}>
+              {editSaving && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              حفظ
             </Button>
           </div>
         </DialogContent>
       </Dialog>
-
     </Layout>
   );
 }
-
-
-

@@ -188,7 +188,7 @@ export function WhatsAppBanner() {
                     onKeyDown={e => e.key === 'Enter' && requestCode()}
                     placeholder="01xxxxxxxxx أو 201xxxxxxxxx"
                     dir="ltr"
-                    className="bg-background/70 border-border rounded-xl h-11 text-foreground text-left"
+                    className="bg-muted/50 border-transparent focus:border-emerald-500/40 rounded-xl h-11 text-foreground text-left"
                   />
                 </div>
 

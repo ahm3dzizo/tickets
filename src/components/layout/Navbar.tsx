@@ -21,7 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
 
-/* ── nav items definition ─────────────────────────────────────────────── */
+/* ── nav items ─────────────────────────────────────────────────── */
 const allNavItems = [
   { icon: LayoutDashboard, label: 'لوحة التحكم', path: '/',              roles: ['admin', 'engineer', 'supervisor'] },
   { icon: Briefcase,       label: 'المشاريع',    path: '/projects',      roles: ['admin', 'engineer', 'supervisor'] },
@@ -33,7 +33,6 @@ const allNavItems = [
   { icon: Settings,        label: 'الإعدادات',   path: '/settings',      roles: ['admin', 'engineer', 'supervisor'] },
 ];
 
-/* ── helpers ──────────────────────────────────────────────────────────── */
 const roleLabel: Record<string, string> = {
   admin: 'مدير النظام',
   engineer: 'مهندس',
@@ -55,7 +54,7 @@ export function Navbar() {
 
   const filteredNav = allNavItems.filter(item => user && item.roles.includes(user.role));
 
-  /* mobile bottom bar: 4 items based on role */
+  /* mobile bottom bar — 4 items */
   const bottomItems = (() => {
     const picks: typeof filteredNav = [];
     const push = (path: string) => {
@@ -91,23 +90,26 @@ export function Navbar() {
     if (n.ticketDocId) navigate(`/tickets/${n.ticketDocId}`);
   };
 
-  /* ── Notification Dropdown ───────────────────────────────────────────── */
+  /* ── Notification Dropdown ─────────────────────────────────── */
   const NotifBell = ({ side = 'left' }: { side?: 'left' | 'right' | 'top' | 'bottom' }) => (
     <DropdownMenu onOpenChange={open => { if (open) markAllRead(); }}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl h-9 w-9"
-        >
-          <Bell className="w-4.5 h-4.5" />
-          {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl h-9 w-9"
+          />
+        }
+      >
+        <Bell className="w-4 h-4" />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
       </DropdownMenuTrigger>
+
       <DropdownMenuContent
         side={side as any}
         sideOffset={10}
@@ -149,7 +151,7 @@ export function Navbar() {
                 </div>
                 <div className="flex-1 text-right min-w-0">
                   <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className="text-[10px] text-muted-foreground tabular-nums">{formatAgo(n.createdAt)}</span>
+                    <span className="text-[10px] text-muted-foreground">{formatAgo(n.createdAt)}</span>
                     <p className="text-[13px] font-semibold text-foreground leading-tight truncate">{n.title}</p>
                   </div>
                   <p className="text-[11px] text-muted-foreground line-clamp-2">{n.body}</p>
@@ -178,8 +180,8 @@ export function Navbar() {
   return (
     <>
       {/* ═══════════════ MOBILE TOP BAR ═══════════════ */}
-      <header className="lg:hidden fixed top-0 inset-x-0 z-50 h-14 glass bg-card/90 border-b border-border px-3 flex items-center justify-between">
-        {/* LEFT: Actions */}
+      <header className="lg:hidden fixed top-0 inset-x-0 z-50 h-14 bg-card/90 backdrop-blur-xl border-b border-border px-3 flex items-center justify-between">
+        {/* Left: Actions */}
         <div className="flex items-center gap-0.5">
           <NotifBell side="bottom" />
           <Button
@@ -191,8 +193,7 @@ export function Navbar() {
             {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </Button>
         </div>
-
-        {/* RIGHT: Logo */}
+        {/* Right: Logo */}
         <Link to="/" className="flex items-center gap-2">
           <span className="font-extrabold text-sm text-foreground tracking-tight">Retal Maintenance</span>
           <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center p-1 shrink-0">
@@ -202,7 +203,7 @@ export function Navbar() {
       </header>
 
       {/* ═══════════════ MOBILE BOTTOM NAV ═══════════════ */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 glass bg-card/95 border-t border-border safe-area-pb">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border safe-area-pb">
         <div className="flex items-center h-16 px-1">
           {bottomItems.map(item => {
             const active = isActive(item.path);
@@ -217,12 +218,12 @@ export function Navbar() {
                   active ? 'bg-primary/15' : 'hover:bg-muted/60'
                 )}>
                   <item.icon
-                    className={cn('w-5 h-5 transition-all duration-200', active ? 'text-primary scale-110' : 'text-muted-foreground')}
+                    className={cn('w-5 h-5 transition-all', active ? 'text-primary scale-110' : 'text-muted-foreground')}
                     strokeWidth={active ? 2.5 : 1.75}
                   />
                 </div>
                 <span className={cn(
-                  'text-[9px] font-bold transition-all duration-200 leading-none',
+                  'text-[9px] font-bold leading-none',
                   active ? 'text-primary' : 'text-muted-foreground'
                 )}>
                   {item.label}
@@ -233,17 +234,18 @@ export function Navbar() {
 
           {/* More / Avatar */}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex-1 flex flex-col items-center justify-center h-full gap-0.5">
-                <div className="w-12 h-9 rounded-2xl flex items-center justify-center hover:bg-muted/60 transition-colors">
-                  <Avatar className="w-7 h-7 ring-1 ring-border">
-                    <AvatarImage src={user?.photoURL} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">{initials}</AvatarFallback>
-                  </Avatar>
-                </div>
-                <span className="text-[9px] font-bold text-muted-foreground leading-none">المزيد</span>
-              </button>
+            <DropdownMenuTrigger
+              render={<button className="flex-1 flex flex-col items-center justify-center h-full gap-0.5" />}
+            >
+              <div className="w-12 h-9 rounded-2xl flex items-center justify-center hover:bg-muted/60 transition-colors">
+                <Avatar className="w-7 h-7 ring-1 ring-border">
+                  <AvatarImage src={user?.photoURL} />
+                  <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">{initials}</AvatarFallback>
+                </Avatar>
+              </div>
+              <span className="text-[9px] font-bold text-muted-foreground leading-none">المزيد</span>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent
               align="end"
               side="top"
@@ -302,10 +304,7 @@ export function Navbar() {
                     ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                 )}>
-                  <item.icon
-                    className="w-4 h-4 shrink-0"
-                    strokeWidth={active ? 2.5 : 1.75}
-                  />
+                  <item.icon className="w-4 h-4 shrink-0" strokeWidth={active ? 2.5 : 1.75} />
                   <span>{item.label}</span>
                 </div>
               </Link>
@@ -333,22 +332,25 @@ export function Navbar() {
 
           {/* User dropdown */}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-muted transition-colors group">
-                <Avatar className="w-8 h-8 shrink-0 ring-1 ring-border">
-                  <AvatarImage src={user?.photoURL} />
-                  <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">{initials}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col items-end min-w-0 flex-1 text-right leading-tight">
-                  <span className="font-semibold text-foreground text-sm truncate w-full">
-                    {user?.displayName}
-                  </span>
-                  <span className="text-muted-foreground text-[10px] font-medium">
-                    {roleLabel[user?.role ?? ''] ?? user?.role}
-                  </span>
-                </div>
-              </button>
+            <DropdownMenuTrigger
+              render={
+                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-muted transition-colors" />
+              }
+            >
+              <Avatar className="w-8 h-8 shrink-0 ring-1 ring-border">
+                <AvatarImage src={user?.photoURL} />
+                <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">{initials}</AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col items-end min-w-0 flex-1 text-right leading-tight">
+                <span className="font-semibold text-foreground text-sm truncate w-full">
+                  {user?.displayName}
+                </span>
+                <span className="text-muted-foreground text-[10px] font-medium">
+                  {roleLabel[user?.role ?? ''] ?? user?.role}
+                </span>
+              </div>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent
               align="end"
               side="top"

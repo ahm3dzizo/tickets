@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { usersApi, projectsApi } from '@/lib/api';
-import { Users, Shield, Mail, Search, MoreHorizontal, Phone, Briefcase, Star } from 'lucide-react';
+import { Users, Shield, Mail, Search, MoreHorizontal, Phone, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { UserForm } from '@/components/team/UserForm';
@@ -10,27 +10,34 @@ import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+const roleTranslations: Record<string, string> = { admin: 'مدير النظام', engineer: 'مهندس مشروع', supervisor: 'مشرف' };
+const specialtyLabel: Record<string, string> = { mechanics: 'ميكانيكا', electricity: 'كهرباء', general: 'عام' };
+const roleColors: Record<string, string> = {
+  admin:      'bg-red-500/10 text-red-500 border-red-500/20',
+  engineer:   'bg-purple-500/10 text-purple-500 border-purple-500/20',
+  supervisor: 'bg-primary/10 text-primary border-primary/20',
+};
+const specialtyColor: Record<string, string> = {
+  mechanics:   'bg-amber-500/10 text-amber-500 border-amber-500/20',
+  electricity: 'bg-primary/10 text-primary border-primary/20',
+  general:     'bg-muted text-muted-foreground border-border',
+};
 
 export default function Team() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
-  const [team, setTeam] = useState<any[]>([]);
+  const [team, setTeam]         = useState<any[]>([]);
   const [projects, setProjects] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState('');
 
   const loadData = async () => {
     try {
-      const [users, projectList] = await Promise.all([
-        usersApi.getAll(),
-        projectsApi.getAll(),
-      ]);
+      const [users, projectList] = await Promise.all([usersApi.getAll(), projectsApi.getAll()]);
       setTeam(users.map((u: any) => ({ ...u, id: u.uid })));
       const map: Record<string, string> = {};
       projectList.forEach((p: any) => { map[p.id] = p.name; });
@@ -46,24 +53,6 @@ export default function Team() {
     t.role?.toLowerCase().includes(search.toLowerCase()) ||
     t.email?.toLowerCase().includes(search.toLowerCase())
   );
-
-  const roleTranslations: Record<string, string> = {
-    'admin': 'مدير النظام',
-    'engineer': 'مهندس مشروع',
-    'supervisor': 'مشرف',
-  };
-
-  const specialtyLabel: Record<string, string> = {
-    'mechanics': 'ميكانيكا',
-    'electricity': 'كهرباء',
-    'general': 'عام',
-  };
-
-  const specialtyColor: Record<string, string> = {
-    'mechanics': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    'electricity': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    'general': 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-  };
 
   const getSpecialties = (t: any): string[] => {
     if (t.specialties?.length) return t.specialties;
@@ -81,85 +70,96 @@ export default function Team() {
 
   return (
     <Layout>
-      <div className="space-y-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="text-right order-2 md:order-1">
-            <h1 className="text-3xl font-extrabold text-white">إدارة الفريق</h1>
-            <p className="text-slate-500 mt-1">إضافة وإدارة المهندسين والمشرفين وأدوارهم</p>
+      <div className="space-y-6 page-in">
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="text-right">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">إدارة الفريق</h1>
+            <p className="text-muted-foreground mt-1 text-sm">إضافة وإدارة المهندسين والمشرفين</p>
           </div>
-          <div className="order-1 md:order-2 self-end md:self-auto">
-            {isAdmin && <UserForm />}
-          </div>
+          {isAdmin && <UserForm />}
         </div>
 
-        <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl transition-all">
-          <div className="p-6 border-b border-border bg-white/5 flex flex-col md:flex-row gap-4 items-center justify-between">
-             <div className="relative w-full md:w-96">
-              <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              <Input 
-                placeholder="البحث بالاسم أو البريد..." 
-                className="bg-white/5 border-border pr-12 text-right rounded-xl h-11"
+        {/* Main card */}
+        <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
+
+          {/* Search bar */}
+          <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="البحث بالاسم أو البريد..."
+                className="bg-muted/50 border-transparent focus:border-primary/30 pr-10 text-right rounded-xl h-10 text-sm"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={e => setSearch(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-2">
-               <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">{filtered.length} موظف</span>
-            </div>
+            <span className="text-muted-foreground text-xs font-bold uppercase tracking-widest">{filtered.length} موظف</span>
           </div>
 
+          {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-right border-collapse">
-              <thead className="bg-[#1e293b] text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-border">
-                <tr>
-                  <th className="px-6 py-4">الموظف</th>
-                  <th className="px-6 py-4">الدور</th>
-                  <th className="px-6 py-4">التخصصات</th>
-                  <th className="px-6 py-4">المشاريع</th>
-                  <th className="px-6 py-4">التواصل</th>
-                  <th className="px-6 py-4 text-center">الحالة</th>
-                  <th className="px-6 py-4 text-center">إجراءات</th>
+              <thead>
+                <tr className="bg-muted/50 text-muted-foreground text-[10px] font-black uppercase tracking-widest border-b border-border">
+                  <th className="px-5 py-3.5">الموظف</th>
+                  <th className="px-5 py-3.5">الدور</th>
+                  <th className="px-5 py-3.5 hidden sm:table-cell">التخصصات</th>
+                  <th className="px-5 py-3.5 hidden md:table-cell">المشاريع</th>
+                  <th className="px-5 py-3.5 hidden lg:table-cell">التواصل</th>
+                  <th className="px-5 py-3.5 text-center">الحالة</th>
+                  <th className="px-5 py-3.5 text-center w-14">...</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/40">
+              <tbody className="divide-y divide-border/50">
                 {loading ? (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
-                  </td></tr>
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-5 py-4"><div className="flex items-center gap-3 justify-end"><div className="space-y-1 text-right"><div className="h-4 shimmer rounded w-24" /><div className="h-3 shimmer rounded w-16" /></div><div className="w-9 h-9 shimmer rounded-full shrink-0" /></div></td>
+                      <td className="px-5 py-4"><div className="h-5 shimmer rounded-full w-20 ml-auto" /></td>
+                      <td className="px-5 py-4 hidden sm:table-cell"><div className="h-5 shimmer rounded-lg w-16 ml-auto" /></td>
+                      <td className="px-5 py-4 hidden md:table-cell"><div className="h-5 shimmer rounded-lg w-24 ml-auto" /></td>
+                      <td className="px-5 py-4 hidden lg:table-cell"><div className="h-4 shimmer rounded w-32 ml-auto" /></td>
+                      <td className="px-5 py-4"><div className="h-5 shimmer rounded w-12 mx-auto" /></td>
+                      <td className="px-5 py-4"><div className="w-6 h-6 shimmer rounded mx-auto" /></td>
+                    </tr>
+                  ))
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-500">لا يوجد موظفين حالياً</td></tr>
-                ) : filtered.map((t) => {
+                  <tr>
+                    <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">لا يوجد موظفين</td>
+                  </tr>
+                ) : filtered.map(t => {
                   const specs = getSpecialties(t);
                   const memberProjects = (t.projectIds ?? []).map((id: string) => projects[id]).filter(Boolean);
                   return (
-                    <tr key={t.id} className="group hover:bg-white/[0.02] transition-colors cursor-pointer" onClick={() => navigate(`/team/${t.id}`)}>
-
-                      {/* Name + ID */}
-                      <td className="px-6 py-4">
+                    <tr
+                      key={t.id}
+                      className="group hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/team/${t.id}`)}
+                    >
+                      {/* Name */}
+                      <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3 justify-end">
                           <div className="text-right">
-                            <div className="font-bold text-white text-sm">{t.displayName}</div>
-                            <div className="text-[10px] text-slate-500 font-mono">ID: {t.employeeId || '---'}</div>
+                            <div className="font-semibold text-foreground text-sm">{t.displayName}</div>
+                            <div className="text-[10px] text-muted-foreground font-mono">{t.employeeId ? `#${t.employeeId}` : ''}</div>
                           </div>
-                          <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-blue-400 border border-border shrink-0">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
                             <Shield className="w-4 h-4" />
                           </div>
                         </div>
                       </td>
 
                       {/* Role */}
-                      <td className="px-6 py-4">
-                        <span className={cn('px-3 py-1 rounded-full text-[10px] font-bold border',
-                          t.role === 'admin'      ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                          t.role === 'engineer'   ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                          'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                        )}>
+                      <td className="px-5 py-3.5">
+                        <span className={cn('px-2.5 py-1 rounded-full text-[10px] font-bold border', roleColors[t.role] ?? roleColors.supervisor)}>
                           {roleTranslations[t.role] || t.role}
                         </span>
                       </td>
 
                       {/* Specialties */}
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3.5 hidden sm:table-cell">
                         {specs.length > 0 ? (
                           <div className="flex flex-wrap gap-1 justify-end">
                             {specs.map((sp: string) => (
@@ -168,90 +168,87 @@ export default function Team() {
                               </span>
                             ))}
                           </div>
-                        ) : <span className="text-[10px] text-slate-600">—</span>}
+                        ) : <span className="text-muted-foreground text-xs">—</span>}
                       </td>
 
                       {/* Projects */}
-                      <td className="px-6 py-4 max-w-[200px]">
+                      <td className="px-5 py-3.5 hidden md:table-cell max-w-[180px]">
                         {memberProjects.length > 0 ? (
                           <div className="flex flex-wrap gap-1 justify-end">
-                            {memberProjects.slice(0, 3).map((name: string) => (
-                              <span key={name} className="text-[10px] bg-white/5 border border-border text-slate-400 px-2 py-0.5 rounded-lg font-medium">
+                            {memberProjects.slice(0, 2).map((name: string) => (
+                              <span key={name} className="text-[10px] bg-muted border border-border text-muted-foreground px-2 py-0.5 rounded-lg font-medium">
                                 {name}
                               </span>
                             ))}
-                            {memberProjects.length > 3 && (
-                              <span className="text-[10px] text-slate-600">+{memberProjects.length - 3}</span>
+                            {memberProjects.length > 2 && (
+                              <span className="text-[10px] text-muted-foreground">+{memberProjects.length - 2}</span>
                             )}
                           </div>
-                        ) : <span className="text-[10px] text-slate-600">—</span>}
+                        ) : <span className="text-muted-foreground text-xs">—</span>}
                       </td>
 
                       {/* Contact */}
-                      <td className="px-6 py-4">
-                        <div className="text-right space-y-1">
-                          <div className="flex items-center gap-1.5 justify-end text-xs text-slate-400 font-mono">
-                            <span className="truncate max-w-[160px]">{t.email}</span>
-                            <Mail className="w-3 h-3 shrink-0 text-slate-600" />
+                      <td className="px-5 py-3.5 hidden lg:table-cell">
+                        <div className="space-y-1 text-right">
+                          <div className="flex items-center gap-1.5 justify-end text-xs text-muted-foreground font-mono">
+                            <span className="truncate max-w-[150px]">{t.email}</span>
+                            <Mail className="w-3 h-3 shrink-0" />
                           </div>
                           {t.phoneNumber && (
-                            <div className="flex items-center gap-1.5 justify-end text-xs text-slate-500 font-mono">
+                            <div className="flex items-center gap-1.5 justify-end text-xs text-muted-foreground font-mono">
                               <span>{t.phoneNumber}</span>
-                              <Phone className="w-3 h-3 shrink-0 text-slate-600" />
+                              <Phone className="w-3 h-3 shrink-0" />
                             </div>
                           )}
                         </div>
                       </td>
 
                       {/* Status */}
-                      <td className="px-6 py-4 text-center">
-                        <span className={cn('px-2 py-1 rounded text-[10px] font-bold',
-                          t.disabled ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+                      <td className="px-5 py-3.5 text-center">
+                        <span className={cn('px-2.5 py-1 rounded-full text-[10px] font-bold border',
+                          t.disabled
+                            ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                            : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
                         )}>
                           {t.disabled ? 'معطّل' : 'نشط'}
                         </span>
                       </td>
 
                       {/* Actions */}
-                      <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-white" />}>
+                      <td className="px-5 py-3.5 text-center" onClick={e => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg">
                               <MoreHorizontal className="w-4 h-4" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="bg-card border-border text-slate-200 w-52">
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-card border-border w-48 rounded-2xl">
+                            <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end rounded-xl mx-1 my-0.5" onClick={() => navigate(`/team/${t.id}`)}>
+                              عرض الملف الشخصي
+                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <div onClick={e => e.stopPropagation()}>
+                                <UserForm
+                                  user={t}
+                                  trigger={
+                                    <DropdownMenuItem className="hover:bg-muted cursor-pointer text-right justify-end rounded-xl mx-1 my-0.5" onSelect={e => e.preventDefault()}>
+                                      تعديل البيانات
+                                    </DropdownMenuItem>
+                                  }
+                                />
+                              </div>
+                            )}
+                            {isAdmin && (
                               <DropdownMenuItem
-                                className="hover:bg-white/5 cursor-pointer text-right justify-end"
-                                onClick={() => navigate(`/team/${t.id}`)}
+                                className={cn('hover:bg-muted cursor-pointer text-right justify-end rounded-xl mx-1 my-0.5',
+                                  t.disabled ? 'text-emerald-500' : 'text-red-500')}
+                                onClick={() => handleToggleStatus(t)}
                               >
-                                عرض الملف الشخصي
+                                {t.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب'}
                               </DropdownMenuItem>
-                              {isAdmin && (
-                                <div onClick={e => e.stopPropagation()}>
-                                  <UserForm
-                                    user={t}
-                                    trigger={
-                                      <DropdownMenuItem
-                                        className="hover:bg-white/5 cursor-pointer text-right justify-end"
-                                        onSelect={e => e.preventDefault()}
-                                      >
-                                        تعديل البيانات
-                                      </DropdownMenuItem>
-                                    }
-                                  />
-                                </div>
-                              )}
-                              {isAdmin && (
-                                <DropdownMenuItem
-                                  className="hover:bg-white/5 cursor-pointer text-right justify-end"
-                                  onClick={() => handleToggleStatus(t)}
-                                >
-                                  {t.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب'}
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );

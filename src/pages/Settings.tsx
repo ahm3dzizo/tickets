@@ -55,10 +55,10 @@ function Section({
   open: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
   const accentMap: Record<string, string> = {
-    blue:   'bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20',
-    amber:  'bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20',
-    purple: 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20',
-    green:  'bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20',
+    blue:   'bg-primary/10 text-primary group-hover:bg-primary/20',
+    amber:  'bg-amber-500/10 text-amber-500 group-hover:bg-amber-500/20',
+    purple: 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500/20',
+    green:  'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500/20',
   };
   return (
     <div className={cn(
@@ -333,11 +333,11 @@ export default function Settings() {
 
   return (
     <Layout>
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto">
+      <div className="space-y-5 page-in max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-right">
-          <h1 className="text-3xl font-extrabold text-foreground">الإعدادات</h1>
-          <p className="text-muted-foreground mt-1">تخصيص حسابك وتفضيلات النظام</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">الإعدادات</h1>
+          <p className="text-muted-foreground mt-1 text-sm">تخصيص حسابك وتفضيلات النظام</p>
         </div>
 
         {/* ── Profile ─────────────────────────────────────────────────────── */}
@@ -378,7 +378,7 @@ export default function Settings() {
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
                   placeholder="الاسم الكامل"
-                  className="bg-background/70 border-border rounded-xl h-11 text-foreground text-right"
+                  className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-foreground text-right"
                 />
               </div>
               <div className="space-y-1.5">
@@ -388,7 +388,7 @@ export default function Settings() {
                   onChange={e => setPhoneNumber(e.target.value)}
                   placeholder="+966xxxxxxxxx"
                   dir="ltr"
-                  className="bg-background/70 border-border rounded-xl h-11 text-foreground text-left"
+                  className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-foreground text-left"
                 />
               </div>
             </div>
@@ -420,7 +420,7 @@ export default function Settings() {
                   onChange={e => setCurrentPass(e.target.value)}
                   placeholder="••••••••"
                   dir="ltr"
-                  className="bg-background/70 border-border rounded-xl h-11 text-foreground pr-12 text-left"
+                  className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-foreground pr-12 text-left"
                 />
                 <button
                   type="button"
@@ -442,7 +442,7 @@ export default function Settings() {
                   onChange={e => setNewPass(e.target.value)}
                   placeholder="••••••••"
                   dir="ltr"
-                  className="bg-background/70 border-border rounded-xl h-11 text-foreground pr-12 text-left"
+                  className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-foreground pr-12 text-left"
                 />
                 <button
                   type="button"
