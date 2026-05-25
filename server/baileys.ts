@@ -49,16 +49,20 @@ export async function initAllSessions() {
   }
 }
 
+const initializingSessions = new Set<string>();
+
 export async function startWA(userId: string) {
-  if (sessions.has(userId)) return;
+  if (sessions.has(userId) || initializingSessions.has(userId)) return;
+  initializingSessions.add(userId);
 
-  statuses.set(userId, 'WAITING_AUTH');
-  qrCodes.set(userId, null);
+  try {
+    statuses.set(userId, 'WAITING_AUTH');
+    qrCodes.set(userId, null);
 
-  const SESSION_DIR = path.join(BASE_SESSIONS, `auth_${userId}`);
-  if (!fs.existsSync(SESSION_DIR)) {
-    fs.mkdirSync(SESSION_DIR, { recursive: true });
-  }
+    const SESSION_DIR = path.join(BASE_SESSIONS, `auth_${userId}`);
+    if (!fs.existsSync(SESSION_DIR)) {
+      fs.mkdirSync(SESSION_DIR, { recursive: true });
+    }
 
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
 
@@ -106,6 +110,10 @@ export async function startWA(userId: string) {
   });
 
   sock.ev.on('creds.update', saveCreds);
+
+  } finally {
+    initializingSessions.delete(userId);
+  }
 }
 
 export async function stopWA(userId: string, cleanSession = false) {
