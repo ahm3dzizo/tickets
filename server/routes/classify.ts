@@ -67,8 +67,10 @@ router.post("/bulk", requireAuth, async (req, res) => {
       return ["general"];
     };
 
-    const results = await Promise.all(items.map(async (item) => {
-      const classification = await classifyTicket(item.description, item.projectId);
+    const keywords = await loadKeywordsFromDB();
+
+    const results = items.map((item) => {
+      const classification = classifyFromKeywordsDB(item.description, keywords);
       const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
       const projectSups = supervisorCache[item.projectId] || [];
 
@@ -84,10 +86,10 @@ router.post("/bulk", requireAuth, async (req, res) => {
         subType: classification.subType || undefined,
         requiredSpecialties,
         confidence: classification.confidence,
-        source: classification.source,
+        source: "keywords",
         supervisors: finalSups.map((u: any) => ({ id: u.uid, name: u.displayName, specialties: getSpecs(u) })),
       };
-    }));
+    });
 
     res.json(results);
   } catch (err: any) {

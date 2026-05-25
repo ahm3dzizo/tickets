@@ -553,15 +553,41 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     setAllSupervisorsForProject(projectSupervisors.map((u: any) => ({ id: u.uid, name: u.displayName })));
     setLoadingSupervisors(false);
 
-    // ── تصنيف الكل دفعة واحدة على السيرفر ──
-    const items = data.map(item => ({
-      description: String(item.description || '').trim(),
-      projectId: selectedProjectId,
-    }));
+    // ── الفرز المسبق للتذاكر (استبعاد المكرر قبل التصنيف) ──
+    const newItemsToClassify: { idx: number; description: string; projectId: string }[] = [];
+    const preProcessedData = data.map((item, idx) => {
+      const ticketId = String(item.ticketId || '').trim();
+      const rawVillaNumber = String(item.villaNumber || '').trim();
+      const cleanVillaNumber = normalizeVillaNumber(rawVillaNumber);
+      const dupKey = `${ticketId}::${cleanVillaNumber}`;
+      const isDuplicate = existingKeys.has(dupKey);
+      
+      if (!isDuplicate) {
+        newItemsToClassify.push({
+          idx,
+          description: String(item.description || '').trim(),
+          projectId: selectedProjectId,
+        });
+      }
+      return { ...item, cleanVillaNumber, isDuplicate, ticketId, rawVillaNumber };
+    });
 
+    // ── تصنيف التذاكر الجديدة فقط على السيرفر ──
     let classifications: any[] = [];
     try {
-      classifications = await bulkClassifyOnServer(items);
+      const newItemsPayload = newItemsToClassify.map(i => ({
+        description: i.description,
+        projectId: i.projectId
+      }));
+      
+      const newClassifications = newItemsPayload.length > 0 
+        ? await bulkClassifyOnServer(newItemsPayload) 
+        : [];
+        
+      // إرجاع التصنيفات لأماكنها الصحيحة
+      newItemsToClassify.forEach((item, i) => {
+        classifications[item.idx] = newClassifications[i];
+      });
     } catch (err) {
       toast.error('فشل التصنيف على السيرفر. حاول مرة أخرى.');
       setLoading(false);
@@ -571,21 +597,21 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     // ── تجهيز التذاكر ──
     const processed: any[] = [];
     for (let idx = 0; idx < data.length; idx++) {
-      const item = data[idx];
-      const ticketId = String(item.ticketId || '').trim();
-      const rawVillaNumber = String(item.villaNumber || '').trim();
+      const item = preProcessedData[idx];
+      const ticketId = item.ticketId;
+      const rawVillaNumber = item.rawVillaNumber;
       const description = String(item.description || '').trim();
       const rawDate = item.createdAt ?? item.issuedAt ?? item.date ?? '';
       const rawStatus = String(item.status || '').trim();
       const classification = classifications[idx];
 
-      const cleanVillaNumber = normalizeVillaNumber(rawVillaNumber);
+      const cleanVillaNumber = item.cleanVillaNumber;
       const refNumber = cleanVillaNumber ? `${projectAbbr}-${cleanVillaNumber}` : '';
 
-      // الكشف عن المكرر
-      const dupKey = `${ticketId}::${cleanVillaNumber}`;
-      const isDuplicate = existingKeys.has(dupKey);
+      // الكشف عن المكرر تم مسبقاً
+      const isDuplicate = item.isDuplicate;
 
+      // التذاكر المكررة نعطيها تصنيف افتراضي لأننا لم نصنفها
       const finalType = classification?.primaryType || 'plumbing';
 
       let clientId = '';

@@ -13,28 +13,43 @@ let _kwCache: KeywordData[] = [];
 let _kwCacheTime = 0;
 const KW_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+let _kwCachePromise: Promise<KeywordData[]> | null = null;
+
 export async function loadKeywordsFromDB(force = false): Promise<KeywordData[]> {
   if (!force && _kwCache.length > 0 && Date.now() - _kwCacheTime < KW_CACHE_TTL) {
     return _kwCache;
   }
-  const rows = await prisma.ticketTypeKeyword.findMany({
-    where: { typeId: { not: null }, ticketType: { isActive: true } },
-    include: { 
-      ticketType: { select: { key: true } },
-      subType: { select: { nameAr: true } }
-    },
-  });
   
-  _kwCache = rows
-    .filter((r: any) => r.ticketType?.key)
-    .map((r: any) => ({
-      keyword: normalizeArabic(r.keyword),
-      typeKey: r.ticketType.key,
-      subType: r.subType?.nameAr || null,
-      weight: r.weight,
-    }));
-  _kwCacheTime = Date.now();
-  return _kwCache;
+  if (_kwCachePromise && !force) {
+    return _kwCachePromise;
+  }
+  
+  _kwCachePromise = (async () => {
+    const rows = await prisma.ticketTypeKeyword.findMany({
+      where: { typeId: { not: null }, ticketType: { isActive: true } },
+      include: { 
+        ticketType: { select: { key: true } },
+        subType: { select: { nameAr: true } }
+      },
+    });
+    
+    _kwCache = rows
+      .filter((r: any) => r.ticketType?.key)
+      .map((r: any) => ({
+        keyword: normalizeArabic(r.keyword),
+        typeKey: r.ticketType.key,
+        subType: r.subType?.nameAr || null,
+        weight: r.weight,
+      }));
+    _kwCacheTime = Date.now();
+    return _kwCache;
+  })();
+
+  try {
+    return await _kwCachePromise;
+  } finally {
+    _kwCachePromise = null;
+  }
 }
 
 export function invalidateKeywordCache() {
