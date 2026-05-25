@@ -160,7 +160,7 @@ export function BulkActionBar({
             {statusOptions.map(opt => (
               <DropdownMenuItem
                 key={opt.key}
-                className={cn('text-right justify-end hover:bg-white/5', opt.danger && 'hover:bg-rose-500/10 text-rose-400')}
+                className={cn('text-start justify-start hover:bg-white/5', opt.danger && 'hover:bg-rose-500/10 text-rose-400')}
                 onClick={() => onStatusChange(opt.key)}
               >
                 {opt.label}
@@ -379,9 +379,9 @@ export function TicketTable({
               </Button>
             } />
             <DropdownMenuContent className="bg-card border-border text-slate-200">
-              <DropdownMenuItem className="hover:bg-white/5 text-right justify-end" onClick={() => setLocalStatus('')}>كل الحالات</DropdownMenuItem>
+              <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalStatus('')}>كل الحالات</DropdownMenuItem>
               {Object.entries(statusTranslations).map(([k, v]) => (
-                <DropdownMenuItem key={k} className="hover:bg-white/5 text-right justify-end" onClick={() => setLocalStatus(k)}>{v}</DropdownMenuItem>
+                <DropdownMenuItem key={k} className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalStatus(k)}>{v}</DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -398,9 +398,9 @@ export function TicketTable({
               </Button>
             } />
             <DropdownMenuContent className="bg-card border-border text-slate-200 max-h-72 overflow-y-auto">
-              <DropdownMenuItem className="hover:bg-white/5 text-right justify-end" onClick={() => setLocalType('')}>كل التخصصات</DropdownMenuItem>
+              <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalType('')}>كل التخصصات</DropdownMenuItem>
               {Object.entries(mergedTranslations).map(([k, v]) => (
-                <DropdownMenuItem key={k} className="hover:bg-white/5 text-right justify-end" onClick={() => setLocalType(k)}>{v}</DropdownMenuItem>
+                <DropdownMenuItem key={k} className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalType(k)}>{v}</DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -418,9 +418,9 @@ export function TicketTable({
                 </Button>
               } />
               <DropdownMenuContent className="bg-card border-border text-slate-200">
-                <DropdownMenuItem className="hover:bg-white/5 text-right justify-end" onClick={() => setLocalProject('')}>كل المشاريع</DropdownMenuItem>
+                <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalProject('')}>كل المشاريع</DropdownMenuItem>
                 {Object.entries(projects).map(([id, p]) => (
-                  <DropdownMenuItem key={id} className="hover:bg-white/5 text-right justify-end" onClick={() => setLocalProject(id)}>{p.name}</DropdownMenuItem>
+                  <DropdownMenuItem key={id} className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalProject(id)}>{p.name}</DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -759,15 +759,15 @@ export function TicketTable({
                               </Button>
                             } />
                             <DropdownMenuContent align="end" className="bg-card border-border text-slate-200 w-48">
-                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-right justify-end"
+                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start"
                                 onClick={() => navigate(`/tickets/${ticket.id}`)}>
                                 عرض التفاصيل <Eye className="w-4 h-4" />
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-right justify-end text-green-400"
+                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start text-green-400"
                                 onClick={() => handleWhatsApp(ticket)}>
                                 واتساب <MessageSquare className="w-4 h-4" />
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-right justify-end"
+                              <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start"
                                 onClick={() => navigate(`/tickets/${ticket.id}`)}>
                                 تعديل <Edit2 className="w-4 h-4" />
                               </DropdownMenuItem>
