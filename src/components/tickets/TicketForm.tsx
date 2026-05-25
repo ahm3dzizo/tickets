@@ -139,8 +139,7 @@ export function TicketForm({
     // Fetch Supervisors for this project
     usersApi.getAll().then(allUsers => {
       const sups = allUsers.filter(u => 
-        (u.role === 'supervisor' || u.role === 'engineer' || u.role === 'admin') && 
-        (u.projectIds?.includes(projectId) || u.role === 'admin')
+        u.role === 'supervisor' && u.projectIds?.includes(projectId)
       );
       setProjectSupervisors(sups.map(u => ({ id: u.uid, name: u.displayName || u.email })));
       setSelectedSupervisors([]);
