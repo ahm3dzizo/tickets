@@ -5,6 +5,7 @@ import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search,
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { ClassifyDialog } from './ClassifyDialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -353,38 +354,8 @@ export function TicketTable({
     );
   };
 
-  // ── Quick Classify ────────────────────────────────────────────────────────
-  const [classifyingId, setClassifyingId] = useState<string | null>(null);
-
-  const handleAutoClassify = async (ticket: Ticket) => {
-    if (!ticket.description || !ticket.projectId) {
-      toast.error('الوصف أو المشروع غير متاح للتصنيف');
-      return;
-    }
-    setClassifyingId(ticket.id);
-    try {
-      const result = await classifyOnServer({ description: ticket.description, projectId: ticket.projectId });
-      if (!result.primaryType || result.primaryType === 'unclassified') {
-        toast.warning('لم يُتعرَّف على نوع التذكرة — جرب التصنيف اليدوي');
-        return;
-      }
-      await ticketsApi.update(ticket.id, {
-        type: result.primaryType,
-        detectedTypes: result.allTypes,
-        ...(result.supervisors.length > 0 && {
-          assignedSupervisorId:  result.supervisors[0].id,
-          assignedSupervisorIds: result.supervisors.map(s => s.id),
-          assignedSupervisors:   result.supervisors.map(s => ({ id: s.id, name: s.name, specialty: s.specialties[0] ?? 'general' })),
-        }),
-      });
-      toast.success(`✅ تم التصنيف: ${mergedTranslations[result.primaryType] ?? result.primaryType}`);
-      onRefresh?.();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'فشل التصنيف التلقائي');
-    } finally {
-      setClassifyingId(null);
-    }
-  };
+  // ── Classify Dialog ───────────────────────────────────────────────────────
+  const [classifyTicket, setClassifyTicket] = useState<Ticket | null>(null);
 
   const handleWhatsApp = (ticket: Ticket) => {
     const phone   = '966500000000';
@@ -918,13 +889,10 @@ export function TicketTable({
                                 تعديل <Edit2 className="w-4 h-4" />
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                className="hover:bg-orange-500/10 cursor-pointer gap-2 text-start justify-start text-orange-400 disabled:opacity-50"
-                                onClick={() => handleAutoClassify(ticket)}
-                                disabled={classifyingId === ticket.id}
+                                className="hover:bg-orange-500/10 cursor-pointer gap-2 text-start justify-start text-orange-400"
+                                onClick={() => setClassifyTicket(ticket)}
                               >
-                                {classifyingId === ticket.id
-                                  ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ التصنيف...</>
-                                  : <><Sparkles className="w-4 h-4" /> تصنيف تلقائي</>}
+                                <Sparkles className="w-4 h-4" /> تصنيف
                               </DropdownMenuItem>
                               <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start text-green-400"
                                 onClick={() => handleWhatsApp(ticket)}>
@@ -950,6 +918,16 @@ export function TicketTable({
         tickets={baseTickets}
         projects={projects}
       />
+
+      {/* ── Classify Dialog ──────────────────────────────────────────────── */}
+      {classifyTicket && (
+        <ClassifyDialog
+          ticket={classifyTicket}
+          open={!!classifyTicket}
+          onClose={() => setClassifyTicket(null)}
+          onDone={() => { setClassifyTicket(null); onRefresh?.(); }}
+        />
+      )}
     </>
   );
 }
