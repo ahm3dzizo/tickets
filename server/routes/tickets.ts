@@ -126,19 +126,27 @@ router.get("/next-id", requireAuth, async (req, res) => {
   const { projectId } = req.query as { projectId?: string };
   try {
     const where = projectId ? { projectId } : {};
-    const lastTicket = await prisma.ticket.findFirst({
+    
+    // Fetch all ticketIds to safely find the maximum numeric ID
+    const tickets = await prisma.ticket.findMany({
       where,
-      orderBy: { createdAt: "desc" },
       select: { ticketId: true },
     });
     
-    let nextId = 1;
-    if (lastTicket && lastTicket.ticketId) {
-      const parsed = parseInt(lastTicket.ticketId, 10);
-      if (!isNaN(parsed)) {
-        nextId = parsed + 1;
+    let maxId = 0;
+    for (const t of tickets) {
+      const trimmed = (t.ticketId || '').trim();
+      if (!trimmed) continue;
+      // Only consider pure numeric IDs to avoid parsing prefixes unexpectedly
+      if (/^\d+$/.test(trimmed)) {
+        const parsed = parseInt(trimmed, 10);
+        if (!isNaN(parsed) && parsed > maxId) {
+          maxId = parsed;
+        }
       }
     }
+    
+    const nextId = maxId + 1;
     res.json({ nextId: nextId.toString() });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
