@@ -235,16 +235,17 @@ export function Navbar() {
             );
           })}
 
-          {/* More / Avatar */}
+          {/* More / Profile */}
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="flex-1 flex flex-col items-center justify-center h-full gap-0.5"
+              render={
+                <button className="flex-1 flex flex-col items-center justify-center h-full gap-0.5 outline-none" />
+              }
             >
               <div className="w-12 h-9 rounded-2xl flex items-center justify-center hover:bg-muted/60 transition-colors">
-                <Avatar className="w-7 h-7 ring-1 ring-border">
-                  <AvatarImage src={user?.photoURL} />
-                  <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">{initials}</AvatarFallback>
-                </Avatar>
+                <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold ring-1 ring-border shrink-0">
+                  {initials}
+                </div>
               </div>
               <span className="text-[9px] font-bold text-muted-foreground leading-none">المزيد</span>
             </DropdownMenuTrigger>
@@ -255,20 +256,23 @@ export function Navbar() {
               sideOffset={8}
               className="w-56 mb-1 bg-card border-border rounded-2xl shadow-2xl shadow-black/20"
             >
-              <DropdownMenuLabel className="text-right text-xs text-muted-foreground px-3 py-2 font-medium">
-                {user?.displayName}
-              </DropdownMenuLabel>
+              <div className="px-3 py-2 text-right">
+                <p className="text-sm font-semibold text-foreground truncate">{user?.displayName}</p>
+                <p className="text-[10px] text-muted-foreground">{roleLabel[user?.role ?? ''] ?? user?.role}</p>
+              </div>
               <DropdownMenuSeparator className="bg-border" />
-              {secondaryItems.map(item => (
-                <DropdownMenuItem
-                  key={item.path}
-                  className="text-right justify-end gap-2.5 cursor-pointer hover:bg-muted rounded-xl mx-1 my-0.5"
-                  onClick={() => navigate(item.path)}
-                >
-                  <item.icon className="w-4 h-4 text-muted-foreground" />
-                  <span>{item.label}</span>
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuGroup>
+                {secondaryItems.map(item => (
+                  <DropdownMenuItem
+                    key={item.path}
+                    className="text-right justify-end gap-2.5 cursor-pointer hover:bg-muted rounded-xl mx-1 my-0.5"
+                    onClick={() => navigate(item.path)}
+                  >
+                    <item.icon className="w-4 h-4 text-muted-foreground" />
+                    <span>{item.label}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem
                 className="text-right justify-end gap-2.5 text-red-500 hover:bg-red-500/10 cursor-pointer rounded-xl mx-1 my-0.5"
