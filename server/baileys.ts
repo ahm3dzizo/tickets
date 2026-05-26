@@ -115,12 +115,25 @@ export async function startWA(userId: string) {
   sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
     if (type !== 'notify') return;
     for (const msg of msgs) {
-      if (!msg.message) continue;
+      if (!msg.message || msg.key.fromMe) continue;
+
+      const senderJid = msg.key.remoteJid!;
+
+      // ① list response (WhatsApp Business API — unlikely on personal accts)
       const listResp = msg.message.listResponseMessage;
-      if (!listResp) continue;
-      const rowId = listResp.singleSelectReply?.selectedRowId;
-      if (!rowId) continue;
-      await handleWAListReply(userId, rowId, msg.key.remoteJid!);
+      if (listResp?.singleSelectReply?.selectedRowId) {
+        await handleWAListReply(userId, listResp.singleSelectReply.selectedRowId, senderJid);
+        continue;
+      }
+
+      // ② plain text reply (works on all accounts)
+      const text = (
+        msg.message.conversation ||
+        msg.message.extendedTextMessage?.text || ''
+      ).trim();
+      if (text) {
+        await handleWATextReply(userId, senderJid, text);
+      }
     }
   });
 
@@ -295,23 +308,15 @@ export async function sendApprovalRequest(
   }
   try {
     const jid = normalizePhone(phone);
-    const notes = closureNotes ? `\n📝 ${closureNotes}` : '';
-    await sock.sendMessage(jid, {
-      text: `مرحباً ${clientName}،\nتم إنهاء أعمال الصيانة في فيلا ${villaNumber}.${notes}\n\nيرجى تأكيد إغلاق التذكرة:`,
-      footer: 'فريق ريتال للصيانة',
-      title: 'تأكيد إغلاق تذكرة الصيانة',
-      buttonText: 'اختر رداً',
-      listType: 1,
-      sections: [
-        {
-          title: '',
-          rows: [
-            { rowId: `approve_${ticketId}`, title: '✅ موافق على الإغلاق', description: 'تم الانتهاء من الصيانة بشكل مُرضٍ' },
-            { rowId: `reject_${ticketId}`,  title: '❌ لديّ اعتراض',       description: 'لم تُحل المشكلة بالكامل' },
-          ],
-        },
-      ],
-    } as any);
+    const notes = closureNotes ? `\n📝 ملاحظات: ${closureNotes}` : '';
+    const text =
+      `مرحباً ${clientName} 👋\n` +
+      `تم إنهاء أعمال الصيانة في *فيلا ${villaNumber}* بنجاح ✅${notes}\n\n` +
+      `رجاءً قيّم الخدمة وأكّد الإغلاق بإرسال:\n\n` +
+      `*1* — ✅ موافق على الإغلاق\n` +
+      `*2* — ❌ لديّ اعتراض\n\n` +
+      `_فريق ريتال للصيانة_`;
+    await sock.sendMessage(jid, { text });
     return { sent: true, fallback: false };
   } catch (err) {
     console.error('[WA] sendApprovalRequest error:', err);
@@ -333,29 +338,61 @@ export async function sendRatingRequest(
   }
   try {
     const jid = normalizePhone(phone);
-    await sock.sendMessage(jid, {
-      text: `شكراً ${clientName} على موافقتك! 🌟\nكيف تُقيّم خدمة الصيانة التي تلقيتها؟`,
-      footer: 'فريق ريتال للصيانة',
-      title: 'تقييم خدمة الصيانة',
-      buttonText: 'اختر تقييمك',
-      listType: 1,
-      sections: [
-        {
-          title: '',
-          rows: [
-            { rowId: `rate_5_${ticketId}`, title: '⭐⭐⭐⭐⭐  ممتاز',    description: 'خدمة رائعة وممتازة' },
-            { rowId: `rate_4_${ticketId}`, title: '⭐⭐⭐⭐     جيد جداً', description: 'خدمة جيدة جداً' },
-            { rowId: `rate_3_${ticketId}`, title: '⭐⭐⭐        جيد',     description: 'خدمة جيدة' },
-            { rowId: `rate_2_${ticketId}`, title: '⭐⭐           مقبول',  description: 'خدمة مقبولة' },
-            { rowId: `rate_1_${ticketId}`, title: '⭐              ضعيف',  description: 'تحتاج تحسين' },
-          ],
-        },
-      ],
-    } as any);
+    const text =
+      `شكراً ${clientName} على موافقتك! 🌟\n\n` +
+      `كيف تُقيّم خدمة الصيانة؟\n` +
+      `أرسل رقماً من 1 إلى 5:\n\n` +
+      `*5* — ⭐⭐⭐⭐⭐ ممتاز\n` +
+      `*4* — ⭐⭐⭐⭐   جيد جداً\n` +
+      `*3* — ⭐⭐⭐     جيد\n` +
+      `*2* — ⭐⭐       مقبول\n` +
+      `*1* — ⭐         ضعيف\n\n` +
+      `_فريق ريتال للصيانة_`;
+    await sock.sendMessage(jid, { text });
     return { sent: true, fallback: false };
   } catch (err) {
     console.error('[WA] sendRatingRequest error:', err);
     return { sent: false, fallback: true };
+  }
+}
+
+// ─── معالجة رد العميل النصي (1/2 للموافقة ، 1-5 للتقييم) ─────────────────
+
+async function handleWATextReply(userId: string, senderJid: string, text: string) {
+  try {
+    // استخرج رقم الهاتف من JID مثل "966501234567@s.whatsapp.net"
+    const rawPhone = senderJid.split('@')[0];
+
+    // ابحث عن عميل بآخر 9 أرقام (يتجاوز فروق البادئات الدولية)
+    const suffix = rawPhone.slice(-9);
+    const client = await prisma.client.findFirst({
+      where: { phone: { endsWith: suffix } },
+    });
+    if (!client) return;
+
+    // هل العميل ينتظر موافقة؟
+    const pendingApproval = await prisma.ticket.findFirst({
+      where: { clientId: client.id, approvalState: 'sent' },
+      orderBy: { approvalSentAt: 'desc' },
+    });
+    if (pendingApproval && (text === '1' || text === '2')) {
+      const rowId = text === '1'
+        ? `approve_${pendingApproval.id}`
+        : `reject_${pendingApproval.id}`;
+      await handleWAListReply(userId, rowId, senderJid);
+      return;
+    }
+
+    // هل العميل ينتظر تقييم؟
+    const pendingRating = await prisma.ticket.findFirst({
+      where: { clientId: client.id, approvalState: 'awaiting_rating' },
+      orderBy: { clientApprovedAt: 'desc' },
+    });
+    if (pendingRating && ['1', '2', '3', '4', '5'].includes(text)) {
+      await handleWAListReply(userId, `rate_${text}_${pendingRating.id}`, senderJid);
+    }
+  } catch (err) {
+    console.error('[WA] handleWATextReply error:', err);
   }
 }
 
