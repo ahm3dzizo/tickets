@@ -53,9 +53,8 @@ async function processOne(): Promise<void> {
     where: {
       status: { not: "closed" },
       OR: [
-        { type: null },
         { type: "unclassified" },
-        { AND: [{ detectedTypes: { equals: [] } }, { type: { not: null } }] },
+        { detectedTypes: { equals: [] } },
       ],
     },
     orderBy: { createdAt: "asc" },
