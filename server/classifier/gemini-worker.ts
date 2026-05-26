@@ -1,36 +1,40 @@
 /**
  * Background Gemini Worker
  * ─────────────────────────
- * Runs every 15 seconds and picks one unclassified ticket to classify via Gemini.
- * Rate: ~4 tickets/minute — safely under the free-tier 5 RPM limit.
+ * Picks up tickets that have never been verified by Gemini (geminiClassifiedAt = null)
+ * and classifies them in batches of 3 per request.
+ *
+ * Rate:  3 tickets per request × 1 request per 15 s  ≈ 12 tickets/min
+ *        Well under the free-tier 5 RPM limit.
  *
  * Activated automatically on server start when GEMINI_API_KEY is set.
  */
 
 import prisma from "../db.js";
-import { classifyWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
+import { classifyBatchWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB } from "./db-helpers.js";
 
-const INTERVAL_MS   = 15_000;  // 15 s → 4 req/min (< 5 RPM free limit)
-const MIN_DESC_LEN  = 5;
+const INTERVAL_MS  = 15_000;  // 15 s → 1 request/15 s = 4 RPM (< 5 RPM free limit)
+const BATCH_SIZE   = 3;       // tickets per Gemini request
+const MIN_DESC_LEN = 5;
 
 let _timer: ReturnType<typeof setInterval> | null = null;
-let _running = false;         // prevent overlapping ticks
+let _running = false;
 
 export function startGeminiWorker(): void {
   if (!geminiEnabled()) {
     console.log("[GeminiWorker] Disabled — GEMINI_API_KEY not set");
     return;
   }
-  if (_timer) return; // already started
+  if (_timer) return;
 
-  console.log("[GeminiWorker] Started — classifying unclassified tickets every 15 s");
+  console.log("[GeminiWorker] Started — Gemini batch classifier every 15 s (3 tickets/batch)");
 
   _timer = setInterval(async () => {
-    if (_running) return;   // skip if previous tick still busy
+    if (_running) return;
     _running = true;
     try {
-      await processOne();
+      await processBatch();
     } finally {
       _running = false;
     }
@@ -47,70 +51,69 @@ export function stopGeminiWorker(): void {
 
 // ── Core logic ─────────────────────────────────────────────────────────────
 
-async function processOne(): Promise<void> {
-  // Find the oldest unclassified open ticket
-  const ticket = await prisma.ticket.findFirst({
+async function processBatch(): Promise<void> {
+  // Find tickets not yet processed by Gemini — oldest first
+  const tickets = await prisma.ticket.findMany({
     where: {
-      status: { not: "closed" },
-      OR: [
-        { type: "unclassified" },
-        { detectedTypes: { equals: [] } },
-      ],
+      geminiClassifiedAt: null,
+      description: { not: "" },
     },
     orderBy: { createdAt: "asc" },
-    select: { id: true, description: true, projectId: true },
+    take: BATCH_SIZE,
+    select: { id: true, description: true, projectId: true, type: true },
   });
 
-  if (!ticket?.description || ticket.description.length < MIN_DESC_LEN) return;
+  const valid = tickets.filter(t => t.description && t.description.length >= MIN_DESC_LEN);
+  if (valid.length === 0) return;
 
-  let result;
+  let results;
   try {
-    result = await classifyWithGemini(ticket.description);
+    results = await classifyBatchWithGemini(valid.map(t => ({ id: t.id, description: t.description! })));
   } catch (err: any) {
-    // 429 = rate limited — just skip this tick quietly
     if (err.message?.includes("429") || err.message?.includes("quota")) return;
     console.error("[GeminiWorker] Gemini error:", err.message);
     return;
   }
 
-  if (!result || result.primaryType === "unclassified" || result.allTypes.length === 0) {
-    // Mark as explicitly unclassified so we don't retry endlessly
-    await prisma.ticket.update({
-      where: { id: ticket.id },
-      data: { type: "unclassified", detectedTypes: [] },
-    });
-    return;
-  }
+  const typeToSpecialty = await buildTypeToSpecialtyMap();
+  const now = new Date();
 
-  // Auto-learn in background
-  learnFromGeminiResult(ticket.description, result.allTypes).catch(() => {});
+  for (const ticket of valid) {
+    const result = results.find(r => r.id === ticket.id);
 
-  // Build update payload
-  const updateData: Record<string, any> = {
-    type:          result.primaryType,
-    detectedTypes: result.allTypes,
-  };
+    // Mark as processed regardless (so we don't retry forever on vague descriptions)
+    const updateData: Record<string, any> = { geminiClassifiedAt: now };
 
-  // Try to assign supervisors if ticket has a project
-  if (ticket.projectId) {
-    try {
-      const typeToSpecialty  = await buildTypeToSpecialtyMap();
-      const specialties      = [...new Set(result.allTypes.map((t) => typeToSpecialty[t] || "general"))] as string[];
-      const supervisors      = await findSupervisorsDB(ticket.projectId, specialties);
-      if (supervisors.length > 0) {
-        updateData.assignedSupervisorId  = supervisors[0].id;
-        updateData.assignedSupervisorIds = supervisors.map((s) => s.id);
-        updateData.assignedSupervisors   = supervisors.map((s) => ({
-          id: s.id, name: s.name, specialty: s.specialties[0] || "general",
-        }));
+    if (result && result.primaryType !== "unclassified" && result.allTypes.length > 0) {
+      updateData.type          = result.primaryType;
+      updateData.detectedTypes = result.allTypes;
+
+      // Auto-learn in background
+      learnFromGeminiResult(ticket.description!, result.allTypes).catch(() => {});
+
+      // Re-assign supervisor if classification changed
+      if (ticket.projectId && result.primaryType !== ticket.type) {
+        try {
+          const specialties = [...new Set(result.allTypes.map(t => typeToSpecialty[t] || "general"))] as string[];
+          const supervisors = await findSupervisorsDB(ticket.projectId, specialties);
+          if (supervisors.length > 0) {
+            updateData.assignedSupervisorId  = supervisors[0].id;
+            updateData.assignedSupervisorIds = supervisors.map(s => s.id);
+            updateData.assignedSupervisors   = supervisors.map(s => ({
+              id: s.id, name: s.name, specialty: s.specialties[0] || "general",
+            }));
+          }
+        } catch { /* non-fatal */ }
       }
-    } catch { /* non-fatal */ }
+
+      console.log(
+        `[GeminiWorker] ✅ ${ticket.id.slice(0, 8)} → [${result.allTypes.join(", ")}]` +
+        (result.primaryType !== ticket.type ? ` (was: ${ticket.type})` : " (confirmed)")
+      );
+    } else {
+      console.log(`[GeminiWorker] ⬜ ${ticket.id.slice(0, 8)} → unclear/unclassified`);
+    }
+
+    await prisma.ticket.update({ where: { id: ticket.id }, data: updateData });
   }
-
-  await prisma.ticket.update({ where: { id: ticket.id }, data: updateData });
-
-  console.log(
-    `[GeminiWorker] ✅ Ticket ${ticket.id.slice(0, 8)} → [${result.allTypes.join(", ")}]` +
-    ` (conf: ${result.confidence})`
-  );
 }

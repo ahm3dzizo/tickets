@@ -76,6 +76,7 @@ model Ticket {
   assignedSupervisorIds  String[]  @default([])
   assignedSupervisors    Json?
   detectedTypes          String[]  @default([])
+  geminiClassifiedAt     DateTime?
   appointmentTime        String?
   appointmentNotes       String?
   closureNotes           String?

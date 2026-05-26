@@ -115,6 +115,85 @@ Reply format: {"types":["key1","key2"],"confidence":0.9}`;
   }
 }
 
+// ── Batch classification — multiple tickets in one request ─────────────────
+export interface GeminiBatchResult {
+  id: string;
+  primaryType: string;
+  allTypes: string[];
+  confidence: number;
+}
+
+export async function classifyBatchWithGemini(
+  items: { id: string; description: string }[]
+): Promise<GeminiBatchResult[]> {
+  const client = getClient();
+  if (!client || items.length === 0) return [];
+
+  const types = await getActiveTypes();
+  if (types.length === 0) return [];
+
+  const typesList = types
+    .map((t) => `- ${t.key}: ${t.nameAr}${t.description ? ` (${t.description})` : ""}`)
+    .join("\n");
+
+  const ticketLines = items
+    .map((item, i) => `${i + 1}. "${item.description.replace(/"/g, "'")}"`)
+    .join("\n");
+
+  const prompt = `Maintenance classifier for Arabic residential projects. Reply ONLY with a valid JSON array.
+
+Available types:
+${typesList}
+
+Rules: 1-2 types max, focus on root cause, empty array if vague/unclear.
+
+Tickets:
+${ticketLines}
+
+Reply format (JSON array only, same order, no other text):
+[{"i":1,"types":["key1"],"confidence":0.9},{"i":2,"types":["key2"],"confidence":0.8}]`;
+
+  const model = client.getGenerativeModel({
+    model: "gemini-flash-latest",
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 400,
+      thinkingConfig: { thinkingBudget: 0 },
+    } as any,
+  });
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text   = result.response.text().trim();
+
+    // Extract JSON array from response
+    const stripped  = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+    const arrMatch  = stripped.match(/\[[\s\S]*\]/);
+    if (!arrMatch) {
+      console.error("[Gemini batch] No JSON array in response:", text.slice(0, 120));
+      return [];
+    }
+
+    const parsed: { i: number; types?: string[]; confidence?: number }[] = JSON.parse(arrMatch[0]);
+    const validTypeKeys = new Set(types.map((t) => t.key));
+
+    return parsed
+      .filter((r) => r.i >= 1 && r.i <= items.length)
+      .map((r) => {
+        const validTypes = (r.types ?? []).filter((k) => validTypeKeys.has(k));
+        return {
+          id:          items[r.i - 1].id,
+          primaryType: validTypes[0] ?? "unclassified",
+          allTypes:    validTypes,
+          confidence:  r.confidence ?? 0.8,
+        };
+      });
+  } catch (err: any) {
+    console.error("[Gemini batch] error:", err.message);
+    throw err; // let worker handle 429
+  }
+}
+
 // ── Auto-learn: add Gemini's result as keywords so next time keywords catch it ─
 export async function learnFromGeminiResult(
   description: string,
