@@ -72,10 +72,11 @@ Problem description: "${description}"
 Reply format: {"types":["key1","key2"],"confidence":0.9}`;
 
     const model = client.getGenerativeModel({
-      model: "gemini-flash-latest",
+      model: "gemini-2.0-flash",
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 400,
+        maxOutputTokens: 200,
+        responseMimeType: "application/json",
       },
     });
 
@@ -138,7 +139,7 @@ export async function classifyBatchWithGemini(
     .map((item, i) => `${i + 1}. "${item.description.replace(/"/g, "'")}"`)
     .join("\n");
 
-  const prompt = `Maintenance classifier for Arabic residential projects. Reply ONLY with a valid JSON array.
+  const prompt = `Maintenance classifier for Arabic residential projects.
 
 Available types:
 ${typesList}
@@ -148,14 +149,15 @@ Rules: 1-2 types max, focus on root cause, empty array if vague/unclear.
 Tickets:
 ${ticketLines}
 
-Reply format (JSON array only, same order, no other text):
+Return a JSON array (same order as input):
 [{"i":1,"types":["key1"],"confidence":0.9},{"i":2,"types":["key2"],"confidence":0.8}]`;
 
   const model = client.getGenerativeModel({
-    model: "gemini-flash-latest",
+    model: "gemini-2.0-flash",
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 2000,  // thinking tokens are separate, need room for output + Arabic descriptions
+      maxOutputTokens: 800,
+      responseMimeType: "application/json",
     },
   });
 
