@@ -74,7 +74,7 @@ echo "▶  git pull..."
 git pull
 
 echo "▶  npm install..."
-npm install --omit=dev --silent
+npm install --silent
 
 echo "▶  npx prisma db push..."
 npx prisma db push --accept-data-loss
