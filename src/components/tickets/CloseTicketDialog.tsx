@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Ticket, Client, Project } from '@/types';
-import { ticketsApi, projectsApi } from '@/lib/api';
+import { ticketsApi, projectsApi, whatsappApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -294,8 +294,17 @@ export function CloseTicketDialog({
       // 3. The Backend already sends the WhatsApp message + Image via Baileys API silently!
       // (We passed whatsappPhone in the /api/generate-report payload)
 
+      // 4. Automatically send approval request to client after closure report
+      if (targetClient?.phone && mainTicket?.id) {
+        try {
+          await whatsappApi.sendApprovalRequest(mainTicket.id);
+        } catch {
+          // non-critical — don't block the success flow
+        }
+      }
+
       const isWhatsAppSent = targetClient?.phone && previewMessage;
-      toast.success(`تم إغلاق التذاكر بنجاح${isWhatsAppSent ? ' وجارٍ إرسال التقرير للعميل 💬' : ''}`);
+      toast.success(`تم إغلاق التذاكر بنجاح${isWhatsAppSent ? ' وجارٍ إرسال التقرير + طلب الموافقة للعميل 💬' : ''}`);
       onSuccess();
       onOpenChange(false);
     } catch (error) {
