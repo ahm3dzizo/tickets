@@ -4,6 +4,7 @@ import { AuthRequest, requireAuth, requireAdmin } from "../auth.js";
 import { classifyTicket } from "../classifier/classify.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
 import { loadKeywordsFromDB, invalidateKeywordCache, classifyFromKeywordsDB, normalizeArabic } from "../classifier/keywords.js";
+import { geminiEnabled } from "../classifier/gemini.js";
 
 const router = Router();
 
@@ -231,7 +232,8 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (_req, res) => {
 
       const classification = await classifyTicket(ticket.description, ticket.projectId || undefined, { forceReclassify: true });
 
-      if (classification.confidence >= 3 && classification.primaryType !== "unclassified") {
+      // classifyTicket already filters out low-confidence results — just check primaryType
+      if (classification.primaryType !== "unclassified") {
         const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
         
         await prisma.ticket.update({
@@ -291,7 +293,7 @@ router.get("/analytics", requireAuth, async (_req, res) => {
       classificationRate: totalTickets > 0 ? Math.round((withDetectedTypes / totalTickets) * 100) : 0,
       typeDistribution: typeDistribution.map((t: any) => ({ type: t.type, count: t._count })),
       learnedKeywords: { total: keywordsCount, auto: 0 },
-      geminiEnabled: false,
+      geminiEnabled: geminiEnabled(),
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

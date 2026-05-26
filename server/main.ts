@@ -21,6 +21,7 @@ import whatsappRoutes from "./routes/whatsapp.js";
 import settingsRoutes from "./routes/settings.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
+import { startGeminiWorker } from "./classifier/gemini-worker.js";
 
 let globalIo: any = null;
 
@@ -117,7 +118,7 @@ async function startServer() {
   });
 
   // ── Background Jobs ────────────────────────────────────────────────────
-  // Removed Gemini auto-learn jobs
+  startGeminiWorker();   // classifies unclassified tickets in background (4/min)
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
@@ -134,9 +135,11 @@ startServer().catch((err) => {
 });
 
 import { closeAllSessions } from './baileys.js';
+import { stopGeminiWorker } from './classifier/gemini-worker.js';
 
 async function shutdown() {
-  console.log('Shutting down gracefully, closing WA sessions...');
+  console.log('Shutting down gracefully...');
+  stopGeminiWorker();
   await closeAllSessions();
   process.exit(0);
 }

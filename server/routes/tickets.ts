@@ -344,26 +344,65 @@ router.post("/bulk", requireAuth, async (req, res) => {
 router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   const data = req.body;
   try {
+    // ── Build base update payload ──────────────────────────────────────────
+    const updatePayload: Record<string, any> = {
+      status:               data.status               ?? undefined,
+      priority:             data.priority !== undefined ? Number(data.priority) : undefined,
+      assigneeName:         data.assigneeName         ?? undefined,
+      assignedSupervisorId: data.assignedSupervisorId ?? undefined,
+      assignedSupervisorIds:data.assignedSupervisorIds?? undefined,
+      assignedSupervisors:  data.assignedSupervisors  ?? undefined,
+      appointmentTime:      data.appointmentTime      ?? undefined,
+      appointmentNotes:     data.appointmentNotes     ?? undefined,
+      closureNotes:         data.closureNotes         ?? undefined,
+      maintenanceItems:     data.maintenanceItems     ?? undefined,
+      closedAt:             data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
+      description:          data.description          ?? undefined,
+      type:                 data.type                 ?? undefined,
+      detectedTypes:        data.detectedTypes        ?? undefined,
+      clientId:             data.clientId             ?? undefined,
+      clientName:           data.clientName           ?? undefined,
+      villaNumber:          data.villaNumber          ?? undefined,
+    };
+
+    // ── Auto-reassign supervisor when classification changes ───────────────
+    // Only when type/detectedTypes are being updated AND no explicit supervisor override
+    const typeChanged = data.type !== undefined || data.detectedTypes !== undefined;
+    const supervisorExplicit = data.assignedSupervisorId !== undefined;
+
+    if (typeChanged && !supervisorExplicit) {
+      // Get the ticket's projectId (need the current record)
+      const existing = await prisma.ticket.findUnique({
+        where: { id: req.params.id },
+        select: { projectId: true, type: true },
+      });
+
+      const newTypes: string[] = data.detectedTypes?.length
+        ? data.detectedTypes
+        : data.type && data.type !== "unclassified"
+          ? [data.type]
+          : [];
+
+      if (existing?.projectId && newTypes.length > 0) {
+        try {
+          const typeToSpecialty = await buildTypeToSpecialtyMap();
+          const specialties     = [...new Set(newTypes.map((t) => typeToSpecialty[t] || "general"))];
+          const supervisors     = await findSupervisorsDB(existing.projectId, specialties);
+
+          if (supervisors.length > 0) {
+            updatePayload.assignedSupervisorId  = supervisors[0].id;
+            updatePayload.assignedSupervisorIds = supervisors.map((s) => s.id);
+            updatePayload.assignedSupervisors   = supervisors.map((s) => ({
+              id: s.id, name: s.name, specialty: s.specialties[0] || "general",
+            }));
+          }
+        } catch { /* non-fatal — keep old supervisor */ }
+      }
+    }
+
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },
-      data: {
-        status: data.status ?? undefined,
-        priority: data.priority !== undefined ? Number(data.priority) : undefined,
-        assigneeName: data.assigneeName ?? undefined,
-        assignedSupervisorId: data.assignedSupervisorId ?? undefined,
-        assignedSupervisorIds: data.assignedSupervisorIds ?? undefined,
-        assignedSupervisors: data.assignedSupervisors ?? undefined,
-        appointmentTime: data.appointmentTime ?? undefined,
-        appointmentNotes: data.appointmentNotes ?? undefined,
-        closureNotes: data.closureNotes ?? undefined,
-        maintenanceItems: data.maintenanceItems ?? undefined,
-        closedAt: data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
-        description: data.description ?? undefined,
-        type: data.type ?? undefined,
-        clientId: data.clientId ?? undefined,
-        clientName: data.clientName ?? undefined,
-        villaNumber: data.villaNumber ?? undefined,
-      },
+      data:  updatePayload,
     });
 
     const closingStatuses = ['closed', 'completed'];
