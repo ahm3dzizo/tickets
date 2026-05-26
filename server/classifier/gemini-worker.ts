@@ -17,7 +17,8 @@ import { buildTypeToSpecialtyMap, findSupervisorsDB } from "./db-helpers.js";
 const INTERVAL_MS      = 15_000;  // 15 s → 1 request/15 s = 4 RPM (< 5 RPM free limit)
 const BATCH_SIZE       = 3;       // tickets per Gemini request
 const MIN_DESC_LEN     = 5;
-const RATE_LIMIT_PAUSE = 70_000;  // 70 s pause after 429 (API says retry after ~55 s)
+const RATE_LIMIT_PAUSE_RPM = 70_000;       // 70 s after per-minute limit
+const RATE_LIMIT_PAUSE_RPD = 60 * 60_000;  // 60 min after daily limit — wait for quota reset
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 let _running = false;
@@ -74,8 +75,10 @@ async function processBatch(): Promise<void> {
     results = await classifyBatchWithGemini(valid.map(t => ({ id: t.id, description: t.description! })));
   } catch (err: any) {
     if (err.message?.includes("429") || err.message?.includes("quota")) {
-      _pausedUntil = Date.now() + RATE_LIMIT_PAUSE;
-      console.warn(`[GeminiWorker] ⏸ Rate limited — pausing for ${RATE_LIMIT_PAUSE / 1000}s`);
+      const isDaily = err.message?.includes("PerDay") || err.message?.includes("per_day");
+      const pause   = isDaily ? RATE_LIMIT_PAUSE_RPD : RATE_LIMIT_PAUSE_RPM;
+      _pausedUntil  = Date.now() + pause;
+      console.warn(`[GeminiWorker] ⏸ ${isDaily ? "Daily" : "Per-minute"} limit hit — pausing ${pause / 60000}m`);
       return;  // tickets NOT marked → will be retried after cooldown
     }
     console.error("[GeminiWorker] Gemini error:", err.message);
