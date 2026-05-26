@@ -75,10 +75,8 @@ Reply format: {"types":["key1","key2"],"confidence":0.9}`;
       model: "gemini-flash-latest",
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 200,
-        // Disable thinking mode — saves ~150 tokens overhead, leaves full budget for output
-        thinkingConfig: { thinkingBudget: 0 },
-      } as any,
+        maxOutputTokens: 400,
+      },
     });
 
     const result = await model.generateContent(prompt);
@@ -157,9 +155,8 @@ Reply format (JSON array only, same order, no other text):
     model: "gemini-flash-latest",
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 400,
-      thinkingConfig: { thinkingBudget: 0 },
-    } as any,
+      maxOutputTokens: 800,
+    },
   });
 
   try {
