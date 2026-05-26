@@ -155,7 +155,7 @@ Reply format (JSON array only, same order, no other text):
     model: "gemini-flash-latest",
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 800,
+      maxOutputTokens: 2000,  // thinking tokens are separate, need room for output + Arabic descriptions
     },
   });
 
