@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { UserForm } from '@/components/team/UserForm';
+import { TicketTable } from '@/components/tickets/TicketTable';
 import { usersApi, projectsApi, ticketsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
-  ArrowRight, Shield, Mail, Phone, Hash, Calendar,
+  Shield, Mail, Phone, Hash, Calendar,
   Ticket as TicketIcon, CheckCircle2, Clock, AlertCircle,
-  Loader2, UserX, UserCheck, Edit2, Wrench,
+  Loader2, UserX, UserCheck, Edit2,
   ClipboardList, ChevronRight
 } from 'lucide-react';
 
@@ -35,40 +35,6 @@ const specialtyColor: Record<string, string> = {
   mechanics: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   electricity: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   general: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-};
-const ticketStatusLabel: Record<string, string> = {
-  open: 'مفتوحة',
-  'in-progress': 'جارية',
-  pending: 'معلقة',
-  completed: 'مكتملة',
-  closed: 'مغلقة',
-  waiting: 'انتظار',
-};
-const ticketStatusColor: Record<string, string> = {
-  open: 'bg-red-500/10 text-red-400 border-red-500/20',
-  'in-progress': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  pending: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  completed: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  closed: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-  waiting: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-};
-const ticketTypeLabel: Record<string, string> = {
-  electricity: 'كهرباء',
-  plumbing: 'سباكة',
-  doors: 'أبواب',
-  paints: 'دهانات',
-  cracks: 'تشققات',
-  ceramics: 'سيراميك',
-  tank_insulation: 'عزل خزان',
-};
-const ticketTypeColor: Record<string, string> = {
-  electricity: 'bg-yellow-500/10 text-yellow-400',
-  plumbing: 'bg-blue-500/10 text-blue-400',
-  doors: 'bg-orange-500/10 text-orange-400',
-  paints: 'bg-pink-500/10 text-pink-400',
-  cracks: 'bg-red-500/10 text-red-400',
-  ceramics: 'bg-teal-500/10 text-teal-400',
-  tank_insulation: 'bg-cyan-500/10 text-cyan-400',
 };
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -123,6 +89,11 @@ export default function TeamMemberDetail() {
   const memberProjects = member
     ? (member.projectIds ?? []).map((pid: string) => ({ id: pid, name: projects[pid] })).filter((p: any) => p.name)
     : [];
+
+  // Convert projects map to format expected by TicketTable
+  const projectsForTable = Object.fromEntries(
+    Object.entries(projects).map(([id, name]) => [id, { name }])
+  );
 
   const specialties: string[] = member
     ? (member.specialties?.length ? member.specialties : member.specialty ? [member.specialty] : [])
@@ -288,75 +259,22 @@ export default function TeamMemberDetail() {
 
         {/* ── tickets table ── */}
         <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl">
-          <div className="p-6 border-b border-border bg-white/5 flex items-center justify-between">
+          <div className="p-5 border-b border-border bg-white/5 flex items-center justify-between">
             <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">{totalTickets} تذكرة</span>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <TicketIcon className="w-5 h-5 text-blue-400" />
               التذاكر المسندة
             </h2>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-right border-collapse">
-              <thead className="bg-[#1e293b] text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-border">
-                <tr>
-                  <th className="px-5 py-4">رقم التذكرة</th>
-                  <th className="px-5 py-4">العميل / الفيلا</th>
-                  <th className="px-5 py-4">المشروع</th>
-                  <th className="px-5 py-4">النوع</th>
-                  <th className="px-5 py-4 text-center">الأولوية</th>
-                  <th className="px-5 py-4 text-center">الحالة</th>
-                  <th className="px-5 py-4">تاريخ الفتح</th>
-                  <th className="px-5 py-4" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40">
-                {tickets.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
-                      لا توجد تذاكر مسندة لهذا العضو
-                    </td>
-                  </tr>
-                ) : tickets.map(t => (
-                  <tr
-                    key={t.id}
-                    className="hover:bg-white/[0.02] transition-colors cursor-pointer"
-                    onClick={() => navigate(`/tickets/${t.id}`)}
-                  >
-                    <td className="px-5 py-3.5">
-                      <span className="font-mono text-xs text-blue-400">#{t.ticketId || t.id.slice(0, 8)}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="text-sm font-medium text-white">{t.clientName || '—'}</div>
-                      <div className="text-[11px] text-slate-500">{t.villaNumber ? `فيلا ${t.villaNumber}` : ''}</div>
-                    </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-400">
-                      {projects[t.projectId] || t.projectId || '—'}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded', ticketTypeColor[t.type] ?? 'bg-white/5 text-slate-400')}>
-                        {ticketTypeLabel[t.type] ?? t.type ?? '—'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-center">
-                      <PriorityDot priority={t.priority} />
-                    </td>
-                    <td className="px-5 py-3.5 text-center">
-                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded border', ticketStatusColor[t.status] ?? 'bg-white/5 text-slate-400 border-border')}>
-                        {ticketStatusLabel[t.status] ?? t.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-500 font-mono">
-                      {t.issuedAt || (t.createdAt?.toDate ? t.createdAt.toDate().toLocaleDateString('ar-SA') : '—')}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <ChevronRight className="w-4 h-4 text-slate-700" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TicketTable
+            tickets={tickets as any}
+            projects={projectsForTable}
+            hideSupervisorColumn={true}
+            showInlineFilters={tickets.length > 5}
+            maxHeight="600px"
+            emptyMessage="لا توجد تذاكر مسندة لهذا العضو"
+            onRefresh={loadData}
+          />
         </div>
 
       </div>
@@ -380,19 +298,3 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
   );
 }
 
-function PriorityDot({ priority }: { priority: any }) {
-  const p = typeof priority === 'number' ? (priority >= 7 ? 'urgent' : priority >= 5 ? 'high' : priority >= 3 ? 'medium' : 'low') : priority;
-  const cfg: Record<string, { label: string; cls: string }> = {
-    urgent: { label: 'عاجل',   cls: 'bg-red-500'    },
-    high:   { label: 'عالية',  cls: 'bg-orange-500' },
-    medium: { label: 'متوسطة', cls: 'bg-amber-500'  },
-    low:    { label: 'منخفضة', cls: 'bg-slate-500'  },
-  };
-  const c = cfg[p] ?? cfg.medium;
-  return (
-    <span className="flex items-center justify-center gap-1.5">
-      <span className={cn('w-2 h-2 rounded-full inline-block', c.cls)} />
-      <span className="text-[10px] text-slate-400">{c.label}</span>
-    </span>
-  );
-}

@@ -34,6 +34,8 @@ export default function Team() {
   const [projects, setProjects] = useState<Record<string, string>>({});
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
+  // Edit modal — lifted outside dropdown so it doesn't unmount when dropdown closes
+  const [editUser, setEditUser] = useState<any>(null);
 
   const loadData = async () => {
     try {
@@ -227,16 +229,12 @@ export default function Team() {
                               عرض الملف الشخصي
                             </DropdownMenuItem>
                             {isAdmin && (
-                              <div onClick={e => e.stopPropagation()}>
-                                <UserForm
-                                  user={t}
-                                  trigger={
-                                    <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start rounded-xl mx-1 my-0.5" onSelect={e => e.preventDefault()}>
-                                      تعديل البيانات
-                                    </DropdownMenuItem>
-                                  }
-                                />
-                              </div>
+                              <DropdownMenuItem
+                                className="hover:bg-muted cursor-pointer text-start justify-start rounded-xl mx-1 my-0.5"
+                                onClick={e => { e.stopPropagation(); setEditUser(t); }}
+                              >
+                                تعديل البيانات
+                              </DropdownMenuItem>
                             )}
                             {isAdmin && (
                               <DropdownMenuItem
@@ -258,6 +256,17 @@ export default function Team() {
           </div>
         </div>
       </div>
+
+      {/* Edit modal — rendered outside dropdown to prevent unmount-on-close */}
+      {editUser && (
+        <UserForm
+          key={editUser.id}
+          user={editUser}
+          open={!!editUser}
+          onOpenChange={open => { if (!open) setEditUser(null); }}
+          onSaved={() => { setEditUser(null); loadData(); }}
+        />
+      )}
     </Layout>
   );
 }
