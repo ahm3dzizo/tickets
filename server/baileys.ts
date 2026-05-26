@@ -297,21 +297,20 @@ export async function sendApprovalRequest(
     const jid = normalizePhone(phone);
     const notes = closureNotes ? `\n📝 ${closureNotes}` : '';
     await sock.sendMessage(jid, {
-      listMessage: {
-        title: 'تأكيد إغلاق تذكرة الصيانة',
-        description: `مرحباً ${clientName}،\nتم إنهاء أعمال الصيانة في فيلا ${villaNumber}.${notes}\n\nيرجى تأكيد إغلاق التذكرة:`,
-        buttonText: 'اختر رداً',
-        listType: 1,
-        sections: [
-          {
-            title: '',
-            rows: [
-              { rowId: `approve_${ticketId}`, title: '✅ موافق على الإغلاق', description: 'تم الانتهاء من الصيانة بشكل مُرضٍ' },
-              { rowId: `reject_${ticketId}`,  title: '❌ لديّ اعتراض',       description: 'لم تُحل المشكلة بالكامل' },
-            ],
-          },
-        ],
-      },
+      text: `مرحباً ${clientName}،\nتم إنهاء أعمال الصيانة في فيلا ${villaNumber}.${notes}\n\nيرجى تأكيد إغلاق التذكرة:`,
+      footer: 'فريق ريتال للصيانة',
+      title: 'تأكيد إغلاق تذكرة الصيانة',
+      buttonText: 'اختر رداً',
+      listType: 1,
+      sections: [
+        {
+          title: '',
+          rows: [
+            { rowId: `approve_${ticketId}`, title: '✅ موافق على الإغلاق', description: 'تم الانتهاء من الصيانة بشكل مُرضٍ' },
+            { rowId: `reject_${ticketId}`,  title: '❌ لديّ اعتراض',       description: 'لم تُحل المشكلة بالكامل' },
+          ],
+        },
+      ],
     } as any);
     return { sent: true, fallback: false };
   } catch (err) {
@@ -335,24 +334,23 @@ export async function sendRatingRequest(
   try {
     const jid = normalizePhone(phone);
     await sock.sendMessage(jid, {
-      listMessage: {
-        title: 'تقييم خدمة الصيانة',
-        description: `شكراً ${clientName} على موافقتك! 🌟\nكيف تُقيّم خدمة الصيانة التي تلقيتها؟`,
-        buttonText: 'اختر تقييمك',
-        listType: 1,
-        sections: [
-          {
-            title: '',
-            rows: [
-              { rowId: `rate_5_${ticketId}`, title: '⭐⭐⭐⭐⭐  ممتاز',    description: 'خدمة رائعة وممتازة' },
-              { rowId: `rate_4_${ticketId}`, title: '⭐⭐⭐⭐     جيد جداً', description: 'خدمة جيدة جداً' },
-              { rowId: `rate_3_${ticketId}`, title: '⭐⭐⭐        جيد',     description: 'خدمة جيدة' },
-              { rowId: `rate_2_${ticketId}`, title: '⭐⭐           مقبول',  description: 'خدمة مقبولة' },
-              { rowId: `rate_1_${ticketId}`, title: '⭐              ضعيف',  description: 'تحتاج تحسين' },
-            ],
-          },
-        ],
-      },
+      text: `شكراً ${clientName} على موافقتك! 🌟\nكيف تُقيّم خدمة الصيانة التي تلقيتها؟`,
+      footer: 'فريق ريتال للصيانة',
+      title: 'تقييم خدمة الصيانة',
+      buttonText: 'اختر تقييمك',
+      listType: 1,
+      sections: [
+        {
+          title: '',
+          rows: [
+            { rowId: `rate_5_${ticketId}`, title: '⭐⭐⭐⭐⭐  ممتاز',    description: 'خدمة رائعة وممتازة' },
+            { rowId: `rate_4_${ticketId}`, title: '⭐⭐⭐⭐     جيد جداً', description: 'خدمة جيدة جداً' },
+            { rowId: `rate_3_${ticketId}`, title: '⭐⭐⭐        جيد',     description: 'خدمة جيدة' },
+            { rowId: `rate_2_${ticketId}`, title: '⭐⭐           مقبول',  description: 'خدمة مقبولة' },
+            { rowId: `rate_1_${ticketId}`, title: '⭐              ضعيف',  description: 'تحتاج تحسين' },
+          ],
+        },
+      ],
     } as any);
     return { sent: true, fallback: false };
   } catch (err) {
