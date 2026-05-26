@@ -294,17 +294,10 @@ export function CloseTicketDialog({
       // 3. The Backend already sends the WhatsApp message + Image via Baileys API silently!
       // (We passed whatsappPhone in the /api/generate-report payload)
 
-      // 4. Automatically send approval request to client after closure report
-      if (targetClient?.phone && mainTicket?.id) {
-        try {
-          await whatsappApi.sendApprovalRequest(mainTicket.id);
-        } catch {
-          // non-critical — don't block the success flow
-        }
-      }
+      // الـ backend يبعت التقرير + طلب الموافقة تلقائيًا بعد 3 ثوانٍ
 
       const isWhatsAppSent = targetClient?.phone && previewMessage;
-      toast.success(`تم إغلاق التذاكر بنجاح${isWhatsAppSent ? ' وجارٍ إرسال التقرير + طلب الموافقة للعميل 💬' : ''}`);
+      toast.success(`تم إغلاق التذاكر بنجاح${isWhatsAppSent ? ' — جارٍ إرسال التقرير وطلب الموافقة 💬' : ''}`);
       onSuccess();
       onOpenChange(false);
     } catch (error) {

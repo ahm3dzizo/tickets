@@ -5,7 +5,7 @@ import path from "path";
 import { __dirname } from "../config.js";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth } from "../auth.js";
-import { sendWAImage } from "../baileys.js";
+import { sendWAImage, sendApprovalRequest } from "../baileys.js";
 
 const router = Router();
 
@@ -82,11 +82,46 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       res.setHeader("Content-Disposition", `attachment; filename="report.jpg"`);
       res.send(jpgData);
 
-      // Fire-and-forget: send via WhatsApp in background
-      if (whatsappPhone && req.uid) {
-        sendWAImage(req.uid, whatsappPhone, jpgData, whatsappMessage || '📊 تقرير الصيانة — فريق ريتال')
-          .then((res: any) => console.log('WA report image sent:', res))
-          .catch((err: any) => console.error('WA report error:', err));
+      // Fire-and-forget: send report image + approval request via WhatsApp
+      if (whatsappPhone && senderUid) {
+        const uid = senderUid;
+        const phone = whatsappPhone;
+        const customerName: string = body.customer_name || '';
+        const villa: string        = body.villa || '';
+        const notes: string        = body.notes || '';
+        const ticketNum: string    = (body.ticket_num || '').split('،')[0].trim();
+
+        sendWAImage(uid, phone, jpgData, whatsappMessage || '📊 تقرير الصيانة — فريق ريتال')
+          .then((r: any) => {
+            console.log('[WA] report image sent:', r);
+            // بعد 3 ثوانٍ ابعت رسالة طلب الموافقة
+            setTimeout(async () => {
+              try {
+                // ابحث عن التذكرة بـ ticketId أو refNumber
+                const ticket = await prisma.ticket.findFirst({
+                  where: { OR: [{ ticketId: ticketNum }, { refNumber: ticketNum }] },
+                  select: { id: true },
+                });
+                const ticketId = ticket?.id;
+                if (!ticketId) {
+                  console.warn('[WA] approval: ticket not found for', ticketNum);
+                  return;
+                }
+                console.log('[WA] sending approval request for ticket:', ticketId, '→', phone);
+                const result = await sendApprovalRequest(uid, phone, ticketId, customerName, villa, notes);
+                console.log('[WA] approval request sent:', result);
+                if (result.sent) {
+                  await prisma.ticket.update({
+                    where: { id: ticketId },
+                    data: { approvalState: 'sent', approvalSentAt: new Date(), approvalUserId: uid },
+                  });
+                }
+              } catch (err) {
+                console.error('[WA] approval after report error:', err);
+              }
+            }, 3000);
+          })
+          .catch((err: any) => console.error('[WA] report image error:', err));
       }
 
       try { unlinkSync(jpgPath); } catch { /* ignore */ }
