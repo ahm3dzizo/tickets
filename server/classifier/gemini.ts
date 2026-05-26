@@ -1,6 +1,6 @@
 /**
  * Gemini Flash classifier — fallback when keyword confidence is too low.
- * Uses gemini-2.0-flash-lite (fastest free model).
+ * Uses gemini-2.5-flash-lite-lite (fastest free model).
  *
  * Set GEMINI_API_KEY in .env to enable.
  * Free tier: 1500 requests/day, 1M tokens/day — more than enough.
@@ -72,7 +72,7 @@ Problem description: "${description}"
 Reply format: {"types":["key1","key2"],"confidence":0.9}`;
 
     const model = client.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash-lite",
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 200,
@@ -153,7 +153,7 @@ Return a JSON array (same order as input):
 [{"i":1,"types":["key1"],"confidence":0.9},{"i":2,"types":["key2"],"confidence":0.8}]`;
 
   const model = client.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash-lite",
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 800,
