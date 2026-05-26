@@ -14,12 +14,14 @@ import prisma from "../db.js";
 import { classifyBatchWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB } from "./db-helpers.js";
 
-const INTERVAL_MS  = 15_000;  // 15 s → 1 request/15 s = 4 RPM (< 5 RPM free limit)
-const BATCH_SIZE   = 3;       // tickets per Gemini request
-const MIN_DESC_LEN = 5;
+const INTERVAL_MS      = 15_000;  // 15 s → 1 request/15 s = 4 RPM (< 5 RPM free limit)
+const BATCH_SIZE       = 3;       // tickets per Gemini request
+const MIN_DESC_LEN     = 5;
+const RATE_LIMIT_PAUSE = 70_000;  // 70 s pause after 429 (API says retry after ~55 s)
 
 let _timer: ReturnType<typeof setInterval> | null = null;
 let _running = false;
+let _pausedUntil = 0;  // epoch ms — worker skips ticks while paused
 
 export function startGeminiWorker(): void {
   if (!geminiEnabled()) {
@@ -32,6 +34,7 @@ export function startGeminiWorker(): void {
 
   _timer = setInterval(async () => {
     if (_running) return;
+    if (Date.now() < _pausedUntil) return;  // still in rate-limit cooldown
     _running = true;
     try {
       await processBatch();
@@ -70,7 +73,11 @@ async function processBatch(): Promise<void> {
   try {
     results = await classifyBatchWithGemini(valid.map(t => ({ id: t.id, description: t.description! })));
   } catch (err: any) {
-    if (err.message?.includes("429") || err.message?.includes("quota")) return;
+    if (err.message?.includes("429") || err.message?.includes("quota")) {
+      _pausedUntil = Date.now() + RATE_LIMIT_PAUSE;
+      console.warn(`[GeminiWorker] ⏸ Rate limited — pausing for ${RATE_LIMIT_PAUSE / 1000}s`);
+      return;  // tickets NOT marked → will be retried after cooldown
+    }
     console.error("[GeminiWorker] Gemini error:", err.message);
     return;
   }
