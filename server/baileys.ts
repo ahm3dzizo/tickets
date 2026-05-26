@@ -111,6 +111,19 @@ export async function startWA(userId: string) {
 
   sock.ev.on('creds.update', saveCreds);
 
+  // ─── معالجة الردود الواردة (موافقة / رفض / تقييم) ─────────────────────────
+  sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
+    if (type !== 'notify') return;
+    for (const msg of msgs) {
+      if (!msg.message) continue;
+      const listResp = msg.message.listResponseMessage;
+      if (!listResp) continue;
+      const rowId = listResp.singleSelectReply?.selectedRowId;
+      if (!rowId) continue;
+      await handleWAListReply(userId, rowId, msg.key.remoteJid!);
+    }
+  });
+
   } finally {
     initializingSessions.delete(userId);
   }
@@ -264,4 +277,136 @@ export async function buildClosingMsg(params: MsgParams): Promise<string> {
   const defaultMsg = `مرحباً {clientName} 👋\nتمت معالجة تذكرة الصيانة بنجاح ✅\n\n📋 رقم التذكرة: #{ticketId}\n📝 الوصف: {description}\n🏠 الفيلا: {villaNumber}${notesStr}\n\nشكراً لصبركم وتعاونكم 🌟`;
   const template = await getTemplate('closingMsg', defaultMsg);
   return replaceVars(template, params);
+}
+
+// ─── طلب موافقة العميل عبر قائمة واتساب ───────────────────────────────────
+
+export async function sendApprovalRequest(
+  userId: string,
+  phone: string,
+  ticketId: string,
+  clientName: string,
+  villaNumber: string,
+  closureNotes?: string | null
+): Promise<{ sent: boolean; fallback: boolean }> {
+  const sock = sessions.get(userId);
+  if (getWAStatus(userId) !== 'CONNECTED' || !sock) {
+    return { sent: false, fallback: true };
+  }
+  try {
+    const jid = normalizePhone(phone);
+    const notes = closureNotes ? `\n📝 ${closureNotes}` : '';
+    await sock.sendMessage(jid, {
+      listMessage: {
+        title: 'تأكيد إغلاق تذكرة الصيانة',
+        description: `مرحباً ${clientName}،\nتم إنهاء أعمال الصيانة في فيلا ${villaNumber}.${notes}\n\nيرجى تأكيد إغلاق التذكرة:`,
+        buttonText: 'اختر رداً',
+        listType: 1,
+        sections: [
+          {
+            title: '',
+            rows: [
+              { rowId: `approve_${ticketId}`, title: '✅ موافق على الإغلاق', description: 'تم الانتهاء من الصيانة بشكل مُرضٍ' },
+              { rowId: `reject_${ticketId}`,  title: '❌ لديّ اعتراض',       description: 'لم تُحل المشكلة بالكامل' },
+            ],
+          },
+        ],
+      },
+    } as any);
+    return { sent: true, fallback: false };
+  } catch (err) {
+    console.error('[WA] sendApprovalRequest error:', err);
+    return { sent: false, fallback: true };
+  }
+}
+
+// ─── طلب تقييم بعد الموافقة ────────────────────────────────────────────────
+
+export async function sendRatingRequest(
+  userId: string,
+  phone: string,
+  ticketId: string,
+  clientName: string
+): Promise<{ sent: boolean; fallback: boolean }> {
+  const sock = sessions.get(userId);
+  if (getWAStatus(userId) !== 'CONNECTED' || !sock) {
+    return { sent: false, fallback: true };
+  }
+  try {
+    const jid = normalizePhone(phone);
+    await sock.sendMessage(jid, {
+      listMessage: {
+        title: 'تقييم خدمة الصيانة',
+        description: `شكراً ${clientName} على موافقتك! 🌟\nكيف تُقيّم خدمة الصيانة التي تلقيتها؟`,
+        buttonText: 'اختر تقييمك',
+        listType: 1,
+        sections: [
+          {
+            title: '',
+            rows: [
+              { rowId: `rate_5_${ticketId}`, title: '⭐⭐⭐⭐⭐  ممتاز',    description: 'خدمة رائعة وممتازة' },
+              { rowId: `rate_4_${ticketId}`, title: '⭐⭐⭐⭐     جيد جداً', description: 'خدمة جيدة جداً' },
+              { rowId: `rate_3_${ticketId}`, title: '⭐⭐⭐        جيد',     description: 'خدمة جيدة' },
+              { rowId: `rate_2_${ticketId}`, title: '⭐⭐           مقبول',  description: 'خدمة مقبولة' },
+              { rowId: `rate_1_${ticketId}`, title: '⭐              ضعيف',  description: 'تحتاج تحسين' },
+            ],
+          },
+        ],
+      },
+    } as any);
+    return { sent: true, fallback: false };
+  } catch (err) {
+    console.error('[WA] sendRatingRequest error:', err);
+    return { sent: false, fallback: true };
+  }
+}
+
+// ─── معالجة رد العميل على قائمة الموافقة / التقييم ────────────────────────
+
+async function handleWAListReply(userId: string, rowId: string, jid: string) {
+  try {
+    if (rowId.startsWith('approve_')) {
+      const ticketId = rowId.slice('approve_'.length);
+      const ticket = await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { approvalState: 'awaiting_rating', clientApproved: true, clientApprovedAt: new Date() },
+        include: { client: true },
+      });
+      getIO()?.emit('ticket-approval', { ticketId, approved: true });
+      // أرسل طلب التقييم
+      const phone = (ticket as any).client?.phone;
+      if (phone) {
+        await sendRatingRequest(userId, phone, ticketId, ticket.clientName);
+      }
+
+    } else if (rowId.startsWith('reject_')) {
+      const ticketId = rowId.slice('reject_'.length);
+      await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { approvalState: 'rejected', clientApproved: false, clientApprovedAt: new Date() },
+      });
+      getIO()?.emit('ticket-approval', { ticketId, approved: false });
+
+    } else if (rowId.startsWith('rate_')) {
+      // format: rate_<stars>_<ticketId>
+      const withoutPrefix = rowId.slice('rate_'.length);     // "5_abc123"
+      const underIdx = withoutPrefix.indexOf('_');
+      const rating = parseInt(withoutPrefix.slice(0, underIdx), 10);
+      const ticketId = withoutPrefix.slice(underIdx + 1);
+      const ticket = await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { approvalState: 'rated', clientRating: rating },
+      });
+      getIO()?.emit('ticket-rated', { ticketId, rating });
+      // رسالة شكر
+      const sock = sessions.get(userId);
+      if (sock) {
+        await sock.sendMessage(jid, {
+          text: `شكراً ${ticket.clientName}! 🌟\nتم تسجيل تقييمك (${rating}/5).\nنسعد بخدمتكم دائماً. 💚`,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[WA] handleWAListReply error:', err);
+  }
 }

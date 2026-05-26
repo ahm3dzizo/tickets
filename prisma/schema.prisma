@@ -77,6 +77,12 @@ model Ticket {
   assignedSupervisors    Json?
   detectedTypes          String[]  @default([])
   geminiClassifiedAt     DateTime?
+  approvalState          String?    // 'sent' | 'approved' | 'rejected' | 'awaiting_rating' | 'rated'
+  approvalSentAt         DateTime?
+  approvalUserId         String?
+  clientApproved         Boolean?
+  clientApprovedAt       DateTime?
+  clientRating           Int?
   appointmentTime        String?
   appointmentNotes       String?
   closureNotes           String?

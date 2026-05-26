@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import {
   Shield, Mail, Phone, Hash, Calendar,
   Ticket as TicketIcon, CheckCircle2, Clock, AlertCircle,
-  Loader2, UserX, UserCheck, Edit2,
+  Loader2, UserX, UserCheck, Edit2, ArrowRight,
   ClipboardList, ChevronRight
 } from 'lucide-react';
 

@@ -59,6 +59,9 @@ export default function TicketDetail() {
   const [editAssignedSupervisorIds, setEditAssignedSupervisorIds] = useState<string[]>([]);
   const [supervisorsLoading, setSupervisorsLoading] = useState(false);
 
+  // ── Approval state ──
+  const [sendingApproval, setSendingApproval] = useState(false);
+
   // ── Appointment dialog state ──
   const [apptOpen, setApptOpen] = useState(false);
   const [apptDate, setApptDate] = useState('');
@@ -236,6 +239,24 @@ export default function TicketDetail() {
       success: 'تم إرسال رسالة التحديث بنجاح 💬',
       error: 'فشل إرسال الرسالة. تأكد من اتصال الواتساب.'
     });
+  };
+
+  const handleSendApproval = async () => {
+    if (!ticket) return;
+    setSendingApproval(true);
+    try {
+      const result = await whatsappApi.sendApprovalRequest(ticket.id);
+      if (result.sent) {
+        toast.success('تم إرسال طلب الموافقة للعميل عبر واتساب ✅');
+        loadData();
+      } else {
+        toast.error('تعذر الإرسال. تحقق من اتصال الواتساب.');
+      }
+    } catch {
+      toast.error('فشل إرسال طلب الموافقة.');
+    } finally {
+      setSendingApproval(false);
+    }
   };
 
   if (loading) {
@@ -506,6 +527,36 @@ export default function TicketDetail() {
                   <Phone className="w-4 h-4 me-2" />
                   إرسال تحديث للعميل
                 </Button>
+
+                {/* زر طلب الموافقة على الإغلاق */}
+                {(ticket.status === 'closed' || ticket.status === 'completed') && client?.phone && (
+                  <div className="space-y-2">
+                    <Button
+                      variant="outline"
+                      disabled={sendingApproval || (ticket as any).approvalState === 'rated'}
+                      className="w-full justify-start border-border bg-white/5 text-purple-400 hover:bg-purple-500/10 text-xs h-12 rounded-2xl font-bold disabled:opacity-50"
+                      onClick={handleSendApproval}
+                    >
+                      <CheckCircle2 className="w-4 h-4 me-2" />
+                      {sendingApproval ? 'جاري الإرسال...' : 'طلب موافقة العميل'}
+                    </Button>
+                    {(ticket as any).approvalState && (
+                      <div className={cn(
+                        'text-[10px] font-bold px-3 py-1.5 rounded-xl text-center',
+                        (ticket as any).approvalState === 'rated'     ? 'bg-emerald-500/10 text-emerald-400' :
+                        (ticket as any).approvalState === 'approved'  ? 'bg-blue-500/10 text-blue-400'      :
+                        (ticket as any).approvalState === 'rejected'  ? 'bg-red-500/10 text-red-400'        :
+                        'bg-amber-500/10 text-amber-400'
+                      )}>
+                        {(ticket as any).approvalState === 'sent'           && '⏳ في انتظار رد العميل'}
+                        {(ticket as any).approvalState === 'awaiting_rating' && '✅ وافق — في انتظار التقييم'}
+                        {(ticket as any).approvalState === 'approved'        && '✅ وافق العميل'}
+                        {(ticket as any).approvalState === 'rejected'        && '❌ رفض العميل'}
+                        {(ticket as any).approvalState === 'rated'           && `⭐ التقييم: ${(ticket as any).clientRating}/5`}
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
