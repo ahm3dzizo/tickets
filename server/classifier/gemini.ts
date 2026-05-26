@@ -23,7 +23,7 @@ export function geminiEnabled(): boolean {
   return !!process.env.GEMINI_API_KEY;
 }
 
-// ── Build available-types list for the prompt ──────────────────────────────
+// ── Build available-types + subtypes list ──────────────────────────────────
 async function getActiveTypes(): Promise<{ key: string; nameAr: string; description?: string }[]> {
   const types = await prisma.ticketType.findMany({
     where: { isActive: true },
@@ -33,13 +33,25 @@ async function getActiveTypes(): Promise<{ key: string; nameAr: string; descript
   return types;
 }
 
+type SubTypeInfo = { id: string; nameAr: string; parentKey: string };
+
+async function getActiveSubTypes(): Promise<SubTypeInfo[]> {
+  const subs = await prisma.ticketSubType.findMany({
+    where: { isActive: true },
+    select: { id: true, nameAr: true, parentType: { select: { key: true } } },
+  });
+  return subs.map(s => ({ id: s.id, nameAr: s.nameAr, parentKey: s.parentType.key }));
+}
+
 // ── Main classification function ───────────────────────────────────────────
 export interface GeminiClassifyResult {
-  primaryType: string;
-  allTypes: string[];
-  confidence: number;
-  reason: string;
-  source: "gemini";
+  primaryType:  string;
+  allTypes:     string[];
+  subTypeId?:   string;
+  subTypeNameAr?: string;
+  confidence:   number;
+  reason:       string;
+  source:       "gemini";
 }
 
 export async function classifyWithGemini(
@@ -49,27 +61,31 @@ export async function classifyWithGemini(
   if (!client) return null;
 
   try {
-    const types = await getActiveTypes();
+    const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
     if (types.length === 0) return null;
 
     const typesList = types
-      .map((t) => `- ${t.key}: ${t.nameAr}${t.description ? ` (${t.description})` : ""}`)
+      .map((t) => {
+        const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join("، ");
+        return `- ${t.key}: ${t.nameAr}${subs ? ` (أنواع فرعية: ${subs})` : ""}`;
+      })
       .join("\n");
 
     const prompt = `Maintenance ticket classifier for Arabic residential projects. Reply with ONLY valid JSON.
 
-Available types:
+Available main types with their sub-types:
 ${typesList}
 
 Rules:
-1. Choose 1-2 types max (3 only if truly composite problem)
-2. Focus on the root cause — e.g. "water leak caused tile damage" → [plumbing, ceramics]
-3. If description is too vague or not a maintenance issue → return empty types array
-4. Reply with JSON only, no other text
+1. Choose 1-2 main types max (3 only if truly composite)
+2. Focus on root cause — e.g. "water leak caused tile damage" → types:[plumbing,ceramics], subType:"تسريبات مياه"
+3. subType must be one of the listed sub-type names for the primary type
+4. If description is vague → empty types array, null subType
+5. JSON only, no other text
 
-Problem description: "${description}"
+Problem: "${description}"
 
-Reply format: {"types":["key1","key2"],"confidence":0.9}`;
+Format: {"types":["key1"],"subType":"اسم النوع الفرعي أو null","confidence":0.9}`;
 
     const model = client.getGenerativeModel({
       model: "gemini-2.5-flash-lite",
@@ -84,9 +100,8 @@ Reply format: {"types":["key1","key2"],"confidence":0.9}`;
     const text   = result.response.text().trim();
 
     // Parse JSON response — extract first {...} block regardless of surrounding text
-    let parsed: { types?: string[]; confidence?: number; reason?: string };
+    let parsed: { types?: string[]; subType?: string | null; confidence?: number; reason?: string };
     try {
-      // Strip markdown code fences, then extract the JSON object
       const stripped = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
       const jsonMatch = stripped.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error("No JSON object found");
@@ -96,17 +111,28 @@ Reply format: {"types":["key1","key2"],"confidence":0.9}`;
       return null;
     }
 
-    const validTypeKeys = new Set((await getActiveTypes()).map((t) => t.key));
+    const validTypeKeys = new Set(types.map((t) => t.key));
     const validTypes = (parsed.types ?? []).filter((k) => validTypeKeys.has(k));
-
     if (validTypes.length === 0) return null;
 
+    // Resolve subType name → id
+    let subTypeId: string | undefined;
+    let subTypeNameAr: string | undefined;
+    if (parsed.subType && parsed.subType !== "null") {
+      const match = subTypes.find(
+        s => s.nameAr === parsed.subType && s.parentKey === validTypes[0]
+      );
+      if (match) { subTypeId = match.id; subTypeNameAr = match.nameAr; }
+    }
+
     return {
-      primaryType: validTypes[0],
-      allTypes:    validTypes,
-      confidence:  parsed.confidence ?? 0.8,
-      reason:      parsed.reason ?? "",
-      source:      "gemini",
+      primaryType:   validTypes[0],
+      allTypes:      validTypes,
+      subTypeId,
+      subTypeNameAr,
+      confidence:    parsed.confidence ?? 0.8,
+      reason:        parsed.reason ?? "",
+      source:        "gemini",
     };
   } catch (err: any) {
     console.error("[Gemini] classify error:", err.message);
@@ -116,10 +142,11 @@ Reply format: {"types":["key1","key2"],"confidence":0.9}`;
 
 // ── Batch classification — multiple tickets in one request ─────────────────
 export interface GeminiBatchResult {
-  id: string;
-  primaryType: string;
-  allTypes: string[];
-  confidence: number;
+  id:           string;
+  primaryType:  string;
+  allTypes:     string[];
+  subTypeId?:   string;
+  confidence:   number;
 }
 
 export async function classifyBatchWithGemini(
@@ -128,11 +155,14 @@ export async function classifyBatchWithGemini(
   const client = getClient();
   if (!client || items.length === 0) return [];
 
-  const types = await getActiveTypes();
+  const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
   if (types.length === 0) return [];
 
   const typesList = types
-    .map((t) => `- ${t.key}: ${t.nameAr}${t.description ? ` (${t.description})` : ""}`)
+    .map((t) => {
+      const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join("، ");
+      return `- ${t.key}: ${t.nameAr}${subs ? ` (${subs})` : ""}`;
+    })
     .join("\n");
 
   const ticketLines = items
@@ -141,16 +171,16 @@ export async function classifyBatchWithGemini(
 
   const prompt = `Maintenance classifier for Arabic residential projects.
 
-Available types:
+Types with sub-types:
 ${typesList}
 
-Rules: 1-2 types max, focus on root cause, empty array if vague/unclear.
+Rules: 1-2 main types max, subType = one sub-type name from the primary type (or null).
 
 Tickets:
 ${ticketLines}
 
-Return a JSON array (same order as input):
-[{"i":1,"types":["key1"],"confidence":0.9},{"i":2,"types":["key2"],"confidence":0.8}]`;
+Return JSON array:
+[{"i":1,"types":["key1"],"subType":"اسم فرعي أو null","confidence":0.9}]`;
 
   const model = client.getGenerativeModel({
     model: "gemini-2.5-flash-lite",
@@ -173,17 +203,24 @@ Return a JSON array (same order as input):
       return [];
     }
 
-    const parsed: { i: number; types?: string[]; confidence?: number }[] = JSON.parse(arrMatch[0]);
+    const parsed: { i: number; types?: string[]; subType?: string | null; confidence?: number }[] = JSON.parse(arrMatch[0]);
     const validTypeKeys = new Set(types.map((t) => t.key));
 
     return parsed
       .filter((r) => r.i >= 1 && r.i <= items.length)
       .map((r) => {
         const validTypes = (r.types ?? []).filter((k) => validTypeKeys.has(k));
+        // Resolve subType name → id
+        let subTypeId: string | undefined;
+        if (r.subType && r.subType !== "null" && validTypes[0]) {
+          const match = subTypes.find(s => s.nameAr === r.subType && s.parentKey === validTypes[0]);
+          if (match) subTypeId = match.id;
+        }
         return {
           id:          items[r.i - 1].id,
           primaryType: validTypes[0] ?? "unclassified",
           allTypes:    validTypes,
+          subTypeId,
           confidence:  r.confidence ?? 0.8,
         };
       });

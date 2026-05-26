@@ -17,6 +17,7 @@ import ticketRoutes from "./routes/tickets.js";
 import technicianRoutes from "./routes/technicians.js";
 import classifyRoutes from "./routes/classify.js";
 import reportRoutes from "./routes/report.js";
+import reportsStatsRoutes from "./routes/reports.js";
 import whatsappRoutes from "./routes/whatsapp.js";
 import settingsRoutes from "./routes/settings.js";
 import { initAllSessions } from "./baileys.js";
@@ -67,6 +68,7 @@ async function startServer() {
   app.use("/api/technicians", technicianRoutes);
   app.use("/api/classify", classifyRoutes);
   app.use("/api/generate-report", reportRoutes);
+  app.use("/api/reports", reportsStatsRoutes);
   app.use("/api/admin/ticket-types", ticketTypesAdminRoutes);
   app.use("/api/whatsapp", whatsappRoutes);
   app.use("/api/settings", settingsRoutes);

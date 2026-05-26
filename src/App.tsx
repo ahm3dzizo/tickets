@@ -18,6 +18,7 @@ import ProjectDetail from '@/pages/ProjectDetail';
 import Clients from '@/pages/Clients';
 import Technicians from '@/pages/Technicians';
 import TeamMemberDetail from '@/pages/TeamMemberDetail';
+import Reports from '@/pages/Reports';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
@@ -110,9 +111,13 @@ function AppContent() {
             path="/settings" 
             element={user && !requiresProfileCompletion ? <Settings /> : <Navigate to="/login" />} 
           />
-          <Route 
-            path="/ticket-types" 
-            element={user && !requiresProfileCompletion ? <TicketTypesAdminPage /> : <Navigate to="/login" />} 
+          <Route
+            path="/ticket-types"
+            element={user && !requiresProfileCompletion ? <TicketTypesAdminPage /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/reports"
+            element={user && !requiresProfileCompletion ? <Reports /> : <Navigate to="/login" />}
           />
           {/* ⛔️ تمت إزالة Route /register */}
         </Routes>

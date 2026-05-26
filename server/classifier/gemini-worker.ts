@@ -88,20 +88,23 @@ async function processBatch(): Promise<void> {
   const typeToSpecialty = await buildTypeToSpecialtyMap();
   const now = new Date();
 
+  // Build typeKey → typeId map once per batch
+  const typeRecords = await prisma.ticketType.findMany({ select: { id: true, key: true } });
+  const typeKeyToId = Object.fromEntries(typeRecords.map(t => [t.key, t.id]));
+
   for (const ticket of valid) {
     const result = results.find(r => r.id === ticket.id);
 
-    // Mark as processed regardless (so we don't retry forever on vague descriptions)
     const updateData: Record<string, any> = { geminiClassifiedAt: now };
 
     if (result && result.primaryType !== "unclassified" && result.allTypes.length > 0) {
       updateData.type          = result.primaryType;
       updateData.detectedTypes = result.allTypes;
+      updateData.typeId        = typeKeyToId[result.primaryType] ?? null;
+      updateData.subTypeId     = result.subTypeId ?? null;
 
-      // Auto-learn in background
       learnFromGeminiResult(ticket.description!, result.allTypes).catch(() => {});
 
-      // Re-assign supervisor if classification changed
       if (ticket.projectId && result.primaryType !== ticket.type) {
         try {
           const specialties = [...new Set(result.allTypes.map(t => typeToSpecialty[t] || "general"))] as string[];
@@ -116,8 +119,9 @@ async function processBatch(): Promise<void> {
         } catch { /* non-fatal */ }
       }
 
+      const sub = result.subTypeId ? ` / subType:${result.subTypeId.slice(0, 6)}` : "";
       console.log(
-        `[GeminiWorker] ✅ ${ticket.id.slice(0, 8)} → [${result.allTypes.join(", ")}]` +
+        `[GeminiWorker] ✅ ${ticket.id.slice(0, 8)} → [${result.allTypes.join(", ")}]${sub}` +
         (result.primaryType !== ticket.type ? ` (was: ${ticket.type})` : " (confirmed)")
       );
     } else {

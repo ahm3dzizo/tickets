@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Ticket, Users, Settings, LogOut, Bell,
   Briefcase, UserCheck, HardHat, CalendarClock, ClipboardList,
-  CheckCheck, Moon, Sun, Settings2,
+  CheckCheck, Moon, Sun, Settings2, BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ const allNavItems = [
   { icon: Briefcase,       label: 'المشاريع',    path: '/projects',      roles: ['admin', 'engineer', 'supervisor'] },
   { icon: UserCheck,       label: 'العملاء',     path: '/clients',       roles: ['admin', 'engineer', 'supervisor'] },
   { icon: Ticket,          label: 'التذاكر',     path: '/tickets',       roles: ['admin', 'engineer', 'supervisor'] },
+  { icon: BarChart3,       label: 'التقارير',    path: '/reports',       roles: ['admin', 'engineer'] },
   { icon: HardHat,         label: 'الفنيين',     path: '/technicians',   roles: ['admin', 'supervisor'] },
   { icon: Users,           label: 'الفريق',      path: '/team',          roles: ['admin', 'engineer'] },
   { icon: Settings2,       label: 'أنواع التذاكر', path: '/ticket-types', roles: ['admin'] },

@@ -68,6 +68,7 @@ model Ticket {
   description            String
   type                   String
   typeId                 String?
+  subTypeId              String?
   status                 String    @default("open")
   priority               Int       @default(4)
   assigneeName           String?
@@ -92,7 +93,8 @@ model Ticket {
   createdBy              String?
   client                 Client?   @relation(fields: [clientId], references: [id], onDelete: Restrict)
   project                Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  ticketType             TicketType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  ticketType             TicketType?    @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  ticketSubType          TicketSubType? @relation(fields: [subTypeId], references: [id], onDelete: SetNull)
 }
 
 model Technician {
@@ -181,6 +183,7 @@ model TicketSubType {
   updatedAt     DateTime           @updatedAt
 
   keywords TicketTypeKeyword[]
+  tickets  Ticket[]
 }
 
 model TicketTypeKeyword {

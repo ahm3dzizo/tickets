@@ -166,6 +166,25 @@ export const settingsApi = {
     put<{ openingMsg: string; closingMsg: string }>('/settings/whatsapp-templates', data),
 };
 
+// ── Reports ───────────────────────────────────────────────────────────────────
+export const reportsApi = {
+  getStats: (params?: { projectId?: string; from?: string; to?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.projectId) q.set('projectId', params.projectId);
+    if (params?.from)      q.set('from', params.from);
+    if (params?.to)        q.set('to', params.to);
+    const qs = q.toString();
+    return get<{
+      totals:      { total: number; open: number; closed: number; avgDays: number };
+      bySpecialty: { key: string; nameAr: string; count: number }[];
+      byMainType:  { key: string; nameAr: string; count: number; closed: number; open: number }[];
+      bySubType:   { id: string; nameAr: string; parentKey: string; parentName: string; count: number; closed: number; open: number }[];
+      byProject:   { id: string; name: string; abbr: string; count: number; closed: number; open: number }[];
+      byMonth:     { month: string; total: number; closed: number; open: number }[];
+    }>(`/reports/stats${qs ? `?${qs}` : ''}`);
+  },
+};
+
 // ── Technicians ───────────────────────────────────────────────────────────────
 export const techniciansApi = {
   getAll: ()                         => get<any[]>('/technicians'),

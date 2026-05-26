@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Plus, ArrowUpRight, Clock, CheckCircle2, Briefcase, HardHat,
-  UserPlus, UserCheck, Calendar, ChevronLeft, TrendingUp,
+  UserPlus, UserCheck, Calendar, ChevronLeft,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { TicketForm } from '@/components/tickets/TicketForm';
@@ -19,7 +19,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Project, Ticket, Client } from '@/types';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { ReportsSection } from '@/components/reports/ReportsSection';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -358,8 +357,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Reports ─────────────────────────────────────────── */}
-        <ReportsSection tickets={allTickets} projects={userProjects} userRole={user?.role} />
       </div>
 
       {/* Bulk Action Bar */}
