@@ -1,6 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-prisma.ticketTypeKeyword.findMany().then(k => {
-  console.log(JSON.stringify(k.slice(0,10), null, 2));
+prisma.ticketTypeKeyword.count().then(c => {
+  console.log('Keywords count:', c);
   process.exit(0);
 });
