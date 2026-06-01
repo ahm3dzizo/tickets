@@ -471,6 +471,9 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       // الأنواع النهائية: الملف أولاً، ثم AI
       const finalAllTypes = excelTypesResolved.length > 0 ? excelTypesResolved : (aiAllTypes.length > 0 ? aiAllTypes : []);
       const finalType = excelTypesResolved[0] || aiType || 'unclassified';
+      // typeId/subTypeId: من AI لو Excel ما حدده (AI بيجيب ID مباشرة من DB)
+      const finalTypeId    = excelTypesResolved.length > 0 ? null : (classification?.typeId    ?? null);
+      const finalSubTypeId = excelTypesResolved.length > 0 ? null : (classification?.subTypeId ?? null);
 
       let clientId = '';
       let clientName = '';
@@ -545,7 +548,9 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         assignedSupervisors: validSupervisors,
         detectedTypes: finalAllTypes,
         type: finalType,
+        typeId: finalTypeId,
         subType: classification?.subType || null,
+        subTypeId: finalSubTypeId,
         priority: 3,
         createdAt: new Date().toISOString(),
         createdBy: currentUserId || null,
@@ -674,8 +679,10 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       issuedAt: t.issuedAt,
       createdAt: t.createdAt,
       type: t.type,
+      typeId: t.typeId ?? null,
       detectedTypes: t.detectedTypes,
       subType: t.subType,
+      subTypeId: t.subTypeId ?? null,
       assigneeName: t.assigneeName,
       assignedSupervisorId: t.assignedSupervisorId,
       assignedSupervisorIds: t.assignedSupervisorIds,

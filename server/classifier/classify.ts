@@ -11,7 +11,9 @@ const MIN_CLASSIFY_SCORE = 3;
 export interface ClassificationResult {
   primaryType: string;
   allTypes: string[];
+  typeId: string | null;
   subType?: string | null;
+  subTypeId?: string | null;
   confidence: number;
   source: string;
   reason?: string;
@@ -37,7 +39,9 @@ export async function classifyTicket(
     return {
       primaryType: kwResult.primaryType,
       allTypes:    kwResult.allTypes,
+      typeId:      kwResult.typeId,
       subType:     kwResult.subType,
+      subTypeId:   kwResult.subTypeId,
       confidence:  kwResult.confidence,
       source:      "keywords",
     };
@@ -54,7 +58,9 @@ export async function classifyTicket(
         return {
           primaryType: geminiResult.primaryType,
           allTypes:    geminiResult.allTypes,
+          typeId:      null, // Gemini doesn't resolve DB ids — will be resolved later
           subType:     null,
+          subTypeId:   null,
           confidence:  geminiResult.confidence,
           source:      "gemini",
           reason:      geminiResult.reason,
@@ -69,7 +75,9 @@ export async function classifyTicket(
   return {
     primaryType: "unclassified",
     allTypes:    [],
+    typeId:      null,
     subType:     null,
+    subTypeId:   null,
     confidence:  kwResult.confidence,
     source:      "keywords",
   };

@@ -25,7 +25,7 @@ export interface FieldDef {
 self.onmessage = (e: MessageEvent<{ buffer: ArrayBuffer; fieldDefs: FieldDef[] }>) => {
   try {
     const { buffer, fieldDefs } = e.data;
-    const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+    const wb = XLSX.read(buffer, { type: 'array' });
     const ws = wb.Sheets[wb.SheetNames[0]];
 
     // Find the best header row

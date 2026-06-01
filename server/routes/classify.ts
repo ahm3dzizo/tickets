@@ -82,12 +82,14 @@ router.post("/bulk", requireAuth, async (req, res) => {
       const finalSups = fallback.length > 0 ? fallback : projectSups;
 
       return {
-        primaryType: classification.primaryType,
-        allTypes: classification.allTypes,
-        subType: classification.subType || undefined,
+        primaryType:        classification.primaryType,
+        allTypes:           classification.allTypes,
+        typeId:             classification.typeId    ?? null,
+        subType:            classification.subType   ?? null,
+        subTypeId:          classification.subTypeId ?? null,
         requiredSpecialties,
-        confidence: classification.confidence,
-        source: "keywords",
+        confidence:         classification.confidence,
+        source:             "keywords",
         supervisors: finalSups.map((u: any) => ({ id: u.uid, name: u.displayName, specialties: getSpecs(u) })),
       };
     });
