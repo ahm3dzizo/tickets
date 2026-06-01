@@ -25,7 +25,7 @@ export interface FieldDef {
 self.onmessage = (e: MessageEvent<{ buffer: ArrayBuffer; fieldDefs: FieldDef[] }>) => {
   try {
     const { buffer, fieldDefs } = e.data;
-    const wb = XLSX.read(buffer, { type: 'array' });
+    const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
     const ws = wb.Sheets[wb.SheetNames[0]];
 
     // Find the best header row
@@ -60,7 +60,7 @@ self.onmessage = (e: MessageEvent<{ buffer: ArrayBuffer; fieldDefs: FieldDef[] }
       }
     }
 
-    const data = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: '' });
+    const data = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: '', cellDates: true, raw: false });
     if (data.length === 0) {
       self.postMessage({ error: 'الملف فارغ أو لا يحتوي على بيانات' });
       return;

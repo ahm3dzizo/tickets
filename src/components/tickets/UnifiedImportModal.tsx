@@ -43,10 +43,19 @@ const normalizeDate = (dateStr: unknown): string => {
   return str.split('T')[0];
 };
 
-const normalizeStatus = (status: string): string => {
-  const s = (status || '').toLowerCase().trim();
-  if (s === '' || s === 'مفتوح' || s === 'open') return 'open';
-  if (s === 'مغلق' || s === 'closed') return 'closed';
+const normalizeStatus = (rawStatus: unknown): string => {
+  // Empty / null / undefined / None → open
+  if (rawStatus === null || rawStatus === undefined) return 'open';
+  const s = String(rawStatus).toLowerCase().trim();
+  if (!s || s === 'none' || s === 'null' || s === 'مفتوح' || s === 'open' || s === 'نشط') return 'open';
+  // All closed variants from Excel sheets
+  if (
+    s === 'مغلق' || s === 'مغلوق' || s === 'اغلاق' || s === 'إغلاق' ||
+    s === 'closed' || s === 'close' || s === 'done' || s === 'تم' ||
+    s === 'منتهي' || s === 'منتهى' || s === 'مكتمل' || s === 'مكتملة' ||
+    s === 'مكتمله' || s === 'completed' || s === 'out_of_scope' ||
+    s.startsWith('مغلق') // catches 'مغلق ' with trailing space
+  ) return 'closed';
   return 'open';
 };
 
@@ -312,12 +321,12 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
   const projectAbbr = selectedProject?.abbreviation?.toUpperCase() || '';
 
     const fieldDefs: FieldDef[] = [
-    { key: 'ticketId',    label: 'رقم التذكرة', aliases: ['ID', 'id', 'رقم التذكرة', 'الرقم', '#'], required: true },
-    { key: 'villaNumber', label: 'رقم الفيلا',  aliases: ['فيلا', 'villa', 'رقم الوحدة', 'الوحدة'] },
-    { key: 'createdAt',   label: 'تاريخ الإنشاء', aliases: ['التاريخ', 'date', 'تاريخ التذكرة', 'تاريخ الإنشاء', 'issuedAt'] },
-    { key: 'description', label: 'الوصف',        aliases: ['الوصف', 'وصف', 'description', 'المشكلة', 'تفاصيل المشكلة'] },
-    { key: 'status',      label: 'الحالة',       aliases: ['الحالة', 'status', 'حالة التذكرة', 'حالة الاغلاق', 'حالة الإغلاق'] },
-    { key: 'closedAt',    label: 'تاريخ الإغلاق', aliases: ['تاريخ الإغلاق', 'تاريخ الاغلاق', 'تاريخ الغلق', 'closed date', 'close date'] },
+    { key: 'ticketId',    label: 'رقم التذكرة', aliases: ['ID', 'id', 'رقم التذكرة', 'الرقم', '#', 'رقم الطلب', 'Case Number', 'case number'], required: true },
+    { key: 'villaNumber', label: 'رقم الفيلا',  aliases: ['فيلا', 'villa', 'رقم الوحدة', 'الوحدة', 'Unit', 'unit', 'رقم الفيلا'] },
+    { key: 'createdAt',   label: 'تاريخ الإنشاء', aliases: ['التاريخ', 'date', 'تاريخ التذكرة', 'تاريخ الإنشاء', 'issuedAt', 'Opened Date', 'opened date'] },
+    { key: 'description', label: 'الوصف',        aliases: ['الوصف', 'وصف', 'description', 'المشكلة', 'تفاصيل المشكلة', 'الملاحظات', 'ملاحظات'] },
+    { key: 'status',      label: 'الحالة',       aliases: ['الحالة', 'status', 'حالة التذكرة', 'حالة الاغلاق', 'حالة الإغلاق', 'حالةالإغلاق', 'حالةالاغلاق'] },
+    { key: 'closedAt',    label: 'تاريخ الإغلاق', aliases: ['تاريخ الإغلاق', 'تاريخ الاغلاق', 'تاريخ الغلق', 'closed date', 'close date', 'تاريخالاغلاق', 'تاريخالإغلاق'] },
   ];
 
     // جلب التذاكر الموجودة مسبقاً في قاعدة البيانات للمشروع المحدد
@@ -459,25 +468,31 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
 
             const status = normalizeStatus(rawStatus);
 
-                        // Handle closed date from Excel
+            // ── Handle closing date from Excel ─────────────────────────────
             let closedAtStr: string | null = null;
-            const rawClosedAt = item.closedAt || '';
-            if (rawClosedAt) {
-              // Ensure rawClosedAt is a string or number for parseIssuedAt
-              const normalizedClosed = rawClosedAt instanceof Date ? rawClosedAt.toISOString() : rawClosedAt;
-              const d = parseIssuedAt(normalizedClosed);
-              if (d && !isNaN(d.getTime())) closedAtStr = d.toISOString();
-              else {
-                const nd = normalizeDate(normalizedClosed);
-                if (nd) {
-                  const parsed = new Date(nd);
-                  if (!isNaN(parsed.getTime())) closedAtStr = parsed.toISOString();
+            const rawClosedAt = item.closedAt;
+            if (rawClosedAt !== null && rawClosedAt !== undefined && String(rawClosedAt).trim() !== '') {
+              // Excel Date objects come as JS Date from xlsx library
+              if (rawClosedAt instanceof Date && !isNaN(rawClosedAt.getTime())) {
+                closedAtStr = rawClosedAt.toISOString();
+              } else {
+                const normalizedClosed = String(rawClosedAt);
+                const d = parseIssuedAt(normalizedClosed);
+                if (d && !isNaN(d.getTime())) {
+                  closedAtStr = d.toISOString();
+                } else {
+                  const nd = normalizeDate(normalizedClosed);
+                  if (nd) {
+                    const parsed = new Date(nd);
+                    if (!isNaN(parsed.getTime())) closedAtStr = parsed.toISOString();
+                  }
                 }
               }
             }
-            // If status is closed but no closedAt provided, use current time
+            // If status is closed but no closedAt in sheet → use issuedAt as fallback, not current time
             if (status === 'closed' && !closedAtStr) {
-              closedAtStr = new Date().toISOString();
+              // Prefer the issuedAt date as a minimum, fallback to now
+              closedAtStr = issuedAtStr ? new Date(issuedAtStr).toISOString() : new Date().toISOString();
             }
 
             processed.push({
