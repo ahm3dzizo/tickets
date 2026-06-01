@@ -36,9 +36,12 @@ export function ReassignSupervisorButton({ ticket, onReassigned, variant = 'butt
     setLoading(true);
     try {
       const allUsers = await usersApi.getAll();
-      const projectSupers = allUsers.filter(
+      let projectSupers = allUsers.filter(
         (u: any) => u.role === 'supervisor' && Array.isArray(u.projectIds) && u.projectIds.includes(ticket.projectId)
       );
+      if (projectSupers.length === 0) {
+        projectSupers = allUsers.filter((u: any) => u.role === 'supervisor');
+      }
       const mapped = projectSupers.map((u: any) => ({
         id: u.uid,
         name: u.displayName,

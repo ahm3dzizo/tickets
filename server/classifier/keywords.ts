@@ -146,7 +146,7 @@ export function classifyFromKeywordsDB(
     }
   }
 
-  const MIN_CLASSIFY_SCORE = 3; // At least this score required to classify
+  const MIN_CLASSIFY_SCORE = 1; // Lowered to 1 to catch more tickets based on keywords
 
   const sortedTypes = Object.entries(typeScores).sort((a, b) => b[1] - a[1]);
   if (sortedTypes.length === 0) {
@@ -160,7 +160,7 @@ export function classifyFromKeywordsDB(
     return { primaryType: "unclassified", allTypes: [], subType: null, confidence: maxScore };
   }
 
-  const threshold = Math.max(3, maxScore * 0.5);
+  const threshold = Math.max(1, maxScore * 0.5);
 
   let candidates = sortedTypes.filter(([, s]) => s >= threshold).map(([t]) => t);
 

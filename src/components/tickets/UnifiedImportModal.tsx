@@ -358,9 +358,12 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     setLoadingSupervisors(true);
     const { usersApi } = await import('@/lib/api');
     const allUsers = await usersApi.getAll();
-    const projectSupervisors = allUsers.filter(
+    let projectSupervisors = allUsers.filter(
       (u: any) => u.role === 'supervisor' && Array.isArray(u.projectIds) && u.projectIds.includes(selectedProjectId)
     );
+    if (projectSupervisors.length === 0) {
+      projectSupervisors = allUsers.filter((u: any) => u.role === 'supervisor');
+    }
     setAllSupervisorsForProject(projectSupervisors.map((u: any) => ({ id: u.uid, name: u.displayName })));
     setLoadingSupervisors(false);
 
