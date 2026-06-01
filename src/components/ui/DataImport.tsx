@@ -125,18 +125,51 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+        // Find the best header row (in case first row is a title)
+        const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+        if (rawRows.length === 0) { toast.error('الملف فارغ أو لا يحتوي على بيانات'); return; }
+
+        let headerRowIndex = 0;
+        let maxMatches = -1;
+        let maxCols = -1;
+
+        for (let i = 0; i < Math.min(5, rawRows.length); i++) {
+          const cols = rawRows[i].map(c => String(c).trim());
+          let matches = 0;
+          let nonEmptyCols = cols.filter(c => c !== '').length;
+          
+          for (const fd of fieldDefs) {
+            if (autoMatch(cols, fd.aliases)) matches++;
+          }
+          
+          if (matches > maxMatches) {
+            maxMatches = matches;
+            maxCols = nonEmptyCols;
+            headerRowIndex = i;
+          } else if (matches === maxMatches && maxMatches === 0) {
+            if (nonEmptyCols > maxCols) {
+              maxCols = nonEmptyCols;
+              headerRowIndex = i;
+            }
+          }
+        }
+
+        const data = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: '' });
         if (data.length === 0) { toast.error('الملف فارغ أو لا يحتوي على بيانات'); return; }
+
         const cols = Object.keys(data[0] as object);
         const autoMapping: Record<string, string> = {};
         for (const fd of fieldDefs) {
           autoMapping[fd.key] = autoMatch(cols, fd.aliases);
         }
+        
         setRawData(data);
         setColumns(cols);
         setMapping(autoMapping);
         setStep('mapping');
-      } catch {
+      } catch (err) {
+        console.error(err);
         toast.error('فشل في قراءة الملف. تأكد من أنه ملف Excel أو CSV صالح.');
       }
     };

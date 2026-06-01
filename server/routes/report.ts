@@ -94,32 +94,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
         sendWAImage(uid, phone, jpgData, whatsappMessage || '📊 تقرير الصيانة — فريق ريتال')
           .then((r: any) => {
             console.log('[WA] report image sent:', r);
-            // بعد 3 ثوانٍ ابعت رسالة طلب الموافقة
-            setTimeout(async () => {
-              try {
-                // ابحث عن التذكرة بـ ticketId أو refNumber
-                const ticket = await prisma.ticket.findFirst({
-                  where: { OR: [{ ticketId: ticketNum }, { refNumber: ticketNum }] },
-                  select: { id: true },
-                });
-                const ticketId = ticket?.id;
-                if (!ticketId) {
-                  console.warn('[WA] approval: ticket not found for', ticketNum);
-                  return;
-                }
-                console.log('[WA] sending approval request for ticket:', ticketId, '→', phone);
-                const result = await sendApprovalRequest(uid, phone, ticketId, customerName, villa, notes);
-                console.log('[WA] approval request sent:', result);
-                if (result.sent) {
-                  await prisma.ticket.update({
-                    where: { id: ticketId },
-                    data: { approvalState: 'sent', approvalSentAt: new Date(), approvalUserId: uid },
-                  });
-                }
-              } catch (err) {
-                console.error('[WA] approval after report error:', err);
-              }
-            }, 3000);
           })
           .catch((err: any) => console.error('[WA] report image error:', err));
       }
