@@ -263,7 +263,7 @@ export async function parsePdfTickets(file: File, onProgress?: PdfParseProgress)
   const token = localStorage.getItem('token');
   const response = await fetch('/api/ocr/extract-pdf', {
     method: 'POST',
-    headers: token ? { Authorization: Bearer \} : {},
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   });
   if (!response.ok) {
