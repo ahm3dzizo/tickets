@@ -352,6 +352,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     setLoading(true);
     setProgress(0);
     const allClientsArr = clients.filter(c => c.projectId === selectedProjectId);
+    const normalizedClientsMap = new Map(allClientsArr.map(c => [normalizeVillaNumber(String(c.villaNumber)), c]));
 
     // ── جلب كل المشرفين لهذا المشروع (للواجهة فقط) ──
     setLoadingSupervisors(true);
@@ -372,8 +373,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       const refNumberCandidate = cleanVillaNumber ? `${projectAbbr}-${cleanVillaNumber}` : '';
       
       const isDuplicate = 
-        (ticketId && existingTicketIds.has(ticketId)) || 
-        (refNumberCandidate && existingRefNumbers.has(refNumberCandidate));
+        Boolean(ticketId && existingTicketIds.has(ticketId));
       
       if (!isDuplicate) {
         newItemsToClassify.push({
@@ -430,9 +430,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       let clientId = '';
       let clientName = '';
       if (cleanVillaNumber) {
-        const matchedClient = allClientsArr.find(c => 
-          normalizeVillaNumber(String(c.villaNumber)) === cleanVillaNumber
-        );
+        const matchedClient = normalizedClientsMap.get(cleanVillaNumber);
         if (matchedClient) {
           clientId = matchedClient.id;
           clientName = matchedClient.name;
@@ -509,11 +507,9 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     const duplicates = processed.filter(t => t.isDuplicate);
 
     const updates: { id: string; status: string; closedAt?: string | null }[] = [];
+    const existingByTicketId = new Map(existingTickets.map(t => [String(t.ticketId).trim(), t]));
     duplicates.forEach(dup => {
-      const existing = existingTickets.find(t => 
-        (dup.ticketId && String(t.ticketId).trim() === dup.ticketId) || 
-        (dup.refNumber && String(t.refNumber).trim() === dup.refNumber)
-      );
+      const existing = existingByTicketId.get(dup.ticketId);
       if (existing && existing.status !== dup.status) {
         updates.push({
           id: existing.id,
@@ -622,20 +618,25 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       createdBy: t.createdBy,
     }));
 
-    const BATCH_SIZE = 50;
-    let successCount = 0;
-    let failCount = 0;
-
-    for (let i = 0; i < payload.length; i += BATCH_SIZE) {
-      const batch = payload.slice(i, i + BATCH_SIZE);
-      try {
-        await ticketsApi.bulkCreate(batch);
-        successCount += batch.length;
-      } catch (err) {
-        failCount += batch.length;
+      const BATCH_SIZE = 50;
+      let successCount = 0;
+      let failCount = 0;
+      let skippedCount = 0;
+  
+      for (let i = 0; i < payload.length; i += BATCH_SIZE) {
+        const batch = payload.slice(i, i + BATCH_SIZE);
+        try {
+          const res = await ticketsApi.bulkCreate(batch);
+          const insertedCount = res.count ?? batch.length;
+          successCount += insertedCount;
+          if (insertedCount < batch.length) {
+            skippedCount += (batch.length - insertedCount);
+          }
+        } catch (err) {
+          failCount += batch.length;
+        }
+        setProgress((i + batch.length) / payload.length);
       }
-      setProgress((i + batch.length) / payload.length);
-    }
 
         if (failCount === 0) {
       // ── تعليم السيرفر من التعديلات ──
@@ -667,13 +668,17 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         });
       }
 
-      toast.success(`تم استيراد ${successCount} تذكرة بنجاح`);
-      setOpen(false);
-      setSelectedProjectId('');
-      onImportSuccess();
-    } else {
-      toast.error(`نجح ${successCount} تذكرة، فشل ${failCount} تذكرة.`);
-    }
+        if (skippedCount > 0) {
+          toast.success(`تم استيراد ${successCount} تذكرة، وتخطي ${skippedCount} مكررة`);
+        } else {
+          toast.success(`تم استيراد ${successCount} تذكرة بنجاح`);
+        }
+        setOpen(false);
+        setSelectedProjectId('');
+        onImportSuccess();
+      } else {
+        toast.error(`نجح ${successCount}، فشل ${failCount}، وتخطي ${skippedCount} مكررة.`);
+      }
   };
 
 
