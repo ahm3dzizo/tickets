@@ -27,7 +27,8 @@ router.post("/extract-pdf", requireAuth, upload.single("file"), async (req, res)
       method: "POST",
       body: formData as any,
       headers: formData.getHeaders(),
-    });
+      duplex: "half",
+    } as any);
 
     if (!fetchResponse.ok) {
       const err = await fetchResponse.text();
