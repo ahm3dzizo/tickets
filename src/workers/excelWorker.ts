@@ -60,7 +60,7 @@ self.onmessage = (e: MessageEvent<{ buffer: ArrayBuffer; fieldDefs: FieldDef[] }
       }
     }
 
-    const data = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: '', cellDates: true, raw: false });
+    const data = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: '' });
     if (data.length === 0) {
       self.postMessage({ error: 'الملف فارغ أو لا يحتوي على بيانات' });
       return;
