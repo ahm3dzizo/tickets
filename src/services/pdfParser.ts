@@ -268,7 +268,7 @@ export async function parsePdfTickets(file: File, onProgress?: PdfParseProgress)
   });
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(Failed to extract PDF: );
+    throw new Error('Failed to extract PDF: ' + errorText);
   }
   const json = await response.json();
   onProgress?.(1, 1);
