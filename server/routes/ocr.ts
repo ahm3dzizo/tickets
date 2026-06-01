@@ -26,6 +26,7 @@ router.post("/extract-pdf", requireAuth, upload.single("file"), async (req, res)
     const fetchResponse = await fetch(ocrUrl, {
       method: "POST",
       body: formData as any,
+      headers: formData.getHeaders(),
     });
 
     if (!fetchResponse.ok) {
