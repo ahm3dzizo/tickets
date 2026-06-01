@@ -295,10 +295,10 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
                     <Loader2 className="w-10 h-10 text-blue-400 mx-auto mb-3 animate-spin" />
                       {pdfProgress && pdfProgress.total > 0 && pdfProgress.done < pdfProgress.total ? (
                         <p className="text-slate-400 text-sm">
-                          جاري تحويل الصفحة {pdfProgress.done + 1} من {pdfProgress.total} إلى صورة…
+                          جاري رفع الملف للسيرفر…
                         </p>
                       ) : pdfProgress && pdfProgress.done >= pdfProgress.total ? (
-                        <p className="text-slate-400 text-sm">جاري إرسال الملف لـ Gemini…</p>
+                        <p className="text-slate-400 text-sm">جاري معالجة الملف واستخراج التذاكر…</p>
                     ) : (
                       <p className="text-slate-400">جاري قراءة الملف…</p>
                     )}
