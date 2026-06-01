@@ -20,6 +20,7 @@ import reportRoutes from "./routes/report.js";
 import reportsStatsRoutes from "./routes/reports.js";
 import whatsappRoutes from "./routes/whatsapp.js";
 import settingsRoutes from "./routes/settings.js";
+import ocrRoutes from "./routes/ocr.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
@@ -72,6 +73,7 @@ async function startServer() {
   app.use("/api/admin/ticket-types", ticketTypesAdminRoutes);
   app.use("/api/whatsapp", whatsappRoutes);
   app.use("/api/settings", settingsRoutes);
+  app.use("/api/ocr", ocrRoutes);
 
   // ── Legacy client routes under projects (for backward compat) ──────────
   app.get("/api/projects/:projectId/clients", requireAuth, async (req, res) => {

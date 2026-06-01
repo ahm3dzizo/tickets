@@ -7,10 +7,9 @@ async function run() {
       where: {
         status: { not: "closed" },
         OR: [
-          { detectedTypes: { isEmpty: true } },
+          { detectedTypes: { equals: [] } },
           { type: "unclassified" },
-          { type: null },
-          { type: "plumbing" } // we suspect many plumbing ones are wrong
+          { type: "plumbing" }
         ],
       },
     });
@@ -24,8 +23,7 @@ async function run() {
       
       const classification = await classifyTicket(ticket.description, ticket.projectId || undefined, { forceReclassify: true });
       
-      // If we got a real classification, update it
-      if (classification.primaryType !== "unclassified" && classification.primaryType !== ticket.type) {
+      if (classification.primaryType !== "unclassified") {
         const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
         await prisma.ticket.update({
           where: { id: ticket.id },

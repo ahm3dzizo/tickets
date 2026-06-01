@@ -32,7 +32,7 @@ async function renderPageToBase64(page: pdfjsLib.PDFPageProxy, scale = 1.2): Pro
   canvas.height = viewport.height;
   const ctx = canvas.getContext('2d')!;
   await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-  // JPEG at 70% quality — good enough for Arabic text OCR
+  // JPEG at 70% quality ï¿½ good enough for Arabic text OCR
   return canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
 }
 
@@ -89,7 +89,7 @@ async function extractBatchWithGemini(
       // Log full quota violation details
       const violations = err?.error?.details?.find((d: any) => d['@type']?.includes('QuotaFailure'))?.violations ?? [];
       console.warn(`[pdfParser] 429 violations:`, violations.map((v: any) => v.quotaId).join(', '));
-      console.warn(`[pdfParser] 429 — waiting ${Math.round(waitMs / 1000)}s then retry…`);
+      console.warn(`[pdfParser] 429 ï¿½ waiting ${Math.round(waitMs / 1000)}s then retryï¿½`);
       await new Promise(r => setTimeout(r, waitMs));
       return extractBatchWithGemini(pages, geminiKey, attempt + 1);
     }
@@ -256,34 +256,48 @@ async function parsePdfFallback(pdf: pdfjsLib.PDFDocumentProxy): Promise<ParsedT
 // Main export
 // 
 
-export async function parsePdfTickets(
-  file: File,
-  onProgress?: PdfParseProgress,
-): Promise<ParsedTicketRow[]> {
-  const buffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  const total = pdf.numPages;
-
-  if (GEMINI_KEY) {
-    // TEST MODE: only first page
-    const TEST_PAGES = 1;
-    const pageImages: string[] = [];
-    for (let p = 1; p <= Math.min(total, TEST_PAGES); p++) {
-      onProgress?.(p - 1, total);
-      const page = await pdf.getPage(p);
-      pageImages.push(await renderPageToBase64(page));
-    }
-
-    console.log(`[pdfParser] TEST: sending page 1 only (${pageImages.length} image)`);
-    const rows = await extractBatchWithGemini(pageImages, GEMINI_KEY);
-    console.log(`[pdfParser] Got ${rows.length} tickets from page 1`);
-
-    onProgress?.(total, total);
-    return rows;
+export async function parsePdfTickets(file: File, onProgress?: PdfParseProgress): Promise<ParsedTicketRow[]> {
+  const formData = new FormData();
+  formData.append('file', file);
+  onProgress?.(0, 1);
+  const token = localStorage.getItem('token');
+  const response = await fetch('/api/ocr/extract-pdf', {
+    method: 'POST',
+    headers: token ? { Authorization: Bearer  } : {},
+    body: formData,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(Failed to extract PDF: );
   }
-
-  onProgress?.(0, total);
-  const rows = await parsePdfFallback(pdf);
-  onProgress?.(total, total);
+  const json = await response.json();
+  onProgress?.(1, 1);
+  const rawData = json.results || json;
+  let combinedText = '';
+  if (Array.isArray(rawData)) {
+    combinedText = rawData.map(r => typeof r === 'string' ? r : JSON.stringify(r)).join('\n');
+  } else {
+    combinedText = typeof rawData === 'string' ? rawData : JSON.stringify(rawData);
+  }
+  const rows: ParsedTicketRow[] = [];
+  const lines = combinedText.split('\n');
+  const seen = new Set<string>();
+  for (let i = 0; i < lines.length; i++) {
+    const rowText = lines[i];
+    if (/\\bNTF-\\d+\\b/.test(rowText)) {
+      let j = i + 1, combined = rowText;
+      while (j < lines.length) {
+        const nxt = lines[j];
+        if (/\\bNTF-\\d+\\b/.test(nxt)) break;
+        combined += ' ' + nxt; j++;
+      }
+      i = j - 1;
+      const parsed = parseRowRegex(combined);
+      if (parsed) {
+        const key = parsed.refNumber + parsed.ticketId;
+        if (!seen.has(key)) { seen.add(key); rows.push(parsed); }
+      }
+    }
+  }
   return rows;
 }
