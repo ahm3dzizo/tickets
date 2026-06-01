@@ -20,7 +20,10 @@ router.post("/extract-pdf", requireAuth, upload.single("file"), async (req, res)
     });
 
     // Call the local Python OCR service
-    const fetchResponse = await fetch("process.env.NODE_ENV === 'production' ? 'http://127.0.0.1:8005/extract-pdf' : 'http://84.8.120.31:8005/extract-pdf'", {
+    const ocrUrl = process.env.NODE_ENV === 'production'
+      ? 'http://127.0.0.1:8005/extract-pdf'
+      : 'http://84.8.120.31:8005/extract-pdf';
+    const fetchResponse = await fetch(ocrUrl, {
       method: "POST",
       body: formData as any,
     });
