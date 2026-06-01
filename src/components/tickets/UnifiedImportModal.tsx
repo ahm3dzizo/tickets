@@ -66,6 +66,27 @@ const normalizeVillaNumber = (raw: string): string => {
   return cleaned || raw.trim();
 };
 
+/**
+ * Resolves Arabic type names from the Excel "تصنيف التذاكر" column
+ * to system type keys by matching against DB type nameAr values.
+ * Handles comma/slash-separated multi-type strings like "سباكة، سيراميك"
+ */
+const resolveExcelTypes = (
+  rawExcelType: string,
+  serverTypes: { key: string; nameAr: string }[],
+): string[] => {
+  if (!rawExcelType || rawExcelType === 'nan' || rawExcelType === 'undefined') return [];
+  const parts = rawExcelType.split(/[،,\/]/g).map(p => p.trim()).filter(Boolean);
+  const resolved: string[] = [];
+  for (const part of parts) {
+    const match = serverTypes.find(
+      t => t.nameAr === part || t.nameAr.includes(part) || part.includes(t.nameAr),
+    );
+    if (match && !resolved.includes(match.key)) resolved.push(match.key);
+  }
+  return resolved;
+};
+
 // --- Add Client Inline Modal ---
 interface QuickAddClientModalProps {
   isOpen: boolean;
@@ -327,6 +348,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     { key: 'description', label: 'الوصف',        aliases: ['الوصف', 'وصف', 'description', 'المشكلة', 'تفاصيل المشكلة', 'الملاحظات', 'ملاحظات'] },
     { key: 'status',      label: 'الحالة',       aliases: ['الحالة', 'status', 'حالة التذكرة', 'حالة الاغلاق', 'حالة الإغلاق', 'حالةالإغلاق', 'حالةالاغلاق'] },
     { key: 'closedAt',    label: 'تاريخ الإغلاق', aliases: ['تاريخ الإغلاق', 'تاريخ الاغلاق', 'تاريخ الغلق', 'closed date', 'close date', 'تاريخالاغلاق', 'تاريخالإغلاق'] },
+    { key: 'excelType',   label: 'التصنيف (من الملف)', aliases: ['تصنيف التذاكر', 'التصنيف', 'نوع التذاكر', 'نوع المشكلة', 'النوع', 'الفئة', 'type', 'category'] },
   ];
 
     // جلب التذاكر الموجودة مسبقاً في قاعدة البيانات للمشروع المحدد
@@ -436,8 +458,19 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       // الكشف عن المكرر تم مسبقاً
       const isDuplicate = item.isDuplicate;
 
-      // التذاكر المكررة نعطيها تصنيف افتراضي لأننا لم نصنفها
-      const finalType = classification?.primaryType || 'plumbing';
+      // حل التصنيف:
+      // 1) عمود الملف (تصنيف التذاكر) — مصدر بشري موثوق → أعلى أولوية
+      // 2) AI من الوصف — fallback لما الملف فاضي
+      // 3) unclassified — لو الاتنين فشلوا (لا نحط سباكة كذب)
+      const excelTypesResolved = resolveExcelTypes(String(item.excelType || ''), serverTypes);
+      const aiAllTypes = (classification?.allTypes || []).filter((t: string) => t !== 'unclassified');
+      const aiType = classification?.primaryType && classification.primaryType !== 'unclassified'
+        ? classification.primaryType
+        : null;
+
+      // الأنواع النهائية: الملف أولاً، ثم AI
+      const finalAllTypes = excelTypesResolved.length > 0 ? excelTypesResolved : (aiAllTypes.length > 0 ? aiAllTypes : []);
+      const finalType = excelTypesResolved[0] || aiType || 'unclassified';
 
       let clientId = '';
       let clientName = '';
@@ -510,7 +543,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         assignedSupervisorId: primary?.id || null,
         assignedSupervisorIds: supervisorIds,
         assignedSupervisors: validSupervisors,
-        detectedTypes: classification?.allTypes || [],
+        detectedTypes: finalAllTypes,
         type: finalType,
         subType: classification?.subType || null,
         priority: 3,
@@ -573,7 +606,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
           t.ticketId || t.refNumber,
           Array.isArray(t.detectedTypes) && t.detectedTypes.length > 0
             ? [...t.detectedTypes]
-            : [t.type || 'plumbing'],
+            : t.type && t.type !== 'unclassified' ? [t.type] : [],
         ]))
       );
       setReviewModalOpen(true);
