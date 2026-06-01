@@ -19,6 +19,7 @@ export interface FieldDef {
   key: string;
   label: string;
   aliases: string[];
+  required?: boolean;
 }
 
 interface DataImportProps<T> {
@@ -119,73 +120,74 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
 
     // ── Excel / CSV path ──────────────────────────────────────────────────
     setIsPdf(false);
+    setLoading(true);
+    setPdfProgress(null);
+
     const reader = new FileReader();
     reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-
-        // Find the best header row (in case first row is a title)
-        const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
-        if (rawRows.length === 0) { toast.error('الملف فارغ أو لا يحتوي على بيانات'); return; }
-
-        let headerRowIndex = 0;
-        let maxMatches = -1;
-        let maxCols = -1;
-
-        for (let i = 0; i < Math.min(5, rawRows.length); i++) {
-          const cols = rawRows[i].map(c => String(c).trim());
-          let matches = 0;
-          let nonEmptyCols = cols.filter(c => c !== '').length;
-          
-          for (const fd of fieldDefs) {
-            if (autoMatch(cols, fd.aliases)) matches++;
-          }
-          
-          if (matches > maxMatches) {
-            maxMatches = matches;
-            maxCols = nonEmptyCols;
-            headerRowIndex = i;
-          } else if (matches === maxMatches && maxMatches === 0) {
-            if (nonEmptyCols > maxCols) {
-              maxCols = nonEmptyCols;
-              headerRowIndex = i;
-            }
-          }
-        }
-
-        const data = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: '' });
-        if (data.length === 0) { toast.error('الملف فارغ أو لا يحتوي على بيانات'); return; }
-
-        const cols = Object.keys(data[0] as object);
-        const autoMapping: Record<string, string> = {};
-        for (const fd of fieldDefs) {
-          autoMapping[fd.key] = autoMatch(cols, fd.aliases);
-        }
-        
-        setRawData(data);
-        setColumns(cols);
-        setMapping(autoMapping);
-        setStep('mapping');
-      } catch (err) {
-        console.error(err);
-        toast.error('فشل في قراءة الملف. تأكد من أنه ملف Excel أو CSV صالح.');
+      const buffer = evt.target?.result as ArrayBuffer;
+      if (!buffer) {
+        toast.error('حدث خطأ أثناء قراءة الملف.');
+        setLoading(false);
+        return;
       }
+
+      const worker = new Worker(new URL('../../workers/excelWorker.ts', import.meta.url), { type: 'module' });
+      
+      worker.onmessage = (e) => {
+        const { error, success, data, cols, autoMapping } = e.data;
+        if (error) {
+          toast.error(error);
+          setLoading(false);
+          worker.terminate();
+          return;
+        }
+        if (success) {
+          setRawData(data);
+          setColumns(cols);
+          setMapping(autoMapping);
+          setStep('mapping');
+          setLoading(false);
+          worker.terminate();
+        }
+      };
+
+      worker.onerror = (err) => {
+        console.error('Worker error:', err);
+        toast.error('حدث خطأ غير متوقع أثناء معالجة الملف.');
+        setLoading(false);
+        worker.terminate();
+      };
+
+      worker.postMessage({ buffer, fieldDefs });
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const getMappedData = (): any[] => {
     // PDF data is already mapped — return as-is
     if (isPdf) return rawData;
-    return rawData.map(row => {
+    const mapped = rawData.map(row => {
       const out: Record<string, any> = {};
       for (const fd of fieldDefs) {
         const col = mapping[fd.key];
         out[fd.key] = col ? row[col] : '';
       }
       return out;
+    });
+
+    // Filter out rows that are missing required fields
+    return mapped.filter(row => {
+      // If a field is marked required, it must have a non-empty string or value
+      for (const fd of fieldDefs) {
+        if (fd.required) {
+          const val = row[fd.key];
+          if (val === undefined || val === null || String(val).trim() === '') {
+            return false;
+          }
+        }
+      }
+      return true;
     });
   };
 

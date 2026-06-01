@@ -312,7 +312,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
   const projectAbbr = selectedProject?.abbreviation?.toUpperCase() || '';
 
     const fieldDefs: FieldDef[] = [
-    { key: 'ticketId',    label: 'رقم التذكرة', aliases: ['ID', 'id', 'رقم التذكرة', 'الرقم', '#'] },
+    { key: 'ticketId',    label: 'رقم التذكرة', aliases: ['ID', 'id', 'رقم التذكرة', 'الرقم', '#'], required: true },
     { key: 'villaNumber', label: 'رقم الفيلا',  aliases: ['فيلا', 'villa', 'رقم الوحدة', 'الوحدة'] },
     { key: 'createdAt',   label: 'تاريخ الإنشاء', aliases: ['التاريخ', 'date', 'تاريخ التذكرة', 'تاريخ الإنشاء', 'issuedAt'] },
     { key: 'description', label: 'الوصف',        aliases: ['الوصف', 'وصف', 'description', 'المشكلة', 'تفاصيل المشكلة'] },
