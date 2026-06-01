@@ -97,6 +97,11 @@ const remoteLines = [
   `echo "▶  Copying frontend to Nginx root..."`,
   `rm -rf /var/www/retal/*`,
   `cp -r dist/* /var/www/retal/`,
+  `echo "▶  Clearing Nginx cache & reloading..."`,
+  `[ -d /var/cache/nginx ] && rm -rf /var/cache/nginx/* || true`,
+  `[ -d /tmp/nginx_cache ] && rm -rf /tmp/nginx_cache/* || true`,
+  `nginx -s reload 2>/dev/null || systemctl reload nginx 2>/dev/null || true`,
+  `echo "✔  Nginx reloaded"`,
   `echo "▶  pm2 restart..."`,
   `pm2 restart ${PM2_NAME} --update-env`,               // الـ express بيخدم dist/ مباشرة
   `echo "✔  API جاهز"`,
