@@ -87,6 +87,8 @@ const remoteLines = [
   `git pull origin ${GIT_BRANCH}`,
   `echo "▶  npm install..."`,
   `npm install --silent`,
+  `echo "▶  npx prisma db push..."`,
+  `npx prisma db push --accept-data-loss`,
   `echo "▶  npm run build (frontend + backend)..."`,
   `rm -rf dist`,
   `rm -rf node_modules/.vite`,
