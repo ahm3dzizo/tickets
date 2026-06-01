@@ -557,15 +557,24 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     const newTickets = processed.filter(t => !t.isDuplicate);
     const duplicates = processed.filter(t => t.isDuplicate);
 
-    const updates: { id: string; status: string; closedAt?: string | null }[] = [];
+    const updates: { id: string; status: string; closedAt?: string | null; type?: string; detectedTypes?: string[] }[] = [];
     const existingByTicketId = new Map(existingTickets.map(t => [String(t.ticketId).trim(), t]));
     duplicates.forEach(dup => {
       const existing = existingByTicketId.get(dup.ticketId);
-      if (existing && existing.status !== dup.status) {
+      if (!existing) return;
+
+      const statusChanged = existing.status !== dup.status;
+      // إضافة: لو التذكرة الموجودة غير مصنفة والاستيراد عنده تصنيف → حدّث النوع
+      const typeNeedsUpdate =
+        (!existing.type || existing.type === 'unclassified') &&
+        dup.type && dup.type !== 'unclassified';
+
+      if (statusChanged || typeNeedsUpdate) {
         updates.push({
           id: existing.id,
           status: dup.status,
-          closedAt: dup.closedAt
+          closedAt: dup.closedAt,
+          ...(typeNeedsUpdate ? { type: dup.type, detectedTypes: dup.detectedTypes } : {}),
         });
       }
     });
@@ -573,7 +582,12 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     if (updates.length > 0) {
       try {
         await ticketsApi.bulkUpdateImported(updates);
-        toast.success(`تم تحديث حالة ${updates.length} تذكرة موجودة مسبقاً بناءً على الإكسل`);
+        const typeUpdated = updates.filter(u => u.type).length;
+        const statusUpdated = updates.filter(u => !u.type).length;
+        const parts = [];
+        if (statusUpdated > 0) parts.push(`تحديث حالة ${statusUpdated} تذكرة`);
+        if (typeUpdated > 0) parts.push(`تصنيف ${typeUpdated} تذكرة غير مصنفة`);
+        toast.success(`✅ ${parts.join(' + ')}`);
       } catch (err) {
         toast.error('حدث خطأ أثناء محاولة تحديث التذاكر الموجودة');
       }
@@ -581,7 +595,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
 
     const skippedCount = duplicates.length - updates.length;
     if (skippedCount > 0) {
-      toast.info(`تم تخطي ${skippedCount} تذكرة مكررة لم تتغير حالتها`);
+      toast.info(`تم تخطي ${skippedCount} تذكرة مكررة لم تحتج تحديثاً`);
     }
 
     if (newTickets.length === 0) {
@@ -589,7 +603,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         setOpen(false);
         onImportSuccess();
       } else {
-        toast.error('جميع التذاكر موجودة مسبقاً ولم يحدث تغيير على حالتها. لا يوجد جديد للاستيراد.');
+        toast.error('جميع التذاكر موجودة مسبقاً ولا تحتاج تحديثاً.');
       }
       setLoading(false);
       return;
