@@ -770,6 +770,50 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
                     <p className="text-amber-300 text-xs">لا يوجد عملاء في هذا المشروع. أضف عملاء أولاً.</p>
                   </div>
                 )}
+
+                {/* ── استيراد سريع من السيرفر (للملفات الكبيرة) ── */}
+                <div className="mb-3">
+                  <label className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed border-emerald-500/40 rounded-xl bg-emerald-500/5 hover:bg-emerald-500/10 cursor-pointer transition-all ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <div className="flex items-center gap-2 text-emerald-400">
+                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileUp className="w-5 h-5" />}
+                      <span className="text-sm font-bold">استيراد سريع (موصى به للملفات الكبيرة)</span>
+                    </div>
+                    <span className="text-xs text-slate-500 mt-1">معالجة على السيرفر — لا يُحمّل الذاكرة</span>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xlsm,.xls,.csv"
+                      className="hidden"
+                      disabled={!selectedProjectId || !hasClientsInProject || loading}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !selectedProjectId) return;
+                        e.target.value = '';
+                        setLoading(true);
+                        setProgress(0.1);
+                        try {
+                          const result = await ticketsApi.importExcel(file, selectedProjectId);
+                          setProgress(1);
+                          const parts = [];
+                          if (result.added > 0) parts.push(`إضافة ${result.added} تذكرة جديدة`);
+                          if (result.updated > 0) parts.push(`تحديث ${result.updated} تذكرة`);
+                          if (result.skipped > 0) parts.push(`تخطي ${result.skipped} مكررة`);
+                          if (result.failed > 0) parts.push(`فشل ${result.failed}`);
+                          toast.success(`✅ ${parts.join(' · ')}`);
+                          setOpen(false);
+                          setSelectedProjectId('');
+                          onImportSuccess();
+                        } catch (err: any) {
+                          toast.error('فشل الاستيراد: ' + err.message);
+                        } finally {
+                          setLoading(false);
+                          setProgress(0);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {/* ── استيراد عادي مع مراجعة (للملفات الصغيرة) ── */}
                 <DataImport
                   title=""
                   description="الأعمدة المطلوبة: رقم التذكرة، رقم الفيلا، تاريخ الإنشاء، الوصف، الحالة (اختياري)"
@@ -778,11 +822,12 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
                   trigger={
                     <Button
                       type="button"
-                      className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-2"
+                      variant="outline"
+                      className="w-full h-10 border-border text-slate-400 hover:text-white rounded-xl flex items-center justify-center gap-2 text-sm"
                       disabled={!selectedProjectId || !hasClientsInProject}
                     >
                       <FileUp className="w-4 h-4" />
-                      رفع ملف Excel
+                      استيراد مع مراجعة (ملفات صغيرة)
                     </Button>
                   }
                 />

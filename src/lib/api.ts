@@ -137,6 +137,21 @@ export const ticketsApi = {
   deleteAll:    ()                                     => del<any>('/tickets'),
   getNextId:    (projectId: string)                    => get<{ nextId: string }>(`/tickets/next-id?projectId=${projectId}`).then(res => res.nextId),
   getTicketIds: (projectId: string)                    => get<{ ticketId: string; id: string; type: string; status: string; closedAt: string | null }[]>(`/tickets/ticketids?projectId=${projectId}`),
+  importExcel:  (file: File, projectId: string) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('projectId', projectId);
+    const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
+    return fetch('/api/import-excel', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    }).then(async r => {
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || 'فشل الاستيراد');
+      return json as { ok: boolean; added: number; updated: number; skipped: number; failed: number; errors: string[] };
+    });
+  },
 };
 
 // ── WhatsApp ──────────────────────────────────────────────────────────────────
