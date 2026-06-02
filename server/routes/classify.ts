@@ -5,6 +5,7 @@ import { classifyTicket } from "../classifier/classify.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
 import { loadKeywordsFromDB, invalidateKeywordCache, classifyFromKeywordsDB, normalizeArabic } from "../classifier/keywords.js";
 import { geminiEnabled } from "../classifier/gemini.js";
+import { nudgeReclassifyWorker } from "../classifier/reclassify-worker.js";
 
 const router = Router();
 
@@ -139,7 +140,7 @@ router.post("/learn", requireAuth, async (req, res) => {
       if (existing) {
         await prisma.ticketTypeKeyword.update({
           where: { id: existing.id },
-          data: { usageCount: existing.usageCount + 1, isLearned: true },
+          data: { usageCount: existing.usageCount + 1, isLearned: true, pendingReclassify: true },
         });
       } else {
         const otherKeyword = await prisma.ticketTypeKeyword.findFirst({
@@ -152,7 +153,16 @@ router.post("/learn", requireAuth, async (req, res) => {
           });
         }
         await prisma.ticketTypeKeyword.create({
-          data: { keyword: word, typeId: correctType.id, weight: 1.0, isLearned: true, source: "learned", confidence: 0.8, usageCount: 1 },
+          data: {
+            keyword:           word,
+            typeId:            correctType.id,
+            weight:            1.0,
+            isLearned:         true,
+            source:            "learned",
+            confidence:        0.8,
+            usageCount:        1,
+            pendingReclassify: true,
+          },
         });
         updated++;
       }
@@ -160,6 +170,7 @@ router.post("/learn", requireAuth, async (req, res) => {
 
     invalidateKeywordCache();
     invalidateReferenceCache();
+    nudgeReclassifyWorker();
 
     res.json({ learned: updated, message: "Learned " + updated + " new keywords for " + correctType.nameAr });
   } catch (err: any) {
@@ -191,15 +202,24 @@ router.post("/manual-keyword", requireAuth, requireAdmin, async (req, res) => {
     if (existing) {
       await prisma.ticketTypeKeyword.update({
         where: { id: existing.id },
-        data: { weight: weight ?? existing.weight, source: "manual" },
+        data: { weight: weight ?? existing.weight, source: "manual", pendingReclassify: true },
       });
     } else {
       await prisma.ticketTypeKeyword.create({
-        data: { keyword: normKeyword, typeId: type.id, weight: weight ?? 1.0, source: "manual", isLearned: false, confidence: 1.0 },
+        data: {
+          keyword:           normKeyword,
+          typeId:            type.id,
+          weight:            weight ?? 1.0,
+          source:            "manual",
+          isLearned:         false,
+          confidence:        1.0,
+          pendingReclassify: true,
+        },
       });
     }
 
     invalidateKeywordCache();
+    nudgeReclassifyWorker();
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

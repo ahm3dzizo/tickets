@@ -10,6 +10,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import prisma from "../db.js";
 import { loadKeywordsFromDB, normalizeArabic } from "./keywords.js";
 import { invalidateKeywordCache } from "./keywords.js";
+import { nudgeReclassifyWorker } from "./reclassify-worker.js";
 
 let _client: GoogleGenerativeAI | null = null;
 
@@ -283,10 +284,14 @@ export async function learnFromGeminiResult(
         });
 
         if (existing) {
-          // Reinforce existing keyword
+          // Reinforce existing keyword + flag for reclassification
           await prisma.ticketTypeKeyword.update({
             where: { id: existing.id },
-            data: { usageCount: { increment: 1 }, weight: Math.min(existing.weight + 0.1, 3.0) },
+            data: {
+              usageCount:        { increment: 1 },
+              weight:            Math.min(existing.weight + 0.1, 3.0),
+              pendingReclassify: true,
+            },
           });
         } else {
           // Check if this word is already strongly associated with another type
@@ -297,13 +302,14 @@ export async function learnFromGeminiResult(
 
           await prisma.ticketTypeKeyword.create({
             data: {
-              keyword:    word,
-              typeId:     typeRecord.id,
-              weight:     1.0,
-              source:     "gemini_learned",
-              isLearned:  true,
-              confidence: 0.75,
-              usageCount: 1,
+              keyword:           word,
+              typeId:            typeRecord.id,
+              weight:            1.0,
+              source:            "gemini_learned",
+              isLearned:         true,
+              confidence:        0.75,
+              usageCount:        1,
+              pendingReclassify: true,
             },
           });
         }
@@ -311,6 +317,7 @@ export async function learnFromGeminiResult(
     }
 
     invalidateKeywordCache();
+    nudgeReclassifyWorker();
   } catch (err: any) {
     console.error("[Gemini] learnFromGeminiResult error:", err.message);
   }

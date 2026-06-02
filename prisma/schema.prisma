@@ -193,13 +193,14 @@ model TicketTypeKeyword {
   ticketType  TicketType?   @relation(fields: [typeId], references: [id], onDelete: Cascade)
   subTypeId   String?
   subType     TicketSubType? @relation(fields: [subTypeId], references: [id], onDelete: Cascade)
-  weight      Float         @default(1.0)
-  isLearned   Boolean       @default(false)
-  usageCount  Int           @default(0)
-  confidence  Float         @default(1.0)
-  source      String        @default("seed")
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  weight             Float         @default(1.0)
+  isLearned          Boolean       @default(false)
+  usageCount         Int           @default(0)
+  confidence         Float         @default(1.0)
+  source             String        @default("seed")
+  pendingReclassify  Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   @@unique([keyword, typeId])
   @@unique([keyword, subTypeId])

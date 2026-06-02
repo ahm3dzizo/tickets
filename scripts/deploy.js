@@ -89,6 +89,8 @@ const remoteLines = [
   `npm install --silent`,
   `echo "▶  npx prisma db push..."`,
   `npx prisma migrate deploy 2>/dev/null || npx prisma db push`,
+  `echo "▶  Loading keywords from Excel extraction..."`,
+  `[ -f scripts/keywords_from_excel.sql ] && psql "$DATABASE_URL" -f scripts/keywords_from_excel.sql -q && echo "✔  Keywords loaded" || echo "⚠  keywords_from_excel.sql not found — skipping"`,
   `echo "▶  npm run build (frontend + backend)..."`,
   `rm -rf dist`,
   `rm -rf node_modules/.vite`,

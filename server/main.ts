@@ -25,6 +25,7 @@ import importExcelRoutes from "./routes/import-excel.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
+import { startReclassifyWorker, stopReclassifyWorker } from "./classifier/reclassify-worker.js";
 
 let globalIo: any = null;
 
@@ -124,7 +125,8 @@ async function startServer() {
   });
 
   // ── Background Jobs ────────────────────────────────────────────────────
-  startGeminiWorker();   // classifies unclassified tickets in background (4/min)
+  startGeminiWorker();        // classifies open unclassified tickets via Gemini (4/min)
+  startReclassifyWorker();    // reclassifies tickets when keywords are learned (every 30s)
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
@@ -146,6 +148,7 @@ import { stopGeminiWorker } from './classifier/gemini-worker.js';
 async function shutdown() {
   console.log('Shutting down gracefully...');
   stopGeminiWorker();
+  stopReclassifyWorker();
   await closeAllSessions();
   process.exit(0);
 }

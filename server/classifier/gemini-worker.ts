@@ -56,11 +56,13 @@ export function stopGeminiWorker(): void {
 // ── Core logic ─────────────────────────────────────────────────────────────
 
 async function processBatch(): Promise<void> {
-  // Find tickets not yet processed by Gemini — oldest first
+  // Find open/in-progress tickets not yet processed by Gemini — oldest first.
+  // Closed tickets are reclassified by the ReclassifyWorker using learned keywords only.
   const tickets = await prisma.ticket.findMany({
     where: {
       geminiClassifiedAt: null,
       description: { not: "" },
+      status: { notIn: ["closed", "out_of_scope"] },
     },
     orderBy: { createdAt: "asc" },
     take: BATCH_SIZE,
