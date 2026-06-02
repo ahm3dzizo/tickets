@@ -393,6 +393,7 @@ export default function TicketsList() {
             onAppointment={handleSendAppointment}
             onClose={() => setCloseDialogOpen(true)}
             onClear={() => setSelectedTicketIds([])}
+            hidden={closeDialogOpen}
           />
         )}
 

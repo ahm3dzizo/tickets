@@ -133,6 +133,7 @@ export interface BulkActionBarProps {
   onAppointment?: () => void;
   onClose?: () => void;
   onClear: () => void;
+  hidden?: boolean;
   statusOptions?: { key: string; label: string; danger?: boolean }[];
 }
 
@@ -143,10 +144,12 @@ export function BulkActionBar({
   onAppointment,
   onClose,
   onClear,
+  hidden = false,
   statusOptions = DEFAULT_STATUS_OPTIONS,
 }: BulkActionBarProps) {
+  if (hidden) return null;
   const content = (
-    <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 sm:gap-2.5 bg-slate-900/95 backdrop-blur-md border border-blue-500/30 rounded-2xl shadow-2xl shadow-black/60 px-2.5 sm:px-4 py-2 sm:py-2.5 w-fit max-w-[calc(100vw-1rem)] sm:max-w-2xl" dir="rtl">
+    <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-2.5 bg-slate-900/95 backdrop-blur-md border border-blue-500/30 rounded-2xl shadow-2xl shadow-black/60 px-2.5 sm:px-4 py-2 sm:py-2.5 w-fit max-w-[calc(100vw-1rem)] sm:max-w-2xl" dir="rtl">
       <div className="flex items-center gap-1.5 pl-2.5 sm:pl-3 border-l border-white/10 shrink-0">
         <span className="text-base sm:text-lg font-black text-blue-400">{count}</span>
         <span className="text-[10px] font-bold text-slate-500 hidden sm:block">مختارة</span>
@@ -574,7 +577,7 @@ export function TicketTable({
             const supervisorNames = getSupervisorNames(ticket);
             const isSelected  = selectedIds?.includes(ticket.id) ?? false;
             const isOverdue   = !isClosed && daysOpen > 6;
-            const canSelect   = hasSelection && !isClosed;
+            const canSelect   = hasSelection; // التذاكر المغلقة قابلة للتحديد كمان
 
             const handleCardClick = () => {
               if (canSelect && inSelectionMode) { toggleOne(ticket.id); return; }
