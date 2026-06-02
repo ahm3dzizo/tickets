@@ -16,405 +16,267 @@ export interface ParsedTicketRow {
 
 export type PdfParseProgress = (done: number, total: number) => void;
 
-const GEMINI_KEY = (process as any).env?.GEMINI_API_KEY as string | undefined;
+// ─── Unicode RTL/LTR control characters ─────────────────────────────────────
+const RTL_MARKS = /[‎‏‪-‮⁦-⁩​-‍﻿­]/g;
 
-const GEMINI_PROMPT = `??? ??? ??? ????? ????? ????? ????? ???? RTL (?? ???? = ???? ?????).
-?????? ?? ????? ????? ?? ???? ??????? ?????? ?? JSON array ???? ???? ?? ???????.
-??? ????? ???? ??? ?????? ??????:
-- ticketId, refNumber (??? NTF-123), clientName, date (d/M/yyyy), daysOpen (??? ???), description, assigneeName, priority
-??? ?? JSON array ??? ???? ?? ?? ????? ?? markdown:
-[{"ticketId":"...","refNumber":"...","clientName":"...","date":"...","daysOpen":"...","description":"...","assigneeName":"...","priority":"..."}]`;
+// ─── Date pattern ────────────────────────────────────────────────────────────
+const DATE_RE = /(\d{1,2})\/(\d{1,2})\/(\d{4})/;
 
-async function renderPageToBase64(page: pdfjsLib.PDFPageProxy, scale = 1.2): Promise<string> {
-  const viewport = page.getViewport({ scale });
-  const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  const ctx = canvas.getContext('2d')!;
-  await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-  // JPEG at 70% quality � good enough for Arabic text OCR
-  return canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
-}
+// ─── Days+supervisor suffix at end of text ───────────────────────────────────
+// e.g.  "...جاري 12 أحمد محمد"  → daysOpen=12, assigneeName="أحمد محمد"
+const DAYS_SUFFIX_RE = /\s(\d{1,3})\s+([؀-ۿ][^\d\n]{2,40})$/;
 
-/** Parse retryDelay string like "35s" or "35.123s" ? milliseconds */
-function parseRetryDelayMs(err: any): number {
-  try {
-    const detail = err?.error?.details?.find((d: any) => d['@type']?.includes('RetryInfo'));
-    const s = detail?.retryDelay ?? '';
-    const secs = parseFloat(s);
-    if (!isNaN(secs)) return Math.ceil(secs * 1000) + 2000; // +2s buffer
-  } catch { /* ignore */ }
-  return 60_000; // safe fallback: 1 min
-}
+// ─── Standalone last-line days+supervisor ────────────────────────────────────
+// e.g.  "12 أحمد طاهر" alone on a line
+const STANDALONE_DAY_RE = /^(\d{1,3})\s+([؀-ۿ].{2,40})$/;
 
-function parseGeminiRows(text: string): ParsedTicketRow[] {
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) return [];
-  try {
-    const rows = JSON.parse(match[0]) as any[];
-    return rows
-      .filter(r => r.refNumber && /NTF-\d+/i.test(r.refNumber))
-      .map(r => ({
-        ticketId:     String(r.ticketId     ?? '').trim(),
-        refNumber:    String(r.refNumber    ?? '').trim(),
-        clientName:   String(r.clientName   ?? '').trim(),
-        date:         String(r.date         ?? '').trim(),
-        daysOpen:     String(r.daysOpen     ?? '').replace(/\D/g, ''),
-        description:  String(r.description  ?? '').trim(),
-        assigneeName: String(r.assigneeName ?? '').trim(),
-        priority:     String(r.priority     ?? '').replace(/\D/g, ''),
-      }));
-  } catch { return []; }
-}
+// ────────────────────────────────────────────────────────────────────────────
+// Parse structured NTF-format text (works for both pdfjs and OCR output)
+// ────────────────────────────────────────────────────────────────────────────
+function parseNtfText(rawText: string): ParsedTicketRow[] {
+  // Strip RTL marks that may break NTF- pattern matching
+  const text = rawText.replace(RTL_MARKS, '');
 
-/** Send a batch of pages (max 3) in one Gemini request, with retry on 429 */
-async function extractBatchWithGemini(
-  pages: string[],
-  geminiKey: string,
-  attempt = 0,
-): Promise<ParsedTicketRow[]> {
-  const imageParts = pages.map(b64 => ({ inline_data: { mime_type: 'image/jpeg', data: b64 } }));
-  const body = {
-    contents: [{ parts: [{ text: GEMINI_PROMPT }, ...imageParts] }],
-    generationConfig: { temperature: 0, maxOutputTokens: 8192 },
-  };
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
-  );
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    if (res.status === 429 && attempt < 5) {
-      const waitMs = parseRetryDelayMs(err);
-      // Log full quota violation details
-      const violations = err?.error?.details?.find((d: any) => d['@type']?.includes('QuotaFailure'))?.violations ?? [];
-      console.warn(`[pdfParser] 429 violations:`, violations.map((v: any) => v.quotaId).join(', '));
-      console.warn(`[pdfParser] 429 � waiting ${Math.round(waitMs / 1000)}s then retry�`);
-      await new Promise(r => setTimeout(r, waitMs));
-      return extractBatchWithGemini(pages, geminiKey, attempt + 1);
-    }
-    throw new Error(`Gemini ${res.status}: ${JSON.stringify(err)}`);
-  }
-  const data = await res.json();
-  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-  return parseGeminiRows(text);
-}
+  // Merge split NTF sequences like "NTF- 3 59" → "NTF-359"
+  const cleaned = text
+    .replace(/NTF-\s*(\d)/gi, 'NTF-$1')
+    .replace(/N\s*T\s*F\s*-\s*(\d)/gi, 'NTF-$1'); // handle "N T F-359"
 
-//  Regex fallback 
-
-type RawItem = { text: string; x: number; y: number; w: number };
-
-async function pageItems(page: pdfjsLib.PDFPageProxy): Promise<RawItem[]> {
-  const c = await page.getTextContent();
-  return c.items
-    .filter(it => 'str' in it && (it as any).str.trim() !== '')
-    .map(it => ({
-      text: (it as any).str.trim(),
-      x: Math.round(((it as any).transform as number[])[4]),
-      y: Math.round(((it as any).transform as number[])[5]),
-      w: Math.round((it as any).width ?? 0),
-    }));
-}
-
-function groupIntoRows(items: RawItem[], yTol = 6): RawItem[][] {
-  const buckets = new Map<number, RawItem[]>();
-  for (const it of items) {
-    let matched = false;
-    for (const [ky] of buckets) {
-      if (Math.abs(ky - it.y) <= yTol) { buckets.get(ky)!.push(it); matched = true; break; }
-    }
-    if (!matched) buckets.set(it.y, [it]);
-  }
-  return [...buckets.entries()].sort(([a], [b]) => b - a).map(([, row]) => row.sort((a, b) => b.x - a.x));
-}
-
-const HEADER_KEYWORDS = ['?????', '?????', '???', '?????', '????', '????', 'NTF', '?????', '????', '??????'];
-const DATE_RE = /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/;
-const ASSIGNEE_PATTERNS = ['???? ???', 'Ahmed Mohamed', '????', '????', '????', '?????', '????'];
-
-interface ColBounds { minX: number; maxX: number; name: string }
-
-function detectColumns(headerRow: RawItem[]): ColBounds[] | null {
-  const anchors = headerRow.filter(it => HEADER_KEYWORDS.some(kw => it.text.includes(kw)));
-  if (anchors.length < 3) return null;
-  anchors.sort((a, b) => b.x - a.x);
-  return anchors.map((cur, i, arr) => ({
-    name: cur.text,
-    maxX: cur.x + (cur.w || 40) + 10,
-    minX: arr[i + 1] ? arr[i + 1].x - 5 : 0,
-  }));
-}
-
-function assignToCols(row: RawItem[], cols: ColBounds[]): string[] {
-  const buckets = cols.map(() => [] as string[]);
-  for (const it of row) {
-    for (let c = 0; c < cols.length; c++) {
-      if (it.x >= cols[c].minX && it.x <= cols[c].maxX) { buckets[c].push(it.text); break; }
-    }
-  }
-  return buckets.map(b => b.join(' ').trim());
-}
-
-function parseRowRegex(rowText: string): ParsedTicketRow | null {
-  const ntfMatch = rowText.match(/\bNTF-(\d{2,4})\b/);
-  if (!ntfMatch) return null;
-  const refNumber = ntfMatch[0];
-  const idMatch = rowText.match(/\b(\d{5,6})\b/);
-  const ticketId = idMatch ? idMatch[1] : '';
-  const dateMatch = DATE_RE.exec(rowText);
-  const date = dateMatch ? dateMatch[0] : '';
-  const afterNtf = rowText.slice(rowText.indexOf(refNumber) + refNumber.length).trim();
-  const clientRaw = date ? afterNtf.slice(0, afterNtf.indexOf(date)).trim() : afterNtf.slice(0, 60).trim();
-  const clientName = clientRaw.replace(/\s+/g, ' ').trim();
-  const afterDate = date ? afterNtf.slice(afterNtf.indexOf(date) + date.length).trim() : afterNtf;
-  let assigneeName = '', descRaw = afterDate;
-  for (const p of ASSIGNEE_PATTERNS) {
-    const idx = descRaw.lastIndexOf(p);
-    if (idx !== -1) { assigneeName = (p === '?????' || p === '????') ? '' : p; descRaw = descRaw.slice(0, idx).trim(); break; }
-  }
-  const priorityMatches = [...descRaw.matchAll(/(?<!\d)([1-9])(?!\d)/g)];
-  const pm = priorityMatches.pop();
-  let priority = '';
-  if (pm) { priority = pm[1]; descRaw = (descRaw.slice(0, pm.index!) + descRaw.slice(pm.index! + 1)).replace(/\s+/g, ' ').trim(); }
-  return { ticketId, refNumber, clientName, date, daysOpen: '', description: descRaw.trim(), priority, assigneeName };
-}
-
-async function parsePdfFallback(pdf: pdfjsLib.PDFDocumentProxy): Promise<ParsedTicketRow[]> {
-  const results: ParsedTicketRow[] = [];
-  const seen = new Set<string>();
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const pg = await pdf.getPage(p);
-    const items = await pageItems(pg);
-    const rows = groupIntoRows(items);
-    const headerRowIdx = rows.findIndex(r => r.some(it => HEADER_KEYWORDS.some(kw => it.text.includes(kw))));
-    const cols = headerRowIdx >= 0 ? detectColumns(rows[headerRowIdx]) : null;
-    let i = headerRowIdx >= 0 ? headerRowIdx + 1 : 0;
-    while (i < rows.length) {
-      const rowItems = rows[i];
-      const rowText = rowItems.map(r => r.text).join(' ');
-      if (!/\bNTF-\d+\b/.test(rowText)) { i++; continue; }
-      let parsed: ParsedTicketRow | null = null;
-      if (cols) {
-        const colValues = assignToCols(rowItems, cols);
-        let descExtra = '';
-        let j = i + 1;
-        while (j < rows.length) {
-          const nxt = rows[j].map(r => r.text).join(' ');
-          if (/\bNTF-\d+\b/.test(nxt)) break;
-          descExtra += ' ' + nxt; j++;
-        }
-        i = j;
-        const byName: Record<string, string> = {};
-        cols.forEach((c, idx) => { byName[c.name] = colValues[idx]; });
-        const getNamed = (...keys: string[]) => {
-          const found = Object.entries(byName).find(([n]) => keys.some(kw => n.includes(kw)));
-          return found ? found[1] : '';
-        };
-        let assigneeName = getNamed('?????', '?????', '????');
-        if (!assigneeName) {
-          for (const p of ASSIGNEE_PATTERNS) {
-            if (colValues.join(' ').includes(p) && p !== '?????' && p !== '????') { assigneeName = p; break; }
-          }
-        }
-        let description = (getNamed('???', '????') + ' ' + descExtra).replace(/\s+/g, ' ').trim();
-        const ntfMatch = rowText.match(/\bNTF-\d+\b/);
-        const refNumber = ntfMatch ? ntfMatch[0] : '';
-        const idMatch = rowText.match(/\b(\d{5,6})\b/);
-        const ticketId = idMatch ? idMatch[1] : '';
-        const dateMatch = DATE_RE.exec(rowText);
-        const date = dateMatch ? dateMatch[0] : '';
-        let daysOpen = getNamed('????', '??????', '???');
-        if (!daysOpen) { const m = rowText.match(/\b([1-9]\d{1,2})\b/); if (m) daysOpen = m[1]; }
-        daysOpen = daysOpen.replace(/\D/g, '');
-        let clientName = getNamed('????', '?????');
-        if (!clientName) {
-          const afterNtf = rowText.slice(rowText.indexOf(refNumber) + refNumber.length).trim();
-          clientName = date ? afterNtf.slice(0, afterNtf.indexOf(date)).trim() : afterNtf.slice(0, 60).trim();
-        }
-        const priority = getNamed('???', '??????', 'priority').match(/\b([1-9])\b/)?.[1] ?? '';
-        if (refNumber) parsed = { ticketId, refNumber, clientName, date, daysOpen, description, priority, assigneeName };
-      } else {
-        let j = i + 1, combined = rowText;
-        while (j < rows.length) {
-          const nxt = rows[j].map(r => r.text).join(' ');
-          if (/\bNTF-\d+\b/.test(nxt)) break;
-          combined += ' ' + nxt; j++;
-        }
-        i = j;
-        parsed = parseRowRegex(combined);
-      }
-      if (parsed) {
-        const key = parsed.refNumber + parsed.ticketId;
-        if (!seen.has(key)) { seen.add(key); results.push(parsed); }
-      }
-    }
-  }
-  return results;
-}
-
-// 
-// Main export
-// 
-
-export async function parsePdfTickets(file: File, onProgress?: PdfParseProgress): Promise<ParsedTicketRow[]> {
-  const formData = new FormData();
-  formData.append('file', file);
-  onProgress?.(0, 1);
-  const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
-  const response = await fetch('/api/ocr/extract-pdf', {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: formData,
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error('Failed to extract PDF: ' + errorText);
-  }
-  const json = await response.json();
-  onProgress?.(1, 1);
-  const rawData = json.results || json;
-  let combinedText = '';
-  if (Array.isArray(rawData)) {
-    combinedText = rawData.map(r => typeof r === 'string' ? r : JSON.stringify(r)).join('\n');
-  } else {
-    combinedText = typeof rawData === 'string' ? rawData : JSON.stringify(rawData);
-  }
   const rows: ParsedTicketRow[] = [];
   const seen = new Set<string>();
+  const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
 
-  // ── محاولة 1: فورمات تقرير NTF ────────────────────────────────────────────
-  // كل تذكرة تبدأ بـ {ticketId 6 أرقام} ثم NTF-XXX
-  // الاسم والتاريخ إما على نفس سطر NTF-XXX أو على السطر التالي
-  // Days+Supervisor إما سطر منفصل أو ملتصق في نهاية آخر سطر وصف
-  const ntfBlockRegex = /(\d{5,6})\n(NTF-\d+[\s\S]*?)(?=\n\d{5,6}\n|$)/g;
-  const DATE_RE_PDF = /(\d{1,2})\/(\d{1,2})\/(\d{4})/;
-  // days+supervisor في نهاية أي نص: مثلاً "...ومن ل جاري12احمد"
-  const DAYS_SUFFIX_RE = /(\d{1,3})([؀-ۿ][^\d]{1,20})$/;
-  let m: RegExpExecArray | null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
 
-  while ((m = ntfBlockRegex.exec(combinedText)) !== null) {
-    const ticketId   = m[1];
-    const block      = m[2].trim();
-    const blockLines = block.split('\n').map(l => l.trim()).filter(Boolean);
-    if (!blockLines.length) continue;
-
-    // ── استخراج NTF-XXX ───────────────────────────────────────────────────
-    const firstLine = blockLines[0];
-    const ntfMatch  = firstLine.match(/^(NTF-\d+)/);
+    // A ticket starts when we find NTF-XXX on the line
+    const ntfMatch = line.match(/NTF-(\d{2,4})/i);
     if (!ntfMatch) continue;
-    const refNumber = ntfMatch[1];
-    const villaNum  = refNumber.replace(/[^0-9]/g, ''); // "NTF-171" → "171"
 
-    // ── استخراج التاريخ والاسم: على سطر NTF أو السطر التالي ──────────────
+    const refNum  = 'NTF-' + ntfMatch[1];
+    const villaNum = ntfMatch[1];         // "359" not "NTF-359"
+
+    // ── ticket ID: 5-6 digit number on same line OR previous line ────────────
+    let ticketId = '';
+    const idOnLine = line.match(/\b(\d{5,6})\b/);
+    if (idOnLine) {
+      ticketId = idOnLine[1];
+    } else if (i > 0) {
+      const prev = lines[i - 1];
+      const prevId = prev.match(/^(\d{5,6})$/);
+      if (prevId) ticketId = prevId[1];
+    }
+
+    // ── date: on same line ───────────────────────────────────────────────────
+    const dateMatch = DATE_RE.exec(line);
+    const date = dateMatch ? dateMatch[0] : '';
+
+    // ── client name: text between NTF-XXX and date on same line ─────────────
     let clientName = '';
-    let date       = '';
-    let contentStartIdx = 1; // سطر بداية الوصف
-
-    const ntfLineRest = firstLine.slice(ntfMatch[0].length); // ما بعد NTF-XXX
-    const dateInNtfLine = DATE_RE_PDF.exec(ntfLineRest);
-
-    if (dateInNtfLine) {
-      // التاريخ موجود على سطر NTF
-      const di = ntfLineRest.indexOf(dateInNtfLine[0]);
-      clientName = ntfLineRest.slice(0, di).trim();
-      date = dateInNtfLine[0];
-      contentStartIdx = 1;
-    } else if (ntfLineRest.trim()) {
-      // الاسم على سطر NTF لكن بدون تاريخ — جرب السطر التالي
-      clientName = ntfLineRest.trim();
-      if (blockLines[1]) {
-        const dateInNext = DATE_RE_PDF.exec(blockLines[1]);
-        if (dateInNext) {
-          const ni = blockLines[1].indexOf(dateInNext[0]);
-          if (!clientName) clientName = blockLines[1].slice(0, ni).trim();
-          date = dateInNext[0];
-          contentStartIdx = 2;
-        }
-      }
+    const ntfEnd = line.indexOf(refNum) + refNum.length;
+    const afterNtf = line.slice(ntfEnd).trim();
+    if (date) {
+      const di = afterNtf.indexOf(date);
+      if (di > 0) clientName = afterNtf.slice(0, di).trim();
+      else if (di === 0) clientName = '';
+      else clientName = afterNtf.slice(0, 50).trim();
     } else {
-      // NTF-XXX وحده على السطر — التالي فيه الاسم والتاريخ
-      if (blockLines[1]) {
-        const dateInNext = DATE_RE_PDF.exec(blockLines[1]);
-        if (dateInNext) {
-          const ni = blockLines[1].indexOf(dateInNext[0]);
-          clientName = blockLines[1].slice(0, ni).trim();
-          date = dateInNext[0];
-          contentStartIdx = 2;
+      // No date on NTF line — might be on next line
+      if (i + 1 < lines.length) {
+        const nxtDateMatch = DATE_RE.exec(lines[i + 1]);
+        if (nxtDateMatch) {
+          // date found on next line, so afterNtf might be the name
+          clientName = afterNtf || lines[i + 1].slice(0, lines[i + 1].indexOf(nxtDateMatch[0])).trim();
+          // skip that next line since we consumed name+date
+          i++;
         } else {
-          clientName = blockLines[1].trim();
-          contentStartIdx = 2;
+          clientName = afterNtf.slice(0, 50).trim();
         }
+      } else {
+        clientName = afterNtf.slice(0, 50).trim();
       }
     }
 
-    // ── استخراج الوصف والأيام والمشرف ────────────────────────────────────
-    const contentLines = blockLines.slice(contentStartIdx);
+    // ── description lines: until next NTF or next 5-6 digit ticket ID ────────
+    const descLines: string[] = [];
+    for (let j = i + 1; j < lines.length; j++) {
+      const nxt = lines[j];
+      if (/NTF-\d+/i.test(nxt)) break;               // next ticket
+      if (/^\d{5,6}$/.test(nxt)) break;               // standalone ticket ID
+      if (/^\d{5,6}\s/.test(nxt) && /NTF-\d+/i.test(lines[j] ?? '')) break;
+      descLines.push(nxt);
+    }
+
+    // ── extract daysOpen + assigneeName ──────────────────────────────────────
     let daysOpen     = '';
     let assigneeName = '';
-    let descParts    = [...contentLines];
+    let description  = '';
 
-    if (contentLines.length > 0) {
-      // محاولة 1: آخر سطر يبدأ برقم (سطر منفصل للأيام)
-      const lastLine = contentLines[contentLines.length - 1];
-      const standaloneMatch = lastLine.match(/^(\d{1,3})([^\d].{0,20})$/);
-      if (standaloneMatch && Number(standaloneMatch[1]) <= 365) {
-        daysOpen     = standaloneMatch[1];
-        assigneeName = standaloneMatch[2].trim();
-        descParts    = contentLines.slice(0, -1);
+    if (descLines.length > 0) {
+      // Try standalone last line first: "12 أحمد محمد"
+      const lastLine = descLines[descLines.length - 1];
+      const standaloneM = STANDALONE_DAY_RE.exec(lastLine);
+      if (standaloneM && Number(standaloneM[1]) <= 365) {
+        daysOpen     = standaloneM[1];
+        assigneeName = standaloneM[2].trim();
+        description  = descLines.slice(0, -1).join(' ').trim();
       } else {
-        // محاولة 2: الأيام والمشرف ملتصقة في نهاية آخر سطر وصف
-        const combined = contentLines.join(' ');
-        const suffixMatch = DAYS_SUFFIX_RE.exec(combined);
-        if (suffixMatch && Number(suffixMatch[1]) <= 365) {
-          daysOpen     = suffixMatch[1];
-          assigneeName = suffixMatch[2].trim();
-          descParts    = [combined.slice(0, suffixMatch.index).trim()];
+        // Try suffix pattern in joined text
+        const combined = descLines.join(' ');
+        const suffixM  = DAYS_SUFFIX_RE.exec(combined);
+        if (suffixM && Number(suffixM[1]) <= 365) {
+          daysOpen     = suffixM[1];
+          assigneeName = suffixM[2].trim();
+          description  = combined.slice(0, suffixM.index).trim();
+        } else {
+          description = descLines.join(' ').trim();
         }
       }
     }
 
-    const description = descParts.join(' ')
-      .replace(/[a-zA-Z​‌]+$/gm, '') // أحرف لاتينية في نهاية الأسطر
-      .replace(/\s+/g, ' ')
+    // Remove stray Latin OCR artifacts from description
+    description = description
+      .replace(/[a-zA-Z]{3,}/g, '')   // long Latin runs (OCR noise)
+      .replace(/\s{2,}/g, ' ')
       .trim();
 
-    const key = refNumber + ticketId;
+    const key = refNum + '|' + ticketId;
     if (!seen.has(key)) {
       seen.add(key);
       rows.push({
         ticketId,
-        refNumber: villaNum,   // رقم الفيلا فقط "171" بدل "NTF-171"
+        refNumber: villaNum,
         clientName,
         date,
         daysOpen,
-        description: description || `[${refNumber}]`,
+        description: description || '[' + refNum + ']',
         assigneeName,
         priority: '',
       });
     }
   }
 
-  // ── محاولة 2: fallback — regex بسيط لو الفورمات مختلف ────────────────────
-  if (rows.length === 0) {
-    const lines = combinedText.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const rowText = lines[i];
-      if (/NTF-\d+/.test(rowText)) {
-        let j = i + 1, combined = rowText;
-        while (j < lines.length) {
-          const nxt = lines[j];
-          if (/NTF-\d+/.test(nxt)) break;
-          combined += ' ' + nxt; j++;
-        }
-        i = j - 1;
-        const parsed = parseRowRegex(combined);
-        if (parsed) {
-          const key = parsed.refNumber + parsed.ticketId;
-          if (!seen.has(key)) { seen.add(key); rows.push(parsed); }
+  return rows;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Extract plain text from every PDF page using pdfjs (no OCR)
+// Groups items by Y-coordinate into visual lines, sorted RTL
+// ────────────────────────────────────────────────────────────────────────────
+async function extractPdfjsText(
+  pdf: pdfjsLib.PDFDocumentProxy,
+  onPage?: (p: number, total: number) => void,
+): Promise<string> {
+  let allText = '';
+  const total = pdf.numPages;
+
+  for (let p = 1; p <= total; p++) {
+    onPage?.(p, total);
+    const page    = await pdf.getPage(p);
+    const content = await page.getTextContent();
+
+    // Collect items with position
+    const items: { str: string; x: number; y: number }[] = [];
+    for (const it of content.items) {
+      if (!('str' in it)) continue;
+      const raw = (it as any).str.replace(RTL_MARKS, '').trim();
+      if (!raw) continue;
+      items.push({
+        str: raw,
+        x:   Math.round((it as any).transform[4]),
+        y:   Math.round((it as any).transform[5]),
+      });
+    }
+
+    // Group by Y (tolerance = 5 px)
+    const lineMap = new Map<number, typeof items>();
+    for (const it of items) {
+      let matched = false;
+      for (const [ky] of lineMap) {
+        if (Math.abs(ky - it.y) <= 5) {
+          lineMap.get(ky)!.push(it);
+          matched = true;
+          break;
         }
       }
+      if (!matched) lineMap.set(it.y, [it]);
     }
+
+    // Sort lines top→bottom (PDF Y increases upward, so invert)
+    // Within each line sort right→left (Arabic RTL)
+    const lines = [...lineMap.entries()]
+      .sort(([a], [b]) => b - a)
+      .map(([, its]) =>
+        its
+          .sort((a, b) => b.x - a.x)
+          .map(i => i.str)
+          .join(' ')
+          .trim(),
+      )
+      .filter(Boolean);
+
+    allText += lines.join('\n') + '\n';
   }
 
-  return rows;
+  return allText;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Server OCR fallback (for scanned/image PDFs)
+// ────────────────────────────────────────────────────────────────────────────
+async function tryServerOcr(
+  file: File,
+  onProgress?: PdfParseProgress,
+): Promise<ParsedTicketRow[]> {
+  onProgress?.(0, 1);
+  const token    = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch('/api/ocr/extract-pdf', {
+    method:  'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body:    formData,
+  });
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error('OCR server error: ' + err);
+  }
+  const json    = await response.json();
+  const rawData = json.results || json;
+  let combined  = '';
+  if (Array.isArray(rawData)) {
+    combined = rawData.map(r => (typeof r === 'string' ? r : JSON.stringify(r))).join('\n');
+  } else {
+    combined = typeof rawData === 'string' ? rawData : JSON.stringify(rawData);
+  }
+
+  onProgress?.(1, 1);
+  return parseNtfText(combined);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Main export
+// ────────────────────────────────────────────────────────────────────────────
+export async function parsePdfTickets(
+  file: File,
+  onProgress?: PdfParseProgress,
+): Promise<ParsedTicketRow[]> {
+  const buffer = await file.arrayBuffer();
+  const pdf    = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const total  = pdf.numPages;
+
+  // ── Step 1: direct text extraction via pdfjs ──────────────────────────────
+  // Best for computer-generated PDFs (preserves NTF-XXX exactly, no OCR noise)
+  const rawText = await extractPdfjsText(pdf, (p, t) => onProgress?.(p - 1, t));
+  const rows    = parseNtfText(rawText);
+
+  if (rows.length > 0) {
+    onProgress?.(total, total);
+    return rows;
+  }
+
+  // ── Step 2: server OCR fallback (for scanned/image PDFs) ─────────────────
+  console.warn('[pdfParser] pdfjs found 0 tickets — falling back to server OCR');
+  return tryServerOcr(file, onProgress);
 }
