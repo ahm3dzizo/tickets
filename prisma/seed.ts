@@ -358,18 +358,20 @@ async function main() {
       const norm = word.trim().toLowerCase();
       if (!norm) continue;
       
-      const exist = await prisma.ticketTypeKeyword.findFirst({
-        where: { keyword: norm, typeId, subTypeId },
-      });
-
-      if (!exist) {
-        await prisma.ticketTypeKeyword.create({
-          data: { keyword: norm, typeId, subTypeId, weight: kw.weight, source: "seed", confidence: 1.0 },
+      try {
+        const exist = await prisma.ticketTypeKeyword.findFirst({
+          where: { keyword: norm, typeId, subTypeId },
         });
-        kwCount++;
-      } else if (exist.weight !== kw.weight) {
-        await prisma.ticketTypeKeyword.update({ where: { id: exist.id }, data: { weight: kw.weight } });
-      }
+
+        if (!exist) {
+          await prisma.ticketTypeKeyword.create({
+            data: { keyword: norm, typeId, subTypeId, weight: kw.weight, source: "seed", confidence: 1.0 },
+          });
+          kwCount++;
+        } else if (exist.weight !== kw.weight) {
+          await prisma.ticketTypeKeyword.update({ where: { id: exist.id }, data: { weight: kw.weight } });
+        }
+      } catch { /* skip duplicate */ }
     }
   }
   console.log(`  OK Keywords: ${kwCount} new`);
