@@ -21,6 +21,7 @@ export const VALID_TYPES = [
 ];
 
 export const CONFLICTING_PAIRS: [string, string][] = [
+  // كهرباء لا تجتمع مع أنواع المياه
   ["electricity", "plumbing"],
   ["electricity", "drainage"],
   ["electricity", "pumps"],
@@ -32,6 +33,15 @@ export const CONFLICTING_PAIRS: [string, string][] = [
   ["electricity", "tank_insulation"],
   ["plumbing", "electricity"],
   ["doors_windows", "electricity"],
+  // أبواب ونوافذ لا تجتمع مع السباكة (الأعلى score يكسب)
+  ["doors_windows", "plumbing"],
+  ["doors_windows", "drainage"],
+  ["doors_windows", "grading"],
+  ["doors_windows", "waterproofing"],
+  ["doors_windows", "tank_insulation"],
+  ["doors_windows", "pumps"],
+  // السباكة لا تجتمع مع الأبواب
+  ["plumbing", "doors_windows"],
   ["cracks", "pest_control"],
   ["cleaning", "structural"],
 ];
