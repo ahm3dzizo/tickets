@@ -351,24 +351,11 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     { key: 'excelType',   label: 'التصنيف (من الملف)', aliases: ['تصنيف التذاكر', 'التصنيف', 'نوع التذاكر', 'نوع المشكلة', 'النوع', 'الفئة', 'type', 'category'] },
   ];
 
-    // جلب التذاكر الموجودة مسبقاً في قاعدة البيانات للمشروع المحدد
-  const [existingTickets, setExistingTickets] = useState<any[]>([]);
-  useEffect(() => {
-    if (!selectedProjectId) { setExistingTickets([]); return; }
-    ticketsApi.getAll({ projectId: selectedProjectId }).then((list: any[]) => {
-      setExistingTickets(list);
-    }).catch(() => {});
-  }, [selectedProjectId]);
-
   // New: Review modal state — combined matched + unmatched with editable fields
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewTickets, setReviewTickets] = useState<any[]>([]);
   const [allSupervisorsForProject, setAllSupervisorsForProject] = useState<{id: string; name: string}[]>([]);
   const [loadingSupervisors, setLoadingSupervisors] = useState(false);
-
-  // Build sets for duplicate detection
-  const existingTicketIds = new Set(existingTickets.map(t => String(t.ticketId || '').trim()).filter(Boolean));
-  const existingRefNumbers = new Set(existingTickets.map(t => String(t.refNumber || '').trim()).filter(Boolean));
 
     const handleImport = async (data: any[]) => {
     if (!selectedProjectId) {
@@ -384,6 +371,13 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     setProgress(0);
     const allClientsArr = clients.filter(c => c.projectId === selectedProjectId);
     const normalizedClientsMap = new Map(allClientsArr.map(c => [normalizeVillaNumber(String(c.villaNumber)), c]));
+
+    // ── جلب ticketIds الموجودة مباشرة (خفيف وسريع) ──
+    let existingTickets: { ticketId: string; id: string; type: string; status: string; closedAt: string | null }[] = [];
+    try {
+      existingTickets = await ticketsApi.getTicketIds(selectedProjectId);
+    } catch { existingTickets = []; }
+    const existingTicketIds = new Set(existingTickets.map(t => String(t.ticketId || '').trim()).filter(Boolean));
 
     // ── جلب كل المشرفين لهذا المشروع (للواجهة فقط) ──
     setLoadingSupervisors(true);

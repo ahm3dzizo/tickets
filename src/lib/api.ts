@@ -136,6 +136,7 @@ export const ticketsApi = {
   delete:       (id: string)                           => del<any>(`/tickets/${id}`),
   deleteAll:    ()                                     => del<any>('/tickets'),
   getNextId:    (projectId: string)                    => get<{ nextId: string }>(`/tickets/next-id?projectId=${projectId}`).then(res => res.nextId),
+  getTicketIds: (projectId: string)                    => get<{ ticketId: string; id: string; type: string; status: string; closedAt: string | null }[]>(`/tickets/ticketids?projectId=${projectId}`),
 };
 
 // ── WhatsApp ──────────────────────────────────────────────────────────────────

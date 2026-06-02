@@ -132,6 +132,17 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   res.json(tickets);
 });
 
+// GET /api/tickets/ticketids — للكشف عن المكررات في الاستيراد (خفيف)
+router.get("/ticketids", requireAuth, async (req, res) => {
+  const { projectId } = req.query as { projectId?: string };
+  const where: any = projectId ? { projectId } : {};
+  const rows = await prisma.ticket.findMany({
+    where,
+    select: { ticketId: true, id: true, type: true, status: true, closedAt: true },
+  });
+  res.json(rows);
+});
+
 // GET /api/tickets/next-id
 router.get("/next-id", requireAuth, async (req, res) => {
   const { projectId } = req.query as { projectId?: string };
