@@ -160,7 +160,6 @@ with open(MODEL_PATH, "wb") as f:
     pickle.dump({
         "pipeline": pipeline,
         "classes":  list(pipeline.classes_),
-        "normalize": normalize,
     }, f)
 
 print(f"\n✅ Model saved → {MODEL_PATH}")
