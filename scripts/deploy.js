@@ -102,9 +102,11 @@ const remoteLines = [
   `[ -d /tmp/nginx_cache ] && rm -rf /tmp/nginx_cache/* || true`,
   `nginx -s reload 2>/dev/null || systemctl reload nginx 2>/dev/null || true`,
   `echo "✔  Nginx reloaded"`,
-  `echo "▶  pm2 restart..."`,
-  `pm2 restart ${PM2_NAME} --update-env`,               // الـ express بيخدم dist/ مباشرة
-  `echo "✔  API جاهز"`,
+  `echo "▶  pm2 restart API..."`,
+  `pm2 restart ${PM2_NAME} --update-env`,
+  `echo "▶  pm2 start/restart ML service..."`,
+  `pm2 describe retal-ml > /dev/null 2>&1 && pm2 restart retal-ml || pm2 start ml/ecosystem.config.cjs`,
+  `echo "✔  Services جاهزة"`,
   `pm2 list`,
 ];
 
