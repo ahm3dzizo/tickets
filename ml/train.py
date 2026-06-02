@@ -21,6 +21,7 @@ from sklearn.metrics import classification_report
 # ── Config ─────────────────────────────────────────────────────────────────
 EXCEL_PATH  = pathlib.Path(__file__).parent.parent / "NTF1 Ticket (2).xlsm"
 EXTRA_CSV   = pathlib.Path(__file__).parent / "extra_training.csv"
+DB_CSV      = pathlib.Path(__file__).parent / "db_tickets.csv"
 MODEL_PATH  = pathlib.Path(__file__).parent / "model.pkl"
 MIN_SAMPLES = 10   # drop classes with fewer training samples
 
@@ -115,12 +116,17 @@ for _, row in df.iterrows():
 dataset = pd.DataFrame(records)
 
 # ── Load extra training data ─────────────────────────────────────────────────
-if EXTRA_CSV.exists():
-    extra = pd.read_csv(EXTRA_CSV)
-    extra["text"] = extra["text"].apply(normalize)
-    extra = extra[extra["text"].str.len() >= 5]
-    dataset = pd.concat([dataset, extra], ignore_index=True)
-    print(f"✅ Extra training data: +{len(extra)} rows from {EXTRA_CSV.name}")
+for csv_path in [EXTRA_CSV, DB_CSV]:
+    if csv_path.exists():
+        extra = pd.read_csv(csv_path)
+        extra["text"] = extra["text"].apply(normalize)
+        extra = extra[extra["text"].str.len() >= 5]
+        # DB tickets: deduplicate against Excel data by text
+        if csv_path == DB_CSV:
+            existing_texts = set(dataset["text"].tolist())
+            extra = extra[~extra["text"].isin(existing_texts)]
+        dataset = pd.concat([dataset, extra], ignore_index=True)
+        print(f"✅ {csv_path.name}: +{len(extra)} rows")
 
 print(f"\n📊 Dataset: {len(dataset)} samples")
 print(dataset["label"].value_counts().to_string())
