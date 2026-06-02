@@ -282,66 +282,115 @@ export async function parsePdfTickets(file: File, onProgress?: PdfParseProgress)
   const rows: ParsedTicketRow[] = [];
   const seen = new Set<string>();
 
-  // ── محاولة 1: فورمات تقرير NTF (pymupdf) ─────────────────────────────────
-  // كل تذكرة:
-  //   {ticketId 6 أرقام}
-  //   NTF-{villa}{اسم العميل}{تاريخ}
-  //   {الوصف...}
-  //   {أيام}{اسم المشرف}
+  // ── محاولة 1: فورمات تقرير NTF ────────────────────────────────────────────
+  // كل تذكرة تبدأ بـ {ticketId 6 أرقام} ثم NTF-XXX
+  // الاسم والتاريخ إما على نفس سطر NTF-XXX أو على السطر التالي
+  // Days+Supervisor إما سطر منفصل أو ملتصق في نهاية آخر سطر وصف
   const ntfBlockRegex = /(\d{5,6})\n(NTF-\d+[\s\S]*?)(?=\n\d{5,6}\n|$)/g;
   const DATE_RE_PDF = /(\d{1,2})\/(\d{1,2})\/(\d{4})/;
+  // days+supervisor في نهاية أي نص: مثلاً "...ومن ل جاري12احمد"
+  const DAYS_SUFFIX_RE = /(\d{1,3})([؀-ۿ][^\d]{1,20})$/;
   let m: RegExpExecArray | null;
+
   while ((m = ntfBlockRegex.exec(combinedText)) !== null) {
-    const ticketId = m[1];
-    const block    = m[2].trim();
+    const ticketId   = m[1];
+    const block      = m[2].trim();
     const blockLines = block.split('\n').map(l => l.trim()).filter(Boolean);
     if (!blockLines.length) continue;
 
-    // السطر الأول: NTF-XXX + اسم + تاريخ متلاصقين
+    // ── استخراج NTF-XXX ───────────────────────────────────────────────────
     const firstLine = blockLines[0];
     const ntfMatch  = firstLine.match(/^(NTF-\d+)/);
-    const dateMatch = DATE_RE_PDF.exec(firstLine);
     if (!ntfMatch) continue;
-
     const refNumber = ntfMatch[1];
-    let clientName  = '';
-    let date        = '';
-    if (dateMatch) {
-      const dateStr   = dateMatch[0];
-      const afterNTF  = firstLine.slice(ntfMatch[0].length);
-      const dateIdx   = afterNTF.indexOf(dateStr);
-      clientName = dateIdx > 0 ? afterNTF.slice(0, dateIdx).trim() : '';
-      const [, d, mo, y] = dateMatch;
-      date = `${d}/${mo}/${y}`;
+    const villaNum  = refNumber.replace(/[^0-9]/g, ''); // "NTF-171" → "171"
+
+    // ── استخراج التاريخ والاسم: على سطر NTF أو السطر التالي ──────────────
+    let clientName = '';
+    let date       = '';
+    let contentStartIdx = 1; // سطر بداية الوصف
+
+    const ntfLineRest = firstLine.slice(ntfMatch[0].length); // ما بعد NTF-XXX
+    const dateInNtfLine = DATE_RE_PDF.exec(ntfLineRest);
+
+    if (dateInNtfLine) {
+      // التاريخ موجود على سطر NTF
+      const di = ntfLineRest.indexOf(dateInNtfLine[0]);
+      clientName = ntfLineRest.slice(0, di).trim();
+      date = dateInNtfLine[0];
+      contentStartIdx = 1;
+    } else if (ntfLineRest.trim()) {
+      // الاسم على سطر NTF لكن بدون تاريخ — جرب السطر التالي
+      clientName = ntfLineRest.trim();
+      if (blockLines[1]) {
+        const dateInNext = DATE_RE_PDF.exec(blockLines[1]);
+        if (dateInNext) {
+          const ni = blockLines[1].indexOf(dateInNext[0]);
+          if (!clientName) clientName = blockLines[1].slice(0, ni).trim();
+          date = dateInNext[0];
+          contentStartIdx = 2;
+        }
+      }
     } else {
-      clientName = firstLine.slice(ntfMatch[0].length).trim();
-    }
-
-    // باقي الأسطر = وصف + آخر سطر (أيام + مشرف)
-    const middleLines = blockLines.slice(1);
-    let daysOpen = '';
-    let assigneeName = '';
-    let descLines = middleLines;
-
-    if (middleLines.length > 0) {
-      const lastLine = middleLines[middleLines.length - 1];
-      const daysMatch = lastLine.match(/^(\d+)(.*)$/);
-      if (daysMatch && Number(daysMatch[1]) < 1000) {
-        daysOpen     = daysMatch[1];
-        assigneeName = daysMatch[2].trim();
-        descLines    = middleLines.slice(0, -1);
+      // NTF-XXX وحده على السطر — التالي فيه الاسم والتاريخ
+      if (blockLines[1]) {
+        const dateInNext = DATE_RE_PDF.exec(blockLines[1]);
+        if (dateInNext) {
+          const ni = blockLines[1].indexOf(dateInNext[0]);
+          clientName = blockLines[1].slice(0, ni).trim();
+          date = dateInNext[0];
+          contentStartIdx = 2;
+        } else {
+          clientName = blockLines[1].trim();
+          contentStartIdx = 2;
+        }
       }
     }
 
-    const description = descLines.join(' ')
-      .replace(/[a-zA-Z]$/g, '')   // إزالة حروف لاتينية في نهاية السطر (status flags)
+    // ── استخراج الوصف والأيام والمشرف ────────────────────────────────────
+    const contentLines = blockLines.slice(contentStartIdx);
+    let daysOpen     = '';
+    let assigneeName = '';
+    let descParts    = [...contentLines];
+
+    if (contentLines.length > 0) {
+      // محاولة 1: آخر سطر يبدأ برقم (سطر منفصل للأيام)
+      const lastLine = contentLines[contentLines.length - 1];
+      const standaloneMatch = lastLine.match(/^(\d{1,3})([^\d].{0,20})$/);
+      if (standaloneMatch && Number(standaloneMatch[1]) <= 365) {
+        daysOpen     = standaloneMatch[1];
+        assigneeName = standaloneMatch[2].trim();
+        descParts    = contentLines.slice(0, -1);
+      } else {
+        // محاولة 2: الأيام والمشرف ملتصقة في نهاية آخر سطر وصف
+        const combined = contentLines.join(' ');
+        const suffixMatch = DAYS_SUFFIX_RE.exec(combined);
+        if (suffixMatch && Number(suffixMatch[1]) <= 365) {
+          daysOpen     = suffixMatch[1];
+          assigneeName = suffixMatch[2].trim();
+          descParts    = [combined.slice(0, suffixMatch.index).trim()];
+        }
+      }
+    }
+
+    const description = descParts.join(' ')
+      .replace(/[a-zA-Z​‌]+$/gm, '') // أحرف لاتينية في نهاية الأسطر
       .replace(/\s+/g, ' ')
       .trim();
 
     const key = refNumber + ticketId;
-    if (!seen.has(key) && description) {
+    if (!seen.has(key)) {
       seen.add(key);
-      rows.push({ ticketId, refNumber, clientName, date, daysOpen, description, assigneeName, priority: '' });
+      rows.push({
+        ticketId,
+        refNumber: villaNum,   // رقم الفيلا فقط "171" بدل "NTF-171"
+        clientName,
+        date,
+        daysOpen,
+        description: description || `[${refNumber}]`,
+        assigneeName,
+        priority: '',
+      });
     }
   }
 
