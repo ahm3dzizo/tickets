@@ -9,20 +9,17 @@
  */
 
 import prisma from "../server/db.js";
-import { loadKeywordsFromDB, classifyFromKeywordsDB } from "../server/classifier/keywords.js";
+import { classifyWithML } from "../server/classifier/ml-client.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB } from "../server/classifier/db-helpers.js";
 
 const DRY_RUN    = process.argv.includes("--dry-run");
 const BATCH_SIZE = 100;
 
 async function main() {
-  console.log(`\n🔄 Reclassify-All ${DRY_RUN ? "(DRY RUN)" : ""}`);
+  console.log(`\n🔄 Reclassify-All via ML ${DRY_RUN ? "(DRY RUN)" : ""}`);
   console.log("━".repeat(50));
 
-  const keywords       = await loadKeywordsFromDB(true);
   const typeToSpecialty = await buildTypeToSpecialtyMap();
-
-  console.log(`📚 Loaded ${keywords.length} keywords\n`);
 
   const total = await prisma.ticket.count({ where: { description: { not: "" } } });
   console.log(`🎫 Total tickets: ${total}\n`);
@@ -52,10 +49,10 @@ async function main() {
     for (const ticket of tickets) {
       if (!ticket.description || ticket.description.length < 5) { unchanged++; continue; }
 
-      const result = classifyFromKeywordsDB(ticket.description, keywords);
+      const result = await classifyWithML(ticket.description);
 
-      if (result.primaryType === "unclassified") { unclassified++; continue; }
-      if (result.primaryType === ticket.type)    { unchanged++;    continue; }
+      if (!result || result.primaryType === "unclassified") { unclassified++; continue; }
+      if (result.primaryType === ticket.type)               { unchanged++;    continue; }
 
       changed++;
       const label = ticket.closedAt ? "مغلقة" : "مفتوحة";
@@ -63,11 +60,15 @@ async function main() {
 
       if (DRY_RUN) continue;
 
+      const typeRecord = await prisma.ticketType.findUnique({
+        where: { key: result.primaryType }, select: { id: true },
+      });
+
       const updateData: Record<string, any> = {
         type:         result.primaryType,
         detectedTypes: result.allTypes,
-        typeId:       result.typeId   ?? null,
-        subTypeId:    result.subTypeId ?? null,
+        typeId:       typeRecord?.id ?? null,
+        subTypeId:    null,
       };
 
       if (ticket.projectId) {
