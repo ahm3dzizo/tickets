@@ -280,24 +280,92 @@ export async function parsePdfTickets(file: File, onProgress?: PdfParseProgress)
     combinedText = typeof rawData === 'string' ? rawData : JSON.stringify(rawData);
   }
   const rows: ParsedTicketRow[] = [];
-  const lines = combinedText.split('\n');
   const seen = new Set<string>();
-  for (let i = 0; i < lines.length; i++) {
-    const rowText = lines[i];
-    if (/\\bNTF-\\d+\\b/.test(rowText)) {
-      let j = i + 1, combined = rowText;
-      while (j < lines.length) {
-        const nxt = lines[j];
-        if (/\\bNTF-\\d+\\b/.test(nxt)) break;
-        combined += ' ' + nxt; j++;
+
+  // ── محاولة 1: فورمات تقرير NTF (pymupdf) ─────────────────────────────────
+  // كل تذكرة:
+  //   {ticketId 6 أرقام}
+  //   NTF-{villa}{اسم العميل}{تاريخ}
+  //   {الوصف...}
+  //   {أيام}{اسم المشرف}
+  const ntfBlockRegex = /(\d{5,6})\n(NTF-\d+[\s\S]*?)(?=\n\d{5,6}\n|$)/g;
+  const DATE_RE_PDF = /(\d{1,2})\/(\d{1,2})\/(\d{4})/;
+  let m: RegExpExecArray | null;
+  while ((m = ntfBlockRegex.exec(combinedText)) !== null) {
+    const ticketId = m[1];
+    const block    = m[2].trim();
+    const blockLines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!blockLines.length) continue;
+
+    // السطر الأول: NTF-XXX + اسم + تاريخ متلاصقين
+    const firstLine = blockLines[0];
+    const ntfMatch  = firstLine.match(/^(NTF-\d+)/);
+    const dateMatch = DATE_RE_PDF.exec(firstLine);
+    if (!ntfMatch) continue;
+
+    const refNumber = ntfMatch[1];
+    let clientName  = '';
+    let date        = '';
+    if (dateMatch) {
+      const dateStr   = dateMatch[0];
+      const afterNTF  = firstLine.slice(ntfMatch[0].length);
+      const dateIdx   = afterNTF.indexOf(dateStr);
+      clientName = dateIdx > 0 ? afterNTF.slice(0, dateIdx).trim() : '';
+      const [, d, mo, y] = dateMatch;
+      date = `${d}/${mo}/${y}`;
+    } else {
+      clientName = firstLine.slice(ntfMatch[0].length).trim();
+    }
+
+    // باقي الأسطر = وصف + آخر سطر (أيام + مشرف)
+    const middleLines = blockLines.slice(1);
+    let daysOpen = '';
+    let assigneeName = '';
+    let descLines = middleLines;
+
+    if (middleLines.length > 0) {
+      const lastLine = middleLines[middleLines.length - 1];
+      const daysMatch = lastLine.match(/^(\d+)(.*)$/);
+      if (daysMatch && Number(daysMatch[1]) < 1000) {
+        daysOpen     = daysMatch[1];
+        assigneeName = daysMatch[2].trim();
+        descLines    = middleLines.slice(0, -1);
       }
-      i = j - 1;
-      const parsed = parseRowRegex(combined);
-      if (parsed) {
-        const key = parsed.refNumber + parsed.ticketId;
-        if (!seen.has(key)) { seen.add(key); rows.push(parsed); }
+    }
+
+    const description = descLines.join(' ')
+      .replace(/[a-zA-Z]$/g, '')   // إزالة حروف لاتينية في نهاية السطر (status flags)
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const key = refNumber + ticketId;
+    if (!seen.has(key) && description) {
+      seen.add(key);
+      rows.push({ ticketId, refNumber, clientName, date, daysOpen, description, assigneeName, priority: '' });
+    }
+  }
+
+  // ── محاولة 2: fallback — regex بسيط لو الفورمات مختلف ────────────────────
+  if (rows.length === 0) {
+    const lines = combinedText.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const rowText = lines[i];
+      if (/NTF-\d+/.test(rowText)) {
+        let j = i + 1, combined = rowText;
+        while (j < lines.length) {
+          const nxt = lines[j];
+          if (/NTF-\d+/.test(nxt)) break;
+          combined += ' ' + nxt; j++;
+        }
+        i = j - 1;
+        const parsed = parseRowRegex(combined);
+        if (parsed) {
+          const key = parsed.refNumber + parsed.ticketId;
+          if (!seen.has(key)) { seen.add(key); rows.push(parsed); }
+        }
       }
     }
   }
+
   return rows;
 }
