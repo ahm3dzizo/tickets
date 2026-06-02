@@ -133,7 +133,6 @@ pipeline = Pipeline([
         C           = 5.0,
         class_weight= "balanced", # handles imbalanced classes
         solver      = "lbfgs",
-        multi_class = "multinomial",
     )),
 ])
 
