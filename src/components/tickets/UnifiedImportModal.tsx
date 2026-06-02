@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ChevronDown, FileUp, AlertTriangle, Plus, User, Phone, Loader2, CheckCircle } from 'lucide-react';
 import { DataImport, FieldDef } from '@/components/ui/DataImport';
 import { Project, Client, TicketType } from '@/types';
-import { classifyOnServer, bulkClassifyOnServer, learnFromCorrection, getAuthHeaders } from '@/services/classificationApi';
+import { classifyOnServer, learnFromCorrection, getAuthHeaders } from '@/services/classificationApi';
 import { ticketsApi, clientsApi } from '@/lib/api';
 import { parseIssuedAt } from './TicketTable';
 import { format } from 'date-fns';
@@ -399,47 +399,15 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
     setLoadingSupervisors(false);
 
     // ── الفرز المسبق للتذاكر (استبعاد المكرر قبل التصنيف) ──
-    const newItemsToClassify: { idx: number; description: string; projectId: string }[] = [];
+    // لا نصنف تلقائيًا من الكلمات المفتاحية — نكتفي بعمود الملف أو unclassified
+    // (الـ GeminiWorker سيصنف unclassified في الخلفية)
     const preProcessedData = data.map((item, idx) => {
       const ticketId = String(item.ticketId || '').trim();
       const rawVillaNumber = String(item.villaNumber || '').trim();
       const cleanVillaNumber = normalizeVillaNumber(rawVillaNumber);
-      const refNumberCandidate = cleanVillaNumber ? `${projectAbbr}-${cleanVillaNumber}` : '';
-      
-      const isDuplicate = 
-        Boolean(ticketId && existingTicketIds.has(ticketId));
-      
-      if (!isDuplicate) {
-        newItemsToClassify.push({
-          idx,
-          description: String(item.description || '').trim(),
-          projectId: selectedProjectId,
-        });
-      }
+      const isDuplicate = Boolean(ticketId && existingTicketIds.has(ticketId));
       return { ...item, cleanVillaNumber, isDuplicate, ticketId, rawVillaNumber };
     });
-
-    // ── تصنيف التذاكر الجديدة فقط على السيرفر ──
-    let classifications: any[] = [];
-    try {
-      const newItemsPayload = newItemsToClassify.map(i => ({
-        description: i.description,
-        projectId: i.projectId
-      }));
-      
-      const newClassifications = newItemsPayload.length > 0 
-        ? await bulkClassifyOnServer(newItemsPayload) 
-        : [];
-        
-      // إرجاع التصنيفات لأماكنها الصحيحة
-      newItemsToClassify.forEach((item, i) => {
-        classifications[item.idx] = newClassifications[i];
-      });
-    } catch (err) {
-      toast.error('فشل التصنيف على السيرفر. حاول مرة أخرى.');
-      setLoading(false);
-      return;
-    }
 
     // ── تجهيز التذاكر ──
     const processed: any[] = [];
@@ -450,7 +418,6 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       const description = String(item.description || '').trim();
       const rawDate = item.createdAt ?? item.issuedAt ?? item.date ?? '';
       const rawStatus = String(item.status || '').trim();
-      const classification = classifications[idx];
 
       const cleanVillaNumber = item.cleanVillaNumber;
       const refNumber = cleanVillaNumber ? `${projectAbbr}-${cleanVillaNumber}` : '';
@@ -458,22 +425,14 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       // الكشف عن المكرر تم مسبقاً
       const isDuplicate = item.isDuplicate;
 
-      // حل التصنيف:
-      // 1) عمود الملف (تصنيف التذاكر) — مصدر بشري موثوق → أعلى أولوية
-      // 2) AI من الوصف — fallback لما الملف فاضي
-      // 3) unclassified — لو الاتنين فشلوا (لا نحط سباكة كذب)
+      // حل التصنيف — المصدر الوحيد الموثوق في الاستيراد هو عمود الملف
+      // لا نستخدم keyword classifier (متحيز لـ doors_windows + plumbing)
+      // التذاكر بدون تصنيف في الملف → unclassified، GeminiWorker يعالجها
       const excelTypesResolved = resolveExcelTypes(String(item.excelType || ''), serverTypes);
-      const aiAllTypes = (classification?.allTypes || []).filter((t: string) => t !== 'unclassified');
-      const aiType = classification?.primaryType && classification.primaryType !== 'unclassified'
-        ? classification.primaryType
-        : null;
-
-      // الأنواع النهائية: الملف أولاً، ثم AI
-      const finalAllTypes = excelTypesResolved.length > 0 ? excelTypesResolved : (aiAllTypes.length > 0 ? aiAllTypes : []);
-      const finalType = excelTypesResolved[0] || aiType || 'unclassified';
-      // typeId/subTypeId: من AI لو Excel ما حدده (AI بيجيب ID مباشرة من DB)
-      const finalTypeId    = excelTypesResolved.length > 0 ? null : (classification?.typeId    ?? null);
-      const finalSubTypeId = excelTypesResolved.length > 0 ? null : (classification?.subTypeId ?? null);
+      const finalAllTypes = excelTypesResolved.length > 0 ? excelTypesResolved : [];
+      const finalType = excelTypesResolved[0] || 'unclassified';
+      const finalTypeId    = null;
+      const finalSubTypeId = null;
 
       let clientId = '';
       let clientName = '';
@@ -485,11 +444,10 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         }
       }
 
-      // المشرفون من نتيجة التصنيف على السيرفر
-      const supervisors = classification?.supervisors || [];
-      const validSupervisors = supervisors.filter((s: any) => !s.id.startsWith('pending_'));
-      const primary = validSupervisors[0] || null;
-      const supervisorIds = validSupervisors.map((s: any) => s.id);
+      // لا نعين مشرفين تلقائيًا في الاستيراد — تُعين لاحقًا يدويًا أو بواسطة Gemini
+      const validSupervisors: any[] = [];
+      const primary = null;
+      const supervisorIds: string[] = [];
 
                         let issuedAtStr = '';
       if (rawDate) {
@@ -549,7 +507,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
         detectedTypes: finalAllTypes,
         type: finalType,
         typeId: finalTypeId,
-        subType: classification?.subType || null,
+        subType: null,
         subTypeId: finalSubTypeId,
         priority: 3,
         createdAt: new Date().toISOString(),
@@ -584,31 +542,57 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
       }
     });
 
+    // ── لوج المقارنة: ما اتعمل وما اتخطى ──
+    const importLog = {
+      timestamp: new Date().toISOString(),
+      project: selectedProject?.name || selectedProjectId,
+      fileRows: data.length,
+      uniqueInFile: new Set(data.map((r: any) => String(r.ticketId || '').trim()).filter(Boolean)).size,
+      newTickets: newTickets.length,
+      duplicatesFound: duplicates.length,
+      statusUpdates: 0,
+      typeUpdates: 0,
+      unchangedDuplicates: 0,
+    };
+
     if (updates.length > 0) {
       try {
         await ticketsApi.bulkUpdateImported(updates);
-        const typeUpdated = updates.filter(u => u.type).length;
-        const statusUpdated = updates.filter(u => !u.type).length;
+        importLog.typeUpdates = updates.filter(u => u.type).length;
+        importLog.statusUpdates = updates.filter(u => !u.type).length;
         const parts = [];
-        if (statusUpdated > 0) parts.push(`تحديث حالة ${statusUpdated} تذكرة`);
-        if (typeUpdated > 0) parts.push(`تصنيف ${typeUpdated} تذكرة غير مصنفة`);
+        if (importLog.statusUpdates > 0) parts.push(`تحديث حالة ${importLog.statusUpdates} تذكرة`);
+        if (importLog.typeUpdates > 0) parts.push(`تصنيف ${importLog.typeUpdates} تذكرة غير مصنفة`);
         toast.success(`✅ ${parts.join(' + ')}`);
       } catch (err) {
         toast.error('حدث خطأ أثناء محاولة تحديث التذاكر الموجودة');
       }
     }
 
-    const skippedCount = duplicates.length - updates.length;
-    if (skippedCount > 0) {
-      toast.info(`تم تخطي ${skippedCount} تذكرة مكررة لم تحتج تحديثاً`);
+    importLog.unchangedDuplicates = duplicates.length - updates.length;
+    if (importLog.unchangedDuplicates > 0) {
+      toast.info(`↩ ${importLog.unchangedDuplicates} تذكرة موجودة بالفعل ولم تتغير`);
     }
+
+    // إرسال اللوج للسيرفر
+    fetch('/api/tickets/import-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(importLog),
+    }).catch(() => {});
 
     if (newTickets.length === 0) {
       if (updates.length > 0) {
         setOpen(false);
         onImportSuccess();
       } else {
-        toast.error('جميع التذاكر موجودة مسبقاً ولا تحتاج تحديثاً.');
+        // تقرير تفصيلي لما مفيش جديد
+        toast.info(
+          `📊 تقرير الاستيراد:\n` +
+          `• في الملف: ${importLog.fileRows} صف (${importLog.uniqueInFile} فريد)\n` +
+          `• موجودة مسبقًا: ${importLog.duplicatesFound}\n` +
+          `• لا يوجد تذاكر جديدة للإضافة`
+        );
       }
       setLoading(false);
       return;

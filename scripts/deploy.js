@@ -88,7 +88,7 @@ const remoteLines = [
   `echo "▶  npm install..."`,
   `npm install --silent`,
   `echo "▶  npx prisma db push..."`,
-  `npx prisma db push --accept-data-loss`,
+  `npx prisma migrate deploy 2>/dev/null || npx prisma db push`,
   `echo "▶  npm run build (frontend + backend)..."`,
   `rm -rf dist`,
   `rm -rf node_modules/.vite`,

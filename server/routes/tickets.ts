@@ -62,9 +62,16 @@ async function autoSendClosing(uid: string, ticket: any) {
 
 async function classifyInBackground(description: string, ticketId: string, projectId?: string, keepManualSupervisors?: boolean) {
   try {
-    const classification = await classifyTicket(description, projectId);
+    // لا نُعيد تصنيف التذاكر التي لها تصنيف موثوق (من Excel أو مستخدم) — فقط unclassified
+    const existing = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { type: true },
+    });
+    if (existing?.type && existing.type !== "unclassified") return;
 
-    // 3) حدّث التذكرة والمشرفين
+    const classification = await classifyTicket(description, projectId);
+    if (classification.primaryType === "unclassified") return; // لا نحفظ unclassified من keywords
+
     const typeToSpecialty = await buildTypeToSpecialtyMap();
     const allTypes: string[] = classification.allTypes;
     const requiredSpecialties = [...new Set(allTypes.map((t: string) => typeToSpecialty[t] || "general"))] as string[];
@@ -83,9 +90,17 @@ async function classifyInBackground(description: string, ticketId: string, proje
       primarySupId = supervisorList[0]?.id || null;
     }
 
+    // حل typeId من قاعدة البيانات
+    const typeRecord = classification.typeId
+      ? null
+      : await prisma.ticketType.findFirst({ where: { key: classification.primaryType }, select: { id: true } });
+    const resolvedTypeId = classification.typeId || typeRecord?.id || null;
+
     const updateData: any = {
       type: classification.primaryType,
       detectedTypes: classification.allTypes,
+      typeId: resolvedTypeId,
+      subTypeId: classification.subTypeId || null,
     };
 
     if (!keepManualSupervisors) {
@@ -94,11 +109,7 @@ async function classifyInBackground(description: string, ticketId: string, proje
       updateData.assignedSupervisors = supervisorList.length > 0 ? supervisorList : undefined;
     }
 
-    await prisma.ticket.updateMany({
-      where: { id: ticketId },
-      data: updateData,
-    });
-
+    await prisma.ticket.updateMany({ where: { id: ticketId }, data: updateData });
     invalidateReferenceCache();
     invalidateKeywordCache();
   } catch (err) {
@@ -192,6 +203,10 @@ router.post("/", requireAuth, async (req, res) => {
       priority = isNaN(parsed) ? 3 : parsed;
     }
 
+    // حل typeId تلقائيًا من key
+    const typeKey = data.type || "general";
+    const typeRecord = await prisma.ticketType.findFirst({ where: { key: typeKey }, select: { id: true } });
+
     const ticket = await prisma.ticket.create({
       data: {
         ticketId: data.ticketId || String(Date.now()).slice(-6),
@@ -201,8 +216,8 @@ router.post("/", requireAuth, async (req, res) => {
         clientName: data.clientName, villaNumber: data.villaNumber,
         issuedAt: data.issuedAt || null,
         description: data.description,
-        type: data.type || "general",
-        typeId: null,
+        type: typeKey,
+        typeId: data.typeId || typeRecord?.id || null,
         status: data.status || "open", priority,
         assigneeName: data.assigneeName || null,
         assignedSupervisorId: (assignedSupervisorIds[0] && !assignedSupervisorIds[0].startsWith('pending_')) ? assignedSupervisorIds[0] : null,
@@ -240,6 +255,10 @@ router.post("/bulk", requireAuth, async (req, res) => {
   const tickets: any[] = req.body.tickets;
   if (!Array.isArray(tickets)) { res.status(400).json({ error: "tickets must be array" }); return; }
   try {
+    // جلب خريطة typeId مرة واحدة لكل الطلب
+    const allTicketTypes = await prisma.ticketType.findMany({ select: { id: true, key: true } });
+    const typeIdMap = new Map(allTicketTypes.map(t => [t.key, t.id]));
+
     const now = Date.now();
     const normalized = tickets.map((t, index) => {
       let assignedSupervisorIds = Array.isArray(t.assignedSupervisorIds)
@@ -264,7 +283,7 @@ router.post("/bulk", requireAuth, async (req, res) => {
         clientName: t.clientName, villaNumber: t.villaNumber,
         issuedAt: t.issuedAt || null,
         description: t.description, type: t.type || "general",
-        typeId:   (t.typeId   && typeof t.typeId   === 'string' && t.typeId.length > 0)   ? t.typeId   : null,
+        typeId:   (t.typeId   && typeof t.typeId   === 'string' && t.typeId.length > 0) ? t.typeId   : (typeIdMap.get(t.type) || null),
         subTypeId:(t.subTypeId && typeof t.subTypeId === 'string' && t.subTypeId.length > 0) ? t.subTypeId : null,
         status: t.status || "open", priority,
         assigneeName: t.assigneeName || null,
@@ -324,11 +343,13 @@ router.post("/bulk", requireAuth, async (req, res) => {
       const ticketIds = normalized.map(t => t.ticketId);
       const createdTickets = await prisma.ticket.findMany({
         where: { ticketId: { in: ticketIds } },
-        select: { id: true, description: true, projectId: true },
+        select: { id: true, description: true, projectId: true, type: true },
         take: tickets.length,
       });
 
+      // نصنف في الخلفية فقط التذاكر غير المصنفة — نحمي تصنيف Excel
       for (const t of createdTickets) {
+        if (t.type !== "unclassified") continue;
         const desc = (t.description || "").trim();
         if (desc.length >= 5) {
           classifyInBackground(desc, t.id, t.projectId || undefined).catch(() => {});
@@ -434,6 +455,10 @@ router.post("/bulk-update-imported", requireAuth, async (req, res) => {
   };
   if (!Array.isArray(updates)) { res.status(400).json({ error: "updates must be array" }); return; }
   try {
+    // جلب typeId map مرة واحدة
+    const allTypes = await prisma.ticketType.findMany({ select: { id: true, key: true } });
+    const typeIdMap = new Map(allTypes.map(t => [t.key, t.id]));
+
     const updatePromises = updates.map(u =>
       prisma.ticket.update({
         where: { id: u.id },
@@ -442,6 +467,7 @@ router.post("/bulk-update-imported", requireAuth, async (req, res) => {
           closedAt:      u.closedAt ? new Date(u.closedAt) : null,
           ...(u.type && u.type !== 'unclassified' ? {
             type:          u.type,
+            typeId:        typeIdMap.get(u.type) || null,
             detectedTypes: u.detectedTypes ?? [u.type],
           } : {}),
         },
@@ -451,6 +477,38 @@ router.post("/bulk-update-imported", requireAuth, async (req, res) => {
     res.json({ count: updates.length });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/import-log — تسجيل نتائج كل عملية استيراد
+router.post("/import-log", requireAuth, async (req, res) => {
+  try {
+    const log = req.body;
+    const logEntry = {
+      ...log,
+      savedAt: new Date().toISOString(),
+    };
+    // حفظ في SystemSetting (آخر 50 استيراد)
+    const existing = await prisma.systemSetting.findUnique({ where: { key: 'importHistory' } });
+    const history: any[] = (existing?.value as any[]) || [];
+    history.unshift(logEntry);
+    const trimmed = history.slice(0, 50);
+    await prisma.systemSetting.upsert({
+      where: { key: 'importHistory' },
+      create: { key: 'importHistory', value: trimmed },
+      update: { value: trimmed },
+    });
+    // طباعة في اللوج للمتابعة الفورية
+    console.log(
+      `[Import] ${logEntry.project} | ` +
+      `ملف: ${logEntry.fileRows} صف (${logEntry.uniqueInFile} فريد) | ` +
+      `جديد: ${logEntry.newTickets} | ` +
+      `موجود: ${logEntry.duplicatesFound} (تحديث حالة: ${logEntry.statusUpdates}, تصنيف: ${logEntry.typeUpdates}, بدون تغيير: ${logEntry.unchangedDuplicates}) | ` +
+      `${logEntry.timestamp}`
+    );
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
