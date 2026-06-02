@@ -36,8 +36,12 @@ async function main() {
   );
 
   const csv = ["text,label", ...rows.map(r => {
-    const text = r.description!.replace(/"/g, "").replace(/\n/g, " ").trim();
-    return `${text},${r.type}`;
+    const text = r.description!
+      .replace(/"/g, "'")
+      .replace(/\r?\n/g, " ")
+      .replace(/,/g, "،")
+      .trim();
+    return `"${text}",${r.type}`;
   })].join("\n");
 
   fs.writeFileSync(OUT_PATH, csv, "utf8");
