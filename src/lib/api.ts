@@ -149,7 +149,7 @@ export const ticketsApi = {
     }).then(async r => {
       const json = await r.json();
       if (!r.ok) throw new Error(json.error || 'فشل الاستيراد');
-      return json as { ok: boolean; added: number; updated: number; skipped: number; failed: number; errors: string[] };
+      return json as { ok: boolean; added: number; updated: number; skippedInFile: number; skippedInDB: number; failed: number; classified: number; unclassified: number; errors: string[] };
     });
   },
 };

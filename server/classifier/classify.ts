@@ -6,7 +6,7 @@ import {
 } from "./db-helpers.js";
 import { classifyWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
 
-const MIN_CLASSIFY_SCORE = 3;
+const MIN_CLASSIFY_SCORE = 2; // score 2 = مطابقتان = ثقة كافية
 
 export interface ClassificationResult {
   primaryType: string;

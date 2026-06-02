@@ -9,10 +9,9 @@ import { Router } from "express";
 import { requireAuth, AuthRequest } from "../auth.js";
 import multer from "multer";
 import fs from "fs";
-import path from "path";
 import * as XLSX from "xlsx";
 import prisma from "../db.js";
-import { classifyTicket } from "../classifier/classify.js";
+import { loadKeywordsFromDB, classifyFromKeywordsDB } from "../classifier/keywords.js";
 
 const router = Router();
 const upload = multer({
@@ -193,8 +192,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // Free the full data array
     allData.length = 0;
 
-    // ── 4. Load reference data ────────────────────────────────────────────────
-    const [existingRows, clientRows, ticketTypes] = await Promise.all([
+    // ── 4. Load reference data + keywords cache (مرة واحدة للكل) ─────────────
+    const [existingRows, clientRows, ticketTypes, keywordsCache] = await Promise.all([
       prisma.ticket.findMany({
         where: { projectId },
         select: { id: true, ticketId: true, type: true, status: true, closedAt: true },
@@ -204,6 +203,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         select: { id: true, villaNumber: true, name: true },
       }),
       prisma.ticketType.findMany({ select: { id: true, key: true, nameAr: true } }),
+      loadKeywordsFromDB(),
     ]);
 
     const existingMap = new Map(existingRows.map((t) => [String(t.ticketId).trim(), t]));
@@ -214,10 +214,12 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // ── 5. Process rows ───────────────────────────────────────────────────────
     const toCreate: any[] = [];
     const toUpdate: { id: string; status: string; closedAt: string | null; type?: string; typeId?: string; detectedTypes?: string[] }[] = [];
-    const skipped: string[] = [];
+    let skippedInFile = 0;  // مكرر داخل الملف
+    let skippedInDB  = 0;   // موجود في DB ولم يتغير
     const errors: string[] = [];
+    const seenInFile = new Set<string>(); // للكشف عن مكررات الملف نفسه
 
-    const now = Date.now();
+    const KEYWORD_MIN_SCORE = 2; // score 2 = مطابقتان = ثقة كافية
 
     for (const row of rows) {
       try {
@@ -227,7 +229,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         };
 
         const ticketId = String(get("ticketId") || "").trim();
-        if (!ticketId) { skipped.push("صف بدون رقم تذكرة"); continue; }
+        if (!ticketId) { skippedInFile++; continue; }
+
+        // كشف مكررات الملف نفسه
+        if (seenInFile.has(ticketId)) { skippedInFile++; continue; }
+        seenInFile.add(ticketId);
 
         const rawVilla = String(get("villaNumber") || "").trim();
         const cleanVilla = normalizeVillaNumber(rawVilla);
@@ -243,14 +249,30 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const description = String(get("description") || "").trim();
         const rawExcelType = String(get("excelType") || "").trim();
         const excelTypes = resolveExcelTypes(rawExcelType, typeNameMap);
-        const finalType = excelTypes[0] || "unclassified";
+
+        // ── تصنيف: Excel أولاً، ثم Keyword classifier ──────────────────────
+        let finalTypes = excelTypes;
+        let finalType  = excelTypes[0] || "";
+        let finalSubTypeId: string | null = null;
+
+        if (!finalType && description.length >= 4) {
+          // لا يوجد تصنيف في الملف → نستخدم keyword classifier مباشرة
+          const kwResult = classifyFromKeywordsDB(description, keywordsCache);
+          if (kwResult.primaryType !== "unclassified" && kwResult.confidence >= KEYWORD_MIN_SCORE) {
+            finalType      = kwResult.primaryType;
+            finalTypes     = kwResult.allTypes;
+            finalSubTypeId = kwResult.subTypeId || null;
+          }
+        }
+
+        if (!finalType) finalType = "unclassified";
         const finalTypeId = typeIdMap.get(finalType) || null;
 
         const client = clientMap.get(cleanVilla);
         const clientId = client?.id || null;
         const clientName = client?.name || "";
 
-        // Duplicate check
+        // Duplicate check (DB)
         const existing = existingMap.get(ticketId);
         if (existing) {
           const statusChanged = existing.status !== status;
@@ -263,11 +285,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
             if (typeNeedsUpdate) {
               upd.type = finalType;
               upd.typeId = finalTypeId;
-              upd.detectedTypes = excelTypes;
+              upd.detectedTypes = finalTypes;
             }
             toUpdate.push(upd);
           } else {
-            skipped.push(ticketId);
+            skippedInDB++;
           }
           continue;
         }
@@ -284,13 +306,13 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           description,
           type: finalType,
           typeId: finalTypeId,
-          subTypeId: null,
+          subTypeId: finalSubTypeId,
           status,
           priority: 3,
           assigneeName: null,
           assignedSupervisorId: null,
           assignedSupervisorIds: [],
-          detectedTypes: excelTypes,
+          detectedTypes: finalTypes,
           closedAt: closedAt ? new Date(closedAt) : null,
         });
       } catch (err: any) {
@@ -334,10 +356,12 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     }
 
     // ── 8. Log ─────────────────────────────────────────────────────────────────
+    const classifiedCount = toCreate.filter(t => t.type !== 'unclassified').length;
+    const unclassifiedCount = toCreate.filter(t => t.type === 'unclassified').length;
     console.log(
       `[ImportExcel] ${project.name} | ` +
-      `rows: ${rows.length} | added: ${added} | updated: ${updated} | ` +
-      `skipped: ${skipped.length} | failed: ${failed}`
+      `ملف: ${rows.length} صف | جديد: ${added} (مصنف: ${classifiedCount}, غير مصنف: ${unclassifiedCount}) | ` +
+      `تحديث: ${updated} | مكرر في الملف: ${skippedInFile} | موجود بدون تغيير: ${skippedInDB} | فشل: ${failed}`
     );
 
     // Save to import history
@@ -348,7 +372,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         timestamp: new Date().toISOString(),
         project: project.name,
         fileRows: rows.length,
-        added, updated, skipped: skipped.length - toUpdate.length + (toUpdate.length - updated), failed,
+        added, updated, skippedInFile, skippedInDB, failed,
         mode: "server-side",
       });
       await prisma.systemSetting.upsert({
@@ -362,9 +386,12 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       ok: true,
       added,
       updated,
-      skipped: skipped.length,
+      skippedInFile,   // مكرر في الملف نفسه
+      skippedInDB,     // موجود في DB بدون تغيير
       failed,
-      errors: errors.slice(0, 10), // max 10 errors in response
+      classified: classifiedCount,
+      unclassified: unclassifiedCount,
+      errors: errors.slice(0, 10),
     });
   } catch (err: any) {
     // Clean up temp file on error

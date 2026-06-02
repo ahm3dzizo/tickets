@@ -794,11 +794,12 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
                           const result = await ticketsApi.importExcel(file, selectedProjectId);
                           setProgress(1);
                           const parts = [];
-                          if (result.added > 0) parts.push(`إضافة ${result.added} تذكرة جديدة`);
-                          if (result.updated > 0) parts.push(`تحديث ${result.updated} تذكرة`);
-                          if (result.skipped > 0) parts.push(`تخطي ${result.skipped} مكررة`);
-                          if (result.failed > 0) parts.push(`فشل ${result.failed}`);
-                          toast.success(`✅ ${parts.join(' · ')}`);
+                          if (result.added > 0) parts.push(`✅ إضافة ${result.added} (مصنف: ${result.classified ?? 0}، غير مصنف: ${result.unclassified ?? 0})`);
+                          if (result.updated > 0) parts.push(`🔄 تحديث ${result.updated}`);
+                          if (result.skippedInDB > 0) parts.push(`⏭ موجود بدون تغيير: ${result.skippedInDB}`);
+                          if ((result.skippedInFile ?? 0) > 0) parts.push(`🔁 مكرر في الملف: ${result.skippedInFile}`);
+                          if (result.failed > 0) parts.push(`❌ فشل: ${result.failed}`);
+                          toast.success(parts.join('\n'));
                           setOpen(false);
                           setSelectedProjectId('');
                           onImportSuccess();
