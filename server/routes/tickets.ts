@@ -384,8 +384,12 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       status:               data.status               ?? undefined,
       priority:             data.priority !== undefined ? Number(data.priority) : undefined,
       assigneeName:         data.assigneeName         ?? undefined,
-      assignedSupervisorId: data.assignedSupervisorId ?? undefined,
-      assignedSupervisorIds:data.assignedSupervisorIds?? undefined,
+      assignedSupervisorId: data.assignedSupervisorId !== undefined
+        ? (data.assignedSupervisorId && String(data.assignedSupervisorId).trim() ? data.assignedSupervisorId : null)
+        : undefined,
+      assignedSupervisorIds: data.assignedSupervisorIds
+        ? (data.assignedSupervisorIds as string[]).filter((id: string) => id && id.trim())
+        : undefined,
       assignedSupervisors:  data.assignedSupervisors  ?? undefined,
       appointmentTime:      data.appointmentTime      ?? undefined,
       appointmentNotes:     data.appointmentNotes     ?? undefined,

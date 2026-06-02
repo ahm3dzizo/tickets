@@ -38,7 +38,9 @@ router.get("/:id/supervisors", requireAuth, async (req, res) => {
 
     const result = project.users.map((s: any) => ({
       id:          s.uid,
+      uid:         s.uid,         // للتوافق مع TicketDetail
       name:        s.displayName,
+      displayName: s.displayName, // للتوافق مع TicketDetail
       specialties: s.specialtiesRef?.length > 0 ? s.specialtiesRef.map((ref:any)=>ref.key) : (s.specialty ? [s.specialty] : []),
     }));
 
