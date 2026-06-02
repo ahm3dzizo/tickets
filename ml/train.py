@@ -20,6 +20,7 @@ from sklearn.metrics import classification_report
 
 # ── Config ─────────────────────────────────────────────────────────────────
 EXCEL_PATH  = pathlib.Path(__file__).parent.parent / "NTF1 Ticket (2).xlsm"
+EXTRA_CSV   = pathlib.Path(__file__).parent / "extra_training.csv"
 MODEL_PATH  = pathlib.Path(__file__).parent / "model.pkl"
 MIN_SAMPLES = 10   # drop classes with fewer training samples
 
@@ -28,14 +29,16 @@ CATEGORY_MAP = {
     "سباكة": "plumbing",    "سباكه": "plumbing",
     "كهرباء": "electricity",
     "المنيوم": "doors_windows", "المونيوم": "doors_windows",
-    "دهانات": "paints",
-    "سيراميك": "ceramics",
+    "الموينوم": "doors_windows",
+    "دهانات": "paints",     "دهان": "paints",
+    "سيراميك": "ceramics",  "سراميك": "ceramics",  "سيرامبك": "ceramics",
     "عزل": "waterproofing",
-    "خشب": "doors",          "ابواب خشب": "doors",
+    "خشب": "doors",         "ابواب خشب": "doors",
     "رخام": "ceramics",
     "جبس": "paints",
     "نمل": "pest_control",
-    "كراج": "structural",    "كاراج": "structural",
+    "كراج":  "garage_door", "كاراج": "garage_door",
+    "ابواب جراج": "garage_door", "باب جراج": "garage_door",
     "زجاج": "doors_windows",
     "تشققات": "cracks",
 }
@@ -110,6 +113,15 @@ for _, row in df.iterrows():
     records.append({"text": text, "label": label})
 
 dataset = pd.DataFrame(records)
+
+# ── Load extra training data ─────────────────────────────────────────────────
+if EXTRA_CSV.exists():
+    extra = pd.read_csv(EXTRA_CSV)
+    extra["text"] = extra["text"].apply(normalize)
+    extra = extra[extra["text"].str.len() >= 5]
+    dataset = pd.concat([dataset, extra], ignore_index=True)
+    print(f"✅ Extra training data: +{len(extra)} rows from {EXTRA_CSV.name}")
+
 print(f"\n📊 Dataset: {len(dataset)} samples")
 print(dataset["label"].value_counts().to_string())
 
