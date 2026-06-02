@@ -1,7 +1,22 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import PdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorkerUrl;
+// Use a blob URL for the worker to bypass strict module MIME type checking.
+// Regular fetch() is not subject to MIME enforcement, so this works even if
+// the server (or a cached response) returns application/octet-stream.
+let _workerBlobUrl: string | null = null;
+async function getPdfWorkerUrl(): Promise<string> {
+  if (_workerBlobUrl) return _workerBlobUrl;
+  try {
+    const resp = await fetch(PdfWorkerUrl);
+    const buf  = await resp.arrayBuffer();
+    const blob = new Blob([buf], { type: 'application/javascript' });
+    _workerBlobUrl = URL.createObjectURL(blob);
+    return _workerBlobUrl;
+  } catch {
+    return PdfWorkerUrl; // fallback: direct URL
+  }
+}
 
 export interface ParsedTicketRow {
   ticketId: string;
@@ -262,6 +277,9 @@ export async function parsePdfTickets(
   file: File,
   onProgress?: PdfParseProgress,
 ): Promise<ParsedTicketRow[]> {
+  // Set worker source via blob URL (bypasses MIME type issues / browser cache)
+  pdfjsLib.GlobalWorkerOptions.workerSrc = await getPdfWorkerUrl();
+
   const buffer = await file.arrayBuffer();
   const pdf    = await pdfjsLib.getDocument({ data: buffer }).promise;
   const total  = pdf.numPages;
