@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Mail, Phone, Lock, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail, Phone, Lock, Eye, EyeOff, UserPlus, HelpCircle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +14,8 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showNewEmployee, setShowNewEmployee] = useState(false);
+  const [showForgotPass, setShowForgotPass] = useState(false);
   const { login, isFirstLogin } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,6 +155,73 @@ export default function Login() {
             </Button>
           </form>
         </div>
+
+        {/* New employee + forgot password links */}
+        <div className="flex items-center justify-between px-1">
+          <button
+            type="button"
+            onClick={() => { setShowForgotPass(v => !v); setShowNewEmployee(false); }}
+            className="text-[11px] text-muted-foreground/70 hover:text-muted-foreground transition-colors flex items-center gap-1"
+          >
+            <HelpCircle className="w-3 h-3" />
+            نسيت كلمة المرور؟
+          </button>
+          <button
+            type="button"
+            onClick={() => { setShowNewEmployee(v => !v); setShowForgotPass(false); }}
+            className="text-[11px] text-primary/80 hover:text-primary transition-colors flex items-center gap-1 font-bold"
+          >
+            <UserPlus className="w-3 h-3" />
+            موظف جديد؟
+          </button>
+        </div>
+
+        {/* New employee info panel */}
+        {showNewEmployee && (
+          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setShowNewEmployee(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+              <p className="font-bold text-foreground text-sm flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-primary" />
+                تسجيل موظف جديد
+              </p>
+            </div>
+            <div className="text-right space-y-2 text-sm text-muted-foreground leading-relaxed">
+              <p>إذا أضافك مدير النظام كموظف، يمكنك الدخول مباشرة:</p>
+              <ol className="space-y-1 text-[12px]" dir="rtl">
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">١</span>
+                  <span>اختر <strong>رقم الهاتف</strong> واكتب رقمك المسجل لدى الشركة</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">٢</span>
+                  <span>اكتب كلمة مرور جديدة تريد استخدامها — ستُحفظ تلقائياً</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">٣</span>
+                  <span>أكمل بياناتك (الاسم والبريد) في الخطوة التالية</span>
+                </li>
+              </ol>
+            </div>
+          </div>
+        )}
+
+        {/* Forgot password panel */}
+        {showForgotPass && (
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setShowForgotPass(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+              <p className="font-bold text-amber-400 text-sm flex items-center gap-2">
+                <HelpCircle className="w-4 h-4" />
+                نسيت كلمة المرور
+              </p>
+            </div>
+            <p className="text-right text-[12px] text-muted-foreground leading-relaxed">
+              تواصل مع مدير النظام لإعادة تعيين كلمة مرورك.<br />
+              يمكنه إعادة تفعيل حسابك من صفحة إدارة الفريق.
+            </p>
+          </div>
+        )}
 
         <p className="text-center text-[10px] text-muted-foreground/60 font-bold uppercase tracking-[0.2em]">
           &copy; 2026 Retal Maintenance System

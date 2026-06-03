@@ -128,6 +128,7 @@ function AppContent() {
         {showProfileModal && (
           <ProfileCompletionModal
             open={showProfileModal}
+            pendingUser={user ? { displayName: user.displayName, role: user.role, specialty: (user as any).specialty, phoneNumber: (user as any).phoneNumber } : null}
             onComplete={handleProfileComplete}
           />
         )}
