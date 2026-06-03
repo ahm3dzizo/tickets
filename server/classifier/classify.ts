@@ -9,6 +9,9 @@ import { classifyWithML, mlServiceAvailable } from "./ml-client.js";
 
 // ML confidence threshold — below this, fall back to Gemini
 const ML_CONFIDENCE_THRESHOLD = 0.70;
+// Lower threshold for types with limited training data
+const LOW_SAMPLE_TYPES = new Set(['cracks', 'structural', 'pumps', 'garage_door']);
+const ML_LOW_SAMPLE_THRESHOLD = 0.30;
 
 // Keyword fallback threshold (used when ML service is down)
 const MIN_CLASSIFY_SCORE = 2;
@@ -44,7 +47,10 @@ export async function classifyTicket(
   const mlResult = await classifyWithML(description);
 
   if (mlResult && mlResult.primaryType !== "unclassified") {
-    if (mlResult.confidence >= ML_CONFIDENCE_THRESHOLD) {
+    const threshold = LOW_SAMPLE_TYPES.has(mlResult.primaryType)
+      ? ML_LOW_SAMPLE_THRESHOLD
+      : ML_CONFIDENCE_THRESHOLD;
+    if (mlResult.confidence >= threshold) {
       // ML service now returns subType directly — use it, then resolve IDs
       const [typeId, subTypeId] = await Promise.all([
         resolveTypeId(mlResult.primaryType),
