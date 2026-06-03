@@ -41,7 +41,7 @@ CATEGORY_MAP = {
     "كراج":  "garage_door", "كاراج": "garage_door",
     "ابواب جراج": "garage_door", "باب جراج": "garage_door",
     "زجاج": "doors_windows",
-    "تشققات": "cracks",
+    "تشققات": "cracks",  "تشقق": "cracks",  "شقوق": "cracks",
 }
 
 def resolve_type(raw: str) -> str | None:
