@@ -88,6 +88,10 @@ router.post("/", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
 
     let user;
     if (!uidInput) {
+      // منع إضافة موظف بنفس رقم الهاتف أو رقم الموظف
+      if (employeeId || phoneNumber) {
+        await assertUserIdentityUnique(employeeId, phoneNumber);
+      }
       const uid = `pending_${randomUUID()}`;
       const email = `${uid}@pending.local`;
       user = await prisma.user.create({
