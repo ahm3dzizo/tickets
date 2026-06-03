@@ -664,6 +664,11 @@ export function TicketTable({
                           {mergedTranslations[t] ?? t}
                         </span>
                       ))}
+                      {(ticket as any).subTypeName && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-md border bg-slate-600/20 text-slate-400 border-slate-600/20">
+                          {(ticket as any).subTypeName}
+                        </span>
+                      )}
                       {!hideProjectColumn && ticket.projectId && projects?.[ticket.projectId] && (
                         <span className="text-[10px] text-slate-600 font-medium">
                           {projects[ticket.projectId].abbreviation || projects[ticket.projectId].name}

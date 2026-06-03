@@ -430,6 +430,11 @@ export default function TicketDetail() {
                       ).map((t, i) => (
                         <span key={i} className="text-xs text-slate-300 font-bold">{typeTranslations[t] || t}</span>
                       ))}
+                      {(ticket as any).subTypeName && (
+                        <span className="text-[10px] text-slate-400 bg-slate-700/50 px-1.5 py-0.5 rounded">
+                          {(ticket as any).subTypeName}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center justify-between">

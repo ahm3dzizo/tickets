@@ -166,8 +166,10 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const tickets = await prisma.ticket.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    include: { ticketSubType: { select: { id: true, nameAr: true } } },
   });
-  res.json(await enrichSupervisorNames(tickets));
+  const enriched = await enrichSupervisorNames(tickets);
+  res.json(enriched.map(t => ({ ...t, subTypeName: (t as any).ticketSubType?.nameAr ?? null })));
 });
 
 // GET /api/tickets/ticketids — للكشف عن المكررات في الاستيراد (خفيف)
@@ -215,10 +217,13 @@ router.get("/next-id", requireAuth, async (req, res) => {
 
 // GET /api/tickets/:id
 router.get("/:id", requireAuth, async (req, res) => {
-  const ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } });
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: req.params.id },
+    include: { ticketSubType: { select: { id: true, nameAr: true } } },
+  });
   if (!ticket) { res.status(404).json({ error: "Not found" }); return; }
   const [enriched] = await enrichSupervisorNames([ticket]);
-  res.json(enriched);
+  res.json({ ...enriched, subTypeName: (ticket as any).ticketSubType?.nameAr ?? null });
 });
 
 // POST /api/tickets

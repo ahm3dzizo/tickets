@@ -80,6 +80,8 @@ export interface Ticket {
   assignedSupervisorIds?: string[];
   assignedSupervisors?: { id: string; name: string; specialty?: string }[];
   detectedTypes?: string[];
+  subTypeId?: string | null;
+  subTypeName?: string | null;
   appointmentTime?: string;
   appointmentNotes?: string;
   createdAt: any;
