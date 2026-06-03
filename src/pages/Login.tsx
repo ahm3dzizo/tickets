@@ -96,6 +96,7 @@ export default function Login() {
                 <Input
                   type={loginMethod === 'email' ? 'email' : 'tel'}
                   inputMode={loginMethod === 'email' ? 'email' : 'tel'}
+                  autoComplete={loginMethod === 'email' ? 'email' : 'tel'}
                   placeholder={loginMethod === 'email' ? 'name@example.com' : '05xxxxxxxx'}
                   className="h-12 rounded-2xl pr-11 text-right bg-muted/50 border-transparent focus:border-primary/40 focus:bg-card focus:ring-3 focus:ring-primary/10 transition-all"
                   value={identifier}
@@ -121,6 +122,7 @@ export default function Login() {
               <div className="relative group">
                 <Input
                   type={showPass ? 'text' : 'password'}
+                  autoComplete="current-password"
                   placeholder="••••••••••••"
                   className="h-12 rounded-2xl pr-11 pl-11 text-right bg-muted/50 border-transparent focus:border-primary/40 focus:bg-card focus:ring-3 focus:ring-primary/10 transition-all"
                   value={password}

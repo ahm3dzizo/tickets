@@ -45,7 +45,23 @@ router.post("/login", loginLimiter, async (req, res) => {
   if (email) {
     user = await prisma.user.findUnique({ where: { email } });
   } else if (phoneNumber) {
-    user = await prisma.user.findFirst({ where: { phoneNumber } });
+    // Multiple users may share a phone (e.g. admin + pending employee)
+    // Priority: 1) non-pending with matching password  2) pending (first login)
+    const allByPhone = await prisma.user.findMany({ where: { phoneNumber } });
+
+    // Try non-pending users first — check password match
+    const nonPending = allByPhone.filter(u => !u.uid.startsWith("pending_"));
+    for (const u of nonPending) {
+      if (u.passwordHash && await bcrypt.compare(password, u.passwordHash)) {
+        user = u;
+        break;
+      }
+    }
+
+    // If no non-pending matched, fall back to pending (new employee activation)
+    if (!user) {
+      user = allByPhone.find(u => u.uid.startsWith("pending_")) ?? null;
+    }
   }
 
   if (!user) {
@@ -55,24 +71,20 @@ router.post("/login", loginLimiter, async (req, res) => {
 
   const isPending = user.uid.startsWith("pending_");
 
+  // First login for new employee — set their chosen password
   if (isPending && !user.passwordHash) {
     const passwordHash = await bcrypt.hash(password, 10);
-    await prisma.user.update({
-      where: { uid: user.uid },
-      data: { passwordHash },
-    });
+    await prisma.user.update({ where: { uid: user.uid }, data: { passwordHash } });
     const token = signAppToken({ uid: user.uid, email: user.email, type: "app" });
     res.json({ token, user: toPublicUser(user), requiresProfileCompletion: true, isFirstLogin: true });
     return;
   }
 
-  if (user.passwordHash) {
-    const passwordOk = await bcrypt.compare(password, user.passwordHash);
-    if (passwordOk) {
-      const token = signAppToken({ uid: user.uid, email: user.email, type: "app" });
-      res.json({ token, user: toPublicUser(user), requiresProfileCompletion: isPending, isFirstLogin: false });
-      return;
-    }
+  // Regular login — verify password
+  if (user.passwordHash && await bcrypt.compare(password, user.passwordHash)) {
+    const token = signAppToken({ uid: user.uid, email: user.email, type: "app" });
+    res.json({ token, user: toPublicUser(user), requiresProfileCompletion: isPending, isFirstLogin: false });
+    return;
   }
 
   res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
