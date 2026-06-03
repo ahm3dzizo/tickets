@@ -45,15 +45,16 @@ export async function classifyTicket(
 
   if (mlResult && mlResult.primaryType !== "unclassified") {
     if (mlResult.confidence >= ML_CONFIDENCE_THRESHOLD) {
-      const [typeId, { subType, subTypeId }] = await Promise.all([
+      // ML service now returns subType directly — use it, then resolve IDs
+      const [typeId, subTypeId] = await Promise.all([
         resolveTypeId(mlResult.primaryType),
-        detectSubType(description, mlResult.primaryType),
+        mlResult.subType ? resolveSubTypeId(mlResult.subType, mlResult.primaryType) : Promise.resolve(null),
       ]);
       return {
         primaryType: mlResult.primaryType,
         allTypes:    mlResult.allTypes,
         typeId,
-        subType,
+        subType:     mlResult.subType ?? null,
         subTypeId,
         confidence:  mlResult.confidence,
         source:      "ml",
@@ -66,7 +67,7 @@ export async function classifyTicket(
         const geminiResult = await classifyWithGemini(description);
         if (geminiResult && geminiResult.primaryType !== "unclassified") {
           learnFromGeminiResult(description, geminiResult.allTypes).catch(() => {});
-          const { subType, subTypeId } = await detectSubType(description, geminiResult.primaryType);
+          const [subType, subTypeId] = await resolveSubTypeFromML(description, geminiResult.primaryType);
           return {
             primaryType: geminiResult.primaryType,
             allTypes:    geminiResult.allTypes,
@@ -84,15 +85,15 @@ export async function classifyTicket(
     }
 
     // Gemini not available/failed → return low-confidence ML result
-    const [typeId, { subType, subTypeId }] = await Promise.all([
+    const [typeId, subTypeId] = await Promise.all([
       resolveTypeId(mlResult.primaryType),
-      detectSubType(description, mlResult.primaryType),
+      mlResult.subType ? resolveSubTypeId(mlResult.subType, mlResult.primaryType) : Promise.resolve(null),
     ]);
     return {
       primaryType: mlResult.primaryType,
       allTypes:    mlResult.allTypes,
       typeId,
-      subType,
+      subType:     mlResult.subType ?? null,
       subTypeId,
       confidence:  mlResult.confidence,
       source:      "ml_low_confidence",
@@ -157,9 +158,32 @@ async function resolveTypeId(typeKey: string): Promise<string | null> {
   return t?.id ?? null;
 }
 
+/** Resolve a sub-type nameAr → DB id for a given parent type key */
+async function resolveSubTypeId(nameAr: string, typeKey: string): Promise<string | null> {
+  const typeId = await resolveTypeId(typeKey);
+  if (!typeId) return null;
+  const sub = await prisma.ticketSubType.findFirst({
+    where: { nameAr, parentTypeId: typeId },
+    select: { id: true },
+  });
+  return sub?.id ?? null;
+}
+
+/** Call ML service for sub-type (used as fallback when Gemini classifies) */
+async function resolveSubTypeFromML(description: string, typeKey: string): Promise<[string | null, string | null]> {
+  try {
+    const mlResult = await classifyWithML(description);
+    if (mlResult?.subType && mlResult.primaryType === typeKey) {
+      const subTypeId = await resolveSubTypeId(mlResult.subType, typeKey);
+      return [mlResult.subType, subTypeId];
+    }
+  } catch { /* non-fatal */ }
+  return [null, null];
+}
+
 /**
- * After ML gives us the main type, use keyword scoring to detect the best sub-type.
- * Only looks at keywords that belong to the given typeKey — avoids cross-type contamination.
+ * Keyword-based sub-type detection (legacy fallback when ML service is down).
+ * Only looks at keywords that belong to the given typeKey.
  */
 async function detectSubType(
   description: string,

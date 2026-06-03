@@ -21,8 +21,11 @@ echo "════════════════════════�
 echo "▶ Exporting DB tickets..." | tee -a "$LOG"
 npx tsx scripts/retrain-from-db.ts >> "$LOG" 2>&1
 
-echo "▶ Retraining ML model..." | tee -a "$LOG"
+echo "▶ Retraining main ML model..." | tee -a "$LOG"
 python3 ml/train.py >> "$LOG" 2>&1
+
+echo "▶ Retraining sub-type models..." | tee -a "$LOG"
+python3 ml/train_subtype.py >> "$LOG" 2>&1
 
 echo "▶ Restarting ML service..." | tee -a "$LOG"
 pm2 restart retal-ml >> "$LOG" 2>&1

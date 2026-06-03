@@ -9,10 +9,12 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL ?? "http://127.0.0.1:5050";
 const TIMEOUT_MS     = 3_000;
 
 export interface MLResult {
-  primaryType: string;
-  allTypes:    string[];
-  confidence:  number;
-  source:      "ml";
+  primaryType:  string;
+  subType?:     string | null;
+  subTypeConf?: number;
+  allTypes:     string[];
+  confidence:   number;
+  source:       "ml";
 }
 
 export interface MLBatchItem {
