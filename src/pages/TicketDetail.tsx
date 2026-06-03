@@ -68,6 +68,8 @@ export default function TicketDetail() {
   const [apptTime, setApptTime] = useState('');
   const [apptNotes, setApptNotes] = useState('');
   const [apptSaving, setApptSaving] = useState(false);
+  const [waSent, setWaSent] = useState(false);
+  const [waSending, setWaSending] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
 
   const loadData = async () => {
@@ -217,9 +219,27 @@ export default function TicketDetail() {
         appointmentNotes: apptNotes,
         status: ticket.status === 'open' ? 'pending' : ticket.status,
       });
-      toast.success(`تم تحديد موعد الزيارة ${appointmentTime ? `يوم ${appointmentTime}` : ''} بنجاح 📅`);
+
+      // إرسال رسالة الموعد عبر واتساب تلقائياً
+      const phone = client?.phone?.replace(/\D/g, '') || '';
+      if (phone) {
+        const apptMsg = `السلام عليكم ${client?.name || ''} 👋\n\nتم تحديد موعد زيارة فريق الصيانة لوحدتكم رقم ${ticket.villaNumber}.\n\n📋 رقم التذكرة: #${ticket.ticketId}\n📅 موعد الزيارة: ${appointmentTime}\n${apptNotes ? `📝 ملاحظات: ${apptNotes}\n` : ''}\nيرجى التواجد في الموعد المحدد.\nشكراً لتعاونكم.`;
+        try {
+          const r = await whatsappApi.send(phone, apptMsg);
+          if (r?.sent) {
+            toast.success('✅ تم تأكيد الموعد وإشعار العميل عبر واتساب');
+          } else {
+            toast.success(`📅 تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
+          }
+        } catch {
+          toast.success(`📅 تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
+        }
+      } else {
+        toast.success(`📅 تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
+      }
+
       setApptOpen(false);
-      loadData();
+      navigate(-1);
     } catch {
       toast.error('فشل حفظ الموعد');
     } finally {
@@ -229,16 +249,25 @@ export default function TicketDetail() {
 
   const todayStr = () => new Date().toISOString().split('T')[0];
 
-  const handleWhatsApp = () => {
+  const handleWhatsApp = async () => {
     const phone = client?.phone?.replace(/\D/g, '') || '';
     if (!phone) { toast.error('رقم الهاتف غير متوفر'); return; }
-    const msg = `السلام عليكم ${client?.name || ''}\nبخصوص طلب الصيانة رقم ${ticket?.ticketId || ''} - فيلا ${ticket?.villaNumber}\n${ticket?.appointmentTime ? `موعد الزيارة: ${ticket.appointmentTime}` : 'سيتم التواصل معكم لتحديد موعد الزيارة'}\nشكراً لكم.`;
-    
-    toast.promise(whatsappApi.send(phone, msg), {
-      loading: 'جارٍ إرسال التحديث للعميل عبر الواتساب...',
-      success: 'تم إرسال رسالة التحديث بنجاح 💬',
-      error: 'فشل إرسال الرسالة. تأكد من اتصال الواتساب.'
-    });
+    const msg = `السلام عليكم ${client?.name || ''} 👋\nبخصوص طلب الصيانة رقم ${ticket?.ticketId || ''} - فيلا ${ticket?.villaNumber}\n${ticket?.appointmentTime ? `📅 موعد الزيارة: ${ticket.appointmentTime}` : 'سيتم التواصل معكم لتحديد موعد الزيارة'}\nشكراً لكم.`;
+    setWaSending(true);
+    try {
+      const r = await whatsappApi.send(phone, msg);
+      if (r?.sent) {
+        toast.success('تم إرسال الرسالة للعميل عبر واتساب ✅');
+        setWaSent(true);
+        setTimeout(() => navigate(-1), 800);
+      } else {
+        toast.error('فشل إرسال الرسالة. تأكد من اتصال الواتساب.');
+      }
+    } catch {
+      toast.error('فشل إرسال الرسالة. تأكد من اتصال الواتساب.');
+    } finally {
+      setWaSending(false);
+    }
   };
 
   const handleSendApproval = async () => {
@@ -510,57 +539,69 @@ export default function TicketDetail() {
                 <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest text-right">إجراءات سريعة</CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start border-border bg-white/5 text-slate-400 hover:text-white text-xs h-12 rounded-2xl font-bold"
-                  onClick={() => {
-                    setApptDate(ticket.appointmentTime?.split(' ')[0] || todayStr());
-                    setApptTime(ticket.appointmentTime?.split(' ')[1] || '');
-                    setApptNotes(ticket.appointmentNotes || '');
-                    setApptOpen(true);
-                  }}
-                >
-                  <CalendarDays className="w-4 h-4 me-2" />
-                  تحديد موعد زيارة
-                </Button>
-                <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
-                <Button
-                  variant="outline"
-                  className="w-full justify-start border-border bg-white/5 text-emerald-400 hover:bg-emerald-500/10 text-xs h-12 rounded-2xl font-bold"
-                  onClick={handleWhatsApp}
-                >
-                  <Phone className="w-4 h-4 me-2" />
-                  إرسال تحديث للعميل
-                </Button>
-
-                {/* زر طلب الموافقة على الإغلاق */}
-                {(ticket.status === 'closed' || ticket.status === 'completed') && client?.phone && (
-                  <div className="space-y-2">
+                {waSent ? (
+                  /* ── بعد إرسال الرسالة: اختفاء كل الأزرار ── */
+                  <div className="w-full flex flex-col items-center justify-center gap-2 py-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    <CheckCircle2 className="w-8 h-8" />
+                    <p className="text-sm font-bold">تم إرسال الرسالة بنجاح ✅</p>
+                    <p className="text-[10px] text-emerald-500/70">جارٍ العودة للقائمة...</p>
+                  </div>
+                ) : (
+                  <>
                     <Button
                       variant="outline"
-                      disabled={sendingApproval || (ticket as any).approvalState === 'rated'}
-                      className="w-full justify-start border-border bg-white/5 text-purple-400 hover:bg-purple-500/10 text-xs h-12 rounded-2xl font-bold disabled:opacity-50"
-                      onClick={handleSendApproval}
+                      className="w-full justify-start border-border bg-white/5 text-slate-400 hover:text-white text-xs h-12 rounded-2xl font-bold"
+                      onClick={() => {
+                        setApptDate(ticket.appointmentTime?.split(' ')[0] || todayStr());
+                        setApptTime(ticket.appointmentTime?.split(' ')[1] || '');
+                        setApptNotes(ticket.appointmentNotes || '');
+                        setApptOpen(true);
+                      }}
                     >
-                      <CheckCircle2 className="w-4 h-4 me-2" />
-                      {sendingApproval ? 'جاري الإرسال...' : 'طلب موافقة العميل'}
+                      <CalendarDays className="w-4 h-4 me-2" />
+                      تحديد موعد زيارة
                     </Button>
-                    {(ticket as any).approvalState && (
-                      <div className={cn(
-                        'text-[10px] font-bold px-3 py-1.5 rounded-xl text-center',
-                        (ticket as any).approvalState === 'rated'     ? 'bg-emerald-500/10 text-emerald-400' :
-                        (ticket as any).approvalState === 'approved'  ? 'bg-blue-500/10 text-blue-400'      :
-                        (ticket as any).approvalState === 'rejected'  ? 'bg-red-500/10 text-red-400'        :
-                        'bg-amber-500/10 text-amber-400'
-                      )}>
-                        {(ticket as any).approvalState === 'sent'           && '⏳ في انتظار رد العميل'}
-                        {(ticket as any).approvalState === 'awaiting_rating' && '✅ وافق — في انتظار التقييم'}
-                        {(ticket as any).approvalState === 'approved'        && '✅ وافق العميل'}
-                        {(ticket as any).approvalState === 'rejected'        && '❌ رفض العميل'}
-                        {(ticket as any).approvalState === 'rated'           && `⭐ التقييم: ${(ticket as any).clientRating}/5`}
+                    <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
+                    <Button
+                      variant="outline"
+                      disabled={waSending}
+                      className="w-full justify-start border-border bg-white/5 text-emerald-400 hover:bg-emerald-500/10 text-xs h-12 rounded-2xl font-bold disabled:opacity-60"
+                      onClick={handleWhatsApp}
+                    >
+                      <Phone className="w-4 h-4 me-2" />
+                      {waSending ? 'جارٍ الإرسال...' : 'إرسال تحديث للعميل'}
+                    </Button>
+
+                    {/* زر طلب الموافقة على الإغلاق */}
+                    {(ticket.status === 'closed' || ticket.status === 'completed') && client?.phone && (
+                      <div className="space-y-2">
+                        <Button
+                          variant="outline"
+                          disabled={sendingApproval || (ticket as any).approvalState === 'rated'}
+                          className="w-full justify-start border-border bg-white/5 text-purple-400 hover:bg-purple-500/10 text-xs h-12 rounded-2xl font-bold disabled:opacity-50"
+                          onClick={handleSendApproval}
+                        >
+                          <CheckCircle2 className="w-4 h-4 me-2" />
+                          {sendingApproval ? 'جاري الإرسال...' : 'طلب موافقة العميل'}
+                        </Button>
+                        {(ticket as any).approvalState && (
+                          <div className={cn(
+                            'text-[10px] font-bold px-3 py-1.5 rounded-xl text-center',
+                            (ticket as any).approvalState === 'rated'     ? 'bg-emerald-500/10 text-emerald-400' :
+                            (ticket as any).approvalState === 'approved'  ? 'bg-blue-500/10 text-blue-400'      :
+                            (ticket as any).approvalState === 'rejected'  ? 'bg-red-500/10 text-red-400'        :
+                            'bg-amber-500/10 text-amber-400'
+                          )}>
+                            {(ticket as any).approvalState === 'sent'           && '⏳ في انتظار رد العميل'}
+                            {(ticket as any).approvalState === 'awaiting_rating' && '✅ وافق — في انتظار التقييم'}
+                            {(ticket as any).approvalState === 'approved'        && '✅ وافق العميل'}
+                            {(ticket as any).approvalState === 'rejected'        && '❌ رفض العميل'}
+                            {(ticket as any).approvalState === 'rated'           && `⭐ التقييم: ${(ticket as any).clientRating}/5`}
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
               </CardContent>
             </Card>
