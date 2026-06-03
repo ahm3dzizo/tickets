@@ -89,29 +89,58 @@ export default function Reports() {
     if (!reportRef.current) return;
     setExporting(true);
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      const { jsPDF } = await import('jspdf');
-      const canvas = await html2canvas(reportRef.current, { scale: 1.5, useCORS: true, backgroundColor: '#0f1117' });
-      const imgW = 210; // A4 width mm
+      // dynamic import — handle both ESM default and named exports
+      const h2cMod   = await import('html2canvas');
+      const html2canvas = (h2cMod as any).default ?? h2cMod;
+
+      const jspdfMod = await import('jspdf');
+      const jsPDF    = (jspdfMod as any).jsPDF ?? (jspdfMod as any).default?.jsPDF ?? (jspdfMod as any).default;
+
+      // reduce scale to avoid canvas memory limit
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 1.2,
+        useCORS: true,
+        backgroundColor: '#0f1117',
+        logging: false,
+        allowTaint: true,
+      });
+
+      const A4_W = 210;
+      const A4_H = 297;
+      const imgW = A4_W;
       const imgH = (canvas.height * imgW) / canvas.width;
-      const pdf = new jsPDF({ orientation: imgH > 297 ? 'p' : 'p', unit: 'mm', format: 'a4' });
-      const pageH = 297;
-      let y = 0;
-      while (y < imgH) {
-        const srcY = (y / imgH) * canvas.height;
-        const srcH = Math.min((pageH / imgH) * canvas.height, canvas.height - srcY);
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvas.width; pageCanvas.height = srcH;
-        pageCanvas.getContext('2d')!.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
-        const slice = pageCanvas.toDataURL('image/jpeg', 0.9);
-        if (y > 0) pdf.addPage();
-        pdf.addImage(slice, 'JPEG', 0, 0, imgW, (srcH * imgW) / canvas.width);
-        y += pageH;
+
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+      // split canvas into A4 pages
+      let yMm = 0;
+      let page = 0;
+      while (yMm < imgH) {
+        const sliceHMm  = Math.min(A4_H, imgH - yMm);
+        const sliceHPx  = Math.round((sliceHMm / imgH) * canvas.height);
+        const srcYPx    = Math.round((yMm / imgH) * canvas.height);
+
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width  = canvas.width;
+        sliceCanvas.height = sliceHPx;
+        sliceCanvas.getContext('2d')!
+          .drawImage(canvas, 0, srcYPx, canvas.width, sliceHPx, 0, 0, canvas.width, sliceHPx);
+
+        if (page > 0) pdf.addPage();
+        pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgW, sliceHMm);
+
+        yMm  += A4_H;
+        page++;
       }
-      const date = new Date().toLocaleDateString('ar-EG').replace(/\//g, '-');
+
+      const date = new Date().toISOString().split('T')[0];
       pdf.save(`تقرير-الصيانة-${date}.pdf`);
-    } catch { alert('فشل تصدير PDF'); }
-    finally { setExporting(false); }
+    } catch (e: any) {
+      console.error('[PDF Export]', e);
+      alert(`فشل تصدير PDF: ${e?.message ?? e}`);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const t = data?.totals ?? {};
