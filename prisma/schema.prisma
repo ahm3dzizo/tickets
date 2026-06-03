@@ -67,7 +67,7 @@ model Ticket {
   description           String
   type                  String
   typeId                String?
-  status                String         @default("open")
+  status                TicketStatus   @default(open)
   priority              Int            @default(4)
   assigneeName          String?
   assignedSupervisorId  String?
@@ -197,6 +197,7 @@ enum TicketStatus {
   closed
   waiting
   out_of_scope
+  absent
 }
 
 enum TicketPriority {
