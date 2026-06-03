@@ -44,26 +44,27 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       select: { id: true, ticketId: true, clientName: true, villaNumber: true, type: true, status: true, createdAt: true, assignedSupervisors: true },
     });
 
-    // Last 7 days trend — two separate queries to avoid nested $queryRaw
+    // Last 7 days trend — pure ORM to avoid raw SQL enum issues
     const days7ago = new Date(now.getTime() - 6 * 86_400_000);
     days7ago.setHours(0, 0, 0, 0);
-    const recentActivity = projectId
-      ? await prisma.$queryRaw<{ day: Date; opened: bigint; closed: bigint }[]>`
-          SELECT
-            DATE_TRUNC('day', "createdAt") AS day,
-            COUNT(*)::bigint AS opened,
-            COUNT(CASE WHEN status = 'closed'::"TicketStatus" AND "closedAt" >= DATE_TRUNC('day', "createdAt") THEN 1 END)::bigint AS closed
-          FROM "Ticket"
-          WHERE "createdAt" >= ${days7ago} AND "projectId" = ${projectId}
-          GROUP BY 1 ORDER BY 1`
-      : await prisma.$queryRaw<{ day: Date; opened: bigint; closed: bigint }[]>`
-          SELECT
-            DATE_TRUNC('day', "createdAt") AS day,
-            COUNT(*)::bigint AS opened,
-            COUNT(CASE WHEN status = 'closed'::"TicketStatus" AND "closedAt" >= DATE_TRUNC('day', "createdAt") THEN 1 END)::bigint AS closed
-          FROM "Ticket"
-          WHERE "createdAt" >= ${days7ago}
-          GROUP BY 1 ORDER BY 1`;
+    const tickets7days = await prisma.ticket.findMany({
+      where: { ...where, createdAt: { gte: days7ago } },
+      select: { createdAt: true, status: true },
+    });
+    const dayMap: Record<string, { opened: number; closed: number }> = {};
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(days7ago.getTime() + i * 86_400_000);
+      dayMap[d.toISOString().split("T")[0]] = { opened: 0, closed: 0 };
+    }
+    for (const t of tickets7days) {
+      const day = new Date(t.createdAt).toISOString().split("T")[0];
+      if (!dayMap[day]) dayMap[day] = { opened: 0, closed: 0 };
+      dayMap[day].opened++;
+      if (t.status === "closed") dayMap[day].closed++;
+    }
+    const recentActivity = Object.entries(dayMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, v]) => ({ day, opened: v.opened, closed: v.closed }));
 
     // Per supervisor summary
     const supTickets = await prisma.ticket.findMany({
@@ -94,11 +95,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
         ...t,
         daysOpen: Math.floor((Date.now() - new Date(t.createdAt).getTime()) / 86_400_000),
       })),
-      trend7Days: recentActivity.map(r => ({
-        day: r.day.toISOString().split("T")[0],
-        opened: Number(r.opened),
-        closed: Number(r.closed),
-      })),
+      trend7Days: recentActivity,
       bySupervisor,
     });
   } catch (err: any) {
