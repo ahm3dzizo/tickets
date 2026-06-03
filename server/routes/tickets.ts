@@ -13,7 +13,7 @@ const router = Router();
 async function enrichSupervisorNames<T extends { assignedSupervisorIds?: string[]; assignedSupervisors?: any }>(
   tickets: T[]
 ): Promise<T[]> {
-  // collect all unique supervisor IDs across all tickets
+  // collect all unique supervisor UIDs across all tickets
   const allIds = new Set<string>();
   for (const t of tickets) {
     for (const id of (t.assignedSupervisorIds || [])) {
@@ -22,14 +22,14 @@ async function enrichSupervisorNames<T extends { assignedSupervisorIds?: string[
   }
   if (allIds.size === 0) return tickets;
 
-  // fetch current names from DB
+  // fetch current names from DB — User PK is `uid`, name is `displayName`
   const users = await prisma.user.findMany({
-    where: { id: { in: [...allIds] } },
-    select: { id: true, name: true, specialties: true },
+    where: { uid: { in: [...allIds] } },
+    select: { uid: true, displayName: true, specialty: true },
   });
-  const nameMap = new Map(users.map(u => [u.id, u]));
+  const nameMap = new Map(users.map(u => [u.uid, u]));
 
-  // patch each ticket's assignedSupervisors array
+  // patch each ticket's assignedSupervisors with live data
   return tickets.map(t => {
     const ids = t.assignedSupervisorIds || [];
     if (ids.length === 0) return t;
@@ -40,7 +40,7 @@ async function enrichSupervisorNames<T extends { assignedSupervisorIds?: string[
         const stored = Array.isArray(t.assignedSupervisors)
           ? (t.assignedSupervisors as any[]).find((s: any) => s.id === id)
           : null;
-        return { id: u.id, name: u.name, specialty: stored?.specialty || u.specialties?.[0] || "general" };
+        return { id: u.uid, name: u.displayName, specialty: stored?.specialty || u.specialty || "general" };
       })
       .filter(Boolean);
     return { ...t, assignedSupervisors: supervisors };
