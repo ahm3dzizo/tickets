@@ -175,11 +175,12 @@ export const whatsappApi = {
 };
 
 // ── Settings ──────────────────────────────────────────────────────────────────
+type WaTemplates = { openingMsg: string; closingMsg: string; absentMsg?: string; outOfScopeMsg?: string };
 export const settingsApi = {
   getWhatsAppTemplates: () =>
-    get<{ openingMsg: string; closingMsg: string }>('/settings/whatsapp-templates'),
-  updateWhatsAppTemplates: (data: { openingMsg: string; closingMsg: string }) =>
-    put<{ openingMsg: string; closingMsg: string }>('/settings/whatsapp-templates', data),
+    get<WaTemplates>('/settings/whatsapp-templates'),
+  updateWhatsAppTemplates: (data: WaTemplates) =>
+    put<WaTemplates>('/settings/whatsapp-templates', data),
 };
 
 // ── Reports ───────────────────────────────────────────────────────────────────

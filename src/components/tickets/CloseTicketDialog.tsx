@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { 
-  CheckCircle2, 
-  X, 
-  Plus, 
-  Trash2, 
+import {
+  CheckCircle2,
+  X,
+  Plus,
+  Trash2,
   MessageCircle,
   Save,
   FileText,
@@ -12,6 +12,8 @@ import {
   ExternalLink,
   FolderOpen,
   ChevronDown,
+  UserX,
+  Ban,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -112,6 +114,8 @@ export function CloseTicketDialog({
   projects,
   onSuccess 
 }: CloseTicketDialogProps) {
+  type CloseType = 'normal' | 'absent' | 'out_of_scope';
+  const [closeType, setCloseType] = useState<CloseType>('normal');
   const [loading, setLoading] = useState(false);
   const [copying, setCopying] = useState(false);
   const [notes, setNotes] = useState('');
@@ -125,10 +129,18 @@ export function CloseTicketDialog({
     getSavedDirHandle().then(h => setSavedDirName(h?.name ?? null));
   }, []);
 
-  const [closingMsgTemplate, setClosingMsgTemplate] = useState('');
+  const [closingMsgTemplate, setClosingMsgTemplate]     = useState('');
+  const [absentMsgTemplate, setAbsentMsgTemplate]       = useState('');
+  const [outOfScopeMsgTemplate, setOutOfScopeMsgTemplate] = useState('');
+
   React.useEffect(() => {
     if (open) {
-      WhatsAppService.getTemplates().then(t => setClosingMsgTemplate(t.closingMsg));
+      setCloseType('normal');
+      WhatsAppService.getTemplates().then(t => {
+        setClosingMsgTemplate(t.closingMsg);
+        setAbsentMsgTemplate(t.absentMsg || '');
+        setOutOfScopeMsgTemplate(t.outOfScopeMsg || '');
+      });
     }
   }, [open]);
 
@@ -137,14 +149,18 @@ export function CloseTicketDialog({
   const mainTicket = selectedTickets[0];
   const waIds = selectedTickets.map(t => t.ticketId || t.refNumber).join('، ');
 
-  const previewMessage = WhatsAppService.processTemplate(closingMsgTemplate, {
-    clientName: targetClient?.name || mainTicket?.clientName || '',
-    ticketId: waIds,
-    description: mainTicket?.description || '',
-    villaNumber: targetClient?.villaNumber || mainTicket?.villaNumber || '',
+  const msgParams = {
+    clientName:   targetClient?.name || mainTicket?.clientName || '',
+    ticketId:     waIds,
+    description:  mainTicket?.description || '',
+    villaNumber:  targetClient?.villaNumber || mainTicket?.villaNumber || '',
     closureNotes: notes || 'تم الإنجاز',
-    date: new Date().toLocaleDateString('ar-SA'),
-  });
+    date:         new Date().toLocaleDateString('ar-SA'),
+  };
+  const previewMessage =
+    closeType === 'absent'       ? WhatsAppService.processTemplate(absentMsgTemplate, msgParams) :
+    closeType === 'out_of_scope' ? WhatsAppService.processTemplate(outOfScopeMsgTemplate, msgParams) :
+    WhatsAppService.processTemplate(closingMsgTemplate, msgParams);
 
   // Sync items if selectedTickets changes
   React.useEffect(() => {
@@ -192,7 +208,32 @@ export function CloseTicketDialog({
     ? projects?.[selectedTickets[0].projectId]?.name
     : undefined;
 
+  const handleSpecialClose = async () => {
+    if (closeType === 'normal') return;
+    setLoading(true);
+    try {
+      const authToken = localStorage.getItem('retal_auth_token');
+      await Promise.all(selectedTickets.map(t =>
+        fetch(`/api/tickets/${t.id}/special-close`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+          body: JSON.stringify({ closeType, notes }),
+        })
+      ));
+      const label = closeType === 'absent' ? 'عدم التواجد' : 'خارج الاختصاص';
+      toast.success(`تم إغلاق التذاكر (${label}) وإرسال الرسالة 💬`);
+      onSuccess();
+      onOpenChange(false);
+    } catch {
+      toast.error('فشل إغلاق التذاكر');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
+    if (closeType !== 'normal') { handleSpecialClose(); return; }
+
     if (maintItems.length === 0) {
       toast.error('يرجى إضافة بند صيانة واحد على الأقل');
       return;
@@ -328,9 +369,46 @@ export function CloseTicketDialog({
           </div>
         </DialogHeader>
 
+        {/* ── نوع الإغلاق ── */}
+        <div className="flex gap-2 mt-1">
+          {[
+            { key: 'normal'      as const, label: 'إغلاق عادي',      icon: CheckCircle2, color: 'emerald' },
+            { key: 'absent'      as const, label: 'عدم التواجد',      icon: UserX,        color: 'amber'   },
+            { key: 'out_of_scope'as const, label: 'خارج الاختصاص',  icon: Ban,          color: 'red'     },
+          ].map(({ key, label, icon: Icon, color }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setCloseType(key)}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold border transition-all',
+                closeType === key
+                  ? color === 'emerald' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                  : color === 'amber'   ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                  : 'bg-red-500/20 border-red-500/50 text-red-400'
+                  : 'bg-white/5 border-border text-slate-500 hover:text-slate-300'
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="space-y-6 py-4">
-          {/* Maintenance Items Section */}
-          <div className="space-y-4">
+          {/* Maintenance Items Section — يظهر فقط للإغلاق العادي */}
+          {closeType !== 'normal' && (
+            <div className={cn(
+              'rounded-2xl border p-4 text-right text-sm leading-relaxed',
+              closeType === 'absent'       ? 'bg-amber-500/5 border-amber-500/20 text-amber-300'
+                                           : 'bg-red-500/5 border-red-500/20 text-red-300'
+            )}>
+              {closeType === 'absent'
+                ? '⚠️ ستُغلق التذاكر بحالة "في الانتظار" وتُرسل رسالة عدم التواجد للعميل.'
+                : '⛔ ستُغلق التذاكر بحالة "خارج النطاق" وتُرسل رسالة للعميل بأن المشكلة خارج الضمان.'}
+            </div>
+          )}
+          <div className="space-y-4" style={{ display: closeType === 'normal' ? 'block' : 'none' }}>
             <div className="flex items-center justify-between">
               <Label className="text-slate-500 block text-[10px] font-bold uppercase tracking-widest">بنود الصيانة والحالة</Label>
               <Button 
@@ -382,6 +460,8 @@ export function CloseTicketDialog({
                 </div>
               ))}
             </div>
+          </div>
+
           </div>
 
           {/* Notes Section */}

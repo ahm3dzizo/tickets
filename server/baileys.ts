@@ -292,6 +292,18 @@ export async function buildClosingMsg(params: MsgParams): Promise<string> {
   return replaceVars(template, params);
 }
 
+export async function buildAbsentMsg(params: MsgParams): Promise<string> {
+  const defaultMsg = `السلام عليكم {clientName} 👋\n\nتم زيارة وحدتكم رقم {villaNumber} بخصوص بلاغ الصيانة #{ticketId}،\nولم يتمكن الفريق من الدخول نظراً لعدم التواجد.\n\nيرجى التواصل معنا لتحديد موعد مناسب لإتمام الصيانة.\n\nشكراً لتعاونكم — فريق ريتال للصيانة 🌟`;
+  const template = await getTemplate('absentMsg', defaultMsg);
+  return replaceVars(template, params);
+}
+
+export async function buildOutOfScopeMsg(params: MsgParams): Promise<string> {
+  const defaultMsg = `السلام عليكم {clientName} 👋\n\nبخصوص بلاغ الصيانة #{ticketId} لوحدتكم رقم {villaNumber}،\nبعد المعاينة تبيّن أن المشكلة خارج نطاق الضمان والصيانة.\n\nللاستفسار يرجى التواصل مع مكتب المبيعات.\n\nشكراً لتفهمكم — فريق ريتال للصيانة 🌟`;
+  const template = await getTemplate('outOfScopeMsg', defaultMsg);
+  return replaceVars(template, params);
+}
+
 // ─── طلب موافقة العميل عبر قائمة واتساب ───────────────────────────────────
 
 export async function sendApprovalRequest(

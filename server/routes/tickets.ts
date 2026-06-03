@@ -5,7 +5,7 @@ import { getIO } from "../socket.js";
 import { classifyTicket } from "../classifier/classify.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
 import { invalidateKeywordCache } from "../classifier/keywords.js";
-import { sendWAText, buildOpeningMsg, buildClosingMsg } from "../baileys.js";
+import { sendWAText, buildOpeningMsg, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from "../baileys.js";
 
 const router = Router();
 
@@ -94,6 +94,26 @@ async function autoSendClosing(uid: string, ticket: any) {
       villaNumber: ticket.villaNumber,
       closureNotes: ticket.closureNotes,
     });
+    await sendWAText(uid, client.phone, msg);
+  } catch {}
+}
+
+async function autoSendAbsent(uid: string, ticket: any) {
+  try {
+    if (!(await shouldAutoSendWA(uid))) return;
+    const client = await prisma.client.findUnique({ where: { id: ticket.clientId }, select: { phone: true, name: true } });
+    if (!client?.phone) return;
+    const msg = await buildAbsentMsg({ ticketId: ticket.ticketId, clientName: client.name, description: ticket.description, villaNumber: ticket.villaNumber });
+    await sendWAText(uid, client.phone, msg);
+  } catch {}
+}
+
+async function autoSendOutOfScope(uid: string, ticket: any) {
+  try {
+    if (!(await shouldAutoSendWA(uid))) return;
+    const client = await prisma.client.findUnique({ where: { id: ticket.clientId }, select: { phone: true, name: true } });
+    if (!client?.phone) return;
+    const msg = await buildOutOfScopeMsg({ ticketId: ticket.ticketId, clientName: client.name, description: ticket.description, villaNumber: ticket.villaNumber });
     await sendWAText(uid, client.phone, msg);
   } catch {}
 }
@@ -210,6 +230,28 @@ router.get("/next-id", requireAuth, async (req, res) => {
     
     const nextId = maxId + 1;
     res.json({ nextId: nextId.toString() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:id/special-close  — عدم تواجد أو خارج الاختصاص
+router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => {
+  const { closeType, notes } = req.body as { closeType: 'absent' | 'out_of_scope'; notes?: string };
+  if (!['absent', 'out_of_scope'].includes(closeType)) {
+    res.status(400).json({ error: "closeType غير صالح" }); return;
+  }
+  const status = closeType === 'absent' ? 'waiting' : 'out_of_scope';
+  try {
+    const ticket = await prisma.ticket.update({
+      where: { id: req.params.id },
+      data: { status, closureNotes: notes || null, closedAt: closeType === 'out_of_scope' ? new Date() : null },
+      select: { id: true, ticketId: true, clientId: true, description: true, villaNumber: true, status: true },
+    });
+    const uid = req.uid!;
+    if (closeType === 'absent')       autoSendAbsent(uid, ticket).catch(() => {});
+    if (closeType === 'out_of_scope') autoSendOutOfScope(uid, ticket).catch(() => {});
+    res.json({ ok: true, status });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

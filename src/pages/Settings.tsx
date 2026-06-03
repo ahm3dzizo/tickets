@@ -287,10 +287,12 @@ export default function Settings() {
   };
 
   // ── WA Templates ──────────────────────────────────────────────────────────
-  const [openingMsg, setOpeningMsg] = useState('');
-  const [closingMsg, setClosingMsg] = useState('');
+  const [openingMsg, setOpeningMsg]           = useState('');
+  const [closingMsg, setClosingMsg]           = useState('');
+  const [absentMsg, setAbsentMsg]             = useState('');
+  const [outOfScopeMsg, setOutOfScopeMsg]     = useState('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [savingTemplates, setSavingTemplates] = useState(false);
+  const [savingTemplates, setSavingTemplates]   = useState(false);
 
   useEffect(() => {
     if (user?.role === 'admin' && openSection === 'templates') {
@@ -304,6 +306,8 @@ export default function Settings() {
       const data = await settingsApi.getWhatsAppTemplates();
       setOpeningMsg(data.openingMsg);
       setClosingMsg(data.closingMsg);
+      setAbsentMsg(data.absentMsg || '');
+      setOutOfScopeMsg(data.outOfScopeMsg || '');
     } catch {
       toast.error('تعذر تحميل القوالب');
     } finally {
@@ -314,7 +318,7 @@ export default function Settings() {
   const saveTemplates = async () => {
     setSavingTemplates(true);
     try {
-      await settingsApi.updateWhatsAppTemplates({ openingMsg, closingMsg });
+      await settingsApi.updateWhatsAppTemplates({ openingMsg, closingMsg, absentMsg, outOfScopeMsg });
       toast.success('تم حفظ القوالب بنجاح');
     } catch {
       toast.error('تعذر حفظ القوالب');
@@ -826,12 +830,40 @@ export default function Settings() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground text-xs font-bold text-right block">رسالة إغلاق التذكرة</Label>
-                    <Textarea 
-                      value={closingMsg} 
+                    <Label className="text-muted-foreground text-xs font-bold text-right block">رسالة إغلاق التذكرة (عادي)</Label>
+                    <Textarea
+                      value={closingMsg}
                       onChange={e => setClosingMsg(e.target.value)}
                       className="min-h-[120px] text-right bg-background/70"
                       dir="rtl"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 justify-end">
+                      <Label className="text-amber-400 text-xs font-bold text-right block">رسالة عدم التواجد</Label>
+                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">حالة: في الانتظار</span>
+                    </div>
+                    <Textarea
+                      value={absentMsg}
+                      onChange={e => setAbsentMsg(e.target.value)}
+                      className="min-h-[100px] text-right bg-background/70"
+                      dir="rtl"
+                      placeholder="رسالة تُرسل للعميل عند عدم تواجده وقت الزيارة..."
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 justify-end">
+                      <Label className="text-red-400 text-xs font-bold text-right block">رسالة خارج الاختصاص</Label>
+                      <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">حالة: خارج النطاق</span>
+                    </div>
+                    <Textarea
+                      value={outOfScopeMsg}
+                      onChange={e => setOutOfScopeMsg(e.target.value)}
+                      className="min-h-[100px] text-right bg-background/70"
+                      dir="rtl"
+                      placeholder="رسالة تُرسل للعميل عندما تكون المشكلة خارج نطاق الضمان..."
                     />
                   </div>
 

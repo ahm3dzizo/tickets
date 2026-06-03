@@ -42,6 +42,6 @@ export class WhatsAppService {
       });
       if (res.ok) return await res.json();
     } catch {}
-    return { openingMsg: '', closingMsg: '' };
+    return { openingMsg: '', closingMsg: '', absentMsg: '', outOfScopeMsg: '' };
   }
 }
