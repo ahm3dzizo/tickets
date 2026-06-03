@@ -1,4 +1,4 @@
-import { loadKeywordsFromDB, classifyFromKeywordsDB, invalidateKeywordCache } from "./keywords.js";
+import { loadKeywordsFromDB, classifyFromKeywordsDB, invalidateKeywordCache, normalizeArabic } from "./keywords.js";
 import {
   buildTypeToSpecialtyMap,
   findSupervisorsDB,
@@ -195,12 +195,8 @@ async function detectSubType(
     const subKws = keywords.filter(kw => kw.typeKey === typeKey && kw.subType && kw.subTypeId);
     if (subKws.length === 0) return { subType: null, subTypeId: null };
 
-    const normDesc = description
-      .replace(/[ً-ِْ-ٰٟ]/g, "")
-      .replace(/[أإآ]/g, "ا")
-      .replace(/ة/g, "ه")
-      .replace(/[ىي]/g, "ي")
-      .toLowerCase();
+    // Use the same normalizeArabic as loadKeywordsFromDB to ensure consistent matching
+    const normDesc = normalizeArabic(description);
 
     // Score each sub-type
     const scores: Record<string, number> = {};
