@@ -189,7 +189,14 @@ async function detectSubType(
     }
 
     const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
-    if (!best) return { subType: null, subTypeId: null };
+    // Require meaningful score — avoids matching "خزان" mentioned in passing
+    if (!best || best[1] < 4) return { subType: null, subTypeId: null };
+
+    // If 2+ sub-types match, winner needs clear lead (score >= 1.5x runner-up)
+    const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    if (sorted.length > 1 && sorted[0][1] < sorted[1][1] * 1.5) {
+      return { subType: null, subTypeId: null };
+    }
 
     return { subType: best[0], subTypeId: idMap[best[0]] };
   } catch {
