@@ -17,6 +17,7 @@ router.get("/", requireAuth, async (_req, res) => {
           include: {
             specialty: { select: { id: true, key: true, nameAr: true } },
             keywords: { orderBy: { weight: "desc" }, take: 20 },
+            _count: { select: { tickets: true } },
           },
         },
         keywords: { orderBy: { weight: "desc" }, take: 30 },
@@ -24,7 +25,17 @@ router.get("/", requireAuth, async (_req, res) => {
       },
       orderBy: { sortOrder: "asc" },
     });
-    res.json(types);
+
+    // check which types have an ML sub-type model
+    const fs = await import("fs");
+    const path = await import("path");
+    const mlDir = path.default.resolve("ml");
+    const withMlModel = types.map(t => ({
+      ...t,
+      hasSubtypeModel: fs.default.existsSync(path.default.join(mlDir, `model_subtype_${t.key}.pkl`)),
+    }));
+
+    res.json(withMlModel);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

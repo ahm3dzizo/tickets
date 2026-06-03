@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Search, Trash2, Pencil, ChevronDown, ChevronUp,
-  Tags, Layers, Hash, CheckCircle2, Loader2, X, KeyRound,
-  ToggleLeft, ToggleRight, AlertTriangle,
+  Tags, Layers, Hash, CheckCircle2, Loader2, X,
+  ToggleLeft, ToggleRight, AlertTriangle, Brain, BarChart2,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ interface SubType {
   isActive: boolean;
   sortOrder: number;
   keywords: Keyword[];
+  _count?: { tickets: number };
 }
 
 interface TicketTypeItem {
@@ -43,6 +44,7 @@ interface TicketTypeItem {
   keywords: Keyword[];
   subTypes: SubType[];
   _count?: { tickets: number; keywords: number };
+  hasSubtypeModel?: boolean;
 }
 
 interface Specialty {
@@ -258,6 +260,11 @@ const SubTypeRow = ({ st, typeId, onRefresh }: { st: SubType; typeId: string; on
           </div>
           <div className="flex items-center gap-2 text-right">
             <span className="text-slate-300 text-sm font-medium">{st.nameAr}</span>
+            {(st._count?.tickets ?? 0) > 0 && (
+              <Badge variant="outline" className="text-[9px] border-emerald-500/30 text-emerald-400 font-bold h-4 px-1.5">
+                {(st._count?.tickets ?? 0).toLocaleString()} تذكرة
+              </Badge>
+            )}
             <Badge variant="outline" className="text-[9px] border-border text-slate-500 font-normal h-4 px-1.5">
               {st.keywords.length} كلمة
             </Badge>
@@ -335,14 +342,15 @@ const TypeCard = ({ type, specialties, onRefresh }: {
   };
 
   const specialtyColor: Record<string, string> = {
-    plumbing: 'text-blue-400 bg-blue-500/10',
-    electrical: 'text-amber-400 bg-amber-500/10',
-    carpentry: 'text-orange-400 bg-orange-500/10',
-    painting: 'text-purple-400 bg-purple-500/10',
-    civil: 'text-slate-400 bg-slate-500/10',
-    general: 'text-slate-400 bg-slate-500/10',
+    mechanics:   'text-blue-400 bg-blue-500/10',
+    electricity: 'text-amber-400 bg-amber-500/10',
+    general:     'text-slate-400 bg-slate-500/10',
   };
   const spColor = specialtyColor[type.specialty?.key || 'general'] || 'text-slate-400 bg-slate-500/10';
+
+  // distribution of tickets across sub-types
+  const totalSubTickets = type.subTypes.reduce((s, st) => s + (st._count?.tickets ?? 0), 0);
+  const hasDistribution = totalSubTickets > 0 && type.subTypes.length > 0;
 
   return (
     <>
@@ -379,6 +387,11 @@ const TypeCard = ({ type, specialties, onRefresh }: {
                       ? <ToggleRight className="w-4 h-4 text-emerald-400" />
                       : <ToggleLeft className="w-4 h-4 text-slate-500" />}
                   </button>
+                  {type.hasSubtypeModel && (
+                    <span title="يوجد نموذج ML مخصص للأنواع الفرعية" className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      <Brain className="w-2.5 h-2.5" /> ML
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center justify-start gap-2 mt-1">
                   <code className="text-[10px] text-slate-500 font-mono bg-white/5 px-1.5 py-0.5 rounded">{type.key}</code>
@@ -416,6 +429,34 @@ const TypeCard = ({ type, specialties, onRefresh }: {
           {/* ── Expanded section ── */}
           {expanded && (
             <div className="border-t border-border animate-in fade-in slide-in-from-top-2 duration-200">
+
+              {/* Sub-type distribution bar */}
+              {hasDistribution && (
+                <div className="px-4 pt-3 pb-1 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 justify-end">
+                    <BarChart2 className="w-3 h-3" />
+                    <span>توزيع الأنواع الفرعية ({totalSubTickets.toLocaleString()} تذكرة)</span>
+                  </div>
+                  <div className="flex h-2 rounded-full overflow-hidden gap-px">
+                    {type.subTypes.filter(st => (st._count?.tickets ?? 0) > 0).map((st, i) => {
+                      const pct = Math.max(2, Math.round(((st._count?.tickets ?? 0) / totalSubTickets) * 100));
+                      const colors = ['bg-blue-500','bg-emerald-500','bg-amber-500','bg-purple-500','bg-teal-500','bg-pink-500','bg-orange-500'];
+                      return <div key={st.id} title={`${st.nameAr}: ${st._count?.tickets}`} className={cn('transition-all', colors[i % colors.length])} style={{ width: `${pct}%` }} />;
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 justify-end">
+                    {type.subTypes.filter(st => (st._count?.tickets ?? 0) > 0).map((st, i) => {
+                      const colors = ['text-blue-400','text-emerald-400','text-amber-400','text-purple-400','text-teal-400','text-pink-400','text-orange-400'];
+                      return (
+                        <span key={st.id} className={cn('text-[9px]', colors[i % colors.length])}>
+                          {st.nameAr} {st._count?.tickets}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Tabs */}
               <div className="flex gap-1 p-3 pb-0">
                 {([['keywords', 'الكلمات المفتاحية', Hash], ['subtypes', 'الأنواع الفرعية', Layers]] as const).map(([key, label, Icon]) => (
