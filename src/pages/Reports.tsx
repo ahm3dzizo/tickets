@@ -9,7 +9,7 @@ import {
 import {
   BarChart3, TrendingUp, CheckCircle2, Clock, Timer, Layers,
   ChevronDown, RefreshCw, AlertTriangle, Users, Star, Target, Zap, Activity,
-  Download, Loader2,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -72,8 +72,7 @@ export default function Reports() {
   const [filterTo, setFilterTo]           = useState('');
   const [loading, setLoading]             = useState(true);
   const [data, setData]                   = useState<any>(null);
-  const [exporting, setExporting]         = useState(false);
-  const reportRef                         = useRef<HTMLDivElement>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { projectsApi.getAll().then((p: any[]) => setProjects(p)).catch(() => {}); }, []);
 
@@ -85,62 +84,12 @@ export default function Reports() {
   };
   useEffect(() => { fetchStats(); }, [filterProject, filterFrom, filterTo]);
 
-  const exportPDF = async () => {
-    if (!reportRef.current) return;
-    setExporting(true);
-    try {
-      // dynamic import — handle both ESM default and named exports
-      const h2cMod   = await import('html2canvas');
-      const html2canvas = (h2cMod as any).default ?? h2cMod;
-
-      const jspdfMod = await import('jspdf');
-      const jsPDF    = (jspdfMod as any).jsPDF ?? (jspdfMod as any).default?.jsPDF ?? (jspdfMod as any).default;
-
-      // reduce scale to avoid canvas memory limit
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 1.2,
-        useCORS: true,
-        backgroundColor: '#0f1117',
-        logging: false,
-        allowTaint: true,
-      });
-
-      const A4_W = 210;
-      const A4_H = 297;
-      const imgW = A4_W;
-      const imgH = (canvas.height * imgW) / canvas.width;
-
-      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
-      // split canvas into A4 pages
-      let yMm = 0;
-      let page = 0;
-      while (yMm < imgH) {
-        const sliceHMm  = Math.min(A4_H, imgH - yMm);
-        const sliceHPx  = Math.round((sliceHMm / imgH) * canvas.height);
-        const srcYPx    = Math.round((yMm / imgH) * canvas.height);
-
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width  = canvas.width;
-        sliceCanvas.height = sliceHPx;
-        sliceCanvas.getContext('2d')!
-          .drawImage(canvas, 0, srcYPx, canvas.width, sliceHPx, 0, 0, canvas.width, sliceHPx);
-
-        if (page > 0) pdf.addPage();
-        pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, imgW, sliceHMm);
-
-        yMm  += A4_H;
-        page++;
-      }
-
-      const date = new Date().toISOString().split('T')[0];
-      pdf.save(`تقرير-الصيانة-${date}.pdf`);
-    } catch (e: any) {
-      console.error('[PDF Export]', e);
-      alert(`فشل تصدير PDF: ${e?.message ?? e}`);
-    } finally {
-      setExporting(false);
-    }
+  const exportPDF = () => {
+    // inject print title with date
+    const title = document.title;
+    document.title = `تقرير-الصيانة-${new Date().toISOString().split('T')[0]}`;
+    window.print();
+    document.title = title;
   };
 
   const t = data?.totals ?? {};
@@ -172,9 +121,9 @@ export default function Reports() {
             <p className="text-muted-foreground text-sm mt-0.5">تحليل شامل — جاهز للتقديم للإدارة</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportPDF} disabled={exporting || loading} className="gap-2">
-              {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-              تصدير PDF
+            <Button variant="outline" size="sm" onClick={exportPDF} disabled={loading} className="gap-2">
+              <Download className="w-3.5 h-3.5" />
+              طباعة / PDF
             </Button>
             <Button variant="outline" size="sm" onClick={fetchStats} disabled={loading} className="gap-2">
               <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} /> تحديث
