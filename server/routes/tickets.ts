@@ -9,6 +9,44 @@ import { sendWAText, buildOpeningMsg, buildClosingMsg } from "../baileys.js";
 
 const router = Router();
 
+// ── Enrich tickets: replace stored supervisor names with live names from DB ──
+async function enrichSupervisorNames<T extends { assignedSupervisorIds?: string[]; assignedSupervisors?: any }>(
+  tickets: T[]
+): Promise<T[]> {
+  // collect all unique supervisor IDs across all tickets
+  const allIds = new Set<string>();
+  for (const t of tickets) {
+    for (const id of (t.assignedSupervisorIds || [])) {
+      if (id) allIds.add(id);
+    }
+  }
+  if (allIds.size === 0) return tickets;
+
+  // fetch current names from DB
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...allIds] } },
+    select: { id: true, name: true, specialties: true },
+  });
+  const nameMap = new Map(users.map(u => [u.id, u]));
+
+  // patch each ticket's assignedSupervisors array
+  return tickets.map(t => {
+    const ids = t.assignedSupervisorIds || [];
+    if (ids.length === 0) return t;
+    const supervisors = ids
+      .map(id => {
+        const u = nameMap.get(id);
+        if (!u) return null;
+        const stored = Array.isArray(t.assignedSupervisors)
+          ? (t.assignedSupervisors as any[]).find((s: any) => s.id === id)
+          : null;
+        return { id: u.id, name: u.name, specialty: stored?.specialty || u.specialties?.[0] || "general" };
+      })
+      .filter(Boolean);
+    return { ...t, assignedSupervisors: supervisors };
+  });
+}
+
 async function shouldAutoSendWA(uid: string): Promise<boolean> {
   try {
     const user = await prisma.user.findUnique({
@@ -129,7 +167,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     where,
     orderBy: { createdAt: "desc" },
   });
-  res.json(tickets);
+  res.json(await enrichSupervisorNames(tickets));
 });
 
 // GET /api/tickets/ticketids — للكشف عن المكررات في الاستيراد (خفيف)
@@ -179,7 +217,8 @@ router.get("/next-id", requireAuth, async (req, res) => {
 router.get("/:id", requireAuth, async (req, res) => {
   const ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } });
   if (!ticket) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(ticket);
+  const [enriched] = await enrichSupervisorNames([ticket]);
+  res.json(enriched);
 });
 
 // POST /api/tickets
