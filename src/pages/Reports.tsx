@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { reportsApi, projectsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -9,7 +9,7 @@ import {
 import {
   BarChart3, TrendingUp, CheckCircle2, Clock, Timer, Layers,
   ChevronDown, RefreshCw, AlertTriangle, Users, Star, Target, Zap, Activity,
-  Download,
+  Download, Maximize2, X, Printer, Filter,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -65,6 +65,119 @@ function Card({ title, badge, children }: { title: string; badge?: string; child
 const TABLE_TH = "px-4 py-2.5 text-muted-foreground font-semibold text-[10px] uppercase tracking-wide";
 const TABLE_TD = "px-4 py-2.5";
 
+// ── Full-screen chart modal ───────────────────────────────────────────────────
+function ChartModal({ title, allData, dataKey, colorKey, onClose }: {
+  title: string;
+  allData: any[];
+  dataKey: string;
+  colorKey?: string;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(allData.map(d => d.name)));
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const filtered = allData.filter(d => selected.has(d.name));
+
+  const toggleItem = (name: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  };
+
+  const handlePrint = () => {
+    const el = printRef.current;
+    if (!el) return;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(`<html><head><title>${title}</title>
+      <style>
+        body { font-family: 'Tajawal', sans-serif; direction: rtl; background: #0f1117; color: #fff; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th, td { padding: 8px 12px; border: 1px solid #333; text-align: right; font-size: 13px; }
+        th { background: #1a1f2e; }
+        h2 { margin-bottom: 8px; }
+        @media print { @page { margin: 10mm; } }
+      </style>
+    </head><body>
+      <h2>${title}</h2>
+      <table>
+        <thead><tr><th>النوع</th><th>${dataKey}</th></tr></thead>
+        <tbody>${filtered.map(d => `<tr><td>${d.name}</td><td>${d[dataKey]}</td></tr>`).join('')}</tbody>
+      </table>
+    </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 400);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={handlePrint} title="طباعة">
+            <Printer className="w-4 h-4" />
+          </Button>
+          <Badge variant="secondary" className="text-xs">{filtered.length} نوع</Badge>
+        </div>
+        <h2 className="font-bold text-lg">{title}</h2>
+        <Button variant="ghost" size="icon" onClick={onClose}>
+          <X className="w-5 h-5" />
+        </Button>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Chart area */}
+        <div className="flex-1 p-6 overflow-auto" ref={printRef}>
+          <ResponsiveContainer width="100%" height={Math.max(400, filtered.length * 36 + 60)}>
+            <BarChart data={filtered} margin={{ top: 10, right: 20, left: 10, bottom: 80 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                angle={-40} textAnchor="end" tickLine={false} axisLine={false} interval={0} />
+              <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+              <Tooltip content={<TooltipBox />} />
+              <Bar dataKey={dataKey} radius={[4, 4, 0, 0]}
+                label={{ position: 'top', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}>
+                {filtered.map((d: any, i: number) => (
+                  <Cell key={i} fill={colorKey ? d[colorKey] : COLORS[i % COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Filter sidebar */}
+        <div className="w-56 border-r border-border p-4 overflow-y-auto shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={() => setSelected(new Set(allData.map(d => d.name)))}
+              className="text-[10px] text-primary hover:underline">تحديد الكل</button>
+            <p className="text-xs font-bold text-muted-foreground flex items-center gap-1">
+              <Filter className="w-3 h-3" /> تصفية
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            {allData.map((d, i) => (
+              <label key={d.name} className="flex items-center gap-2 cursor-pointer group">
+                <input type="checkbox" checked={selected.has(d.name)}
+                  onChange={() => toggleItem(d.name)}
+                  className="rounded" />
+                <span className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ background: colorKey ? d[colorKey] : COLORS[i % COLORS.length] }} />
+                <span className="text-xs text-foreground group-hover:text-primary truncate">{d.name}</span>
+                <span className="text-[10px] text-muted-foreground mr-auto shrink-0">{d[dataKey]}</span>
+              </label>
+            ))}
+          </div>
+          <button onClick={() => setSelected(new Set())}
+            className="text-[10px] text-red-400 hover:underline mt-3 block">مسح الكل</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Reports() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [filterProject, setFilterProject] = useState('');
@@ -73,6 +186,7 @@ export default function Reports() {
   const [loading, setLoading]             = useState(true);
   const [data, setData]                   = useState<any>(null);
   const reportRef = useRef<HTMLDivElement>(null);
+  const [expandedChart, setExpandedChart] = useState<'avgDays' | 'subType' | null>(null);
 
   useEffect(() => { projectsApi.getAll().then((p: any[]) => setProjects(p)).catch(() => {}); }, []);
 
@@ -84,12 +198,104 @@ export default function Reports() {
   };
   useEffect(() => { fetchStats(); }, [filterProject, filterFrom, filterTo]);
 
-  const exportPDF = () => {
-    // inject print title with date
-    const title = document.title;
-    document.title = `تقرير-الصيانة-${new Date().toISOString().split('T')[0]}`;
-    window.print();
-    document.title = title;
+  const exportPDF = async () => {
+    if (!data) return;
+    try {
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const date = new Date().toLocaleDateString('ar-SA');
+      const t = data.totals ?? {};
+
+      // ── Header ──
+      pdf.setFontSize(18); pdf.setFont('helvetica', 'bold');
+      pdf.text('Maintenance Report', 105, 18, { align: 'center' });
+      pdf.setFontSize(11); pdf.setFont('helvetica', 'normal');
+      pdf.text(date, 105, 26, { align: 'center' });
+      pdf.setDrawColor(100, 102, 241); pdf.setLineWidth(0.5);
+      pdf.line(15, 30, 195, 30);
+
+      // ── KPIs ──
+      pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
+      pdf.text('Summary', 15, 38);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
+      const kpis = [
+        ['Total Tickets', String(t.total ?? 0)],
+        ['Open', String(t.open ?? 0)],
+        ['Closed', String(t.closed ?? 0)],
+        ['Avg Days to Close', String(t.avgDays ?? 0) + ' days'],
+        ['Overdue (+7 days)', String(t.overdueCount ?? 0)],
+      ];
+      kpis.forEach(([k, v], i) => {
+        pdf.text(k + ': ' + v, 15 + (i % 3) * 62, 46 + Math.floor(i / 3) * 7);
+      });
+
+      // ── By Type ──
+      let y = 70;
+      pdf.setFontSize(11); pdf.setFont('helvetica', 'bold');
+      pdf.text('By Ticket Type', 15, y); y += 7;
+      pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
+      pdf.setFillColor(240, 240, 255);
+      pdf.rect(15, y, 180, 6, 'F');
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Type', 17, y + 4); pdf.text('Total', 90, y + 4); pdf.text('Closed', 120, y + 4); pdf.text('Open', 150, y + 4);
+      y += 8; pdf.setFont('helvetica', 'normal');
+      (data.byMainType ?? []).slice(0, 12).forEach((row: any, i: number) => {
+        if (i % 2 === 0) { pdf.setFillColor(248, 248, 252); pdf.rect(15, y - 1, 180, 6, 'F'); }
+        pdf.text(row.nameAr ?? row.key, 17, y + 3);
+        pdf.text(String(row.count), 90, y + 3);
+        pdf.text(String(row.closed), 120, y + 3);
+        pdf.text(String(row.open), 150, y + 3);
+        y += 7;
+      });
+
+      // ── By Sub-type ──
+      y += 5;
+      if (y > 240) { pdf.addPage(); y = 20; }
+      pdf.setFontSize(11); pdf.setFont('helvetica', 'bold');
+      pdf.text('By Sub-Type', 15, y); y += 7;
+      pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
+      pdf.setFillColor(240, 240, 255);
+      pdf.rect(15, y, 180, 6, 'F');
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Sub-Type', 17, y + 4); pdf.text('Type', 90, y + 4); pdf.text('Total', 130, y + 4); pdf.text('Close%', 160, y + 4);
+      y += 8; pdf.setFont('helvetica', 'normal');
+      (data.bySubType ?? []).slice(0, 15).forEach((row: any, i: number) => {
+        if (y > 270) { pdf.addPage(); y = 20; }
+        if (i % 2 === 0) { pdf.setFillColor(248, 248, 252); pdf.rect(15, y - 1, 180, 6, 'F'); }
+        pdf.text(row.nameAr ?? '', 17, y + 3);
+        pdf.text(row.parentName ?? '', 90, y + 3);
+        pdf.text(String(row.count), 130, y + 3);
+        pdf.text(pct(row.closed, row.count) + '%', 160, y + 3);
+        y += 7;
+      });
+
+      // ── Supervisor ──
+      if ((data.bySupervisor ?? []).length > 0) {
+        y += 5;
+        if (y > 240) { pdf.addPage(); y = 20; }
+        pdf.setFontSize(11); pdf.setFont('helvetica', 'bold');
+        pdf.text('Supervisor Performance', 15, y); y += 7;
+        pdf.setFontSize(9);
+        pdf.setFillColor(240, 240, 255); pdf.rect(15, y, 180, 6, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Supervisor', 17, y + 4); pdf.text('Total', 85, y + 4); pdf.text('Closed', 110, y + 4); pdf.text('Close%', 140, y + 4); pdf.text('Avg Days', 165, y + 4);
+        y += 8; pdf.setFont('helvetica', 'normal');
+        (data.bySupervisor ?? []).slice(0, 10).forEach((s: any, i: number) => {
+          if (y > 270) { pdf.addPage(); y = 20; }
+          if (i % 2 === 0) { pdf.setFillColor(248, 248, 252); pdf.rect(15, y - 1, 180, 6, 'F'); }
+          pdf.text(s.name ?? '', 17, y + 3);
+          pdf.text(String(s.total), 85, y + 3);
+          pdf.text(String(s.closed), 110, y + 3);
+          pdf.text(pct(s.closed, s.total) + '%', 140, y + 3);
+          pdf.text(s.avgDays != null ? s.avgDays + 'd' : '-', 165, y + 3);
+          y += 7;
+        });
+      }
+
+      pdf.save(`maintenance-report-${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (e: any) {
+      alert('PDF Error: ' + (e?.message ?? e));
+    }
   };
 
   const t = data?.totals ?? {};
@@ -121,9 +327,9 @@ export default function Reports() {
             <p className="text-muted-foreground text-sm mt-0.5">تحليل شامل — جاهز للتقديم للإدارة</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportPDF} disabled={loading} className="gap-2">
+            <Button variant="outline" size="sm" onClick={exportPDF} disabled={loading || !data} className="gap-2">
               <Download className="w-3.5 h-3.5" />
-              طباعة / PDF
+              تصدير PDF
             </Button>
             <Button variant="outline" size="sm" onClick={fetchStats} disabled={loading} className="gap-2">
               <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} /> تحديث
@@ -320,40 +526,65 @@ export default function Reports() {
             )}
           </Card>
 
-          <Card title="متوسط أيام الإغلاق حسب النوع">
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+              <button onClick={() => setExpandedChart('avgDays')}
+                className="text-muted-foreground hover:text-foreground transition-colors" title="تكبير">
+                <Maximize2 className="w-4 h-4" />
+              </button>
+              <h2 className="font-bold text-sm">متوسط أيام الإغلاق حسب النوع</h2>
+            </div>
+            <div className="p-5">
             {loading ? <Skeleton h="h-56" /> : avgDaysData.length === 0 ? (
               <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">لا توجد بيانات</div>
             ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={avgDaysData} layout="vertical" margin={{ top:5, right:55, left:0, bottom:5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={130} />
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={avgDaysData} margin={{ top:10, right:10, left:-10, bottom:60 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize:9, fill:'hsl(var(--muted-foreground))' }}
+                    angle={-40} textAnchor="end" tickLine={false} axisLine={false} interval={0} />
+                  <YAxis tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                   <Tooltip content={<TooltipBox />} />
-                  <Bar dataKey="متوسط الأيام" radius={[0,6,6,0]} label={{ position:'right', fontSize:10, fill:'hsl(var(--muted-foreground))' }}>
+                  <Bar dataKey="متوسط الأيام" radius={[4,4,0,0]}
+                    label={{ position:'top', fontSize:9, fill:'hsl(var(--muted-foreground))' }}>
                     {avgDaysData.map((_:any,i:number) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}
-          </Card>
+            </div>
+          </div>
         </div>
 
         {/* ── Sub-type bar ─────────────────────────────────────────────────── */}
         {(data?.bySubType?.length ?? 0) > 0 && (
-          <Card title="التوزيع حسب النوع الفرعي" badge={`${data?.bySubType?.length} نوع`}>
-            <ResponsiveContainer width="100%" height={Math.max(300, (subTypeData.length) * 30 + 40)}>
-              <BarChart data={subTypeData} layout="vertical" margin={{ top:5, right:55, left:0, bottom:5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={145} />
-                <Tooltip content={<TooltipBox />} />
-                <Bar dataKey="عدد" radius={[0,6,6,0]} label={{ position:'right', fontSize:10, fill:'hsl(var(--muted-foreground))' }}>
-                  {subTypeData.map((_:any,i:number) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setExpandedChart('subType')}
+                  className="text-muted-foreground hover:text-foreground transition-colors" title="تكبير">
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+                <Badge variant="secondary" className="text-[10px]">{data?.bySubType?.length} نوع</Badge>
+              </div>
+              <h2 className="font-bold text-sm">التوزيع حسب النوع الفرعي</h2>
+            </div>
+            <div className="p-5">
+              <ResponsiveContainer width="100%" height={Math.max(300, subTypeData.length * 32 + 80)}>
+                <BarChart data={subTypeData} margin={{ top:10, right:10, left:-10, bottom:80 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize:8, fill:'hsl(var(--muted-foreground))' }}
+                    angle={-45} textAnchor="end" tickLine={false} axisLine={false} interval={0} />
+                  <YAxis tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                  <Tooltip content={<TooltipBox />} />
+                  <Bar dataKey="عدد" radius={[4,4,0,0]}
+                    label={{ position:'top', fontSize:9, fill:'hsl(var(--muted-foreground))' }}>
+                    {subTypeData.map((_:any,i:number) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         )}
 
         {/* ── Supervisor Table ─────────────────────────────────────────────── */}
@@ -502,6 +733,24 @@ export default function Reports() {
         )}
 
       </div>
+
+      {/* ── Full-screen chart modals ─────────────────────────────────────── */}
+      {expandedChart === 'avgDays' && (
+        <ChartModal
+          title="متوسط أيام الإغلاق حسب النوع"
+          allData={avgDaysData}
+          dataKey="متوسط الأيام"
+          onClose={() => setExpandedChart(null)}
+        />
+      )}
+      {expandedChart === 'subType' && (
+        <ChartModal
+          title="التوزيع حسب النوع الفرعي"
+          allData={subTypeData}
+          dataKey="عدد"
+          onClose={() => setExpandedChart(null)}
+        />
+      )}
     </Layout>
   );
 }
