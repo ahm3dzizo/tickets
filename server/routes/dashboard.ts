@@ -44,19 +44,26 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       select: { id: true, ticketId: true, clientName: true, villaNumber: true, type: true, status: true, createdAt: true, assignedSupervisors: true },
     });
 
-    // Last 7 days trend
+    // Last 7 days trend — two separate queries to avoid nested $queryRaw
     const days7ago = new Date(now.getTime() - 6 * 86_400_000);
     days7ago.setHours(0, 0, 0, 0);
-    const recentActivity = await prisma.$queryRaw<{ day: Date; opened: bigint; closed: bigint }[]>`
-      SELECT
-        DATE_TRUNC('day', "createdAt") AS day,
-        COUNT(*)::bigint AS opened,
-        COUNT(CASE WHEN status = 'closed' AND "closedAt" >= DATE_TRUNC('day', "createdAt") THEN 1 END)::bigint AS closed
-      FROM "Ticket"
-      WHERE "createdAt" >= ${days7ago}
-      ${projectId ? prisma.$queryRaw`AND "projectId" = ${projectId}` : prisma.$queryRaw``}
-      GROUP BY 1 ORDER BY 1
-    `;
+    const recentActivity = projectId
+      ? await prisma.$queryRaw<{ day: Date; opened: bigint; closed: bigint }[]>`
+          SELECT
+            DATE_TRUNC('day', "createdAt") AS day,
+            COUNT(*)::bigint AS opened,
+            COUNT(CASE WHEN status = 'closed'::"TicketStatus" AND "closedAt" >= DATE_TRUNC('day', "createdAt") THEN 1 END)::bigint AS closed
+          FROM "Ticket"
+          WHERE "createdAt" >= ${days7ago} AND "projectId" = ${projectId}
+          GROUP BY 1 ORDER BY 1`
+      : await prisma.$queryRaw<{ day: Date; opened: bigint; closed: bigint }[]>`
+          SELECT
+            DATE_TRUNC('day', "createdAt") AS day,
+            COUNT(*)::bigint AS opened,
+            COUNT(CASE WHEN status = 'closed'::"TicketStatus" AND "closedAt" >= DATE_TRUNC('day', "createdAt") THEN 1 END)::bigint AS closed
+          FROM "Ticket"
+          WHERE "createdAt" >= ${days7ago}
+          GROUP BY 1 ORDER BY 1`;
 
     // Per supervisor summary
     const supTickets = await prisma.ticket.findMany({
