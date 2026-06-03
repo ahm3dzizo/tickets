@@ -462,8 +462,6 @@ export function CloseTicketDialog({
             </div>
           </div>
 
-          </div>
-
           {/* Notes Section */}
           <div className="space-y-2">
             <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">ملاحظات إضافية</Label>
