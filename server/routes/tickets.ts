@@ -241,7 +241,7 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
   if (!['absent', 'out_of_scope'].includes(closeType)) {
     res.status(400).json({ error: "closeType غير صالح" }); return;
   }
-  const status = closeType === 'absent' ? 'waiting' : 'out_of_scope';
+  const status = closeType === 'out_of_scope' ? 'out_of_scope' : 'closed';
   try {
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },

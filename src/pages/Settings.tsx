@@ -842,7 +842,7 @@ export default function Settings() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 justify-end">
                       <Label className="text-amber-400 text-xs font-bold text-right block">رسالة عدم التواجد</Label>
-                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">حالة: في الانتظار</span>
+                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">حالة: مغلقة</span>
                     </div>
                     <Textarea
                       value={absentMsg}
