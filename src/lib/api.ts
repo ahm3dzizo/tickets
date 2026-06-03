@@ -202,6 +202,19 @@ export const reportsApi = {
   },
 };
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+export const dashboardApi = {
+  getStats: (projectId?: string) => {
+    const q = projectId ? `?projectId=${projectId}` : '';
+    return get<any>(`/dashboard/stats${q}`);
+  },
+};
+
+// ── Audit Trail ───────────────────────────────────────────────────────────────
+export const auditApi = {
+  getForTicket: (ticketId: string) => get<any[]>(`/audit/ticket/${ticketId}`),
+};
+
 // ── Technicians ───────────────────────────────────────────────────────────────
 export const techniciansApi = {
   getAll: ()                         => get<any[]>('/technicians'),

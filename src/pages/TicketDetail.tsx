@@ -36,7 +36,7 @@ import { ReassignSupervisorButton } from '@/components/tickets/ReassignSuperviso
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ticketsApi, projectsApi, clientsApi, whatsappApi } from '@/lib/api';
+import { ticketsApi, projectsApi, clientsApi, whatsappApi, auditApi } from '@/lib/api';
 import { learnFromCorrection, getAuthHeaders } from '@/services/classificationApi';
 import { toast } from 'sonner';
 
@@ -71,6 +71,13 @@ export default function TicketDetail() {
   const [waSent, setWaSent] = useState(false);
   const [waSending, setWaSending] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [auditLog, setAuditLog] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'details' | 'audit'>('details');
+
+  const loadAudit = async () => {
+    if (!id) return;
+    try { setAuditLog(await auditApi.getForTicket(id)); } catch {}
+  };
 
   const loadData = async () => {
     if (!id) return;
@@ -94,7 +101,7 @@ export default function TicketDetail() {
     }
   };
 
-  useEffect(() => { loadData(); }, [id, navigate]);
+  useEffect(() => { loadData(); loadAudit(); }, [id, navigate]);
 
   const typeTranslations: Record<string, string> = {
     'electricity': 'كهرباء',
@@ -348,6 +355,51 @@ export default function TicketDetail() {
 
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-8 space-y-6">
+            {/* ── Tabs ── */}
+            <div className="flex gap-2 border-b border-border pb-0" dir="rtl">
+              {([['details', 'تفاصيل التذكرة'], ['audit', `سجل التغييرات (${auditLog.length})`]] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setActiveTab(key)}
+                  className={cn('px-4 py-2 text-xs font-bold rounded-t-xl border-b-2 transition-all',
+                    activeTab === key
+                      ? 'border-primary text-primary bg-primary/5'
+                      : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Audit Tab ── */}
+            {activeTab === 'audit' && (
+              <div className="bg-card border border-border rounded-2xl overflow-hidden" dir="rtl">
+                {auditLog.length === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground text-sm">لا توجد تغييرات مسجلة بعد</div>
+                ) : (
+                  <div className="divide-y divide-border/50">
+                    {auditLog.map((a: any) => (
+                      <div key={a.id} className="flex items-start gap-4 px-5 py-3 hover:bg-muted/20 transition-colors">
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
+                          {new Date(a.changedAt).toLocaleString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <div className="flex-1 text-right">
+                          <p className="text-xs">
+                            <span className="font-semibold text-foreground">{a.changedByName}</span>
+                            <span className="text-muted-foreground"> غيّر </span>
+                            <span className="font-bold text-primary">{a.field}</span>
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {a.oldValue && <span className="line-through text-red-400/70 me-2">{a.oldValue}</span>}
+                            <span className="text-emerald-400">{a.newValue}</span>
+                          </p>
+                        </div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary/40 mt-1.5 shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'details' && (<>
             <Card className="bg-card border-border rounded-3xl shadow-xl shadow-black/20 overflow-hidden">
               <CardHeader className="border-b border-white/5 p-6 bg-white/5">
                 <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest text-right">وصف المشكلة</CardTitle>
@@ -423,6 +475,7 @@ export default function TicketDetail() {
                 </CardContent>
               </Card>
             </div>
+            </>)}
           </div>
 
           <div className="col-span-12 lg:col-span-4 space-y-6">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { reportsApi, projectsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -9,6 +9,7 @@ import {
 import {
   BarChart3, TrendingUp, CheckCircle2, Clock, Timer, Layers,
   ChevronDown, RefreshCw, AlertTriangle, Users, Star, Target, Zap, Activity,
+  Download, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -71,6 +72,8 @@ export default function Reports() {
   const [filterTo, setFilterTo]           = useState('');
   const [loading, setLoading]             = useState(true);
   const [data, setData]                   = useState<any>(null);
+  const [exporting, setExporting]         = useState(false);
+  const reportRef                         = useRef<HTMLDivElement>(null);
 
   useEffect(() => { projectsApi.getAll().then((p: any[]) => setProjects(p)).catch(() => {}); }, []);
 
@@ -81,6 +84,35 @@ export default function Reports() {
     finally { setLoading(false); }
   };
   useEffect(() => { fetchStats(); }, [filterProject, filterFrom, filterTo]);
+
+  const exportPDF = async () => {
+    if (!reportRef.current) return;
+    setExporting(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+      const canvas = await html2canvas(reportRef.current, { scale: 1.5, useCORS: true, backgroundColor: '#0f1117' });
+      const imgW = 210; // A4 width mm
+      const imgH = (canvas.height * imgW) / canvas.width;
+      const pdf = new jsPDF({ orientation: imgH > 297 ? 'p' : 'p', unit: 'mm', format: 'a4' });
+      const pageH = 297;
+      let y = 0;
+      while (y < imgH) {
+        const srcY = (y / imgH) * canvas.height;
+        const srcH = Math.min((pageH / imgH) * canvas.height, canvas.height - srcY);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width; pageCanvas.height = srcH;
+        pageCanvas.getContext('2d')!.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+        const slice = pageCanvas.toDataURL('image/jpeg', 0.9);
+        if (y > 0) pdf.addPage();
+        pdf.addImage(slice, 'JPEG', 0, 0, imgW, (srcH * imgW) / canvas.width);
+        y += pageH;
+      }
+      const date = new Date().toLocaleDateString('ar-EG').replace(/\//g, '-');
+      pdf.save(`تقرير-الصيانة-${date}.pdf`);
+    } catch { alert('فشل تصدير PDF'); }
+    finally { setExporting(false); }
+  };
 
   const t = data?.totals ?? {};
   const total = t.total ?? 0;
@@ -100,7 +132,7 @@ export default function Reports() {
 
   return (
     <Layout>
-      <div className="space-y-5 pb-8" dir="rtl">
+      <div className="space-y-5 pb-8" dir="rtl" ref={reportRef}>
 
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between">
@@ -110,9 +142,15 @@ export default function Reports() {
             </h1>
             <p className="text-muted-foreground text-sm mt-0.5">تحليل شامل — جاهز للتقديم للإدارة</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchStats} disabled={loading} className="gap-2">
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} /> تحديث
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={exportPDF} disabled={exporting || loading} className="gap-2">
+              {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              تصدير PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={fetchStats} disabled={loading} className="gap-2">
+              <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} /> تحديث
+            </Button>
+          </div>
         </div>
 
         {/* ── Filters ─────────────────────────────────────────────────────── */}

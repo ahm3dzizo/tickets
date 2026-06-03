@@ -525,14 +525,38 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       }
     }
 
+    // ── Fetch old values for audit trail ────────────────────────────────────
+    const oldTicket = await prisma.ticket.findUnique({
+      where: { id: req.params.id },
+      select: { status: true, type: true, assignedSupervisorId: true, appointmentTime: true, priority: true },
+    });
+
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },
       data:  updatePayload,
     });
 
+    // ── Log audit entries ────────────────────────────────────────────────────
+    if (req.uid && oldTicket) {
+      const AUDIT_FIELDS: Record<string, string> = {
+        status: 'الحالة', type: 'التصنيف',
+        assignedSupervisorId: 'المشرف', appointmentTime: 'الموعد', priority: 'الأولوية',
+      };
+      const auditRows: { ticketId: string; field: string; oldValue: string | null; newValue: string | null; changedBy: string }[] = [];
+      for (const [key, label] of Object.entries(AUDIT_FIELDS)) {
+        const oldVal = String((oldTicket as any)[key] ?? '');
+        const newVal = String((updatePayload as any)[key] ?? (oldTicket as any)[key] ?? '');
+        if (updatePayload[key] !== undefined && oldVal !== newVal) {
+          auditRows.push({ ticketId: ticket.id, field: label, oldValue: oldVal || null, newValue: newVal || null, changedBy: req.uid });
+        }
+      }
+      if (auditRows.length > 0) {
+        prisma.ticketAudit.createMany({ data: auditRows }).catch(() => {});
+      }
+    }
+
     const closingStatuses = ['closed', 'completed'];
     if (data.status && closingStatuses.includes(data.status) && req.uid) {
-      // بناءً على طلب المستخدم: تم إيقاف إرسال رسالة الإغلاق التلقائية، والاكتفاء بصورة التقرير
       // autoSendClosing(req.uid, ticket).catch(() => {});
     }
 

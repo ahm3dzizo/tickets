@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus, ArrowUpRight, Clock, CheckCircle2, Briefcase, HardHat,
-  UserPlus, UserCheck, Calendar, ChevronLeft,
+  UserPlus, UserCheck, Calendar, ChevronLeft, AlertTriangle,
+  TrendingUp, RefreshCw, Users, CalendarCheck,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { TicketForm } from '@/components/tickets/TicketForm';
@@ -12,13 +13,14 @@ import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { TechnicianForm } from '@/components/technicians/TechnicianForm';
 import { Button } from '@/components/ui/button';
-import { ticketsApi, projectsApi, clientsApi, techniciansApi } from '@/lib/api';
+import { ticketsApi, projectsApi, clientsApi, techniciansApi, dashboardApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
 import { Project, Ticket, Client } from '@/types';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -31,6 +33,12 @@ export default function Dashboard() {
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [clients, setClients] = useState<Record<string, Client>>({});
+
+  // ── Live KPI data ──
+  const [kpi, setKpi] = useState<any>(null);
+  const [kpiLoading, setKpiLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+  const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedTicketIds.length === 0) return;
@@ -103,7 +111,22 @@ export default function Dashboard() {
     }
   };
 
+  const loadKpi = async () => {
+    try {
+      const data = await dashboardApi.getStats();
+      setKpi(data);
+      setLastRefresh(new Date());
+    } catch {}
+    finally { setKpiLoading(false); }
+  };
+
   useEffect(() => { loadDashboard(); }, [user]);
+
+  useEffect(() => {
+    loadKpi();
+    refreshTimer.current = setInterval(loadKpi, 30_000);
+    return () => { if (refreshTimer.current) clearInterval(refreshTimer.current); };
+  }, []);
 
   /* ── Stat card definitions ────────────────────────────────────── */
   const statCards = [
@@ -209,6 +232,124 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {/* ── Live KPI Cards ──────────────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" dir="rtl">
+          {[
+            { label: 'متأخرة +7 أيام', value: kpi?.totals?.overdue ?? 0,       icon: AlertTriangle, color: 'text-red-500',     bg: 'bg-red-500/10',     border: 'border-red-500/30' },
+            { label: 'مفتوحة الآن',    value: kpi?.totals?.open ?? 0,           icon: Clock,         color: 'text-orange-400',  bg: 'bg-orange-500/10',  border: 'border-orange-500/20' },
+            { label: 'أُغلقت اليوم',   value: kpi?.totals?.closedToday ?? 0,   icon: CheckCircle2,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+            { label: 'مواعيد اليوم',   value: kpi?.todayAppts?.length ?? 0,    icon: CalendarCheck, color: 'text-blue-400',    bg: 'bg-blue-500/10',    border: 'border-blue-500/20' },
+          ].map(k => (
+            <div key={k.label} className={cn('bg-card border rounded-2xl p-4 flex flex-col gap-2', k.border)}>
+              <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center', k.bg)}>
+                <k.icon className={cn('w-4 h-4', k.color)} />
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{k.label}</p>
+                <p className={cn('text-2xl font-black tabular-nums', kpiLoading ? 'opacity-30' : '')}>{k.value.toLocaleString()}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Today's Appointments + Overdue + Trend ──────────── */}
+        {kpi && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" dir="rtl">
+
+            {/* Overdue */}
+            <div className="bg-card border border-red-500/20 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <Badge variant="secondary" className="text-[10px] text-red-400">{kpi.totals.overdue}</Badge>
+                <h3 className="font-bold text-sm flex items-center gap-1.5 text-red-400"><AlertTriangle className="w-3.5 h-3.5" /> تذاكر متأخرة</h3>
+              </div>
+              <div className="divide-y divide-border/50 max-h-52 overflow-y-auto">
+                {kpi.overdueTickets.length === 0
+                  ? <p className="text-center text-muted-foreground text-xs py-6">لا توجد تذاكر متأخرة 🎉</p>
+                  : kpi.overdueTickets.map((t: any) => (
+                    <Link to={`/tickets/${t.id}`} key={t.id}
+                      className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors">
+                      <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">{t.daysOpen}ي</span>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold text-foreground">{t.clientName} — {t.villaNumber}</p>
+                        <p className="text-[10px] text-muted-foreground">#{t.ticketId}</p>
+                      </div>
+                    </Link>
+                  ))}
+              </div>
+            </div>
+
+            {/* Today's appointments */}
+            <div className="bg-card border border-blue-500/20 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <Badge variant="secondary" className="text-[10px] text-blue-400">{kpi.todayAppts.length}</Badge>
+                <h3 className="font-bold text-sm flex items-center gap-1.5 text-blue-400"><CalendarCheck className="w-3.5 h-3.5" /> مواعيد اليوم</h3>
+              </div>
+              <div className="divide-y divide-border/50 max-h-52 overflow-y-auto">
+                {kpi.todayAppts.length === 0
+                  ? <p className="text-center text-muted-foreground text-xs py-6">لا توجد مواعيد اليوم</p>
+                  : kpi.todayAppts.map((t: any) => (
+                    <Link to={`/tickets/${t.id}`} key={t.id}
+                      className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors">
+                      <span className="text-[10px] text-blue-400 font-bold">{t.appointmentTime?.split(' ')[1] || '---'}</span>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold text-foreground">{t.clientName} — {t.villaNumber}</p>
+                        <p className="text-[10px] text-muted-foreground">{t.type}</p>
+                      </div>
+                    </Link>
+                  ))}
+              </div>
+            </div>
+
+            {/* 7-day trend */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <button onClick={loadKpi} className="text-muted-foreground hover:text-foreground transition-colors">
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <h3 className="font-bold text-sm flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-primary" /> آخر 7 أيام</h3>
+              </div>
+              <div className="p-3">
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={kpi.trend7Days} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false}
+                      tickFormatter={v => v.slice(5)} />
+                    <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                    <Tooltip formatter={(v: any, n: any) => [v, n]} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11, direction: 'rtl' }} />
+                    <Bar dataKey="opened" name="مفتوحة" fill="#f97316" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="closed"  name="مغلقة"  fill="#22c55e" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <p className="text-[9px] text-muted-foreground text-center mt-1">
+                  آخر تحديث: {lastRefresh.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Supervisor Summary ─────────────────────────────── */}
+        {kpi?.bySupervisor?.length > 0 && (
+          <div className="bg-card border border-border rounded-2xl overflow-hidden" dir="rtl">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <Badge variant="secondary" className="text-[10px]">{kpi.bySupervisor.length} مشرف</Badge>
+              <h3 className="font-bold text-sm flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-primary" /> التذاكر المفتوحة لكل مشرف</h3>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0 divide-x divide-x-reverse divide-border">
+              {kpi.bySupervisor.slice(0, 5).map((s: any) => (
+                <div key={s.uid} className="p-3 text-center space-y-1">
+                  <p className="text-xl font-black tabular-nums text-foreground">{s.total}</p>
+                  <p className="text-[10px] font-semibold text-foreground truncate">{s.name}</p>
+                  <div className="flex justify-center gap-2 text-[9px]">
+                    <span className="text-orange-400">{s.open} م</span>
+                    <span className="text-indigo-400">{s.inProgress} ت</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Stat Cards ──────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

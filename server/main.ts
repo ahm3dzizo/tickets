@@ -18,6 +18,8 @@ import technicianRoutes from "./routes/technicians.js";
 import classifyRoutes from "./routes/classify.js";
 import reportRoutes from "./routes/report.js";
 import reportsStatsRoutes from "./routes/reports.js";
+import auditRoutes from "./routes/audit.js";
+import dashboardRoutes from "./routes/dashboard.js";
 import whatsappRoutes from "./routes/whatsapp.js";
 import settingsRoutes from "./routes/settings.js";
 import ocrRoutes from "./routes/ocr.js";
@@ -72,6 +74,8 @@ async function startServer() {
   app.use("/api/classify", classifyRoutes);
   app.use("/api/generate-report", reportRoutes);
   app.use("/api/reports", reportsStatsRoutes);
+  app.use("/api/audit",     auditRoutes);
+  app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/admin/ticket-types", ticketTypesAdminRoutes);
   app.use("/api/whatsapp", whatsappRoutes);
   app.use("/api/settings", settingsRoutes);
