@@ -325,10 +325,10 @@ export default function Reports() {
               <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">لا توجد بيانات</div>
             ) : (
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={avgDaysData} layout="vertical" margin={{ top:5, right:55, left:5, bottom:5 }}>
+                <BarChart data={avgDaysData} layout="vertical" margin={{ top:5, right:55, left:0, bottom:5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize:9, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={85} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={130} />
                   <Tooltip content={<TooltipBox />} />
                   <Bar dataKey="متوسط الأيام" radius={[0,6,6,0]} label={{ position:'right', fontSize:10, fill:'hsl(var(--muted-foreground))' }}>
                     {avgDaysData.map((_:any,i:number) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
@@ -342,11 +342,11 @@ export default function Reports() {
         {/* ── Sub-type bar ─────────────────────────────────────────────────── */}
         {(data?.bySubType?.length ?? 0) > 0 && (
           <Card title="التوزيع حسب النوع الفرعي" badge={`${data?.bySubType?.length} نوع`}>
-            <ResponsiveContainer width="100%" height={Math.max(280, (subTypeData.length) * 26 + 40)}>
-              <BarChart data={subTypeData} layout="vertical" margin={{ top:5, right:55, left:5, bottom:5 }}>
+            <ResponsiveContainer width="100%" height={Math.max(300, (subTypeData.length) * 30 + 40)}>
+              <BarChart data={subTypeData} layout="vertical" margin={{ top:5, right:55, left:0, bottom:5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={120} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={145} />
                 <Tooltip content={<TooltipBox />} />
                 <Bar dataKey="عدد" radius={[0,6,6,0]} label={{ position:'right', fontSize:10, fill:'hsl(var(--muted-foreground))' }}>
                   {subTypeData.map((_:any,i:number) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
