@@ -58,7 +58,7 @@ for type_key, path in SUBTYPE_MODEL_PATHS.items():
         print(f"[ML] No sub-type model for '{type_key}' (run train_subtype.py)")
 
 # ── Sub-type prediction helper ───────────────────────────────────────────────
-SUBTYPE_THRESHOLD = 0.40   # min confidence to assign a sub-type
+SUBTYPE_THRESHOLD = 0.35   # min confidence to assign a sub-type
 
 def predict_subtype(text: str, primary_type: str) -> tuple[str | None, float]:
     """Returns (subType_label, confidence) or (None, 0) if no model / low confidence."""
