@@ -713,7 +713,7 @@ export function TicketTable({
                 >
                   <span className="flex items-center gap-1">العميل <SortIcon col="client" /></span>
                 </th>
-                {!hideProjectColumn && <th className={cn(thCls, 'w-20')}>المشروع</th>}
+
                 <th
                   className={cn(thCls, 'w-20 cursor-pointer hover:text-slate-200 select-none')}
                   onClick={() => handleSort('date')}
@@ -722,17 +722,11 @@ export function TicketTable({
                 </th>
                 <th className={cn(thCls, 'min-w-[180px]')}>وصف المشكلة</th>
                 <th
-                  className={cn(thCls, 'w-12 text-center cursor-pointer hover:text-slate-200 select-none')}
+                  className={cn(thCls, 'w-8 text-center cursor-pointer hover:text-slate-200 select-none')}
                   onClick={() => handleSort('status')}
+                  title="الحالة"
                 >
-                  <span className="flex items-center justify-center gap-1">الحالة <SortIcon col="status" /></span>
-                </th>
-                <th
-                  className={cn(thCls, 'w-10 text-center cursor-pointer hover:text-slate-200 select-none')}
-                  onClick={() => handleSort('priority')}
-                  title="الأولوية"
-                >
-                  <span className="flex items-center justify-center gap-1">ف <SortIcon col="priority" /></span>
+                  <span className="flex items-center justify-center">●</span>
                 </th>
                 <th
                   className={cn(thCls, 'w-12 text-center cursor-pointer hover:text-slate-200 select-none')}
@@ -817,26 +811,26 @@ export function TicketTable({
                       <td className="px-4 py-3 text-sm text-slate-300 truncate w-28 max-w-[100px]" title={ticket.clientName}>
                         {(ticket.clientName || '---').split(' ')[0]}
                       </td>
-                      {!hideProjectColumn && (
-                        <td className="px-4 py-3 text-sm text-slate-400 whitespace-nowrap w-20">
-                          {(projects && ticket.projectId && projects[ticket.projectId]?.abbreviation) ||
-                            projects?.[ticket.projectId || '']?.name?.slice(0, 6) ||
-                            ticket.projectAbbr || '---'}
-                        </td>
-                      )}
                       <td className="px-4 py-3 text-sm text-slate-400 whitespace-nowrap w-20">
                         {format(openDate, 'd/M/yyyy')}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-300 min-w-[180px] max-w-[260px] leading-relaxed">
-                        <span className="line-clamp-2">{ticket.description}</span>
+                      <td className="px-4 py-3 text-sm text-slate-300 min-w-[260px] max-w-[400px] leading-relaxed">
+                        <span className="line-clamp-3">{ticket.description}</span>
                       </td>
-                      <td className="px-4 py-3 text-center w-12">
-                        <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg border inline-block', statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
-                          {statusTranslations[ticket.status] ?? ticket.status}
-                        </span>
-                      </td>
-                      <td className={cn('px-3 py-3 text-center font-bold text-sm w-10', priorityCls)}>
-                        {priorityNum}
+                      <td className="px-3 py-3 text-center w-8">
+                        <span
+                          title={statusTranslations[ticket.status] ?? ticket.status}
+                          className={cn(
+                            'inline-block w-2.5 h-2.5 rounded-full',
+                            ticket.status === 'closed' || ticket.status === 'out_of_scope'
+                              ? 'bg-emerald-500'
+                              : ticket.status === 'in_progress'
+                              ? 'bg-blue-500'
+                              : ticket.status === 'pending' || ticket.status === 'waiting'
+                              ? 'bg-amber-400'
+                              : 'bg-red-500'
+                          )}
+                        />
                       </td>
                       <td className={cn('px-3 py-3 text-center text-sm w-12', daysBg)}>
                         {daysOpen}
