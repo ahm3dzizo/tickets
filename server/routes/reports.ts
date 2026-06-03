@@ -4,242 +4,248 @@ import prisma from '../db.js';
 
 const router = Router();
 
+// Parse issuedAt string → Date, fallback to createdAt
+function parseIssued(issuedAt: string | null | undefined, createdAt: Date): Date {
+  if (!issuedAt) return createdAt;
+  const d = new Date(issuedAt);
+  if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getFullYear() < 2100) return d;
+  // Try DD/MM/YYYY or DD-MM-YYYY
+  const parts = issuedAt.split(/[\/\-\.]/);
+  if (parts.length === 3) {
+    const [a, b, c] = parts.map(s => s.trim());
+    if (c.length === 4) {
+      const d2 = new Date(`${c}-${b.padStart(2,'0')}-${a.padStart(2,'0')}`);
+      if (!isNaN(d2.getTime()) && d2.getFullYear() > 2000) return d2;
+    }
+  }
+  return createdAt;
+}
+
 // GET /api/reports/stats?projectId=&from=&to=
 router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { projectId, from, to } = req.query as Record<string, string>;
 
-    const dateFilter: any = {};
-    if (from) dateFilter.gte = new Date(from);
-    if (to)   dateFilter.lte = new Date(new Date(to).setHours(23, 59, 59, 999));
-
     const where: any = {};
-    if (projectId)     where.projectId = projectId;
-    if (from || to)    where.createdAt = dateFilter;
+    if (projectId) where.projectId = projectId;
 
-    // ── 1. Totals ─────────────────────────────────────────────────────────────
-    const [total, openCount, closedCount, inProgressCount, pendingCount, waitingCount, outOfScopeCount] = await Promise.all([
-      prisma.ticket.count({ where }),
-      prisma.ticket.count({ where: { ...where, status: 'open' } }),
-      prisma.ticket.count({ where: { ...where, status: 'closed' } }),
-      prisma.ticket.count({ where: { ...where, status: 'in_progress' } }),
-      prisma.ticket.count({ where: { ...where, status: 'pending' } }),
-      prisma.ticket.count({ where: { ...where, status: 'waiting' } }),
-      prisma.ticket.count({ where: { ...where, status: 'out_of_scope' } }),
-    ]);
+    // Date filter applies to issuedAt (string) handled in JS, use createdAt only as fallback for DB filter
+    // We fetch all and filter by issuedAt in JS for accurate results
 
-    // Avg days to close
-    const closedWithDates = await prisma.ticket.findMany({
-      where: { ...where, status: 'closed', closedAt: { not: null } },
-      select: { createdAt: true, closedAt: true },
+    // ── 1. Fetch all tickets needed for calculations ──────────────────────────
+    const allTickets = await prisma.ticket.findMany({
+      where,
+      select: {
+        id: true, type: true, typeId: true, subTypeId: true,
+        status: true, priority: true, projectId: true,
+        clientId: true, clientName: true, villaNumber: true,
+        assignedSupervisorId: true,
+        issuedAt: true, createdAt: true, closedAt: true,
+      },
     });
-    const avgDays = closedWithDates.length
-      ? Math.round(closedWithDates.reduce((sum, t) => {
-          return sum + (t.closedAt!.getTime() - t.createdAt.getTime()) / 86_400_000;
-        }, 0) / closedWithDates.length * 10) / 10
+
+    // Filter by date range using issuedAt
+    const filtered = allTickets.filter(t => {
+      const d = parseIssued(t.issuedAt, t.createdAt);
+      if (from && d < new Date(from)) return false;
+      if (to   && d > new Date(new Date(to).setHours(23,59,59,999))) return false;
+      return true;
+    });
+
+    // ── 2. Totals ─────────────────────────────────────────────────────────────
+    const total          = filtered.length;
+    const openCount      = filtered.filter(t => t.status === 'open').length;
+    const closedCount    = filtered.filter(t => t.status === 'closed').length;
+    const inProgressCount= filtered.filter(t => t.status === 'in_progress').length;
+    const pendingCount   = filtered.filter(t => t.status === 'pending').length;
+    const waitingCount   = filtered.filter(t => t.status === 'waiting').length;
+    const outOfScopeCount= filtered.filter(t => t.status === 'out_of_scope').length;
+
+    // ── 3. Avg days to close (issuedAt → closedAt) ────────────────────────────
+    const closedTickets = filtered.filter(t => t.status === 'closed' && t.closedAt);
+    const daysArr = closedTickets.map(t => {
+      const start = parseIssued(t.issuedAt, t.createdAt);
+      const end   = t.closedAt!;
+      return (end.getTime() - start.getTime()) / 86_400_000;
+    }).filter(d => d >= 0 && d < 3650); // ignore negative or > 10 years
+
+    const avgDays = daysArr.length
+      ? Math.round(daysArr.reduce((a, b) => a + b, 0) / daysArr.length * 10) / 10
       : 0;
 
-    // ── 2. Overdue (open > 7 days) ────────────────────────────────────────────
+    // ── 4. Overdue (active > 7 days based on issuedAt) ───────────────────────
     const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000);
-    const overdueCount = await prisma.ticket.count({
-      where: { ...where, status: { in: ['open', 'in_progress', 'pending'] }, createdAt: { lt: sevenDaysAgo } },
-    });
+    const overdueCount = filtered.filter(t =>
+      ['open','in_progress','pending'].includes(t.status) &&
+      parseIssued(t.issuedAt, t.createdAt) < sevenDaysAgo
+    ).length;
 
-    // ── 3. SLA Breakdown (closed tickets) ─────────────────────────────────────
+    // ── 5. SLA Breakdown ──────────────────────────────────────────────────────
     const sla = { within1: 0, within3: 0, within7: 0, within14: 0, over14: 0 };
-    for (const t of closedWithDates) {
-      const days = (t.closedAt!.getTime() - t.createdAt.getTime()) / 86_400_000;
-      if      (days <= 1)  sla.within1++;
-      else if (days <= 3)  sla.within3++;
-      else if (days <= 7)  sla.within7++;
-      else if (days <= 14) sla.within14++;
-      else                 sla.over14++;
+    for (const d of daysArr) {
+      if      (d <= 1)  sla.within1++;
+      else if (d <= 3)  sla.within3++;
+      else if (d <= 7)  sla.within7++;
+      else if (d <= 14) sla.within14++;
+      else              sla.over14++;
     }
 
-    // ── 4. By Status (full breakdown) ─────────────────────────────────────────
+    // ── 6. By Status ──────────────────────────────────────────────────────────
     const byStatus = [
-      { key: 'open',         nameAr: 'مفتوحة',       count: openCount,        color: '#f97316' },
-      { key: 'in_progress',  nameAr: 'قيد التنفيذ',   count: inProgressCount,  color: '#6366f1' },
-      { key: 'pending',      nameAr: 'معلقة',         count: pendingCount,     color: '#f59e0b' },
-      { key: 'waiting',      nameAr: 'في الانتظار',   count: waitingCount,     color: '#14b8a6' },
-      { key: 'closed',       nameAr: 'مغلقة',         count: closedCount,      color: '#22c55e' },
-      { key: 'out_of_scope', nameAr: 'خارج النطاق',   count: outOfScopeCount,  color: '#6b7280' },
+      { key: 'open',        nameAr: 'مفتوحة',       count: openCount,        color: '#f97316' },
+      { key: 'in_progress', nameAr: 'قيد التنفيذ',   count: inProgressCount,  color: '#6366f1' },
+      { key: 'pending',     nameAr: 'معلقة',         count: pendingCount,     color: '#f59e0b' },
+      { key: 'waiting',     nameAr: 'في الانتظار',   count: waitingCount,     color: '#14b8a6' },
+      { key: 'closed',      nameAr: 'مغلقة',         count: closedCount,      color: '#22c55e' },
+      { key: 'out_of_scope',nameAr: 'خارج النطاق',   count: outOfScopeCount,  color: '#6b7280' },
     ].filter(s => s.count > 0);
 
-    // ── 5. By Priority ────────────────────────────────────────────────────────
-    const priorityGroups = await prisma.ticket.groupBy({
-      by: ['priority'],
-      _count: { id: true },
-      where,
-    });
-    const priorityNames: Record<number, string> = { 1: 'عاجل', 2: 'عالي', 3: 'متوسط عالي', 4: 'متوسط', 5: 'منخفض' };
-    const priorityColors: Record<number, string> = { 1: '#ef4444', 2: '#f97316', 3: '#f59e0b', 4: '#6366f1', 5: '#22c55e' };
-    const byPriority = priorityGroups
-      .map(r => ({ priority: r.priority, nameAr: priorityNames[r.priority] ?? `${r.priority}`, count: r._count.id, color: priorityColors[r.priority] ?? '#6b7280' }))
-      .sort((a, b) => a.priority - b.priority);
+    // ── 7. By Priority ────────────────────────────────────────────────────────
+    const prioMap: Record<number, number> = {};
+    for (const t of filtered) { prioMap[t.priority] = (prioMap[t.priority] || 0) + 1; }
+    const priorityNames:  Record<number,string> = {1:'عاجل',2:'عالي',3:'متوسط عالي',4:'متوسط',5:'منخفض'};
+    const priorityColors: Record<number,string> = {1:'#ef4444',2:'#f97316',3:'#f59e0b',4:'#6366f1',5:'#22c55e'};
+    const byPriority = Object.entries(prioMap)
+      .map(([k,v]) => ({ priority:+k, nameAr: priorityNames[+k] ?? `${k}`, count:v, color: priorityColors[+k] ?? '#6b7280' }))
+      .sort((a,b) => a.priority - b.priority);
 
-    // ── 6. By Specialty ───────────────────────────────────────────────────────
+    // ── 8. By Type & Specialty ────────────────────────────────────────────────
     const allTypes = await prisma.ticketType.findMany({
       where: { isActive: true },
-      select: { key: true, nameAr: true, specialty: { select: { key: true, nameAr: true } } },
+      select: { key:true, nameAr:true, id:true, specialty:{ select:{ key:true, nameAr:true } } },
     });
-    const typeToSpecialty = Object.fromEntries(
-      allTypes.map(t => [t.key, { key: t.specialty?.key ?? 'general', nameAr: t.specialty?.nameAr ?? 'عام' }])
-    );
-    const ticketsByType = await prisma.ticket.groupBy({ by: ['type'], _count: { id: true }, where });
-    const specialtyMap = new Map<string, { nameAr: string; count: number }>();
-    for (const row of ticketsByType) {
-      const sp = typeToSpecialty[row.type] ?? { key: 'general', nameAr: 'عام' };
-      const cur = specialtyMap.get(sp.key) ?? { nameAr: sp.nameAr, count: 0 };
-      specialtyMap.set(sp.key, { ...cur, count: cur.count + row._count.id });
+    const typeNameMap    = Object.fromEntries(allTypes.map(t => [t.key, t.nameAr]));
+    const typeToSpecialty= Object.fromEntries(allTypes.map(t => [t.key, { key: t.specialty?.key ?? 'general', nameAr: t.specialty?.nameAr ?? 'عام' }]));
+
+    const typeCountMap: Record<string,{open:number;closed:number}> = {};
+    for (const t of filtered) {
+      if (!typeCountMap[t.type]) typeCountMap[t.type] = { open:0, closed:0 };
+      t.status === 'closed' ? typeCountMap[t.type].closed++ : typeCountMap[t.type].open++;
     }
-    const bySpecialty = [...specialtyMap.entries()].map(([key, v]) => ({ key, ...v })).sort((a, b) => b.count - a.count);
 
-    // ── 7. By Main Type ───────────────────────────────────────────────────────
-    const typeNameMap = Object.fromEntries(allTypes.map(t => [t.key, t.nameAr]));
-    const closedByType = await prisma.ticket.groupBy({ by: ['type'], _count: { id: true }, where: { ...where, status: 'closed' } });
-    const closedByTypeMap = Object.fromEntries(closedByType.map(r => [r.type, r._count.id]));
-    const byMainType = ticketsByType.map(r => ({
-      key:    r.type,
-      nameAr: typeNameMap[r.type] ?? r.type,
-      count:  r._count.id,
-      closed: closedByTypeMap[r.type] ?? 0,
-      open:   r._count.id - (closedByTypeMap[r.type] ?? 0),
-    })).sort((a, b) => b.count - a.count);
+    const byMainType = Object.entries(typeCountMap).map(([key,v]) => ({
+      key, nameAr: typeNameMap[key] ?? key,
+      count: v.open + v.closed, open: v.open, closed: v.closed,
+    })).sort((a,b) => b.count - a.count);
 
-    // ── 8. By Sub-Type ────────────────────────────────────────────────────────
-    const subTypeGroups = await prisma.ticket.groupBy({ by: ['subTypeId'], _count: { id: true }, where: { ...where, subTypeId: { not: null } } });
-    const subTypeIds = subTypeGroups.map(r => r.subTypeId!).filter(Boolean);
+    const specialtyAgg: Record<string,{nameAr:string;count:number}> = {};
+    for (const [key,v] of Object.entries(typeCountMap)) {
+      const sp = typeToSpecialty[key] ?? { key:'general', nameAr:'عام' };
+      if (!specialtyAgg[sp.key]) specialtyAgg[sp.key] = { nameAr: sp.nameAr, count: 0 };
+      specialtyAgg[sp.key].count += v.open + v.closed;
+    }
+    const bySpecialty = Object.entries(specialtyAgg)
+      .map(([key,v]) => ({ key, ...v }))
+      .sort((a,b) => b.count - a.count);
+
+    // ── 9. By Sub-Type ────────────────────────────────────────────────────────
+    const subTypeCountMap: Record<string,{open:number;closed:number}> = {};
+    for (const t of filtered) {
+      if (!t.subTypeId) continue;
+      if (!subTypeCountMap[t.subTypeId]) subTypeCountMap[t.subTypeId] = { open:0, closed:0 };
+      t.status === 'closed' ? subTypeCountMap[t.subTypeId].closed++ : subTypeCountMap[t.subTypeId].open++;
+    }
+    const subTypeIds = Object.keys(subTypeCountMap);
     const subTypeRecords = subTypeIds.length
-      ? await prisma.ticketSubType.findMany({ where: { id: { in: subTypeIds } }, select: { id: true, nameAr: true, parentType: { select: { key: true, nameAr: true } } } })
+      ? await prisma.ticketSubType.findMany({ where:{ id:{ in: subTypeIds } }, select:{ id:true, nameAr:true, parentType:{ select:{ key:true, nameAr:true } } } })
       : [];
-    const subTypeMap = Object.fromEntries(subTypeRecords.map(s => [s.id, s]));
-    const closedSubType = await prisma.ticket.groupBy({ by: ['subTypeId'], _count: { id: true }, where: { ...where, subTypeId: { not: null }, status: 'closed' } });
-    const closedSubMap = Object.fromEntries(closedSubType.map(r => [r.subTypeId!, r._count.id]));
-    const bySubType = subTypeGroups.filter(r => r.subTypeId && subTypeMap[r.subTypeId!]).map(r => {
-      const info = subTypeMap[r.subTypeId!];
-      return { id: r.subTypeId!, nameAr: info.nameAr, parentKey: info.parentType.key, parentName: info.parentType.nameAr, count: r._count.id, closed: closedSubMap[r.subTypeId!] ?? 0, open: r._count.id - (closedSubMap[r.subTypeId!] ?? 0) };
-    }).sort((a, b) => b.count - a.count);
+    const subTypeMeta = Object.fromEntries(subTypeRecords.map(s => [s.id, s]));
+    const bySubType = subTypeIds.filter(id => subTypeMeta[id]).map(id => {
+      const v = subTypeCountMap[id];
+      const m = subTypeMeta[id];
+      return { id, nameAr: m.nameAr, parentKey: m.parentType.key, parentName: m.parentType.nameAr, count: v.open+v.closed, open: v.open, closed: v.closed };
+    }).sort((a,b) => b.count - a.count);
 
-    // ── 9. By Project ─────────────────────────────────────────────────────────
-    const projectGroups = await prisma.ticket.groupBy({ by: ['projectId'], _count: { id: true }, where });
-    const projectIds = projectGroups.map(r => r.projectId);
-    const projects = await prisma.project.findMany({ where: { id: { in: projectIds } }, select: { id: true, name: true, abbreviation: true } });
-    const projectNameMap = Object.fromEntries(projects.map(p => [p.id, p]));
-    const closedByProject = await prisma.ticket.groupBy({ by: ['projectId'], _count: { id: true }, where: { ...where, status: 'closed' } });
-    const closedByProjectMap = Object.fromEntries(closedByProject.map(r => [r.projectId, r._count.id]));
-    const byProject = projectGroups.map(r => ({
-      id:     r.projectId,
-      name:   projectNameMap[r.projectId]?.name ?? r.projectId,
-      abbr:   projectNameMap[r.projectId]?.abbreviation ?? '',
-      count:  r._count.id,
-      closed: closedByProjectMap[r.projectId] ?? 0,
-      open:   r._count.id - (closedByProjectMap[r.projectId] ?? 0),
-    })).sort((a, b) => b.count - a.count);
+    // ── 10. By Project ────────────────────────────────────────────────────────
+    const projCountMap: Record<string,{open:number;closed:number}> = {};
+    for (const t of filtered) {
+      if (!projCountMap[t.projectId]) projCountMap[t.projectId] = { open:0, closed:0 };
+      t.status === 'closed' ? projCountMap[t.projectId].closed++ : projCountMap[t.projectId].open++;
+    }
+    const projectIds = Object.keys(projCountMap);
+    const projects = projectIds.length
+      ? await prisma.project.findMany({ where:{ id:{ in:projectIds } }, select:{ id:true, name:true, abbreviation:true } })
+      : [];
+    const projectMeta = Object.fromEntries(projects.map(p => [p.id, p]));
+    const byProject = projectIds.map(id => {
+      const v = projCountMap[id];
+      const p = projectMeta[id];
+      return { id, name: p?.name ?? id, abbr: p?.abbreviation ?? '', count: v.open+v.closed, open: v.open, closed: v.closed };
+    }).sort((a,b) => b.count - a.count);
 
-    // ── 10. Monthly Trend ─────────────────────────────────────────────────────
-    const twelveMonthsAgo = new Date();
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
-    twelveMonthsAgo.setDate(1); twelveMonthsAgo.setHours(0, 0, 0, 0);
-    const monthlyRaw = projectId
-      ? await prisma.$queryRaw<{ month: Date; total: bigint; closed: bigint }[]>`
-          SELECT DATE_TRUNC('month', "createdAt") AS month, COUNT(*)::bigint AS total,
-                 COUNT(CASE WHEN status = 'closed' THEN 1 END)::bigint AS closed
-          FROM "Ticket" WHERE "createdAt" >= ${twelveMonthsAgo} AND "projectId" = ${projectId}
-          GROUP BY 1 ORDER BY 1`
-      : await prisma.$queryRaw<{ month: Date; total: bigint; closed: bigint }[]>`
-          SELECT DATE_TRUNC('month', "createdAt") AS month, COUNT(*)::bigint AS total,
-                 COUNT(CASE WHEN status = 'closed' THEN 1 END)::bigint AS closed
-          FROM "Ticket" WHERE "createdAt" >= ${twelveMonthsAgo}
-          GROUP BY 1 ORDER BY 1`;
-    const byMonth = monthlyRaw.map(r => ({ month: r.month.toISOString().slice(0, 7), total: Number(r.total), closed: Number(r.closed), open: Number(r.total) - Number(r.closed) }));
+    // ── 11. Monthly Trend (by issuedAt) ───────────────────────────────────────
+    const monthMap: Record<string,{total:number;closed:number}> = {};
+    for (const t of filtered) {
+      const d = parseIssued(t.issuedAt, t.createdAt);
+      const month = d.toISOString().slice(0,7);
+      if (!monthMap[month]) monthMap[month] = { total:0, closed:0 };
+      monthMap[month].total++;
+      if (t.status === 'closed') monthMap[month].closed++;
+    }
+    const byMonth = Object.entries(monthMap)
+      .sort(([a],[b]) => a.localeCompare(b))
+      .map(([month,v]) => ({ month, total:v.total, closed:v.closed, open:v.total - v.closed }));
 
-    // ── 11. Supervisor Performance ────────────────────────────────────────────
-    const supTickets = await prisma.ticket.findMany({
-      where: { ...where, assignedSupervisorId: { not: null } },
-      select: { assignedSupervisorId: true, status: true, createdAt: true, closedAt: true },
-    });
-    const supMap = new Map<string, { open: number; closed: number; totalDays: number; closedCount: number }>();
-    for (const t of supTickets) {
-      const sid = t.assignedSupervisorId!;
-      const cur = supMap.get(sid) ?? { open: 0, closed: 0, totalDays: 0, closedCount: 0 };
+    // ── 12. Supervisor Performance ────────────────────────────────────────────
+    const supMap: Record<string,{open:number;closed:number;days:number[];}> = {};
+    for (const t of filtered) {
+      if (!t.assignedSupervisorId) continue;
+      if (!supMap[t.assignedSupervisorId]) supMap[t.assignedSupervisorId] = { open:0, closed:0, days:[] };
       if (t.status === 'closed') {
-        cur.closed++;
-        if (t.closedAt) { cur.totalDays += (t.closedAt.getTime() - t.createdAt.getTime()) / 86_400_000; cur.closedCount++; }
+        supMap[t.assignedSupervisorId].closed++;
+        if (t.closedAt) {
+          const days = (t.closedAt.getTime() - parseIssued(t.issuedAt, t.createdAt).getTime()) / 86_400_000;
+          if (days >= 0 && days < 3650) supMap[t.assignedSupervisorId].days.push(days);
+        }
       } else {
-        cur.open++;
+        supMap[t.assignedSupervisorId].open++;
       }
-      supMap.set(sid, cur);
     }
-    const supIds = [...supMap.keys()];
+    const supIds = Object.keys(supMap);
     const supUsers = supIds.length
-      ? await prisma.user.findMany({ where: { uid: { in: supIds } }, select: { uid: true, displayName: true, specialty: true } })
+      ? await prisma.user.findMany({ where:{ uid:{ in:supIds } }, select:{ uid:true, displayName:true, specialty:true } })
       : [];
-    const supNameMap = Object.fromEntries(supUsers.map(u => [u.uid, u]));
-    const bySupervisor = [...supMap.entries()].map(([uid, v]) => ({
-      uid,
-      name:    supNameMap[uid]?.displayName ?? uid,
-      specialty: supNameMap[uid]?.specialty ?? '',
-      open:    v.open,
-      closed:  v.closed,
-      total:   v.open + v.closed,
-      avgDays: v.closedCount > 0 ? Math.round(v.totalDays / v.closedCount * 10) / 10 : null,
-    })).sort((a, b) => b.total - a.total).slice(0, 15);
+    const supMeta = Object.fromEntries(supUsers.map(u => [u.uid, u]));
+    const bySupervisor = supIds.map(uid => {
+      const v = supMap[uid];
+      return {
+        uid, name: supMeta[uid]?.displayName ?? uid, specialty: supMeta[uid]?.specialty ?? '',
+        open: v.open, closed: v.closed, total: v.open + v.closed,
+        avgDays: v.days.length ? Math.round(v.days.reduce((a,b)=>a+b,0)/v.days.length*10)/10 : null,
+      };
+    }).sort((a,b) => b.total - a.total).slice(0,15);
 
-    // ── 12. Top Clients by Ticket Count ──────────────────────────────────────
-    const clientGroups = await prisma.ticket.groupBy({
-      by: ['clientId', 'clientName', 'villaNumber'],
-      _count: { id: true },
-      where: { ...where, clientId: { not: null } },
-      orderBy: { _count: { id: 'desc' } },
-      take: 10,
-    });
-    const clientClosed = await prisma.ticket.groupBy({
-      by: ['clientId'],
-      _count: { id: true },
-      where: { ...where, clientId: { not: null }, status: 'closed' },
-    });
-    const clientClosedMap = Object.fromEntries(clientClosed.map(r => [r.clientId!, r._count.id]));
-    const topClients = clientGroups.map(r => ({
-      clientId:    r.clientId!,
-      clientName:  r.clientName,
-      villaNumber: r.villaNumber,
-      count:       r._count.id,
-      closed:      clientClosedMap[r.clientId!] ?? 0,
-      open:        r._count.id - (clientClosedMap[r.clientId!] ?? 0),
-    }));
-
-    // ── 13. Avg Resolution Days by Type ──────────────────────────────────────
-    const closedByTypeWithDates = await prisma.ticket.findMany({
-      where: { ...where, status: 'closed', closedAt: { not: null } },
-      select: { type: true, createdAt: true, closedAt: true },
-    });
-    const typeResMap = new Map<string, { totalDays: number; count: number }>();
-    for (const t of closedByTypeWithDates) {
-      const days = (t.closedAt!.getTime() - t.createdAt.getTime()) / 86_400_000;
-      const cur = typeResMap.get(t.type) ?? { totalDays: 0, count: 0 };
-      typeResMap.set(t.type, { totalDays: cur.totalDays + days, count: cur.count + 1 });
+    // ── 13. Top Clients ───────────────────────────────────────────────────────
+    const clientMap: Record<string,{name:string;villa:string;open:number;closed:number}> = {};
+    for (const t of filtered) {
+      if (!t.clientId) continue;
+      if (!clientMap[t.clientId]) clientMap[t.clientId] = { name:t.clientName, villa:t.villaNumber, open:0, closed:0 };
+      t.status === 'closed' ? clientMap[t.clientId].closed++ : clientMap[t.clientId].open++;
     }
-    const byTypeAvgDays = [...typeResMap.entries()].map(([key, v]) => ({
-      key,
-      nameAr:  typeNameMap[key] ?? key,
-      avgDays: Math.round(v.totalDays / v.count * 10) / 10,
-      count:   v.count,
-    })).sort((a, b) => b.avgDays - a.avgDays);
+    const topClients = Object.entries(clientMap)
+      .map(([id,v]) => ({ clientId:id, clientName:v.name, villaNumber:v.villa, count:v.open+v.closed, open:v.open, closed:v.closed }))
+      .sort((a,b) => b.count - a.count).slice(0,10);
+
+    // ── 14. Avg Resolution Days by Type ──────────────────────────────────────
+    const typeResMap: Record<string,number[]> = {};
+    for (const t of filtered) {
+      if (t.status !== 'closed' || !t.closedAt) continue;
+      const days = (t.closedAt.getTime() - parseIssued(t.issuedAt, t.createdAt).getTime()) / 86_400_000;
+      if (days < 0 || days > 3650) continue;
+      if (!typeResMap[t.type]) typeResMap[t.type] = [];
+      typeResMap[t.type].push(days);
+    }
+    const byTypeAvgDays = Object.entries(typeResMap)
+      .filter(([,d]) => d.length > 0)
+      .map(([key,d]) => ({ key, nameAr: typeNameMap[key]??key, avgDays: Math.round(d.reduce((a,b)=>a+b,0)/d.length*10)/10, count:d.length }))
+      .sort((a,b) => b.avgDays - a.avgDays);
 
     res.json({
-      totals:     { total, open: openCount, closed: closedCount, avgDays, overdueCount, inProgress: inProgressCount, pending: pendingCount },
-      sla,
-      byStatus,
-      byPriority,
-      bySpecialty,
-      byMainType,
-      bySubType,
-      byProject,
-      byMonth,
-      bySupervisor,
-      topClients,
-      byTypeAvgDays,
+      totals: { total, open:openCount, closed:closedCount, avgDays, overdueCount, inProgress:inProgressCount, pending:pendingCount },
+      sla, byStatus, byPriority,
+      bySpecialty, byMainType, bySubType,
+      byProject, byMonth,
+      bySupervisor, topClients, byTypeAvgDays,
     });
   } catch (err: any) {
     console.error('[Reports] stats error:', err);
