@@ -9,7 +9,7 @@
  */
 
 import prisma from "../server/db.js";
-import { classifyWithML } from "../server/classifier/ml-client.js";
+import { classifyTicket } from "../server/classifier/classify.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB } from "../server/classifier/db-helpers.js";
 
 const DRY_RUN    = process.argv.includes("--dry-run");
@@ -40,7 +40,7 @@ async function main() {
       take:  BATCH_SIZE,
       select: {
         id: true, description: true, type: true,
-        typeId: true, projectId: true, closedAt: true,
+        typeId: true, subTypeId: true, projectId: true, closedAt: true,
       },
     });
 
@@ -49,26 +49,29 @@ async function main() {
     for (const ticket of tickets) {
       if (!ticket.description || ticket.description.length < 5) { unchanged++; continue; }
 
-      const result = await classifyWithML(ticket.description);
+      const result = await classifyTicket(ticket.description, ticket.projectId ?? undefined, { skipGemini: true });
 
       if (!result || result.primaryType === "unclassified") { unclassified++; continue; }
-      if (result.primaryType === ticket.type)               { unchanged++;    continue; }
+
+      // تحديث لو تغير النوع أو الـ subType
+      const typeChanged    = result.primaryType !== ticket.type;
+      const subTypeChanged = result.subTypeId !== ticket.subTypeId;
+      if (!typeChanged && !subTypeChanged) { unchanged++; continue; }
 
       changed++;
       const label = ticket.closedAt ? "مغلقة" : "مفتوحة";
-      console.log(`  ✅ [${label}] ${ticket.id.slice(0,8)}  "${ticket.type}" → "${result.primaryType}"`);
+      if (typeChanged)
+        console.log(`  ✅ [${label}] ${ticket.id.slice(0,8)}  "${ticket.type}" → "${result.primaryType}"`);
+      else
+        console.log(`  📌 [${label}] ${ticket.id.slice(0,8)}  sub: "${result.subType}" (${result.primaryType})`);
 
       if (DRY_RUN) continue;
 
-      const typeRecord = await prisma.ticketType.findUnique({
-        where: { key: result.primaryType }, select: { id: true },
-      });
-
       const updateData: Record<string, any> = {
-        type:         result.primaryType,
+        type:          result.primaryType,
         detectedTypes: result.allTypes,
-        typeId:       typeRecord?.id ?? null,
-        subTypeId:    null,
+        typeId:        result.typeId ?? null,
+        subTypeId:     result.subTypeId ?? null,
       };
 
       if (ticket.projectId) {
