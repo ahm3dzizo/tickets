@@ -14,7 +14,7 @@ router.get("/ticket/:id", requireAuth, async (req, res) => {
     });
 
     // enrich with user display names
-    const uids = [...new Set(audits.map(a => a.changedBy))];
+    const uids = [...new Set(audits.map(a => a.changedBy))] as string[];
     const users = uids.length
       ? await prisma.user.findMany({ where: { uid: { in: uids } }, select: { uid: true, displayName: true } })
       : [];

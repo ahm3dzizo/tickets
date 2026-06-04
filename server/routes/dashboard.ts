@@ -7,16 +7,21 @@ const router = Router();
 // GET /api/dashboard/stats
 router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { uid: req.uid } });
+    const user = await prisma.user.findUnique({ 
+      where: { uid: req.uid },
+      include: { projects: { select: { id: true } } } 
+    });
     if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+    
+    const projectIds = user.projects.map(p => p.id);
 
     const { projectId } = req.query as { projectId?: string };
     const where: any = {};
     
     if (projectId) {
       where.projectId = projectId;
-    } else if (user.role !== 'admin' && user.projectIds && user.projectIds.length > 0) {
-      where.projectId = { in: user.projectIds };
+    } else if (user.role !== 'admin' && projectIds.length > 0) {
+      where.projectId = { in: projectIds };
     }
 
     if (user.role === 'supervisor') {

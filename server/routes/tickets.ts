@@ -598,7 +598,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 
 // PATCH /api/tickets/bulk-status
 router.patch("/bulk-status", requireAuth, async (req, res) => {
-  const { ids, status } = req.body as { ids: string[]; status: string };
+  const { ids, status } = req.body as { ids: string[]; status: any };
   await prisma.ticket.updateMany({ where: { id: { in: ids } }, data: { status } });
   res.json({ count: ids.length });
 });
@@ -606,7 +606,7 @@ router.patch("/bulk-status", requireAuth, async (req, res) => {
 // POST /api/tickets/bulk-update-imported
 router.post("/bulk-update-imported", requireAuth, async (req, res) => {
   const { updates } = req.body as {
-    updates: { id: string; status: string; closedAt?: string | null; type?: string; detectedTypes?: string[] }[]
+    updates: { id: string; status: any; closedAt?: string | null; type?: string; detectedTypes?: string[] }[]
   };
   if (!Array.isArray(updates)) { res.status(400).json({ error: "updates must be array" }); return; }
   try {
