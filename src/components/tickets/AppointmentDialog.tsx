@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 interface AppointmentDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  ticket: {
+  tickets: {
     id: string;
     ticketId: string;
     clientName: string;
@@ -20,7 +20,7 @@ interface AppointmentDialogProps {
     appointmentNotes?: string;
     assignedSupervisorIds?: string[];
     status: string;
-  };
+  }[];
   clientPhone?: string;
   onSuccess?: () => void;
 }
@@ -55,7 +55,11 @@ function todayStr(): string {
 }
 
 // ── الكومبوننت الرئيسي ────────────────────────────────────────────────────────
-export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onSuccess }: AppointmentDialogProps) {
+export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, onSuccess }: AppointmentDialogProps) {
+  const primaryTicket = tickets[0];
+  if (!primaryTicket) return null;
+  const multiIds = tickets.map(t => t.id).join(',');
+  
   // State
   const [startDate, setStartDate] = useState(todayStr());
   const [rangeDays, setRangeDays] = useState(3);
@@ -76,14 +80,14 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
   // ── تهيئة القيم عند فتح الـ Dialog ──
   useEffect(() => {
     if (!open) return;
-    const existing = ticket.appointmentTime;
+    const existing = primaryTicket.appointmentTime;
     if (existing) {
       const parts = existing.split(' ');
       setStartDate(parts[0] || todayStr());
     } else {
       setStartDate(todayStr());
     }
-    setNotes(ticket.appointmentNotes || '');
+    setNotes(primaryTicket.appointmentNotes || '');
     setRangeDays(3);
     setCustomTime('09:00');
     setShowPreview(false);
@@ -103,7 +107,7 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
 
   // ── فحص التعارضات ──
   const checkConflicts = useCallback(async () => {
-    const supIds = ticket.assignedSupervisorIds || [];
+    const supIds = primaryTicket.assignedSupervisorIds || [];
     if (supIds.length === 0 || !startDate) return;
     setCheckingConflicts(true);
     try {
@@ -111,7 +115,7 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
         supervisorIds: supIds,
         startDate,
         endDate,
-        excludeTicketId: ticket.id,
+        excludeTicketId: primaryTicket.id,
       });
       setConflicts(result.conflicts || []);
     } catch {
@@ -119,7 +123,7 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
     } finally {
       setCheckingConflicts(false);
     }
-  }, [startDate, endDate, ticket.id, ticket.assignedSupervisorIds]);
+  }, [startDate, endDate, primaryTicket.id, primaryTicket.assignedSupervisorIds]);
 
   useEffect(() => {
     if (!open) return;
@@ -141,14 +145,14 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
     if (!open) return;
     const fetchPreview = async () => {
       try {
-        const result = await whatsappApi.previewAppointmentRange(ticket.id, {
+        const result = await whatsappApi.previewAppointmentRange(multiIds, {
           startDate,
           endDate: addDays(startDate, rangeDays - 1),
           preferredTime: preferredTimeLabel,
           notes: notes || undefined,
           phone: clientPhone || '966500000000',
-          clientName: ticket.clientName,
-          villaNumber: ticket.villaNumber,
+          clientName: primaryTicket.clientName,
+          villaNumber: primaryTicket.villaNumber,
         });
         if (result.text) {
           setDynamicPreview(result.text);
@@ -159,18 +163,20 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
     };
     const timer = setTimeout(fetchPreview, 500);
     return () => clearTimeout(timer);
-  }, [open, startDate, rangeDays, preferredTimeLabel, notes, ticket, clientPhone]);
+  }, [open, startDate, rangeDays, preferredTimeLabel, notes, multiIds, clientPhone]);
 
   // ── حفظ فقط ──
   const handleSave = async () => {
     setSaving(true);
     try {
-      await ticketsApi.update(ticket.id, {
-        appointmentTime,
-        appointmentNotes: notes,
-        status: ticket.status === 'open' ? 'pending' : ticket.status,
-      });
-      toast.success('تم حفظ الموعد بنجاح');
+      const promises = tickets.map(t => ticketsApi.update(t.id, {
+        appointmentAwaitingReply: true,
+        status: 'waiting',
+        appointmentTime: appointmentTime,
+        appointmentNotes: notes || null
+      }));
+      await Promise.all(promises);
+      toast.success('تم حفظ المواعيد بنجاح');
       onSuccess?.();
       onOpenChange(false);
     } catch {
@@ -188,15 +194,14 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
     }
     setSending(true);
     try {
-      // إرسال رسالة WhatsApp بالـ Range (الخادم سيتولى تحديث التذكرة لحالة الانتظار)
-      const result = await whatsappApi.sendAppointmentRange(ticket.id, {
+      const result = await whatsappApi.sendAppointmentRange(multiIds, {
         startDate,
         endDate,
         preferredTime: preferredTimeLabel,
         notes: notes || undefined,
         phone: clientPhone,
-        clientName: ticket.clientName,
-        villaNumber: ticket.villaNumber,
+        clientName: primaryTicket.clientName,
+        villaNumber: primaryTicket.villaNumber,
       });
 
       if (result.sent) {
@@ -225,8 +230,14 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
         <DialogHeader>
           <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
             <CalendarDays className="w-5 h-5 text-amber-400" />
-            تحديد موعد الزيارة
+            تحديد موعد {tickets.length > 1 ? `لعدد ${tickets.length} تذاكر` : 'الزيارة'}
           </DialogTitle>
+          <div className="text-right">
+            <h3 className="font-bold text-foreground">{primaryTicket.clientName}</h3>
+            <p className="text-xs text-muted-foreground">
+              {tickets.length > 1 ? `تذاكر: ${tickets.map(t => t.ticketId).join(', ')}` : `تذكرة #${primaryTicket.ticketId}`} — فيلا {primaryTicket.villaNumber}
+            </p>
+          </div>
         </DialogHeader>
 
         <div className="space-y-5 py-1">

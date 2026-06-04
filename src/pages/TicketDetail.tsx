@@ -815,7 +815,7 @@ export default function TicketDetail() {
         <AppointmentDialog
           open={apptOpen}
           onOpenChange={setApptOpen}
-          ticket={{
+          tickets={[{
             id: ticket.id,
             ticketId: ticket.ticketId,
             clientName: ticket.clientName,
@@ -824,7 +824,7 @@ export default function TicketDetail() {
             appointmentNotes: ticket.appointmentNotes,
             assignedSupervisorIds: ticket.assignedSupervisorIds as string[] | undefined,
             status: ticket.status,
-          }}
+          }]}
           clientPhone={client?.phone}
           onSuccess={() => { setApptOpen(false); loadData(); }}
         />

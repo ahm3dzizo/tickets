@@ -456,8 +456,8 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
     
     // محاولة استخراج رقم التذكرة من الرسالة المقتبسة (في حال قام العميل بالرد المباشر على الرسالة)
     if (quotedText) {
-      // نبحث عن النص: بخصوص بلاغ الصيانة رقم: *#192895*
-      const ticketMatch = quotedText.match(/#(\d+)/);
+      // نبحث عن النص: بخصوص بلاغ الصيانة رقم: 192895 أو #192895
+      const ticketMatch = quotedText.match(/(?:رقم|#)\s*:?\s*(\d+)/);
       if (ticketMatch && ticketMatch[1]) {
         const ticketId = ticketMatch[1];
         console.log(`[WA] Extracted ticket ID from quoted text: ${ticketId}`);
@@ -498,14 +498,33 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
     if (pendingAppointment) {
       console.log(`[WA] Found pending appointment for ticket: ${pendingAppointment.ticketId}`);
       
-      await prisma.ticket.update({
-        where: { id: pendingAppointment.id },
-        data: {
-          appointmentTime: text,
-          appointmentAwaitingReply: false,
-          status: pendingAppointment.status === 'waiting' ? 'pending' : pendingAppointment.status
-        }
-      });
+      const clientIdToUpdate = pendingAppointment.clientId;
+      if (clientIdToUpdate) {
+        // تحديث جميع التذاكر المفتوحة لهذا العميل التي تنتظر موعداً
+        await prisma.ticket.updateMany({
+          where: { 
+            clientId: clientIdToUpdate,
+            appointmentAwaitingReply: true
+          },
+          data: {
+            appointmentTime: text,
+            appointmentAwaitingReply: false,
+            // حالة pending تعني معلقة بانتظار المشرف
+            status: 'pending'
+          }
+        });
+        console.log(`[WA] Updated all waiting tickets for client ${clientIdToUpdate}`);
+      } else {
+        // Fallback in case there is no clientId attached (rare)
+        await prisma.ticket.update({
+          where: { id: pendingAppointment.id },
+          data: {
+            appointmentTime: text,
+            appointmentAwaitingReply: false,
+            status: pendingAppointment.status === 'waiting' ? 'pending' : pendingAppointment.status
+          }
+        });
+      }
       
       getIO()?.emit('ticket-updated', { id: pendingAppointment.id });
       

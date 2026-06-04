@@ -176,20 +176,24 @@ router.post('/preview-appointment-range/:ticketId', requireAuth, async (req: Aut
   const { startDate, endDate, preferredTime, notes, clientName, villaNumber } = req.body;
 
   try {
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    const ticketIds = ticketId.split(',');
+    const tickets = await prisma.ticket.findMany({
+      where: { id: { in: ticketIds } },
       select: { ticketId: true, clientName: true, villaNumber: true },
     });
-    if (!ticket) { res.status(404).json({ error: 'التذكرة غير موجودة' }); return; }
+    if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
+
+    const combinedTicketIds = tickets.map(t => t.ticketId).join(' و ');
+    const firstTicket = tickets[0];
 
     const fmtDate = (d: string) => new Date(d).toLocaleDateString('ar-EG', {
       weekday: 'long', day: 'numeric', month: 'long',
     });
 
     const msg = await buildAppointmentRangeMsg({
-      clientName: clientName || ticket.clientName,
-      ticketId: ticket.ticketId,
-      villaNumber: villaNumber || ticket.villaNumber,
+      clientName: clientName || firstTicket.clientName,
+      ticketId: combinedTicketIds,
+      villaNumber: villaNumber || firstTicket.villaNumber,
       startDate: fmtDate(startDate),
       endDate: fmtDate(endDate),
       preferredTime,
@@ -227,11 +231,15 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
   }
 
   try {
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      select: { ticketId: true, clientName: true, villaNumber: true },
+    const ticketIds = ticketId.split(',');
+    const tickets = await prisma.ticket.findMany({
+      where: { id: { in: ticketIds } },
+      select: { id: true, ticketId: true, clientName: true, villaNumber: true },
     });
-    if (!ticket) { res.status(404).json({ error: 'التذكرة غير موجودة' }); return; }
+    if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
+
+    const combinedTicketIds = tickets.map(t => t.ticketId).join(' و ');
+    const firstTicket = tickets[0];
 
     // تنسيق التاريخ بالعربية
     const fmtDate = (d: string) => new Date(d).toLocaleDateString('ar-EG', {
@@ -239,9 +247,9 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     });
 
     const msg = await buildAppointmentRangeMsg({
-      clientName: clientName || ticket.clientName,
-      ticketId: ticket.ticketId,
-      villaNumber: villaNumber || ticket.villaNumber,
+      clientName: clientName || firstTicket.clientName,
+      ticketId: combinedTicketIds,
+      villaNumber: villaNumber || firstTicket.villaNumber,
       startDate: fmtDate(startDate),
       endDate: fmtDate(endDate),
       preferredTime,
@@ -251,8 +259,8 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     const result = await sendWAText(uid, phone, msg);
     
     if (result.sent) {
-      await prisma.ticket.update({
-        where: { id: ticketId },
+      await prisma.ticket.updateMany({
+        where: { id: { in: ticketIds } },
         data: {
           appointmentAwaitingReply: true,
           status: 'waiting',

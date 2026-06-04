@@ -30,7 +30,7 @@ export default function TicketsList() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-  const [apptTicket, setApptTicket] = useState<Ticket | null>(null);
+  const [apptTicket, setApptTicket] = useState<Ticket[] | null>(null);
   const [reassigning, setReassigning] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
@@ -122,9 +122,9 @@ export default function TicketsList() {
   };
 
   const handleSendAppointment = () => {
-    const selected = tickets.find(t => selectedTicketIds.includes(t.id));
-    if (!selected) return;
-    setApptTicket(selected);
+    const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
+    if (selected.length === 0) return;
+    setApptTicket(selected); // We'll update the state type
     setApptOpen(true);
   };
 
@@ -393,46 +393,29 @@ export default function TicketsList() {
           onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }}
         />
 
-        {apptTicket && (
+        {apptTicket && apptTicket.length > 0 && (
           <AppointmentDialog
             open={apptOpen}
             onOpenChange={setApptOpen}
-            ticket={{
-              id: apptTicket.id,
-              ticketId: apptTicket.ticketId,
-              clientName: apptTicket.clientName,
-              villaNumber: apptTicket.villaNumber,
-              appointmentTime: apptTicket.appointmentTime,
-              appointmentNotes: apptTicket.appointmentNotes,
-              assignedSupervisorIds: apptTicket.assignedSupervisorIds as string[] | undefined,
-              status: apptTicket.status,
-            }}
+            tickets={apptTicket.map(t => ({
+              id: t.id,
+              ticketId: t.ticketId,
+              clientName: t.clientName,
+              villaNumber: t.villaNumber,
+              appointmentTime: t.appointmentTime,
+              appointmentNotes: t.appointmentNotes,
+              assignedSupervisorIds: t.assignedSupervisorIds as string[] | undefined,
+              status: t.status,
+            }))}
             clientPhone={
-              clients[apptTicket.clientId || '']?.phone || 
-              Object.values(clients).find(c => c.villaNumber === apptTicket.villaNumber)?.phone
+              clients[apptTicket[0].clientId || '']?.phone || 
+              Object.values(clients).find(c => c.villaNumber === apptTicket[0].villaNumber)?.phone
             }
             onSuccess={() => { setApptOpen(false); setSelectedTicketIds([]); loadData(); }}
           />
         )}
 
-        {apptTicket && (
-          <AppointmentDialog
-            open={!!apptTicket}
-            onOpenChange={(open) => !open && setApptTicket(null)}
-            ticket={{
-              id: apptTicket.id,
-              ticketId: apptTicket.ticketId,
-              clientName: apptTicket.clientName,
-              villaNumber: apptTicket.villaNumber,
-              appointmentTime: apptTicket.appointmentTime,
-              appointmentNotes: apptTicket.appointmentNotes,
-              assignedSupervisorIds: apptTicket.assignedSupervisorIds as string[] | undefined,
-              status: apptTicket.status,
-            }}
-            clientPhone={clients[apptTicket.clientId || '']?.phone || Object.values(clients).find(c => c.villaNumber === apptTicket.villaNumber)?.phone || undefined}
-            onSuccess={() => { setApptTicket(null); setSelectedTicketIds([]); loadData(); }}
-          />
-        )}
+
       </div>
     </Layout>
   );
