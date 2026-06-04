@@ -118,6 +118,7 @@ export async function startWA(userId: string) {
       if (!msg.message || msg.key.fromMe) continue;
 
       const senderJid = msg.key.remoteJid!;
+      console.log(`[WA] Received message from ${senderJid}`);
 
       // ① list response (WhatsApp Business API — unlikely on personal accts)
       const listResp = msg.message.listResponseMessage;
@@ -132,7 +133,10 @@ export async function startWA(userId: string) {
         msg.message.extendedTextMessage?.text || ''
       ).trim();
       if (text) {
+        console.log(`[WA] Extracted text: "${text}" from ${senderJid}`);
         await handleWATextReply(userId, senderJid, text);
+      } else {
+        console.log(`[WA] No text extracted. Message type:`, Object.keys(msg.message));
       }
     }
   });
@@ -404,15 +408,22 @@ export async function sendRatingRequest(
 
 async function handleWATextReply(userId: string, senderJid: string, text: string) {
   try {
-    // استخرج رقم الهاتف من JID مثل "966501234567@s.whatsapp.net"
     const rawPhone = senderJid.split('@')[0];
-
-    // ابحث عن عميل بآخر 9 أرقام (يتجاوز فروق البادئات الدولية)
     const suffix = rawPhone.slice(-9);
+    console.log(`[WA] handleWATextReply: rawPhone=${rawPhone}, suffix=${suffix}`);
+    
+    // ابحث أولاً عن التذكرة التي تنتظر رد الموعد من خلال رقم الهاتف نفسه في جدول Tickets (في حال لم يكن مرتبطاً بـ Client)
+    // أو من خلال العميل
     const client = await prisma.client.findFirst({
       where: { phone: { endsWith: suffix } },
     });
-    if (!client) return;
+    
+    console.log(`[WA] Found client:`, client ? client.id : 'None');
+    
+    if (!client) {
+      console.log(`[WA] Client not found for suffix ${suffix}. Checking if any ticket has this phone in notes or fallback...`);
+      return;
+    }
 
     // هل العميل ينتظر موافقة؟
     const pendingApproval = await prisma.ticket.findFirst({
@@ -442,6 +453,8 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
       where: { clientId: client.id, appointmentAwaitingReply: true },
       orderBy: { createdAt: 'desc' }
     });
+    
+    console.log(`[WA] pendingAppointment for client ${client.id}:`, pendingAppointment ? pendingAppointment.id : 'None');
     
     if (pendingAppointment) {
       await prisma.ticket.update({
