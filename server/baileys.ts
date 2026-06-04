@@ -132,9 +132,15 @@ export async function startWA(userId: string) {
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text || ''
       ).trim();
+      
+      const quotedText = (
+        msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.conversation ||
+        msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.extendedTextMessage?.text || ''
+      ).trim();
+
       if (text) {
         console.log(`[WA] Extracted text: "${text}" from ${senderJid}`);
-        await handleWATextReply(userId, senderJid, text);
+        await handleWATextReply(userId, senderJid, text, quotedText);
       } else {
         console.log(`[WA] No text extracted. Message type:`, Object.keys(msg.message));
       }
@@ -406,11 +412,11 @@ export async function sendRatingRequest(
 
 // ─── معالجة رد العميل النصي (1/2 للموافقة ، 1-5 للتقييم) ─────────────────
 
-async function handleWATextReply(userId: string, senderJid: string, text: string) {
+async function handleWATextReply(userId: string, senderJid: string, text: string, quotedText?: string) {
   try {
     const rawPhone = senderJid.split('@')[0];
     const suffix = rawPhone.slice(-9);
-    console.log(`[WA] handleWATextReply: rawPhone=${rawPhone}, suffix=${suffix}`);
+    console.log(`[WA] handleWATextReply: rawPhone=${rawPhone}, suffix=${suffix}, quotedText=${quotedText}`);
     
     // ابحث أولاً عن التذكرة التي تنتظر رد الموعد من خلال رقم الهاتف نفسه في جدول Tickets (في حال لم يكن مرتبطاً بـ Client)
     // أو من خلال العميل
@@ -447,14 +453,29 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
 
     // هل العميل ينتظر تأكيد الموعد؟
     let pendingAppointment = null;
-    if (client) {
+    
+    // محاولة استخراج رقم التذكرة من الرسالة المقتبسة (في حال قام العميل بالرد المباشر على الرسالة)
+    if (quotedText) {
+      // نبحث عن النص: بخصوص بلاغ الصيانة رقم: *#192895*
+      const ticketMatch = quotedText.match(/#(\d+)/);
+      if (ticketMatch && ticketMatch[1]) {
+        const ticketId = ticketMatch[1];
+        console.log(`[WA] Extracted ticket ID from quoted text: ${ticketId}`);
+        pendingAppointment = await prisma.ticket.findUnique({
+          where: { ticketId }
+        });
+      }
+    }
+
+    // إذا لم نجد التذكرة من الرسالة المقتبسة، نبحث عن طريق العميل
+    if (!pendingAppointment && client) {
       pendingAppointment = await prisma.ticket.findFirst({
         where: { clientId: client.id, appointmentAwaitingReply: true },
         orderBy: { createdAt: 'desc' }
       });
     }
 
-    // Fallback: If client not found (e.g., due to @lid) or no pending appointment found for client,
+    // Fallback: If client not found (e.g., due to @lid) and no quoted text,
     // find the most recently updated ticket globally that is waiting for a reply.
     if (!pendingAppointment) {
       console.log(`[WA] Checking for global pending appointment as fallback...`);

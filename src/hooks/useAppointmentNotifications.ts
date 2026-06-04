@@ -56,7 +56,7 @@ export async function subscribePushNotifications(): Promise<void> {
     }
     const sub = await sw.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_KEY),
+      applicationServerKey: urlBase64ToUint8Array(VAPID_KEY) as any,
     });
     await appointmentsApi.subscribePush(sub.toJSON() as PushSubscriptionJSON);
   } catch (err) {

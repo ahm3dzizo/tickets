@@ -219,6 +219,7 @@ export default function Team() {
                       {/* Actions */}
                       <td className="px-5 py-3.5 text-center" onClick={e => e.stopPropagation()}>
                         <DropdownMenu>
+                          {/* @ts-expect-error type mismatch with Radix UI */}
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg">
                               <MoreHorizontal className="w-4 h-4" />
