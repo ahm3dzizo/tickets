@@ -499,11 +499,6 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
       
       getIO()?.emit('ticket-updated', { id: pendingAppointment.id });
       
-      // إرسال رسالة تأكيد للعميل
-      const sock = sessions.get(userId);
-      if (sock) {
-        await sock.sendMessage(senderJid, { text: 'شكراً لك. تم تأكيد موعد الزيارة بناءً على اختيارك. فريق الصيانة في خدمتك.' });
-      }
       return;
     }
   } catch (err) {
