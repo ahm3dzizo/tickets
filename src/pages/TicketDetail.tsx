@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -14,6 +14,7 @@ import {
   Phone,
   PhoneCall,
   ChevronDown,
+  Clock,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -37,7 +38,7 @@ import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ticketsApi, projectsApi, clientsApi, whatsappApi, auditApi } from '@/lib/api';
+import { ticketsApi, projectsApi, clientsApi, whatsappApi, auditApi, settingsApi } from '@/lib/api';
 import { learnFromCorrection, getAuthHeaders } from '@/services/classificationApi';
 import { toast } from 'sonner';
 
@@ -605,6 +606,14 @@ export default function TicketDetail() {
                 <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest text-right">إجراءات سريعة</CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-2">
+                {ticket.appointmentAwaitingReply && (
+                  <div className="w-full flex items-center justify-between p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 mb-3">
+                    <div className="flex items-center gap-2 text-orange-400">
+                      <Clock className="w-4 h-4 animate-pulse" />
+                      <span className="text-xs font-bold">بانتظار رد العميل لتأكيد الموعد</span>
+                    </div>
+                  </div>
+                )}
                 {waSent ? (
                   /* ── بعد إرسال الرسالة: اختفاء كل الأزرار ── */
                   <div className="w-full flex flex-col items-center justify-center gap-2 py-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">

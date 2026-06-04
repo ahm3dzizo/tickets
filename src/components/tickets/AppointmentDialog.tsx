@@ -188,14 +188,7 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
     }
     setSending(true);
     try {
-      // حفظ الموعد أولاً
-      await ticketsApi.update(ticket.id, {
-        appointmentTime,
-        appointmentNotes: notes,
-        status: ticket.status === 'open' ? 'pending' : ticket.status,
-      });
-
-      // إرسال رسالة WhatsApp بالـ Range
+      // إرسال رسالة WhatsApp بالـ Range (الخادم سيتولى تحديث التذكرة لحالة الانتظار)
       const result = await whatsappApi.sendAppointmentRange(ticket.id, {
         startDate,
         endDate,

@@ -434,6 +434,33 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
     });
     if (pendingRating && ['1', '2', '3', '4', '5'].includes(text)) {
       await handleWAListReply(userId, `rate_${text}_${pendingRating.id}`, senderJid);
+      return;
+    }
+
+    // هل العميل ينتظر تأكيد الموعد؟
+    const pendingAppointment = await prisma.ticket.findFirst({
+      where: { clientId: client.id, appointmentAwaitingReply: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    if (pendingAppointment) {
+      await prisma.ticket.update({
+        where: { id: pendingAppointment.id },
+        data: {
+          appointmentTime: text,
+          appointmentAwaitingReply: false,
+          status: pendingAppointment.status === 'waiting' ? 'pending' : pendingAppointment.status
+        }
+      });
+      
+      getIO()?.emit('ticket-updated', { id: pendingAppointment.id });
+      
+      // إرسال رسالة تأكيد للعميل
+      const sock = sessions.get(userId);
+      if (sock) {
+        await sock.sendMessage(senderJid, { text: 'شكراً لك. تم تأكيد موعد الزيارة بناءً على اختيارك. فريق الصيانة في خدمتك.' });
+      }
+      return;
     }
   } catch (err) {
     console.error('[WA] handleWATextReply error:', err);

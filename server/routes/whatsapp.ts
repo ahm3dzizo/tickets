@@ -249,6 +249,19 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     });
 
     const result = await sendWAText(uid, phone, msg);
+    
+    if (result.sent) {
+      await prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          appointmentAwaitingReply: true,
+          status: 'waiting',
+          appointmentTime: null,
+          appointmentNotes: notes || null
+        }
+      });
+    }
+
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

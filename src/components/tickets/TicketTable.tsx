@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, Clock } from 'lucide-react';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
 import { toast } from 'sonner';
@@ -650,7 +650,11 @@ export function TicketTable({
                       {supervisorNames.length > 0 && (
                         <span className="text-[11px] text-amber-400/80 font-medium truncate">{supervisorNames.join('، ')}</span>
                       )}
-                      {ticket.appointmentTime && (
+                      {ticket.appointmentAwaitingReply ? (
+                        <span className="text-[11px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded flex items-center gap-1 w-max">
+                          <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد العميل
+                        </span>
+                      ) : ticket.appointmentTime && (
                         <span className="text-[11px] text-emerald-400 font-bold">{ticket.appointmentTime}</span>
                       )}
                     </div>
@@ -868,7 +872,11 @@ export function TicketTable({
                         )}
                       </td>
                       <td className="px-4 py-3 text-center w-24">
-                        {ticket.appointmentTime ? (
+                        {ticket.appointmentAwaitingReply ? (
+                          <span className="text-[10px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded flex items-center gap-1 justify-center whitespace-nowrap">
+                            <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد العميل
+                          </span>
+                        ) : ticket.appointmentTime ? (
                           <span className="text-[11px] text-emerald-400 font-bold">{ticket.appointmentTime}</span>
                         ) : ticket.closureNotes ? (
                           <span className="text-[10px] text-slate-500 line-clamp-1">{ticket.closureNotes}</span>

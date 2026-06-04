@@ -76,6 +76,7 @@ model Ticket {
   detectedTypes         String[]       @default([])
   appointmentTime       String?
   appointmentNotes      String?
+  appointmentAwaitingReply Boolean @default(false)
   closureNotes          String?
   maintenanceItems      Json?
   createdAt             DateTime       @default(now())
