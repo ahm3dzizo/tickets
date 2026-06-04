@@ -7,8 +7,22 @@ const router = Router();
 // GET /api/dashboard/stats
 router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
   try {
+    const user = await prisma.user.findUnique({ where: { uid: req.uid } });
+    if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
     const { projectId } = req.query as { projectId?: string };
-    const where: any = projectId ? { projectId } : {};
+    const where: any = {};
+    
+    if (projectId) {
+      where.projectId = projectId;
+    } else if (user.role !== 'admin' && user.projectIds && user.projectIds.length > 0) {
+      where.projectId = { in: user.projectIds };
+    }
+
+    if (user.role === 'supervisor') {
+      where.assignedSupervisorIds = { has: user.uid };
+    }
+
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
     const todayStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -28,9 +42,9 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       where: { ...where, status: "closed", closedAt: { gte: todayStart, lt: todayEnd } },
     });
 
-    // Today's appointments
+    // Upcoming appointments (today and future)
     const todayAppts = await prisma.ticket.findMany({
-      where: { ...where, appointmentTime: { startsWith: todayStr } },
+      where: { ...where, appointmentTime: { gte: todayStr } },
       select: { id: true, ticketId: true, clientName: true, villaNumber: true, appointmentTime: true, type: true, status: true },
       orderBy: { appointmentTime: "asc" },
       take: 20,

@@ -40,6 +40,8 @@ export default function Dashboard() {
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [selectedProject, setSelectedProject] = useState<string>('all');
+
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedTicketIds.length === 0) return;
     try {
@@ -113,7 +115,7 @@ export default function Dashboard() {
 
   const loadKpi = async () => {
     try {
-      const data = await dashboardApi.getStats();
+      const data = await dashboardApi.getStats(selectedProject === 'all' ? undefined : selectedProject);
       setKpi(data);
       setLastRefresh(new Date());
     } catch {}
@@ -124,9 +126,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadKpi();
+    if (refreshTimer.current) clearInterval(refreshTimer.current);
     refreshTimer.current = setInterval(loadKpi, 30_000);
     return () => { if (refreshTimer.current) clearInterval(refreshTimer.current); };
-  }, []);
+  }, [selectedProject]);
 
   /* ── Stat card definitions ────────────────────────────────────── */
   const statCards = [
@@ -217,15 +220,25 @@ export default function Dashboard() {
 
         {/* ── Page Header ─────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="text-right">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight leading-tight">
-              لوحة التحكم
-            </h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              مرحباً، <span className="text-foreground font-semibold">{user?.displayName}</span>. إليك ملخص اليوم
-            </p>
+          <div className="text-right flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">لوحة القيادة</h1>
+              <p className="text-muted-foreground mt-1 text-sm">نظرة عامة على أداء نظام الصيانة</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+          <div className="flex flex-wrap items-center gap-3">
+            {userProjects.length > 0 && (
+              <select
+                className="bg-card border border-border text-foreground text-sm rounded-xl px-4 py-2 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                value={selectedProject}
+                onChange={(e) => setSelectedProject(e.target.value)}
+              >
+                <option value="all">كل المشاريع</option>
+                {userProjects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            )}
             {user?.role === 'admin' && <ProjectForm />}
             {(user?.role === 'admin' || user?.role === 'engineer') && (
               <TicketForm onSuccess={loadDashboard} />
@@ -279,19 +292,19 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Today's appointments */}
+            {/* Upcoming appointments */}
             <div className="bg-card border border-blue-500/20 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <Badge variant="secondary" className="text-[10px] text-blue-400">{kpi.todayAppts.length}</Badge>
-                <h3 className="font-bold text-sm flex items-center gap-1.5 text-blue-400"><CalendarCheck className="w-3.5 h-3.5" /> مواعيد اليوم</h3>
+                <h3 className="font-bold text-sm flex items-center gap-1.5 text-blue-400"><CalendarCheck className="w-3.5 h-3.5" /> المواعيد القادمة</h3>
               </div>
               <div className="divide-y divide-border/50 max-h-52 overflow-y-auto">
                 {kpi.todayAppts.length === 0
-                  ? <p className="text-center text-muted-foreground text-xs py-6">لا توجد مواعيد اليوم</p>
+                  ? <p className="text-center text-muted-foreground text-xs py-6">لا توجد مواعيد قادمة</p>
                   : kpi.todayAppts.map((t: any) => (
                     <Link to={`/tickets/${t.id}`} key={t.id}
                       className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors">
-                      <span className="text-[10px] text-blue-400 font-bold">{t.appointmentTime?.split(' ')[1] || '---'}</span>
+                      <span className="text-[10px] text-blue-400 font-bold max-w-[80px] text-right truncate" title={t.appointmentTime || ''}>{t.appointmentTime || '---'}</span>
                       <div className="text-right">
                         <p className="text-xs font-semibold text-foreground">{t.clientName} — {t.villaNumber}</p>
                         <p className="text-[10px] text-muted-foreground">{t.type}</p>

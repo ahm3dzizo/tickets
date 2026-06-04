@@ -93,7 +93,11 @@ export default function Appointments() {
 
   useEffect(() => {
     if (!user) return;
-    projectsApi.getAll().then((p: any[]) => setProjects(p)).catch(() => {});
+    projectsApi.getAll().then((p: any[]) => {
+      const filtered = user.role === 'admin' ? p : p.filter(proj => user.projectIds?.includes(proj.id));
+      setProjects(filtered);
+    }).catch(() => {});
+    
     if (user.role === 'admin') {
       usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => {});
     }
@@ -177,7 +181,7 @@ export default function Appointments() {
             )}
 
             {/* فلتر المشروع */}
-            {projects.length > 1 && (
+            {projects.length > 0 && (
               <select
                 value={filterProject}
                 onChange={e => setFilterProject(e.target.value)}
