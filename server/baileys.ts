@@ -486,8 +486,18 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
     }
     
     console.log(`[WA] pendingAppointment:`, pendingAppointment ? pendingAppointment.id : 'None');
+
+    // قائمة بالكلمات المفتاحية المتعلقة بالوقت والأيام
+    const timeKeywordsRegex = /(السبت|الاحد|الأحد|الاثنين|الإثنين|الثلاثاء|الاربعاء|الأربعاء|الخميس|الجمعة|الجمعه|ساعه|ساعة|صباح|مساء|الصبح|بالليل|الظهر|العصر|المغرب|العشاء|غدا|بكرة|بكرا|اليوم|الان|الآن|متواجد|جاهز|تاريخ|يوم|\d{1,2}:\d{2})/i;
+
+    if (!timeKeywordsRegex.test(text)) {
+      console.log(`[WA] Message ignored, does not contain time keywords: "${text}"`);
+      return; // تجاهل الرسالة إذا لم تحتوي على كلمات دالة على موعد
+    }
     
     if (pendingAppointment) {
+      console.log(`[WA] Found pending appointment for ticket: ${pendingAppointment.ticketId}`);
+      
       await prisma.ticket.update({
         where: { id: pendingAppointment.id },
         data: {
