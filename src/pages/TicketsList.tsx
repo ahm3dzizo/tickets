@@ -10,6 +10,7 @@ import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/TicketTable';
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
+import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { Ticket, Project, Client } from '@/types';
@@ -29,8 +30,10 @@ export default function TicketsList() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [apptTicket, setApptTicket] = useState<Ticket | null>(null);
   const [reassigning, setReassigning] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
+  const [apptOpen, setApptOpen] = useState(false);
 
   const loadData = async () => {
     if (!user) return;
@@ -99,7 +102,7 @@ export default function TicketsList() {
 
       await Promise.all(updates);
       toast.success(
-        `✅ تم تعيين المشرفين لـ ${updates.length} تذكرة` +
+        `تم تعيين المشرفين لـ ${updates.length} تذكرة` +
         (noProjectCount > 0 ? ` | ${noProjectCount} بدون مشروع` : '') +
         (noSupervisorCount > 0 ? ` | ${noSupervisorCount} بدون مشرف مطابق` : ''),
         { id: toastId, duration: 8000 }
@@ -118,27 +121,11 @@ export default function TicketsList() {
     } catch { toast.error('فشل تحديث الحالة'); }
   };
 
-  const handleSendAppointment = async () => {
-    const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
-    if (selected.length === 0) return;
-    const byClient = new Map<string, typeof selected>();
-    selected.forEach(t => {
-      const key = t.clientId || t.villaNumber || 'unknown';
-      if (!byClient.has(key)) byClient.set(key, []);
-      byClient.get(key)!.push(t);
-    });
-    const templates = await WhatsAppService.getTemplates();
-    byClient.forEach((clientTickets, key) => {
-      const first = clientTickets[0];
-      const phone = clients[first?.clientId]?.phone ??
-        Object.values(clients).find(c => c.villaNumber === first?.villaNumber)?.phone ?? '';
-      const ids = clientTickets.map(t => t.ticketId || t.refNumber || t.id).join('، ');
-      WhatsAppService.sendUpdate(phone, WhatsAppService.processTemplate(templates.openingMsg, {
-        clientName: clients[first?.clientId]?.name || '', ticketId: ids,
-        description: first?.description || '', villaNumber: first?.villaNumber || '',
-        date: new Date().toLocaleDateString('ar-SA'),
-      }));
-    });
+  const handleSendAppointment = () => {
+    const selected = tickets.find(t => selectedTicketIds.includes(t.id));
+    if (!selected) return;
+    setApptTicket(selected);
+    setApptOpen(true);
   };
 
   const handleAutoLink = async () => {
@@ -190,7 +177,7 @@ export default function TicketsList() {
       if (done % 5 === 0)
         toast.loading(`⚙ جارٍ التصنيف: ${done} / ${unclassifiedTickets.length}`, { id: toastId, duration: Infinity });
     }
-    toast.success(`✅ تم تصنيف ${done - failed} تذكرة — ${failed} لم يُصنَّف`, { id: toastId, duration: 8000 });
+    toast.success(`تم تصنيف ${done - failed} تذكرة — ${failed} لم يُصنَّف`, { id: toastId, duration: 8000 });
     setBulkClassifying(false);
     loadData();
   };
@@ -405,6 +392,47 @@ export default function TicketsList() {
           projects={projects}
           onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }}
         />
+
+        {apptTicket && (
+          <AppointmentDialog
+            open={apptOpen}
+            onOpenChange={setApptOpen}
+            ticket={{
+              id: apptTicket.id,
+              ticketId: apptTicket.ticketId,
+              clientName: apptTicket.clientName,
+              villaNumber: apptTicket.villaNumber,
+              appointmentTime: apptTicket.appointmentTime,
+              appointmentNotes: apptTicket.appointmentNotes,
+              assignedSupervisorIds: apptTicket.assignedSupervisorIds as string[] | undefined,
+              status: apptTicket.status,
+            }}
+            clientPhone={
+              clients[apptTicket.clientId || '']?.phone || 
+              Object.values(clients).find(c => c.villaNumber === apptTicket.villaNumber)?.phone
+            }
+            onSuccess={() => { setApptOpen(false); setSelectedTicketIds([]); loadData(); }}
+          />
+        )}
+
+        {apptTicket && (
+          <AppointmentDialog
+            open={!!apptTicket}
+            onOpenChange={(open) => !open && setApptTicket(null)}
+            ticket={{
+              id: apptTicket.id,
+              ticketId: apptTicket.ticketId,
+              clientName: apptTicket.clientName,
+              villaNumber: apptTicket.villaNumber,
+              appointmentTime: apptTicket.appointmentTime,
+              appointmentNotes: apptTicket.appointmentNotes,
+              assignedSupervisorIds: apptTicket.assignedSupervisorIds as string[] | undefined,
+              status: apptTicket.status,
+            }}
+            clientPhone={clients[apptTicket.clientId || '']?.phone || Object.values(clients).find(c => c.villaNumber === apptTicket.villaNumber)?.phone || undefined}
+            onSuccess={() => { setApptTicket(null); setSelectedTicketIds([]); loadData(); }}
+          />
+        )}
       </div>
     </Layout>
   );

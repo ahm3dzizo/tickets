@@ -59,7 +59,8 @@ export type TicketType =
   | 'cleaning'           // تنظيف مخلفات
   | 'structural'         // إنشائي (أساسات، أعمدة)
   | 'painting'           // مرادف لـ paints
-  | 'tiles';             // مرادف لـ ceramics
+  | 'tiles'              // مرادف لـ ceramics
+  | 'unclassified';      // غير مصنف
 
 export interface Ticket {
   id: string;

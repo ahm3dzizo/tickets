@@ -231,19 +231,19 @@ export default function TicketDetail() {
       // إرسال رسالة الموعد عبر واتساب تلقائياً
       const phone = client?.phone?.replace(/\D/g, '') || '';
       if (phone) {
-        const apptMsg = `السلام عليكم ${client?.name || ''} 👋\n\nتم تحديد موعد زيارة فريق الصيانة لوحدتكم رقم ${ticket.villaNumber}.\n\n📋 رقم التذكرة: #${ticket.ticketId}\n📅 موعد الزيارة: ${appointmentTime}\n${apptNotes ? `📝 ملاحظات: ${apptNotes}\n` : ''}\nيرجى التواجد في الموعد المحدد.\nشكراً لتعاونكم.`;
+        const apptMsg = `السلام عليكم ${client?.name || ''}\n\nتم تحديد موعد زيارة فريق الصيانة لوحدتكم رقم ${ticket.villaNumber}.\n\nرقم التذكرة: #${ticket.ticketId}\nموعد الزيارة: ${appointmentTime}\n${apptNotes ? `ملاحظات: ${apptNotes}\n` : ''}\nيرجى التواجد في الموعد المحدد.\nشكراً لتعاونكم.`;
         try {
           const r = await whatsappApi.send(phone, apptMsg);
           if (r?.sent) {
-            toast.success('✅ تم تأكيد الموعد وإشعار العميل عبر واتساب');
+            toast.success('تم تأكيد الموعد وإشعار العميل عبر واتساب');
           } else {
-            toast.success(`📅 تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
+            toast.success(`تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
           }
         } catch {
-          toast.success(`📅 تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
+          toast.success(`تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
         }
       } else {
-        toast.success(`📅 تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
+        toast.success(`تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
       }
 
       setApptOpen(false);
@@ -260,12 +260,12 @@ export default function TicketDetail() {
   const handleWhatsApp = async () => {
     const phone = client?.phone?.replace(/\D/g, '') || '';
     if (!phone) { toast.error('رقم الهاتف غير متوفر'); return; }
-    const msg = `السلام عليكم ${client?.name || ''} 👋\nبخصوص طلب الصيانة رقم ${ticket?.ticketId || ''} - فيلا ${ticket?.villaNumber}\n${ticket?.appointmentTime ? `📅 موعد الزيارة: ${ticket.appointmentTime}` : 'سيتم التواصل معكم لتحديد موعد الزيارة'}\nشكراً لكم.`;
+    const msg = `السلام عليكم ${client?.name || ''}\nبخصوص طلب الصيانة رقم ${ticket?.ticketId || ''} - فيلا ${ticket?.villaNumber}\n${ticket?.appointmentTime ? `موعد الزيارة: ${ticket.appointmentTime}` : 'سيتم التواصل معكم لتحديد موعد الزيارة'}\nشكراً لكم.`;
     setWaSending(true);
     try {
       const r = await whatsappApi.send(phone, msg);
       if (r?.sent) {
-        toast.success('تم إرسال الرسالة للعميل عبر واتساب ✅');
+        toast.success('تم إرسال الرسالة للعميل عبر واتساب');
         setWaSent(true);
         setTimeout(() => navigate(-1), 800);
       } else {
@@ -284,7 +284,7 @@ export default function TicketDetail() {
     try {
       const result = await whatsappApi.sendApprovalRequest(ticket.id);
       if (result.sent) {
-        toast.success('تم إرسال طلب الموافقة للعميل عبر واتساب ✅');
+        toast.success('تم إرسال طلب الموافقة للعميل عبر واتساب');
         loadData();
       } else {
         toast.error('تعذر الإرسال. تحقق من اتصال الواتساب.');
@@ -597,7 +597,7 @@ export default function TicketDetail() {
                   /* ── بعد إرسال الرسالة: اختفاء كل الأزرار ── */
                   <div className="w-full flex flex-col items-center justify-center gap-2 py-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                     <CheckCircle2 className="w-8 h-8" />
-                    <p className="text-sm font-bold">تم إرسال الرسالة بنجاح ✅</p>
+                    <p className="text-sm font-bold">تم إرسال الرسالة بنجاح</p>
                     <p className="text-[10px] text-emerald-500/70">جارٍ العودة للقائمة...</p>
                   </div>
                 ) : (
@@ -646,11 +646,11 @@ export default function TicketDetail() {
                             (ticket as any).approvalState === 'rejected'  ? 'bg-red-500/10 text-red-400'        :
                             'bg-amber-500/10 text-amber-400'
                           )}>
-                            {(ticket as any).approvalState === 'sent'           && '⏳ في انتظار رد العميل'}
-                            {(ticket as any).approvalState === 'awaiting_rating' && '✅ وافق — في انتظار التقييم'}
-                            {(ticket as any).approvalState === 'approved'        && '✅ وافق العميل'}
-                            {(ticket as any).approvalState === 'rejected'        && '❌ رفض العميل'}
-                            {(ticket as any).approvalState === 'rated'           && `⭐ التقييم: ${(ticket as any).clientRating}/5`}
+                            {(ticket as any).approvalState === 'sent'           && 'في انتظار رد العميل'}
+                            {(ticket as any).approvalState === 'awaiting_rating' && 'وافق — في انتظار التقييم'}
+                            {(ticket as any).approvalState === 'approved'        && 'وافق العميل'}
+                            {(ticket as any).approvalState === 'rejected'        && 'رفض العميل'}
+                            {(ticket as any).approvalState === 'rated'           && `التقييم: ${(ticket as any).clientRating}/5`}
                           </div>
                         )}
                       </div>

@@ -26,10 +26,10 @@ interface AppointmentDialogProps {
 }
 
 const DEFAULT_TIME_OPTIONS = [
-  { label: '🌅 الصباح (8 ص - 12 م)', value: 'الصباح (8 ص - 12 م)' },
-  { label: '☀️ الظهر (12 م - 3 م)', value: 'الظهر (12 م - 3 م)' },
-  { label: '🌆 المساء (3 م - 6 م)', value: 'المساء (3 م - 6 م)' },
-  { label: '🕐 وقت محدد', value: 'custom' },
+  { label: 'الصباح (8 ص - 12 م)', value: 'الصباح (8 ص - 12 م)' },
+  { label: 'الظهر (12 م - 3 م)', value: 'الظهر (12 م - 3 م)' },
+  { label: 'المساء (3 م - 6 م)', value: 'المساء (3 م - 6 م)' },
+  { label: 'وقت محدد', value: 'custom' },
 ];
 
 const RANGE_PRESETS = [
@@ -59,7 +59,7 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
   // State
   const [startDate, setStartDate] = useState(todayStr());
   const [rangeDays, setRangeDays] = useState(3);
-  const [timeOptions, setTimeOptions] = useState([...DEFAULT_TIME_OPTIONS, { label: '🕐 وقت محدد', value: 'custom' }]);
+  const [timeOptions, setTimeOptions] = useState([...DEFAULT_TIME_OPTIONS, { label: 'وقت محدد', value: 'custom' }]);
   const [timeMode, setTimeMode] = useState(DEFAULT_TIME_OPTIONS[0].value);
   const [customTime, setCustomTime] = useState('09:00');
   const [notes, setNotes] = useState('');
@@ -89,11 +89,11 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
 
     settingsApi.getWorkHours().then(hours => {
       const opts = hours && hours.length > 0 ? hours : DEFAULT_TIME_OPTIONS;
-      const finalOpts = [...opts, { label: '🕐 وقت محدد', value: 'custom' }];
+      const finalOpts = [...opts, { label: 'وقت محدد', value: 'custom' }];
       setTimeOptions(finalOpts);
       setTimeMode(finalOpts[0].value);
     }).catch(() => {
-      const finalOpts = [...DEFAULT_TIME_OPTIONS, { label: '🕐 وقت محدد', value: 'custom' }];
+      const finalOpts = [...DEFAULT_TIME_OPTIONS, { label: 'وقت محدد', value: 'custom' }];
       setTimeOptions(finalOpts);
       setTimeMode(finalOpts[0].value);
     });
@@ -143,7 +143,7 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
         appointmentNotes: notes,
         status: ticket.status === 'open' ? 'pending' : ticket.status,
       });
-      toast.success('📅 تم حفظ الموعد بنجاح');
+      toast.success('تم حفظ الموعد بنجاح');
       onSuccess?.();
       onOpenChange(false);
     } catch {
@@ -180,9 +180,9 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
       });
 
       if (result.sent) {
-        toast.success('✅ تم تأكيد الموعد وإرسال الرسالة للعميل عبر واتساب');
+        toast.success('تم تأكيد الموعد وإرسال الرسالة للعميل عبر واتساب');
       } else {
-        toast.success('📅 تم حفظ الموعد (الواتساب غير متصل)');
+        toast.success('تم حفظ الموعد (الواتساب غير متصل)');
       }
       onSuccess?.();
       onOpenChange(false);
@@ -201,7 +201,7 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
     `رقم الفيلا: *${ticket.villaNumber}*`,
     `بخصوص بلاغ الصيانة رقم: *#${ticket.ticketId}*`,
     ``,
-    `📅 *الفترة المتوقعة للزيارة:*`,
+    `تفاصيل الفترة المتوقعة للزيارة:`,
     `من ${formatDateAr(startDate)}`,
     `إلى ${formatDateAr(endDate)}`,
     ``,
@@ -336,7 +336,7 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
                   {conflicts.length > 3 && (
                     <p className="text-[10px] text-orange-400">... و{conflicts.length - 3} أخرى</p>
                   )}
-                  <p className="text-[10px] text-orange-400/70 mt-1">⚠️ يمكن المتابعة — التحذير للمعلومية فقط</p>
+                  <p className="text-[10px] text-orange-400/70 mt-1">يمكن المتابعة — التحذير للمعلومية فقط</p>
                 </div>
               )}
               {!checkingConflicts && conflicts.length === 0 && (

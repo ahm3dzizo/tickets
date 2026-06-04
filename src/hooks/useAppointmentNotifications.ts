@@ -105,10 +105,10 @@ export function useAppointmentNotifications(socket: any) {
       // Toast في التطبيق
       if (!isSelf) {
         // إشعار للمشرف المشارك
-        toast.info(
+        toast(
           data.isShared
-            ? `📅 ${data.setBy} حدّد موعداً مشتركاً`
-            : `📅 تم تحديد موعد جديد`,
+            ? `${data.setBy} حدّد موعداً مشتركاً`
+            : `تم تحديد موعد جديد`,
           {
             description: `تذكرة #${data.ticketRef} — ${data.clientName} (فيلا ${data.villaNumber})\n${fmtDate}`,
             duration: 8000,
@@ -121,8 +121,8 @@ export function useAppointmentNotifications(socket: any) {
 
         // Push notification خارج التطبيق
         const title = data.isShared
-          ? `📅 موعد مشترك جديد — ${data.setBy}`
-          : `📅 موعد محدد`;
+          ? `موعد مشترك جديد — ${data.setBy}`
+          : `موعد محدد`;
         const body = `تذكرة #${data.ticketRef} | ${data.clientName} — فيلا ${data.villaNumber}\n${fmtDate}`;
         sendLocalPush(title, body);
       }

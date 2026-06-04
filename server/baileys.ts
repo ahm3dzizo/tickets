@@ -271,7 +271,6 @@ async function getTemplate(key: string, defaultText: string): Promise<string> {
 
 function replaceVars(template: string, params: MsgParams): string {
   return template
-    .replace(/{clientName}/g, params.clientName)
     .replace(/{ticketId}/g, params.ticketId)
     .replace(/{description}/g, params.description)
     .replace(/{villaNumber}/g, params.villaNumber)
@@ -280,26 +279,26 @@ function replaceVars(template: string, params: MsgParams): string {
 }
 
 export async function buildOpeningMsg(params: MsgParams): Promise<string> {
-  const defaultMsg = `مرحباً {clientName} 👋\nتم استلام طلب الصيانة الخاص بك\n\n📋 رقم التذكرة: #{ticketId}\n📝 الوصف: {description}\n🏠 الفيلا: {villaNumber}\n📅 التاريخ: {date}\n\nسيتواصل معكم فريق الصيانة في أقرب وقت.\nشكراً لثقتكم 🌟`;
+  const defaultMsg = `السلام عليكم،\nتم استلام طلب الصيانة الخاص بك\n\nرقم التذكرة: #{ticketId}\nالوصف: {description}\nالفيلا: {villaNumber}\nالتاريخ: {date}\n\nسيتواصل معكم فريق الصيانة في أقرب وقت.\nشكراً لثقتكم.`;
   const template = await getTemplate('openingMsg', defaultMsg);
   return replaceVars(template, params);
 }
 
 export async function buildClosingMsg(params: MsgParams): Promise<string> {
-  const notesStr = params.closureNotes ? `\n📝 ملاحظات الإغلاق: {closureNotes}` : '';
-  const defaultMsg = `مرحباً {clientName} 👋\nتمت معالجة تذكرة الصيانة بنجاح ✅\n\n📋 رقم التذكرة: #{ticketId}\n📝 الوصف: {description}\n🏠 الفيلا: {villaNumber}${notesStr}\n\nشكراً لصبركم وتعاونكم 🌟`;
+  const notesStr = params.closureNotes ? `\nملاحظات الإغلاق: {closureNotes}` : '';
+  const defaultMsg = `السلام عليكم،\nتمت معالجة تذكرة الصيانة بنجاح\n\nرقم التذكرة: #{ticketId}\nالوصف: {description}\nالفيلا: {villaNumber}${notesStr}\n\nشكراً لصبركم وتعاونكم.`;
   const template = await getTemplate('closingMsg', defaultMsg);
   return replaceVars(template, params);
 }
 
 export async function buildAbsentMsg(params: MsgParams): Promise<string> {
-  const defaultMsg = `السلام عليكم {clientName} 👋\n\nتم زيارة وحدتكم رقم {villaNumber} بخصوص بلاغ الصيانة #{ticketId}،\nولم يتمكن الفريق من الدخول نظراً لعدم التواجد.\n\nيرجى رفع تذكرة جديدة عند تواجدكم لإعادة جدولة الزيارة.\n\nشكراً لتفهمكم.`;
+  const defaultMsg = `السلام عليكم،\n\nتم زيارة وحدتكم رقم {villaNumber} بخصوص بلاغ الصيانة #{ticketId}،\nولم يتمكن الفريق من الدخول نظراً لعدم التواجد.\n\nيرجى رفع تذكرة جديدة عند تواجدكم لإعادة جدولة الزيارة.\n\nشكراً لتفهمكم.`;
   const template = await getTemplate('absentMsg', defaultMsg);
   return replaceVars(template, params);
 }
 
 export async function buildOutOfScopeMsg(params: MsgParams): Promise<string> {
-  const defaultMsg = `السلام عليكم {clientName} 👋\n\nبخصوص بلاغ الصيانة #{ticketId} لوحدتكم رقم {villaNumber}،\nبعد المعاينة تبيّن أن المشكلة خارج نطاق الضمان.\n\nشكراً لتفهمكم.`;
+  const defaultMsg = `السلام عليكم،\n\nبخصوص بلاغ الصيانة #{ticketId} لوحدتكم رقم {villaNumber}،\nبعد المعاينة تبيّن أن المشكلة خارج نطاق الضمان.\n\nشكراً لتفهمكم.`;
   const template = await getTemplate('outOfScopeMsg', defaultMsg);
   return replaceVars(template, params);
 }
@@ -310,49 +309,32 @@ type AppointmentRangeParams = {
   clientName: string;
   ticketId: string;
   villaNumber: string;
-  startDate: string;   // "الخميس 5 يونيو"
-  endDate: string;     // "السبت 7 يونيو"
-  preferredTime: string; // "الصباح (8 ص - 12 م)" مثلاً
+  startDate: string;   
+  endDate: string;     
+  preferredTime: string; 
   notes?: string | null;
 };
 
-function formatDateAr(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('ar-EG', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-}
-
 export async function buildAppointmentRangeMsg(params: AppointmentRangeParams): Promise<string> {
-  const defaultMsg =
-    `السلام عليكم {clientName} 👋\n\n` +
-    `نود إعلامكم بأن فريق الصيانة سيزور وحدتكم 🏠\n` +
-    `رقم الفيلا: *{villaNumber}*\n` +
-    `بخصوص بلاغ الصيانة رقم: *#{ticketId}*\n\n` +
-    `📅 *الفترة المتوقعة للزيارة:*\n` +
-    `من {startDate}\n` +
-    `إلى {endDate}\n\n` +
-    `⏰ *الوقت المفضل:* {preferredTime}\n` +
-    `{notes}\n` +
-    `يرجى التواجد في أي وقت خلال هذه الفترة.\n` +
-    `سنتواصل معكم قبيل الزيارة مباشرةً.\n\n` +
-    `شكراً لتعاونكم 🌟\n` +
-    `_فريق ريتال للصيانة_`;
-
+  const defaultOpeningMsg = `السلام عليكم، بخصوص بلاغ الصيانة رقم {ticketId} لوحدتكم {villaNumber}، نرجو إفادتنا بمواعيد تواجدكم في الفيلا لتنسيق موعد الصيانة. شكراً لتعاونكم.`;
+  
   const setting = await prisma.systemSetting.findUnique({ where: { key: 'whatsapp_templates' } });
   const templates = (setting?.value ?? {}) as Record<string, string>;
-  const template = templates.appointmentRangeMsg || defaultMsg;
+  const baseMsg = templates.openingMsg || defaultOpeningMsg;
 
-  return template
-    .replace(/{clientName}/g, params.clientName)
+  let msg = baseMsg
     .replace(/{ticketId}/g, params.ticketId)
-    .replace(/{villaNumber}/g, params.villaNumber)
-    .replace(/{startDate}/g, params.startDate)
-    .replace(/{endDate}/g, params.endDate)
-    .replace(/{preferredTime}/g, params.preferredTime)
-    .replace(/{notes}/g, params.notes ? `📝 ملاحظات: ${params.notes}\n` : '');
+    .replace(/{villaNumber}/g, params.villaNumber);
+
+  msg += `\n\nتفاصيل الموعد المقترح:\n`;
+  msg += `من ${params.startDate}\n`;
+  msg += `إلى ${params.endDate}\n\n`;
+  msg += `الوقت المفضل: ${params.preferredTime}\n`;
+  if (params.notes) {
+    msg += `ملاحظات: ${params.notes}\n`;
+  }
+  
+  return msg;
 }
 
 // ─── طلب موافقة العميل عبر قائمة واتساب ───────────────────────────────────
@@ -371,14 +353,13 @@ export async function sendApprovalRequest(
   }
   try {
     const jid = normalizePhone(phone);
-    const notes = closureNotes ? `\n📝 ملاحظات: ${closureNotes}` : '';
     const text =
-      `مرحباً ${clientName} 👋\n` +
-      `تم إنهاء أعمال الصيانة في *فيلا ${villaNumber}* بنجاح ✅${notes}\n\n` +
-      `رجاءً قيّم الخدمة وأكّد الإغلاق بإرسال:\n\n` +
-      `*1* — ✅ موافق على الإغلاق\n` +
-      `*2* — ❌ لديّ اعتراض\n\n` +
-      `_فريق ريتال للصيانة_`;
+      `السلام عليكم،\n\n` +
+      `نرجو منكم تأكيد الموافقة على إغلاق تذكرة الصيانة رقم: *#${ticketId}* لوحدتكم.\n\n` +
+      `الرجاء الرد بـ:\n` +
+      `*1* — للموافقة\n` +
+      `*2* — للرفض\n\n` +
+      `شكراً لتعاونكم.`;
     await sock.sendMessage(jid, { text });
     return { sent: true, fallback: false };
   } catch (err) {
@@ -402,15 +383,15 @@ export async function sendRatingRequest(
   try {
     const jid = normalizePhone(phone);
     const text =
-      `شكراً ${clientName} على موافقتك! 🌟\n\n` +
+      `شكراً على موافقتكم!\n\n` +
       `كيف تُقيّم خدمة الصيانة؟\n` +
       `أرسل رقماً من 1 إلى 5:\n\n` +
-      `*5* — ⭐⭐⭐⭐⭐ ممتاز\n` +
-      `*4* — ⭐⭐⭐⭐   جيد جداً\n` +
-      `*3* — ⭐⭐⭐     جيد\n` +
-      `*2* — ⭐⭐       مقبول\n` +
-      `*1* — ⭐         ضعيف\n\n` +
-      `_فريق ريتال للصيانة_`;
+      `*5* — ممتاز\n` +
+      `*4* — جيد جداً\n` +
+      `*3* — جيد\n` +
+      `*2* — مقبول\n` +
+      `*1* — ضعيف\n\n` +
+      `فريق ريتال للصيانة`;
     await sock.sendMessage(jid, { text });
     return { sent: true, fallback: false };
   } catch (err) {

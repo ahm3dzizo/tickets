@@ -822,9 +822,9 @@ export function TicketTable({
                           title={statusTranslations[ticket.status] ?? ticket.status}
                           className={cn(
                             'inline-block w-2.5 h-2.5 rounded-full',
-                            ticket.status === 'closed' || ticket.status === 'out_of_scope'
+                          ticket.status === 'closed' || ticket.status === 'out-of-scope'
                               ? 'bg-emerald-500'
-                              : ticket.status === 'in_progress'
+                              : ticket.status === 'in-progress'
                               ? 'bg-blue-500'
                               : ticket.status === 'pending' || ticket.status === 'waiting'
                               ? 'bg-amber-400'
