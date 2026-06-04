@@ -9,6 +9,11 @@ const DEFAULTS = {
   closingMsg:     `السلام عليكم، بخصوص بلاغ الصيانة رقم {ticketId} لوحدتكم رقم {villaNumber}، تم الانتهاء من الصيانة المطلوبة. نرجو التفضل بالتوقيع على نموذج الإغلاق المرفق.\nشكراً لتعاونكم.`,
   absentMsg:      `السلام عليكم {clientName}،\nتم زيارة وحدتكم رقم {villaNumber} بخصوص بلاغ الصيانة #{ticketId}، ولم يتمكن الفريق من الدخول نظراً لعدم التواجد.\nيرجى رفع تذكرة جديدة عند تواجدكم لإعادة جدولة الزيارة.\nشكراً لتفهمكم.`,
   outOfScopeMsg:  `السلام عليكم {clientName}،\nبخصوص بلاغ الصيانة #{ticketId} لوحدتكم رقم {villaNumber}، بعد المعاينة تبيّن أن المشكلة خارج نطاق الضمان.\nشكراً لتفهمكم.`,
+  workHours: [
+    { label: '🌅 الصباح (8 ص - 12 م)', value: 'الصباح (8 ص - 12 م)' },
+    { label: '☀️ الظهر (12 م - 3 م)', value: 'الظهر (12 م - 3 م)' },
+    { label: '🌆 المساء (3 م - 6 م)', value: 'المساء (3 م - 6 م)' },
+  ],
 };
 
 // ─── GET /api/settings/whatsapp-templates ────────────────────────────────────
@@ -45,6 +50,36 @@ router.put('/whatsapp-templates', requireAuth, async (req: AuthRequest, res) => 
       where:  { key: 'whatsapp_templates' },
       update: { value },
       create: { key: 'whatsapp_templates', value },
+    });
+    res.json(updated.value);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/settings/work-hours ────────────────────────────────────────────
+router.get('/work-hours', requireAuth, async (_req: AuthRequest, res) => {
+  try {
+    const setting = await prisma.systemSetting.findUnique({ where: { key: 'work_hours' } });
+    const saved = setting?.value as { label: string; value: string }[] | undefined;
+    res.json(saved || DEFAULTS.workHours);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PUT /api/settings/work-hours ────────────────────────────────────────────
+router.put('/work-hours', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const workHours = req.body;
+    if (!Array.isArray(workHours)) {
+      res.status(400).json({ error: 'workHours يجب أن يكون مصفوفة' });
+      return;
+    }
+    const updated = await prisma.systemSetting.upsert({
+      where:  { key: 'work_hours' },
+      update: { value: workHours },
+      create: { key: 'work_hours', value: workHours },
     });
     res.json(updated.value);
   } catch (err: any) {

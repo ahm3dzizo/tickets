@@ -19,7 +19,9 @@ import Clients from '@/pages/Clients';
 import Technicians from '@/pages/Technicians';
 import TeamMemberDetail from '@/pages/TeamMemberDetail';
 import Reports from '@/pages/Reports';
+import Appointments from '@/pages/Appointments';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { SocketProvider } from '@/contexts/SocketContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { ProfileCompletionModal } from '@/components/ProfileCompletionModal';
@@ -29,7 +31,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <AppContent />
+        <SocketProvider>
+          <AppContent />
+        </SocketProvider>
       </AuthProvider>
     </ErrorBoundary>
   );
@@ -118,6 +122,10 @@ function AppContent() {
           <Route
             path="/reports"
             element={user && !requiresProfileCompletion ? <Reports /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/appointments"
+            element={user && !requiresProfileCompletion ? <Appointments /> : <Navigate to="/login" />}
           />
           {/* ⛔️ تمت إزالة Route /register */}
         </Routes>

@@ -304,6 +304,57 @@ export async function buildOutOfScopeMsg(params: MsgParams): Promise<string> {
   return replaceVars(template, params);
 }
 
+// ─── رسالة موعد بنطاق زمني (Range) ─────────────────────────────────────────
+
+type AppointmentRangeParams = {
+  clientName: string;
+  ticketId: string;
+  villaNumber: string;
+  startDate: string;   // "الخميس 5 يونيو"
+  endDate: string;     // "السبت 7 يونيو"
+  preferredTime: string; // "الصباح (8 ص - 12 م)" مثلاً
+  notes?: string | null;
+};
+
+function formatDateAr(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('ar-EG', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+}
+
+export async function buildAppointmentRangeMsg(params: AppointmentRangeParams): Promise<string> {
+  const defaultMsg =
+    `السلام عليكم {clientName} 👋\n\n` +
+    `نود إعلامكم بأن فريق الصيانة سيزور وحدتكم 🏠\n` +
+    `رقم الفيلا: *{villaNumber}*\n` +
+    `بخصوص بلاغ الصيانة رقم: *#{ticketId}*\n\n` +
+    `📅 *الفترة المتوقعة للزيارة:*\n` +
+    `من {startDate}\n` +
+    `إلى {endDate}\n\n` +
+    `⏰ *الوقت المفضل:* {preferredTime}\n` +
+    `{notes}\n` +
+    `يرجى التواجد في أي وقت خلال هذه الفترة.\n` +
+    `سنتواصل معكم قبيل الزيارة مباشرةً.\n\n` +
+    `شكراً لتعاونكم 🌟\n` +
+    `_فريق ريتال للصيانة_`;
+
+  const setting = await prisma.systemSetting.findUnique({ where: { key: 'whatsapp_templates' } });
+  const templates = (setting?.value ?? {}) as Record<string, string>;
+  const template = templates.appointmentRangeMsg || defaultMsg;
+
+  return template
+    .replace(/{clientName}/g, params.clientName)
+    .replace(/{ticketId}/g, params.ticketId)
+    .replace(/{villaNumber}/g, params.villaNumber)
+    .replace(/{startDate}/g, params.startDate)
+    .replace(/{endDate}/g, params.endDate)
+    .replace(/{preferredTime}/g, params.preferredTime)
+    .replace(/{notes}/g, params.notes ? `📝 ملاحظات: ${params.notes}\n` : '');
+}
+
 // ─── طلب موافقة العميل عبر قائمة واتساب ───────────────────────────────────
 
 export async function sendApprovalRequest(

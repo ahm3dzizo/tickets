@@ -5,7 +5,7 @@ import { useLocation } from 'react-router-dom';
 import {
   User, Lock, Bell, Shield, LogOut, ChevronDown, ChevronUp,
   Camera, Save, Eye, EyeOff, CheckCircle2, Loader2, Check,
-  MessageSquare, RefreshCw, Wifi, WifiOff, Download,
+  MessageSquare, RefreshCw, Wifi, WifiOff, Download, Clock, Plus, Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -329,6 +329,55 @@ export default function Settings() {
 
   const insertVar = (setter: React.Dispatch<React.SetStateAction<string>>, variable: string) => {
     setter(prev => prev + variable);
+  };
+
+  // ── Work Hours ─────────────────────────────────────────────────────────────
+  const [workHours, setWorkHours] = useState<{ label: string; value: string }[]>([]);
+  const [loadingWorkHours, setLoadingWorkHours] = useState(false);
+  const [savingWorkHours, setSavingWorkHours] = useState(false);
+
+  useEffect(() => {
+    if (user?.role === 'admin' && openSection === 'workhours') {
+      loadWorkHours();
+    }
+  }, [openSection, user?.role]);
+
+  const loadWorkHours = async () => {
+    setLoadingWorkHours(true);
+    try {
+      const data = await settingsApi.getWorkHours();
+      setWorkHours(data || []);
+    } catch {
+      toast.error('تعذر تحميل أوقات الدوام');
+    } finally {
+      setLoadingWorkHours(false);
+    }
+  };
+
+  const saveWorkHours = async () => {
+    setSavingWorkHours(true);
+    try {
+      await settingsApi.updateWorkHours(workHours);
+      toast.success('تم حفظ أوقات الدوام بنجاح');
+    } catch {
+      toast.error('تعذر حفظ أوقات الدوام');
+    } finally {
+      setSavingWorkHours(false);
+    }
+  };
+
+  const addWorkHour = () => {
+    setWorkHours([...workHours, { label: 'فترة جديدة (مثال: 8 ص - 12 م)', value: 'فترة جديدة (مثال: 8 ص - 12 م)' }]);
+  };
+
+  const removeWorkHour = (idx: number) => {
+    setWorkHours(workHours.filter((_, i) => i !== idx));
+  };
+
+  const updateWorkHour = (idx: number, text: string) => {
+    const arr = [...workHours];
+    arr[idx] = { label: text, value: text };
+    setWorkHours(arr);
   };
 
   // ── Initials avatar ────────────────────────────────────────────────────────
@@ -871,6 +920,55 @@ export default function Settings() {
                     <Button onClick={saveTemplates} disabled={savingTemplates} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-6 font-bold">
                       {savingTemplates ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 ml-2" />}
                       حفظ القوالب
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </Section>
+        )}
+
+        {/* ── Work Hours ──────────────────────────────────────────────────── */}
+        {user?.role === 'admin' && (
+          <Section icon={Clock} title="أوقات الدوام" desc="تحديد الفترات المتاحة لحجز مواعيد الصيانة"
+            accent="amber" open={openSection === 'workhours'} onToggle={() => toggle('workhours')}>
+            <div className="space-y-6">
+              {loadingWorkHours ? (
+                <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
+              ) : (
+                <>
+                  <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4 space-y-4">
+                    <p className="text-sm font-bold text-amber-500 text-right">الفترات المتاحة للمواعيد:</p>
+                    <div className="space-y-3">
+                      {workHours.map((wh, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <button
+                            onClick={() => removeWorkHour(idx)}
+                            className="p-2 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          <Input
+                            value={wh.label}
+                            onChange={e => updateWorkHour(idx, e.target.value)}
+                            className="text-right bg-background/70 border-border h-11 rounded-xl"
+                            dir="rtl"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-end pt-2">
+                      <Button onClick={addWorkHour} variant="outline" className="text-amber-500 border-amber-500/20 hover:bg-amber-500/10 gap-2 h-9 rounded-xl">
+                        <Plus className="w-4 h-4" />
+                        إضافة فترة
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-start pt-2">
+                    <Button onClick={saveWorkHours} disabled={savingWorkHours} className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 px-6 font-bold">
+                      {savingWorkHours ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 ml-2" />}
+                      حفظ أوقات الدوام
                     </Button>
                   </div>
                 </>

@@ -560,6 +560,36 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       // autoSendClosing(req.uid, ticket).catch(() => {});
     }
 
+    // ── إشعار المشرفين الآخرين عند تحديد موعد ──────────────────────────────
+    const apptChanged = data.appointmentTime !== undefined &&
+      data.appointmentTime !== (oldTicket as any)?.appointmentTime;
+
+    if (apptChanged && data.appointmentTime && ticket.assignedSupervisorIds?.length) {
+      const senderUid = req.uid!;
+      const io = getIO();
+
+      // جلب اسم المشرف المُرسِل
+      const sender = await prisma.user.findUnique({
+        where: { uid: senderUid },
+        select: { displayName: true },
+      }).catch(() => null);
+
+      // إرسال إشعار Socket.io لكل مشرف في التذكرة (بما فيهم المُرسِل — لعرضه في واجهته)
+      for (const supId of ticket.assignedSupervisorIds) {
+        io.emit(`notification:supervisor:${supId}`, {
+          type: 'appointment_set',
+          ticketId: ticket.id,
+          ticketRef: ticket.ticketId,
+          clientName: ticket.clientName,
+          villaNumber: ticket.villaNumber,
+          appointmentTime: data.appointmentTime,
+          setBy: sender?.displayName || 'مشرف',
+          setByUid: senderUid,
+          isShared: ticket.assignedSupervisorIds.length > 1,
+        });
+      }
+    }
+
     res.json(ticket);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

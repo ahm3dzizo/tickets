@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { AuthRequest, requireAuth } from '../auth.js';
-import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, sendWAText, pairWACode, sendApprovalRequest } from '../baileys.js';
+import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, sendWAText, pairWACode, sendApprovalRequest, buildAppointmentRangeMsg } from '../baileys.js';
 import qrcode from 'qrcode';
 import prisma from '../db.js';
 
@@ -166,6 +166,59 @@ router.post('/approval/:ticketId', requireAuth, async (req: AuthRequest, res) =>
     res.json(result);
   } catch (err: any) {
     console.error('[WA] /approval error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/whatsapp/appointment-range/:ticketId ──────────────────────────
+router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest, res) => {
+  const uid = req.uid!;
+  const { ticketId } = req.params;
+  const { startDate, endDate, preferredTime, notes, phone, clientName, villaNumber } = req.body as {
+    startDate: string;
+    endDate: string;
+    preferredTime: string;
+    notes?: string;
+    phone: string;
+    clientName: string;
+    villaNumber: string;
+  };
+
+  if (!startDate || !endDate || !preferredTime || !phone) {
+    res.status(400).json({ error: 'startDate, endDate, preferredTime, phone مطلوبة' });
+    return;
+  }
+
+  if (getWAStatus(uid) !== 'CONNECTED') {
+    res.status(503).json({ error: 'واتساب غير متصل.' });
+    return;
+  }
+
+  try {
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { ticketId: true, clientName: true, villaNumber: true },
+    });
+    if (!ticket) { res.status(404).json({ error: 'التذكرة غير موجودة' }); return; }
+
+    // تنسيق التاريخ بالعربية
+    const fmtDate = (d: string) => new Date(d).toLocaleDateString('ar-EG', {
+      weekday: 'long', day: 'numeric', month: 'long',
+    });
+
+    const msg = await buildAppointmentRangeMsg({
+      clientName: clientName || ticket.clientName,
+      ticketId: ticket.ticketId,
+      villaNumber: villaNumber || ticket.villaNumber,
+      startDate: fmtDate(startDate),
+      endDate: fmtDate(endDate),
+      preferredTime,
+      notes: notes || null,
+    });
+
+    const result = await sendWAText(uid, phone, msg);
+    res.json(result);
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });

@@ -172,6 +172,10 @@ export const whatsappApi = {
     post<{ success: boolean; message: string }>('/whatsapp/restart', {}),
   sendApprovalRequest: (ticketId: string) =>
     post<{ sent: boolean; fallback: boolean }>(`/whatsapp/approval/${ticketId}`, {}),
+  sendAppointmentRange: (ticketId: string, data: {
+    startDate: string; endDate: string; preferredTime: string;
+    notes?: string; phone: string; clientName: string; villaNumber: string;
+  }) => post<{ sent: boolean; fallback: boolean }>(`/whatsapp/appointment-range/${ticketId}`, data),
 };
 
 // ── Settings ──────────────────────────────────────────────────────────────────
@@ -181,6 +185,10 @@ export const settingsApi = {
     get<WaTemplates>('/settings/whatsapp-templates'),
   updateWhatsAppTemplates: (data: WaTemplates) =>
     put<WaTemplates>('/settings/whatsapp-templates', data),
+  getWorkHours: () =>
+    get<{ label: string; value: string }[]>('/settings/work-hours'),
+  updateWorkHours: (data: { label: string; value: string }[]) =>
+    put<{ label: string; value: string }[]>('/settings/work-hours', data),
 };
 
 // ── Reports ───────────────────────────────────────────────────────────────────
@@ -221,4 +229,34 @@ export const techniciansApi = {
   create: (data: any)                => post<any>('/technicians', data),
   update: (id: string, data: any)    => put<any>(`/technicians/${id}`, data),
   delete: (id: string)               => del<any>(`/technicians/${id}`),
+};
+
+// ── Appointments ──────────────────────────────────────────────────────────────
+export const appointmentsApi = {
+  getConflicts: (params: { supervisorIds: string[]; startDate: string; endDate: string; excludeTicketId?: string }) => {
+    const q = new URLSearchParams();
+    q.set('supervisorIds', params.supervisorIds.join(','));
+    q.set('startDate', params.startDate);
+    q.set('endDate', params.endDate);
+    if (params.excludeTicketId) q.set('excludeTicketId', params.excludeTicketId);
+    return get<{ conflicts: any[] }>(`/appointments/conflicts?${q.toString()}`);
+  },
+  getUpcoming: (supervisorId?: string, days?: number) => {
+    const q = new URLSearchParams();
+    if (supervisorId) q.set('supervisorId', supervisorId);
+    if (days) q.set('days', String(days));
+    return get<any[]>(`/appointments/upcoming?${q.toString()}`);
+  },
+  getCalendar: (params: { from: string; to: string; supervisorId?: string; projectId?: string }) => {
+    const q = new URLSearchParams();
+    q.set('from', params.from);
+    q.set('to', params.to);
+    if (params.supervisorId) q.set('supervisorId', params.supervisorId);
+    if (params.projectId) q.set('projectId', params.projectId);
+    return get<any[]>(`/appointments/calendar?${q.toString()}`);
+  },
+  subscribePush: (subscription: PushSubscriptionJSON) =>
+    post<{ ok: boolean }>('/appointments/push-subscribe', { subscription }),
+  unsubscribePush: () =>
+    del<{ ok: boolean }>('/appointments/push-unsubscribe'),
 };

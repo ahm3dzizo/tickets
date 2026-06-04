@@ -22,6 +22,7 @@ import auditRoutes from "./routes/audit.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import whatsappRoutes from "./routes/whatsapp.js";
 import settingsRoutes from "./routes/settings.js";
+import appointmentRoutes from "./routes/appointments.js";
 import ocrRoutes from "./routes/ocr.js";
 import importExcelRoutes from "./routes/import-excel.js";
 import { initAllSessions } from "./baileys.js";
@@ -79,6 +80,7 @@ async function startServer() {
   app.use("/api/admin/ticket-types", ticketTypesAdminRoutes);
   app.use("/api/whatsapp", whatsappRoutes);
   app.use("/api/settings", settingsRoutes);
+  app.use("/api/appointments", appointmentRoutes);
   app.use("/api/ocr", ocrRoutes);
   app.use("/api/import-excel", importExcelRoutes);
 
