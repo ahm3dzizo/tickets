@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CalendarDays, Clock, AlertTriangle, CheckCircle2, Eye, Send, Save, Loader2, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -66,6 +66,8 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [dynamicPreview, setDynamicPreview] = useState<string>('جاري تحميل الرسالة...');
+
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
 
@@ -134,6 +136,31 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
     ? `الساعة ${customTime}`
     : timeOptions.find(o => o.value === timeMode)?.label.replace(/^[^ ]+ /, '') || timeMode;
 
+  // Fetch dynamic preview when parameters change
+  useEffect(() => {
+    if (!open) return;
+    const fetchPreview = async () => {
+      try {
+        const result = await whatsappApi.previewAppointmentRange(ticket.id, {
+          startDate,
+          endDate: addDays(startDate, rangeDays - 1),
+          preferredTime: preferredTimeLabel,
+          notes: notes || undefined,
+          phone: clientPhone || '966500000000',
+          clientName: ticket.clientName,
+          villaNumber: ticket.villaNumber,
+        });
+        if (result.text) {
+          setDynamicPreview(result.text);
+        }
+      } catch (err) {
+        console.error('Failed to fetch preview', err);
+      }
+    };
+    const timer = setTimeout(fetchPreview, 500);
+    return () => clearTimeout(timer);
+  }, [open, startDate, rangeDays, preferredTimeLabel, notes, ticket, clientPhone]);
+
   // ── حفظ فقط ──
   const handleSave = async () => {
     setSaving(true);
@@ -193,27 +220,6 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
     }
   };
 
-  // ── Preview نص الرسالة ──
-  const previewMsg = [
-    `السلام عليكم ${ticket.clientName} 👋`,
-    ``,
-    `نود إعلامكم بأن فريق الصيانة سيزور وحدتكم 🏠`,
-    `رقم الفيلا: *${ticket.villaNumber}*`,
-    `بخصوص بلاغ الصيانة رقم: *#${ticket.ticketId}*`,
-    ``,
-    `تفاصيل الفترة المتوقعة للزيارة:`,
-    `من ${formatDateAr(startDate)}`,
-    `إلى ${formatDateAr(endDate)}`,
-    ``,
-    `⏰ *الوقت المفضل:* ${preferredTimeLabel}`,
-    notes ? `📝 ملاحظات: ${notes}` : '',
-    ``,
-    `يرجى التواجد في أي وقت خلال هذه الفترة.`,
-    `سنتواصل معكم قبيل الزيارة مباشرةً.`,
-    ``,
-    `شكراً لتعاونكم 🌟`,
-    `_فريق ريتال للصيانة_`,
-  ].filter(l => l !== null).join('\n');
 
   const isBusy = saving || sending;
 
@@ -375,7 +381,7 @@ export function AppointmentDialog({ open, onOpenChange, ticket, clientPhone, onS
             <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
               <p className="text-[10px] text-emerald-400 font-bold mb-2 uppercase tracking-wider">معاينة الرسالة</p>
               <pre className="text-[11px] text-slate-300 whitespace-pre-wrap font-sans leading-relaxed">
-                {previewMsg}
+                {dynamicPreview}
               </pre>
             </div>
           )}
