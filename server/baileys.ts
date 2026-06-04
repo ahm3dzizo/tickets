@@ -420,41 +420,51 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
     
     console.log(`[WA] Found client:`, client ? client.id : 'None');
     
-    if (!client) {
-      console.log(`[WA] Client not found for suffix ${suffix}. Checking if any ticket has this phone in notes or fallback...`);
-      return;
-    }
-
     // هل العميل ينتظر موافقة؟
-    const pendingApproval = await prisma.ticket.findFirst({
-      where: { clientId: client.id, approvalState: 'sent' },
-      orderBy: { approvalSentAt: 'desc' },
-    });
-    if (pendingApproval && (text === '1' || text === '2')) {
-      const rowId = text === '1'
-        ? `approve_${pendingApproval.id}`
-        : `reject_${pendingApproval.id}`;
-      await handleWAListReply(userId, rowId, senderJid);
-      return;
-    }
+    if (client) {
+      const pendingApproval = await prisma.ticket.findFirst({
+        where: { clientId: client.id, approvalState: 'sent' },
+        orderBy: { approvalSentAt: 'desc' },
+      });
+      if (pendingApproval && (text === '1' || text === '2')) {
+        const rowId = text === '1'
+          ? `approve_${pendingApproval.id}`
+          : `reject_${pendingApproval.id}`;
+        await handleWAListReply(userId, rowId, senderJid);
+        return;
+      }
 
-    // هل العميل ينتظر تقييم؟
-    const pendingRating = await prisma.ticket.findFirst({
-      where: { clientId: client.id, approvalState: 'awaiting_rating' },
-      orderBy: { clientApprovedAt: 'desc' },
-    });
-    if (pendingRating && ['1', '2', '3', '4', '5'].includes(text)) {
-      await handleWAListReply(userId, `rate_${text}_${pendingRating.id}`, senderJid);
-      return;
+      // هل العميل ينتظر تقييم؟
+      const pendingRating = await prisma.ticket.findFirst({
+        where: { clientId: client.id, approvalState: 'awaiting_rating' },
+        orderBy: { clientApprovedAt: 'desc' },
+      });
+      if (pendingRating && ['1', '2', '3', '4', '5'].includes(text)) {
+        await handleWAListReply(userId, `rate_${text}_${pendingRating.id}`, senderJid);
+        return;
+      }
     }
 
     // هل العميل ينتظر تأكيد الموعد؟
-    const pendingAppointment = await prisma.ticket.findFirst({
-      where: { clientId: client.id, appointmentAwaitingReply: true },
-      orderBy: { createdAt: 'desc' }
-    });
+    let pendingAppointment = null;
+    if (client) {
+      pendingAppointment = await prisma.ticket.findFirst({
+        where: { clientId: client.id, appointmentAwaitingReply: true },
+        orderBy: { createdAt: 'desc' }
+      });
+    }
+
+    // Fallback: If client not found (e.g., due to @lid) or no pending appointment found for client,
+    // find the most recently updated ticket globally that is waiting for a reply.
+    if (!pendingAppointment) {
+      console.log(`[WA] Checking for global pending appointment as fallback...`);
+      pendingAppointment = await prisma.ticket.findFirst({
+        where: { appointmentAwaitingReply: true },
+        orderBy: { createdAt: 'desc' }
+      });
+    }
     
-    console.log(`[WA] pendingAppointment for client ${client.id}:`, pendingAppointment ? pendingAppointment.id : 'None');
+    console.log(`[WA] pendingAppointment:`, pendingAppointment ? pendingAppointment.id : 'None');
     
     if (pendingAppointment) {
       await prisma.ticket.update({
