@@ -176,6 +176,10 @@ export const whatsappApi = {
     startDate: string; endDate: string; preferredTime: string;
     notes?: string; phone: string; clientName: string; villaNumber: string;
   }) => post<{ sent: boolean; fallback: boolean }>(`/whatsapp/appointment-range/${ticketId}`, data),
+  previewAppointmentRange: (ticketId: string, data: {
+    startDate: string; endDate: string; preferredTime: string;
+    notes?: string; phone: string; clientName: string; villaNumber: string;
+  }) => post<{ text: string }>(`/whatsapp/preview-appointment-range/${ticketId}`, data),
 };
 
 // ── Settings ──────────────────────────────────────────────────────────────────

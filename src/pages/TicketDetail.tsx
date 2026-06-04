@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -259,20 +259,32 @@ export default function TicketDetail() {
 
   const handleWhatsApp = async () => {
     const phone = client?.phone?.replace(/\D/g, '') || '';
-    if (!phone) { toast.error('رقم الهاتف غير متوفر'); return; }
-    const msg = `السلام عليكم ${client?.name || ''}\nبخصوص طلب الصيانة رقم ${ticket?.ticketId || ''} - فيلا ${ticket?.villaNumber}\n${ticket?.appointmentTime ? `موعد الزيارة: ${ticket.appointmentTime}` : 'سيتم التواصل معكم لتحديد موعد الزيارة'}\nشكراً لكم.`;
+    if (!phone) { toast.error('Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ ØºÙŠØ± Ù…ØªÙˆÙØ±'); return; }
+    
     setWaSending(true);
     try {
+      const templates = await settingsApi.getWhatsAppTemplates();
+      const baseMsg = templates.openingMsg || `Ø§Ù„Ø³Ù„Ø§Ù… Ø¹Ù„ÙŠÙƒÙ…ØŒ\nØªÙ… Ø§Ø³ØªÙ„Ø§Ù… Ø·Ù„Ø¨ Ø§Ù„ØµÙŠØ§Ù†Ø© Ø§Ù„Ø®Ø§Øµ Ø¨Ùƒ\n\nØ±Ù‚Ù… Ø§Ù„ØªØ°ÙƒØ±Ø©: #{ticketId}\nØ§Ù„ÙˆØµÙ: {description}\nØ§Ù„ÙÙŠÙ„Ø§: {villaNumber}\n\nØ³ÙŠØªÙˆØ§ØµÙ„ Ù…Ø¹ÙƒÙ… ÙØ±ÙŠÙ‚ Ø§Ù„ØµÙŠØ§Ù†Ø© ÙÙŠ Ø£Ù‚Ø±Ø¨ ÙˆÙ‚Øª.\nØ´ÙƒØ±Ø§Ù‹ Ù„Ø«Ù‚ØªÙƒÙ….`;
+      
+      let msg = baseMsg
+        .replace(/{ticketId}/g, ticket?.ticketId || '')
+        .replace(/{description}/g, ticket?.description || '')
+        .replace(/{villaNumber}/g, ticket?.villaNumber || '');
+
+      if (ticket?.appointmentTime) {
+        msg += `\n\nØªØ­Ø¯ÙŠØ«: Ù…ÙˆØ¹Ø¯ Ø§Ù„Ø²ÙŠØ§Ø±Ø© Ø§Ù„Ù…Ø­Ø¯Ø¯ Ù‡Ùˆ ${ticket.appointmentTime}`;
+      }
+
       const r = await whatsappApi.send(phone, msg);
       if (r?.sent) {
-        toast.success('تم إرسال الرسالة للعميل عبر واتساب');
+        toast.success('ØªÙ… Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„Ø±Ø³Ø§Ù„Ø© Ù„Ù„Ø¹Ù…ÙŠÙ„ Ø¹Ø¨Ø± ÙˆØ§ØªØ³Ø§Ø¨');
         setWaSent(true);
         setTimeout(() => navigate(-1), 800);
       } else {
-        toast.error('فشل إرسال الرسالة. تأكد من اتصال الواتساب.');
+        toast.error('ÙØ´Ù„ Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„Ø±Ø³Ø§Ù„Ø©');
       }
     } catch {
-      toast.error('فشل إرسال الرسالة. تأكد من اتصال الواتساب.');
+      toast.error('Ø®Ø·Ø£ ÙÙŠ Ø§Ù„Ø§ØªØµØ§Ù„');
     } finally {
       setWaSending(false);
     }
@@ -606,9 +618,6 @@ export default function TicketDetail() {
                       variant="outline"
                       className="w-full justify-start border-border bg-white/5 text-slate-400 hover:text-white text-xs h-12 rounded-2xl font-bold"
                       onClick={() => {
-                        setApptDate(ticket.appointmentTime?.split(' ')[0] || todayStr());
-                        setApptTime(ticket.appointmentTime?.split(' ')[1] || '');
-                        setApptNotes(ticket.appointmentNotes || '');
                         setApptOpen(true);
                       }}
                     >

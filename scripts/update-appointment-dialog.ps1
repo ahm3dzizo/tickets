@@ -2,59 +2,50 @@
 $file = 'd:\APP\tickets-main\tickets\src\components\tickets\AppointmentDialog.tsx'
 $content = Get-Content $file -Raw -Encoding UTF8
 
-# 1. Update imports
-$content = $content.Replace("import { appointmentsApi, whatsappApi, ticketsApi } from '@/lib/api';", "import { appointmentsApi, whatsappApi, ticketsApi, settingsApi } from '@/lib/api';")
-
-# 2. Change TIME_OPTIONS to DEFAULT_TIME_OPTIONS
-$content = $content.Replace("const TIME_OPTIONS = [", "const DEFAULT_TIME_OPTIONS = [")
-
-# 3. Add dynamic state inside component
+# 1. Add state for dynamic preview
 $stateCode = @'
-  const [startDate, setStartDate] = useState(todayStr());
-  const [rangeDays, setRangeDays] = useState(3);
-  const [timeOptions, setTimeOptions] = useState(DEFAULT_TIME_OPTIONS);
-  const [timeMode, setTimeMode] = useState(DEFAULT_TIME_OPTIONS[0].value);
-'@
-$content = $content.Replace("  const [startDate, setStartDate] = useState(todayStr());`n  const [rangeDays, setRangeDays] = useState(3);`n  const [timeMode, setTimeMode] = useState(TIME_OPTIONS[0].value);", $stateCode)
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [dynamicPreview, setDynamicPreview] = useState<string>('جاري تحميل الرسالة...');
 
-# 4. Fetch dynamic options inside useEffect
-$useEffectCode = @'
+  // Fetch dynamic preview when parameters change
   useEffect(() => {
     if (!open) return;
-    const existing = ticket.appointmentTime;
-    if (existing) {
-      const parts = existing.split(' ');
-      setStartDate(parts[0] || todayStr());
-    } else {
-      setStartDate(todayStr());
-    }
-    setNotes(ticket.appointmentNotes || '');
-    setRangeDays(3);
-    setCustomTime('09:00');
-    setShowPreview(false);
-    setConflicts([]);
-    
-    // Fetch work hours
-    settingsApi.getWorkHours().then(hours => {
-      const opts = hours && hours.length > 0 ? hours : DEFAULT_TIME_OPTIONS;
-      const finalOpts = [...opts, { label: '🕐 وقت محدد', value: 'custom' }];
-      setTimeOptions(finalOpts);
-      setTimeMode(finalOpts[0].value);
-    }).catch(() => {
-      const opts = [...DEFAULT_TIME_OPTIONS, { label: '🕐 وقت محدد', value: 'custom' }];
-      setTimeOptions(opts);
-      setTimeMode(opts[0].value);
-    });
-  }, [open]);
+    const fetchPreview = async () => {
+      try {
+        const result = await whatsappApi.previewAppointmentRange(ticket.id, {
+          startDate,
+          endDate,
+          preferredTime: preferredTimeLabel,
+          notes: notes || undefined,
+          phone: clientPhone || '966500000000',
+          clientName: ticket.clientName,
+          villaNumber: ticket.villaNumber,
+        });
+        setDynamicPreview(result.text);
+      } catch (err) {
+        console.error('Failed to fetch preview', err);
+      }
+    };
+    const timer = setTimeout(fetchPreview, 500);
+    return () => clearTimeout(timer);
+  }, [open, startDate, endDate, preferredTimeLabel, notes, ticket, clientPhone]);
 '@
+$content = $content -replace '(?s)  const \[saving, setSaving\] = useState\(false\);`r?`n  const \[sending, setSending\] = useState\(false\);', $stateCode
 
-# Locate old useEffect using Regex since we can't be sure of exact spacing
-$content = $content -replace '(?s)  // ── تهيئة القيم عند فتح الـ Dialog ──.*?  \}, \[open\]\);', $useEffectCode
-
-# 5. Fix timeMode references
-$content = $content.Replace("TIME_OPTIONS.find(o => o.value === timeMode)", "timeOptions.find(o => o.value === timeMode)")
-$content = $content.Replace("TIME_OPTIONS.map(opt => (", "timeOptions.map(opt => (")
-$content = $content.Replace("TIME_OPTIONS[0]", "DEFAULT_TIME_OPTIONS[0]")
+# 2. Replace static previewMsg usage
+$previewBoxOld = '(?s)  // ── Preview نص الرسالة ──.*?</ScrollArea>'
+$previewBoxNew = @'
+  // ── Preview نص الرسالة ──
+  const previewBox = (
+    <ScrollArea className="h-48 w-full rounded-xl border border-border/50 bg-slate-900/50 p-4" dir="rtl">
+      <div className="flex flex-col gap-1.5 text-sm whitespace-pre-wrap text-slate-300">
+        {dynamicPreview}
+      </div>
+    </ScrollArea>
+  );
+'@
+$content = $content -replace $previewBoxOld, $previewBoxNew
 
 Set-Content $file -Value $content -Encoding UTF8 -NoNewline
 Write-Host "Done"
