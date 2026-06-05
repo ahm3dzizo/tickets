@@ -81,10 +81,14 @@ export async function buildTypeToSpecialtyMap() {
 export async function findSupervisorsDB(projectId: string, requiredSpecialties: string[]) {
   const allUsers = await prisma.user.findMany({
     where: { role: "supervisor" },
-    include: { projects: { select: { id: true } }, specialtiesRef: { select: { key: true } } },
+    include: { 
+      projects: { select: { id: true } }, 
+      specialtiesRef: { select: { key: true } },
+      substituteFor: { select: { specialty: true, specialtiesRef: { select: { key: true } } } }
+    },
   });
 
-  const activeUsers = allUsers.filter((u: any) => !u.uid.startsWith("pending_"));
+  const activeUsers = allUsers.filter((u: any) => !u.uid.startsWith("pending_") && !u.disabled && !u.onLeave);
 
   let projectSups = activeUsers.filter(
     (u: any) => u.projects && u.projects.some((p: any) => p.id === projectId)
@@ -92,9 +96,18 @@ export async function findSupervisorsDB(projectId: string, requiredSpecialties: 
   if (projectSups.length === 0) projectSups = activeUsers;
 
   const getSpecs = (u: any): string[] => {
-    if (u.specialtiesRef && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-    if (u.specialty) return [u.specialty];
-    return ["general"];
+    const specs: string[] = [];
+    if (u.specialtiesRef && u.specialtiesRef.length > 0) specs.push(...u.specialtiesRef.map((s: any) => s.key));
+    else if (u.specialty) specs.push(u.specialty);
+    else specs.push("general");
+
+    if (u.substituteFor && u.substituteFor.length > 0) {
+      for (const sub of u.substituteFor) {
+        if (sub.specialtiesRef && sub.specialtiesRef.length > 0) specs.push(...sub.specialtiesRef.map((s: any) => s.key));
+        else if (sub.specialty) specs.push(sub.specialty);
+      }
+    }
+    return [...new Set(specs)];
   };
 
   let matched = projectSups.filter((s: any) =>

@@ -1,1 +1,0 @@
-const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.ticket.findMany({ where: { refNumber: { contains: '191900' } } }).then(res => { console.log('Matches:', res.map(t => t.ticketId)); process.exit(0); }).catch(console.error);

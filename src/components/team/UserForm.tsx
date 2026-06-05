@@ -74,12 +74,16 @@ export function UserForm({
   );
   const [selectedProjects, setSelectedProjects] = useState<string[]>(editingUser?.projectIds || []);
   const [projects,         setProjects]         = useState<Project[]>([]);
+  const [onLeave,          setOnLeave]          = useState(editingUser?.onLeave || false);
+  const [substituteUid,    setSubstituteUid]    = useState<string | null>(editingUser?.substituteUid || null);
+  const [allUsers,         setAllUsers]         = useState<any[]>([]);
 
   const isCustomTrigger = !!trigger;
 
-  // Load projects list once
+  // Load projects list and users once
   useEffect(() => {
     projectsApi.getAll().then(setProjects).catch(() => {});
+    usersApi.getAll().then(setAllUsers).catch(() => {});
   }, []);
 
   // When dialog opens in edit mode → fetch fresh user data from server
@@ -100,6 +104,8 @@ export function UserForm({
           : fresh.specialty ? [fresh.specialty] : ['general']
       );
       setSelectedProjects(fresh.projectIds || []);
+      setOnLeave(fresh.onLeave || false);
+      setSubstituteUid(fresh.substituteUid || null);
     }).catch(() => {});
   }, [open]);
 
@@ -136,6 +142,8 @@ export function UserForm({
           specialty: specialties[0],
           role,
           projectIds: selectedProjects,
+          onLeave,
+          substituteUid: onLeave ? substituteUid : null,
         });
         toast.success('تم تحديث بيانات العضو بنجاح');
       } else {
@@ -191,6 +199,9 @@ export function UserForm({
             specialties={specialties} toggleSpecialty={toggleSpecialty}
             selectedProjects={selectedProjects} toggleProject={toggleProject}
             projects={projects}
+            onLeave={onLeave} setOnLeave={setOnLeave}
+            substituteUid={substituteUid} setSubstituteUid={setSubstituteUid}
+            allUsers={allUsers}
             loading={loading}
             onSubmit={handleSubmit}
             onCancel={() => setOpen(false)}
@@ -224,6 +235,9 @@ export function UserForm({
           specialties={specialties} toggleSpecialty={toggleSpecialty}
           selectedProjects={selectedProjects} toggleProject={toggleProject}
           projects={projects}
+          onLeave={onLeave} setOnLeave={setOnLeave}
+          substituteUid={substituteUid} setSubstituteUid={setSubstituteUid}
+          allUsers={allUsers}
           loading={loading}
           onSubmit={handleSubmit}
           onCancel={() => setOpen(false)}
@@ -246,6 +260,9 @@ interface FormBodyProps {
   specialties: string[]; toggleSpecialty: (s: string) => void;
   selectedProjects: string[]; toggleProject: (id: string) => void;
   projects: Project[];
+  onLeave: boolean; setOnLeave: (v: boolean) => void;
+  substituteUid: string | null; setSubstituteUid: (v: string | null) => void;
+  allUsers: any[];
   loading: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
@@ -257,6 +274,7 @@ function FormBody({
   role, setRole, roleTranslations,
   specialties, toggleSpecialty,
   selectedProjects, toggleProject, projects,
+  onLeave, setOnLeave, substituteUid, setSubstituteUid, allUsers,
   loading, onSubmit, onCancel,
 }: FormBodyProps) {
   return (
@@ -430,7 +448,7 @@ function FormBody({
           </div>
         )}
 
-        {/* ── Edit mode: employee ID + phone ── */}
+        {/* ── Edit mode: employee ID + phone + Leave options ── */}
         {editingUser && (
           <div className="space-y-4 pt-4 border-t border-white/5">
             <div className="space-y-2">
@@ -457,6 +475,42 @@ function FormBody({
                 <Phone className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               </div>
             </div>
+
+            {/* Leave / Substitute Section */}
+            {role !== 'admin' && (
+              <div className="space-y-3 pt-4 border-t border-white/5">
+                <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-border">
+                  <input 
+                    type="checkbox" 
+                    id="onLeaveToggle"
+                    checked={onLeave} 
+                    onChange={(e) => setOnLeave(e.target.checked)} 
+                    className="w-4 h-4 rounded text-blue-500" 
+                  />
+                  <Label htmlFor="onLeaveToggle" className="text-white text-sm font-bold cursor-pointer">العضو في إجازة؟</Label>
+                </div>
+                {onLeave && (
+                  <div className="space-y-2">
+                    <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">اختر البديل (المشرف / المهندس الذي سيستلم عمله)</Label>
+                    <select
+                      value={substituteUid || ''}
+                      onChange={e => setSubstituteUid(e.target.value)}
+                      className="w-full bg-slate-900 border border-border text-white rounded-xl h-12 px-4 text-right"
+                      dir="rtl"
+                    >
+                      <option value="">بدون بديل</option>
+                      {allUsers
+                        .filter(u => u.uid !== (editingUser.id ?? editingUser.uid) && !u.disabled && !u.onLeave && u.role === role && u.projectIds?.some((p: string) => selectedProjects.includes(p)))
+                        .map(u => (
+                          <option key={u.uid} value={u.uid}>
+                            {u.displayName} ({u.specialties?.join(', ') || 'عام'})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

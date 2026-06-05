@@ -1,6 +1,6 @@
 import { Router } from "express";
 import prisma from "../db.js";
-import { AuthRequest, requireAuth, asTrimmedString } from "../auth.js";
+import { AuthRequest, requireAuth, requireAdmin, getRequesterRole, asTrimmedString } from "../auth.js";
 import { getIO } from "../socket.js";
 import { classifyTicket } from "../classifier/classify.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
@@ -177,12 +177,32 @@ async function classifyInBackground(description: string, ticketId: string, proje
 
 // GET /api/tickets
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
+  const role = await getRequesterRole(req.uid!);
+  const currentUser = await prisma.user.findUnique({
+    where: { uid: req.uid! },
+    select: { projects: { select: { id: true } } }
+  });
+  const userProjectIds = currentUser?.projects.map(p => p.id) || [];
+
   const { projectId, projectIds, supervisorId, status } = req.query as Record<string, string>;
   const where: any = {};
   if (projectId) where.projectId = projectId;
   if (projectIds) where.projectId = { in: projectIds.split(",") };
   if (supervisorId) where.assignedSupervisorIds = { has: supervisorId };
   if (status) where.status = status;
+
+  if (role !== "admin") {
+    // Only allow tickets in user's projects
+    if (where.projectId && typeof where.projectId === 'string') {
+      if (!userProjectIds.includes(where.projectId)) where.projectId = { in: [] };
+    } else if (where.projectId && where.projectId.in) {
+      where.projectId.in = where.projectId.in.filter((id: string) => userProjectIds.includes(id));
+      if (where.projectId.in.length === 0) where.projectId.in = ["__none__"];
+    } else {
+      where.projectId = { in: userProjectIds.length ? userProjectIds : ["__none__"] };
+    }
+  }
+
   const tickets = await prisma.ticket.findMany({
     where,
     orderBy: { createdAt: "desc" },
@@ -258,12 +278,24 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
 });
 
 // GET /api/tickets/:id
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
+  const role = await getRequesterRole(req.uid!);
+  const currentUser = await prisma.user.findUnique({
+    where: { uid: req.uid! },
+    select: { projects: { select: { id: true } } }
+  });
+  const userProjectIds = currentUser?.projects.map(p => p.id) || [];
+
   const ticket = await prisma.ticket.findUnique({
     where: { id: req.params.id },
     include: { ticketSubType: { select: { id: true, nameAr: true } } },
   });
   if (!ticket) { res.status(404).json({ error: "Not found" }); return; }
+  
+  if (role !== "admin" && ticket.projectId && !userProjectIds.includes(ticket.projectId)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
   const [enriched] = await enrichSupervisorNames([ticket]);
   res.json({ ...enriched, subTypeName: (ticket as any).ticketSubType?.nameAr ?? null });
 });
@@ -720,13 +752,13 @@ router.post("/auto-link", requireAuth, async (req, res) => {
 });
 
 // DELETE /api/tickets/:id
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
   await prisma.ticket.delete({ where: { id: req.params.id } });
   res.json({ success: true });
 });
 
 // DELETE /api/tickets (all)
-router.delete("/", requireAuth, async (_req, res) => {
+router.delete("/", requireAuth, requireAdmin, async (_req, res) => {
   const result = await prisma.ticket.deleteMany();
   res.json({ count: result.count });
 });

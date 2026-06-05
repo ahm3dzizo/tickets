@@ -20,12 +20,16 @@ model User {
   profileCompleted      Boolean      @default(false)
   disabled              Boolean      @default(false)
   notifPrefs            Json?
+  onLeave               Boolean      @default(false)
+  substituteUid         String?
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
   supervisedTechnicians Technician[] @relation("SupervisorTechnicians")
   assignedTickets       Ticket[]     @relation("TicketAssignedSupervisor")
   projects              Project[]    @relation("ProjectUsers")
   specialtiesRef        Specialty[]  @relation("UserSpecialties")
+  substitute            User?        @relation("UserSubstitute", fields: [substituteUid], references: [uid])
+  substituteFor         User[]       @relation("UserSubstitute")
 }
 
 model Project {

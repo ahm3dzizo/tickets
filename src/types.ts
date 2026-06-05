@@ -15,6 +15,9 @@ export interface User {
   projectIds?: string[];
   photoURL?: string;
   profileCompleted?: boolean;
+  disabled?: boolean;
+  onLeave?: boolean;
+  substituteUid?: string | null;
 }
 
 export interface Project {

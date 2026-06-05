@@ -1,1 +1,0 @@
-const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.ticket.findFirst({ where: { ticketId: '191900' } }).then(res => { console.log(res ? 'Ticket exists: ' + res.ticketId : 'Ticket NOT found'); process.exit(0); }).catch(console.error);

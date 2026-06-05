@@ -37,10 +37,10 @@ export function ReassignSupervisorButton({ ticket, onReassigned, variant = 'butt
     try {
       const allUsers = await usersApi.getAll();
       let projectSupers = allUsers.filter(
-        (u: any) => u.role === 'supervisor' && Array.isArray(u.projectIds) && u.projectIds.includes(ticket.projectId)
+        (u: any) => u.role === 'supervisor' && !u.disabled && !u.onLeave && Array.isArray(u.projectIds) && u.projectIds.includes(ticket.projectId)
       );
       if (projectSupers.length === 0) {
-        projectSupers = allUsers.filter((u: any) => u.role === 'supervisor');
+        projectSupers = allUsers.filter((u: any) => u.role === 'supervisor' && !u.disabled && !u.onLeave);
       }
       const mapped = projectSupers.map((u: any) => ({
         id: u.uid,

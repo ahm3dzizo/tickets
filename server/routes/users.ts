@@ -12,8 +12,18 @@ import { USER_ROLES } from "../config.js";
 const router = Router();
 
 // GET /api/users
-router.get("/", requireAuth, async (_req, res) => {
+router.get("/", requireAuth, async (req: AuthRequest, res) => {
+  const role = await getRequesterRole(req.uid!);
+  const currentUser = await prisma.user.findUnique({
+    where: { uid: req.uid! },
+    select: { projects: { select: { id: true } } }
+  });
+  const projectIds = currentUser?.projects.map(p => p.id) || [];
+  
+  const where = role === "admin" ? {} : { projects: { some: { id: { in: projectIds } } } };
+
   const users = await prisma.user.findMany({ 
+    where,
     include: { projects: true, specialtiesRef: true },
     orderBy: { createdAt: "asc" } 
   });
@@ -194,6 +204,8 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
       : existing.projects.map(p => p.id);
     const photoURL = data.photoURL !== undefined ? asTrimmedString(data.photoURL) : existing.photoURL;
     const disabled = data.disabled !== undefined ? Boolean(data.disabled) : existing.disabled;
+    const onLeave = data.onLeave !== undefined ? Boolean(data.onLeave) : existing.onLeave;
+    const substituteUid = data.substituteUid !== undefined ? (data.substituteUid === "" ? null : asTrimmedString(data.substituteUid)) : existing.substituteUid;
 
     // If changing identity fields, check uniqueness
     if (
@@ -221,6 +233,8 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
         projects: data.projectIds !== undefined ? { set: projectIds.map(id => ({ id })) } : undefined,
         photoURL,
         disabled,
+        onLeave,
+        substituteUid,
         notifPrefs: data.notifPrefs ?? existing.notifPrefs ?? undefined,
       },
       include: { projects: true, specialtiesRef: true }

@@ -1,8 +1,0 @@
-// حذف كل التذاكر
-fetch('/api/tickets', {
-  method: 'DELETE',
-  headers: {
-    'Authorization': 'Bearer ' + localStorage.getItem('retal_auth_token'),
-    'Content-Type': 'application/json'
-  }
-}).then(r => r.json()).then(r => console.log('Deleted:', r.count))

@@ -1,12 +1,15 @@
 import { Router } from "express";
 import prisma from "../db.js";
-import { requireAuth } from "../auth.js";
+import { AuthRequest, requireAuth, requireAdmin, getRequesterRole } from "../auth.js";
 
 const router = Router();
 
 // GET /api/projects
-router.get("/", requireAuth, async (_req, res) => {
+router.get("/", requireAuth, async (req: AuthRequest, res) => {
+  const role = await getRequesterRole(req.uid!);
+  const where = role === "admin" ? {} : { users: { some: { uid: req.uid! } } };
   const projects = await prisma.project.findMany({ 
+    where,
     include: { users: true },
     orderBy: { createdAt: "desc" } 
   });
@@ -20,10 +23,16 @@ router.get("/", requireAuth, async (_req, res) => {
 });
 
 // ── GET /api/projects/:id/supervisors ──────────────────────────────────────────
-router.get("/:id/supervisors", requireAuth, async (req, res) => {
+router.get("/:id/supervisors", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const project = await prisma.project.findUnique({
-      where: { id: req.params.id },
+    const role = await getRequesterRole(req.uid!);
+    const where: any = { id: req.params.id };
+    if (role !== "admin") {
+      where.users = { some: { uid: req.uid! } };
+    }
+
+    const project = await prisma.project.findFirst({
+      where,
       include: { 
         users: { 
           where: { role: "supervisor", disabled: false },
@@ -51,9 +60,15 @@ router.get("/:id/supervisors", requireAuth, async (req, res) => {
 });
 
 // GET /api/projects/:id
-router.get("/:id", requireAuth, async (req, res) => {
-  const project = await prisma.project.findUnique({
-    where: { id: req.params.id },
+router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
+  const role = await getRequesterRole(req.uid!);
+  const where: any = { id: req.params.id };
+  if (role !== "admin") {
+    where.users = { some: { uid: req.uid! } };
+  }
+
+  const project = await prisma.project.findFirst({
+    where,
     include: { clients: true, users: true },
   });
   if (!project) { res.status(404).json({ error: "Not found" }); return; }
@@ -67,7 +82,7 @@ router.get("/:id", requireAuth, async (req, res) => {
 });
 
 // POST /api/projects
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireAdmin, async (req, res) => {
   const data = req.body;
   const combinedUserIds = [...(data.engineerIds || []), ...(data.supervisorIds || [])];
   
@@ -91,7 +106,7 @@ router.post("/", requireAuth, async (req, res) => {
 });
 
 // PUT /api/projects/:id
-router.put("/:id", requireAuth, async (req, res) => {
+router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
   const data = req.body;
   const connectData: any = {};
   
@@ -130,7 +145,7 @@ router.put("/:id", requireAuth, async (req, res) => {
 });
 
 // DELETE /api/projects/:id
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
   await prisma.project.delete({ where: { id: req.params.id } });
   res.json({ success: true });
 });
