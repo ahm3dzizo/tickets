@@ -240,6 +240,40 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
       include: { projects: true, specialtiesRef: true }
     });
 
+    // ✨ نقل التذاكر المفتوحة تلقائياً للمشرف البديل عند الخروج في إجازة
+    if (!existing.onLeave && onLeave && substituteUid) {
+      const substitute = await prisma.user.findUnique({
+        where: { uid: substituteUid },
+        include: { specialtiesRef: true }
+      });
+      if (substitute) {
+        const activeTickets = await prisma.ticket.findMany({
+          where: {
+            assignedSupervisorId: uid,
+            status: { in: ['open', 'in_progress', 'pending', 'waiting'] }
+          }
+        });
+
+        if (activeTickets.length > 0) {
+          const substituteInfo = [{
+            id: substitute.uid,
+            name: substitute.displayName,
+            specialty: substitute.specialtiesRef[0]?.key || substitute.specialty || 'general'
+          }];
+
+          await prisma.ticket.updateMany({
+            where: { id: { in: activeTickets.map(t => t.id) } },
+            data: {
+              assignedSupervisorId: substitute.uid,
+              assignedSupervisorIds: [substitute.uid],
+              assigneeName: substitute.displayName,
+              assignedSupervisors: substituteInfo as any
+            }
+          });
+        }
+      }
+    }
+
     const mapped = {
       ...updated,
       projectIds: updated.projects.map((p: any) => p.id),
