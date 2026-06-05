@@ -40,11 +40,16 @@ def normalize(text: str) -> str:
 
 # ── Load main model ──────────────────────────────────────────────────────────
 print(f"[ML] Loading main model ...")
-with open(MODEL_PATH, "rb") as f:
-    bundle = pickle.load(f)
-pipeline = bundle["pipeline"]
-classes  = bundle["classes"]
-print(f"[ML] Main model ready — {len(classes)} classes")
+pipeline = None
+classes = []
+try:
+    with open(MODEL_PATH, "rb") as f:
+        bundle = pickle.load(f)
+    pipeline = bundle["pipeline"]
+    classes  = bundle["classes"]
+    print(f"[ML] Main model ready — {len(classes)} classes")
+except FileNotFoundError:
+    print(f"[ML] ERROR: {MODEL_PATH} not found. Please run ml/train.py first.")
 
 # ── Load sub-type models ─────────────────────────────────────────────────────
 subtype_models: dict[str, dict] = {}
@@ -96,6 +101,16 @@ def get_classes():
 
 @app.post("/classify")
 def classify(req: ClassifyRequest):
+    if pipeline is None:
+        return {
+            "primaryType": "unclassified",
+            "subType": None,
+            "subTypeConf": 0.0,
+            "allTypes": ["unclassified"],
+            "confidence": 0.0,
+            "source": "ml_fallback",
+        }
+
     text  = normalize(req.description)
     proba = pipeline.predict_proba([text])[0]
     top   = int(proba.argmax())
@@ -118,6 +133,19 @@ def classify(req: ClassifyRequest):
 @app.post("/classify/batch")
 def classify_batch(req: BatchRequest):
     results = []
+    if pipeline is None:
+        for item in req.items:
+            results.append({
+                "id":          item.id,
+                "primaryType": "unclassified",
+                "subType":     None,
+                "subTypeConf": 0.0,
+                "allTypes":    ["unclassified"],
+                "confidence":  0.0,
+                "source":      "ml_fallback",
+            })
+        return results
+
     for item in req.items:
         text  = normalize(item.description)
         proba = pipeline.predict_proba([text])[0]

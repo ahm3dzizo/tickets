@@ -74,21 +74,27 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
         overdueCount++;
         overdueList.push({ ...t, daysOpen });
       }
+    }
 
-      // Appointments logic
+    overdueList.sort((a, b) => b.daysOpen - a.daysOpen);
+    const overdueTickets = overdueList.slice(0, 10);
+
+    // Fetch appointments separately to avoid missing any statuses
+    const rawAppts = await prisma.ticket.findMany({
+      where: { ...where, appointmentTime: { not: null } },
+      select: { id: true, ticketId: true, clientName: true, villaNumber: true, appointmentTime: true, type: true, status: true },
+    });
+
+    for (const t of rawAppts) {
       if (t.appointmentTime) {
         const parsedAppt = parseDateString(t.appointmentTime);
         if (parsedAppt && parsedAppt.getTime() >= todayStartMs) {
           apptsList.push({ ...t, parsedDate: parsedAppt });
         } else if (!parsedAppt && String(t.appointmentTime).localeCompare(todayStr) >= 0) {
-          // fallback to string comparison if parsing fails
           apptsList.push({ ...t, parsedDate: new Date("2099-12-31") }); 
         }
       }
     }
-
-    overdueList.sort((a, b) => b.daysOpen - a.daysOpen);
-    const overdueTickets = overdueList.slice(0, 10);
 
     apptsList.sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
     const todayAppts = apptsList.slice(0, 20);
