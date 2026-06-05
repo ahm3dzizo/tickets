@@ -100,10 +100,8 @@ export default function Technicians() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg shrink-0 -mt-1 -ml-1">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
+                        <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg shrink-0 -mt-1 -ml-1 transition-colors">
+                          <MoreHorizontal className="w-4 h-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="bg-card border-border w-44 rounded-2xl">
                           <div onClick={e => e.stopPropagation()}>

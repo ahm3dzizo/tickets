@@ -55,7 +55,7 @@ export function WhatsAppBanner() {
       }
     });
 
-    return () => socket.disconnect();
+    return () => { socket.disconnect(); };
   }, [user?.uid]);
 
   const dismiss = () => {

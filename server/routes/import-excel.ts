@@ -343,7 +343,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         prisma.ticket.update({
           where: { id: u.id },
           data: {
-            status: u.status,
+            status: u.status as any,
             closedAt: u.closedAt ? new Date(u.closedAt) : null,
             ...(u.type && u.type !== "unclassified"
               ? { type: u.type, typeId: u.typeId || null, detectedTypes: u.detectedTypes ?? [u.type] }

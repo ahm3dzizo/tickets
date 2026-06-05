@@ -49,9 +49,10 @@ const TYPE_LABELS: Record<TicketType, string> = {
   grading:        'ميول وترويبة',
   pest_control:   'مكافحة حشرات',
   cleaning:       'تنظيف',
-  structural:     'إنشائي',
-  painting:       'دهانات',
-  tiles:          'سيراميك',
+  'structural': 'إنشائي',
+  'painting': 'دهانات',
+  'tiles': 'سيراميك',
+  'unclassified': 'غير مصنف',
 };
 
 const PRIORITY_LABELS: Record<string, string> = {

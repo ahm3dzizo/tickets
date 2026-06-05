@@ -264,3 +264,11 @@ export const appointmentsApi = {
   unsubscribePush: () =>
     del<{ ok: boolean }>('/appointments/push-unsubscribe'),
 };
+
+// ── Learned Keywords ──────────────────────────────────────────────────────────
+export interface LearnedKeyword { id?: string; keyword: string; type: string; confidence: number; usageCount: number; }
+export const learnedKeywordsApi = {
+  getAll: () => get<LearnedKeyword[]>('/learned-keywords'),
+  learn: (keyword: string, type: string) => post<any>('/learned-keywords/learn', { keyword, type }),
+  bulkLearn: (items: any[]) => post<any>('/learned-keywords/bulk', { items }),
+};
