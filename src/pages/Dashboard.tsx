@@ -282,11 +282,11 @@ export default function Dashboard() {
                   : kpi.overdueTickets.map((t: any) => (
                     <Link to={`/tickets/${t.id}`} key={t.id}
                       className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors">
-                      <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">{t.daysOpen}ي</span>
                       <div className="text-right">
                         <p className="text-xs font-semibold text-foreground">{t.clientName} — {t.villaNumber}</p>
                         <p className="text-[10px] text-muted-foreground">#{t.ticketId}</p>
                       </div>
+                      <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded" dir="ltr">+{t.daysOpen}ي</span>
                     </Link>
                   ))}
               </div>
@@ -304,11 +304,11 @@ export default function Dashboard() {
                   : kpi.todayAppts.map((t: any) => (
                     <Link to={`/tickets/${t.id}`} key={t.id}
                       className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors">
-                      <span className="text-[10px] text-blue-400 font-bold max-w-[80px] text-right truncate" title={t.appointmentTime || ''}>{t.appointmentTime || '---'}</span>
                       <div className="text-right">
                         <p className="text-xs font-semibold text-foreground">{t.clientName} — {t.villaNumber}</p>
                         <p className="text-[10px] text-muted-foreground">{t.type}</p>
                       </div>
+                      <span className="text-[10px] text-blue-400 font-bold max-w-[85px] text-left truncate" title={t.appointmentTime || ''} dir="ltr">{t.appointmentTime || '---'}</span>
                     </Link>
                   ))}
               </div>

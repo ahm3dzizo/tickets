@@ -35,7 +35,7 @@ export function Layout({ children }: LayoutProps) {
       <main className="
         pt-14 pb-safe
         px-4 sm:px-5
-        lg:pt-0 lg:pb-6 lg:pr-60 lg:pl-5
+        lg:pt-0 lg:pb-6 lg:pr-[264px] lg:pl-8
         min-h-dvh
       ">
         <div className="max-w-[1400px] py-6 lg:py-8 page-in">

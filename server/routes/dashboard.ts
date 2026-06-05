@@ -34,33 +34,74 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     const todayEnd    = new Date(todayStart.getTime() + 86_400_000);
     const todayStr    = now.toISOString().split("T")[0];
 
-    const [total, openCount, closedCount, overdueCount, unclassified] = await Promise.all([
+    function parseDateString(raw: any): Date | null {
+      if (!raw) return null;
+      const str = String(raw).trim();
+      const parts = str.split(/[-/ ]/);
+      if (parts.length >= 3 && parts[0].length <= 2 && parts[2].length === 4) {
+        const d = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+        if (!isNaN(d.getTime())) return d;
+      }
+      const num = Number(raw);
+      if (!isNaN(num) && num > 1000) {
+        const d = new Date((num - 25569) * 86400 * 1000);
+        if (!isNaN(d.getTime())) return d;
+      }
+      const d = new Date(str);
+      return !isNaN(d.getTime()) ? d : null;
+    }
+
+    const activeTickets = await prisma.ticket.findMany({
+      where: { ...where, status: { in: ["open", "in_progress", "pending", "waiting"] } },
+      select: { id: true, ticketId: true, clientName: true, villaNumber: true, type: true, status: true, createdAt: true, assignedSupervisors: true, issuedAt: true, appointmentTime: true },
+    });
+
+    let overdueCount = 0;
+    const overdueList: any[] = [];
+    const apptsList: any[] = [];
+    const nowMs = now.getTime();
+    const todayStartMs = todayStart.getTime();
+
+    for (const t of activeTickets) {
+      // Overdue logic
+      let openDate = new Date(t.createdAt);
+      if (t.issuedAt) {
+        const parsed = parseDateString(t.issuedAt);
+        if (parsed) openDate = parsed;
+      }
+      const daysOpen = Math.floor((nowMs - openDate.getTime()) / 86_400_000);
+      if (daysOpen > 6) {
+        overdueCount++;
+        overdueList.push({ ...t, daysOpen });
+      }
+
+      // Appointments logic
+      if (t.appointmentTime) {
+        const parsedAppt = parseDateString(t.appointmentTime);
+        if (parsedAppt && parsedAppt.getTime() >= todayStartMs) {
+          apptsList.push({ ...t, parsedDate: parsedAppt });
+        } else if (!parsedAppt && String(t.appointmentTime).localeCompare(todayStr) >= 0) {
+          // fallback to string comparison if parsing fails
+          apptsList.push({ ...t, parsedDate: new Date("2099-12-31") }); 
+        }
+      }
+    }
+
+    overdueList.sort((a, b) => b.daysOpen - a.daysOpen);
+    const overdueTickets = overdueList.slice(0, 10);
+
+    apptsList.sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
+    const todayAppts = apptsList.slice(0, 20);
+
+    const [total, openCount, closedCount, unclassified] = await Promise.all([
       prisma.ticket.count({ where }),
       prisma.ticket.count({ where: { ...where, status: "open" } }),
       prisma.ticket.count({ where: { ...where, status: "closed" } }),
-      prisma.ticket.count({ where: { ...where, status: { in: ["open","in_progress","pending"] }, createdAt: { lt: sevenDaysAgo } } }),
       prisma.ticket.count({ where: { ...where, type: "unclassified" } }),
     ]);
 
-    // Closed today
     const closedToday = await prisma.ticket.count({
       where: { ...where, status: "closed", closedAt: { gte: todayStart, lt: todayEnd } },
-    });
-
-    // Upcoming appointments (today and future)
-    const todayAppts = await prisma.ticket.findMany({
-      where: { ...where, appointmentTime: { gte: todayStr } },
-      select: { id: true, ticketId: true, clientName: true, villaNumber: true, appointmentTime: true, type: true, status: true },
-      orderBy: { appointmentTime: "asc" },
-      take: 20,
-    });
-
-    // Most overdue tickets (open > 7 days)
-    const overdueTickets = await prisma.ticket.findMany({
-      where: { ...where, status: { in: ["open","in_progress","pending"] }, createdAt: { lt: sevenDaysAgo } },
-      orderBy: { createdAt: "asc" },
-      take: 10,
-      select: { id: true, ticketId: true, clientName: true, villaNumber: true, type: true, status: true, createdAt: true, assignedSupervisors: true },
     });
 
     // Last 7 days trend — pure ORM to avoid raw SQL enum issues
