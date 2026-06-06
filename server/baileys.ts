@@ -489,10 +489,26 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
 
     // قائمة بالكلمات المفتاحية المتعلقة بالوقت والأيام
     const timeKeywordsRegex = /(السبت|الاحد|الأحد|الاثنين|الإثنين|الثلاثاء|الاربعاء|الأربعاء|الخميس|الجمعة|الجمعه|ساعه|ساعة|صباح|مساء|الصبح|بالليل|الظهر|العصر|المغرب|العشاء|غدا|بكرة|بكرا|اليوم|الان|الآن|متواجد|جاهز|تاريخ|يوم|\d{1,2}:\d{2})/i;
+    
+    // استثناء التحيات الشائعة حتى لا تُسجل كموعد
+    const greetingsRegex = /^(صباح الخير|مساء الخير|السلام عليكم|هلا|مرحبا|شكرا|يعطيك العافية)[\s]*$/i;
 
-    if (!timeKeywordsRegex.test(text)) {
-      console.log(`[WA] Message ignored, does not contain time keywords: "${text}"`);
-      return; // تجاهل الرسالة إذا لم تحتوي على كلمات دالة على موعد
+    // استثناء الأسئلة (استفسارات العميل)
+    const questionsRegex = /(ليه|ليش|متى|متي|فين|وين|كيف|شلون|هل|بكم)/i;
+
+    if (!timeKeywordsRegex.test(text) || greetingsRegex.test(text)) {
+      console.log(`[WA] Message ignored, does not contain time keywords or is just a greeting: "${text}"`);
+      return; // تجاهل الرسالة إذا لم تحتوي على كلمات دالة على موعد أو كانت مجرد تحية
+    }
+
+    if (questionsRegex.test(text) && text.length > 30) {
+      console.log(`[WA] Message ignored, appears to be a question: "${text}"`);
+      return; // تجاهل إذا كانت الرسالة تبدو كاستفسار طويل
+    }
+
+    if (text.length > 70) {
+      console.log(`[WA] Message ignored, too long to be just an appointment time: "${text}"`);
+      return; // تجاهل الرسائل الطويلة جداً (أكثر من 70 حرفاً) لأنها على الأرجح شرح لمشكلة
     }
     
     if (pendingAppointment) {

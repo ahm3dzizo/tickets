@@ -90,8 +90,13 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
         const parsedAppt = parseDateString(t.appointmentTime);
         if (parsedAppt && parsedAppt.getTime() >= todayStartMs) {
           apptsList.push({ ...t, parsedDate: parsedAppt });
-        } else if (!parsedAppt && String(t.appointmentTime).localeCompare(todayStr) >= 0) {
-          apptsList.push({ ...t, parsedDate: new Date("2099-12-31") }); 
+        } else if (!parsedAppt) {
+          const text = String(t.appointmentTime).trim();
+          const greetingsRegex = /^(صباح الخير|مساء الخير|السلام عليكم|هلا|مرحبا|شكرا|يعطيك العافية|تمام|اوكي|طيب)[\s]*$/i;
+          // Filter out greetings and overly long text
+          if (!greetingsRegex.test(text) && text.length > 0 && text.length <= 50) {
+            apptsList.push({ ...t, parsedDate: new Date("2099-12-31") }); 
+          }
         }
       }
     }
