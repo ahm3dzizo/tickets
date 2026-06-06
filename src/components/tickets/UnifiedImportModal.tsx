@@ -446,7 +446,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
                         let issuedAtStr = '';
       if (rawDate) {
         // Ensure rawDate is a string or number for parseIssuedAt
-        const normalizedRaw = rawDate instanceof Date ? rawDate.toISOString() : rawDate;
+        const normalizedRaw = (rawDate instanceof Date && !isNaN(rawDate.getTime())) ? rawDate.toISOString() : rawDate;
         const d = parseIssuedAt(normalizedRaw);
         if (d && !isNaN(d.getTime())) issuedAtStr = format(d, 'yyyy-MM-dd');
         else issuedAtStr = normalizeDate(normalizedRaw);

@@ -39,7 +39,9 @@ const RANGE_PRESETS = [
 ];
 
 function addDays(dateStr: string, n: number): string {
+  if (!dateStr) return todayStr();
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return todayStr();
   d.setDate(d.getDate() + n);
   return d.toISOString().split('T')[0];
 }
@@ -83,7 +85,12 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
     const existing = primaryTicket.appointmentTime;
     if (existing) {
       const parts = existing.split(' ');
-      setStartDate(parts[0] || todayStr());
+      const parsedDate = new Date(parts[0]);
+      if (parts[0] && !isNaN(parsedDate.getTime())) {
+        setStartDate(parts[0]);
+      } else {
+        setStartDate(todayStr());
+      }
     } else {
       setStartDate(todayStr());
     }
