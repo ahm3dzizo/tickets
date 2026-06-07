@@ -60,6 +60,13 @@ router.post('/send', requireAuth, async (req: AuthRequest, res) => {
     return;
   }
   const result = await sendWAText(uid, phone.trim(), message.trim());
+  if (!result.sent) {
+    const errMsg = result.error === 'NOT_ON_WHATSAPP' 
+      ? 'الرقم غير مسجل في الواتساب.' 
+      : (result.error === 'NOT_CONNECTED' ? 'واتساب غير متصل.' : 'فشل إرسال الرسالة.');
+    res.status(400).json({ error: errMsg });
+    return;
+  }
   res.json(result);
 });
 
@@ -161,9 +168,13 @@ router.post('/approval/:ticketId', requireAuth, async (req: AuthRequest, res) =>
           approvalUserId: uid,
         },
       });
+      res.json(result);
+    } else {
+      const errMsg = result.error === 'NOT_ON_WHATSAPP' 
+        ? 'لا يمكن إرسال طلب الموافقة، رقم العميل غير مسجل في الواتساب.' 
+        : (result.error === 'NOT_CONNECTED' ? 'واتساب غير متصل.' : 'فشل إرسال الرسالة.');
+      res.status(400).json({ error: errMsg });
     }
-
-    res.json(result);
   } catch (err: any) {
     console.error('[WA] /approval error:', err);
     res.status(500).json({ error: err.message });
@@ -268,9 +279,13 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
           appointmentNotes: notes || null
         }
       });
+      res.json(result);
+    } else {
+      const errMsg = result.error === 'NOT_ON_WHATSAPP' 
+        ? 'لا يمكن تحديد موعد، رقم العميل غير مسجل في الواتساب.' 
+        : (result.error === 'NOT_CONNECTED' ? 'واتساب غير متصل.' : 'فشل إرسال الرسالة.');
+      res.status(400).json({ error: errMsg });
     }
-
-    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

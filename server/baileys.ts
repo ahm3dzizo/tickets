@@ -227,33 +227,41 @@ export async function pairWACode(userId: string, phone: string): Promise<string>
   }
 }
 
-export async function sendWAText(userId: string, phone: string, message: string): Promise<{ sent: boolean; fallback: boolean }> {
+export async function sendWAText(userId: string, phone: string, message: string): Promise<{ sent: boolean; fallback: boolean, error?: string }> {
   const sock = sessions.get(userId);
   if (getWAStatus(userId) !== 'CONNECTED' || !sock) {
-    return { sent: false, fallback: true };
+    return { sent: false, fallback: true, error: 'NOT_CONNECTED' };
   }
   try {
     const jid = normalizePhone(phone);
+    const [result] = await sock.onWhatsApp(jid);
+    if (!result?.exists) {
+      return { sent: false, fallback: true, error: 'NOT_ON_WHATSAPP' };
+    }
     await sock.sendMessage(jid, { text: message });
     return { sent: true, fallback: false };
   } catch (err) {
     console.error('Baileys Error sending text:', err);
-    return { sent: false, fallback: true };
+    return { sent: false, fallback: true, error: 'SEND_FAILED' };
   }
 }
 
-export async function sendWAImage(userId: string, phone: string, jpgBuffer: Buffer, caption = '📊 تقرير الصيانة'): Promise<{ sent: boolean; fallback: boolean }> {
+export async function sendWAImage(userId: string, phone: string, jpgBuffer: Buffer, caption = '📊 تقرير الصيانة'): Promise<{ sent: boolean; fallback: boolean, error?: string }> {
   const sock = sessions.get(userId);
   if (getWAStatus(userId) !== 'CONNECTED' || !sock) {
-    return { sent: false, fallback: true };
+    return { sent: false, fallback: true, error: 'NOT_CONNECTED' };
   }
   try {
     const jid = normalizePhone(phone);
+    const [result] = await sock.onWhatsApp(jid);
+    if (!result?.exists) {
+      return { sent: false, fallback: true, error: 'NOT_ON_WHATSAPP' };
+    }
     await sock.sendMessage(jid, { image: jpgBuffer, caption });
     return { sent: true, fallback: false };
   } catch (err) {
     console.error('Baileys Error sending image:', err);
-    return { sent: false, fallback: true };
+    return { sent: false, fallback: true, error: 'SEND_FAILED' };
   }
 }
 
@@ -356,13 +364,17 @@ export async function sendApprovalRequest(
   clientName: string,
   villaNumber: string,
   closureNotes?: string | null
-): Promise<{ sent: boolean; fallback: boolean }> {
+): Promise<{ sent: boolean; fallback: boolean, error?: string }> {
   const sock = sessions.get(userId);
   if (getWAStatus(userId) !== 'CONNECTED' || !sock) {
-    return { sent: false, fallback: true };
+    return { sent: false, fallback: true, error: 'NOT_CONNECTED' };
   }
   try {
     const jid = normalizePhone(phone);
+    const [result] = await sock.onWhatsApp(jid);
+    if (!result?.exists) {
+      return { sent: false, fallback: true, error: 'NOT_ON_WHATSAPP' };
+    }
     const text =
       `السلام عليكم،\n\n` +
       `نرجو منكم تأكيد الموافقة على إغلاق تذكرة الصيانة رقم: *#${ticketId}* لوحدتكم.\n\n` +
@@ -374,7 +386,7 @@ export async function sendApprovalRequest(
     return { sent: true, fallback: false };
   } catch (err) {
     console.error('[WA] sendApprovalRequest error:', err);
-    return { sent: false, fallback: true };
+    return { sent: false, fallback: true, error: 'SEND_FAILED' };
   }
 }
 
@@ -385,13 +397,17 @@ export async function sendRatingRequest(
   phone: string,
   ticketId: string,
   clientName: string
-): Promise<{ sent: boolean; fallback: boolean }> {
+): Promise<{ sent: boolean; fallback: boolean, error?: string }> {
   const sock = sessions.get(userId);
   if (getWAStatus(userId) !== 'CONNECTED' || !sock) {
-    return { sent: false, fallback: true };
+    return { sent: false, fallback: true, error: 'NOT_CONNECTED' };
   }
   try {
     const jid = normalizePhone(phone);
+    const [result] = await sock.onWhatsApp(jid);
+    if (!result?.exists) {
+      return { sent: false, fallback: true, error: 'NOT_ON_WHATSAPP' };
+    }
     const text =
       `شكراً على موافقتكم!\n\n` +
       `كيف تُقيّم خدمة الصيانة؟\n` +
@@ -406,7 +422,7 @@ export async function sendRatingRequest(
     return { sent: true, fallback: false };
   } catch (err) {
     console.error('[WA] sendRatingRequest error:', err);
-    return { sent: false, fallback: true };
+    return { sent: false, fallback: true, error: 'SEND_FAILED' };
   }
 }
 

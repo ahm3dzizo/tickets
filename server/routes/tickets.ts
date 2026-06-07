@@ -263,14 +263,49 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
   }
   const status = closeType === 'out_of_scope' ? 'out_of_scope' : 'closed';
   try {
+    const uid = req.uid!;
+    
+    // جلب بيانات التذكرة والعميل قبل الإغلاق
+    const ticketInfo = await prisma.ticket.findUnique({
+      where: { id: req.params.id },
+      include: { client: { select: { phone: true, name: true } } }
+    });
+
+    if (!ticketInfo) {
+      res.status(404).json({ error: "التذكرة غير موجودة" }); return;
+    }
+
+    // محاولة إرسال الرسالة أولاً إذا كانت الخدمة مفعلة
+    if (await shouldAutoSendWA(uid)) {
+      const phone = ticketInfo.client?.phone;
+      if (phone) {
+        let msg = '';
+        if (closeType === 'absent') {
+          msg = await buildAbsentMsg({ ticketId: ticketInfo.ticketId, clientName: ticketInfo.client?.name || '', description: ticketInfo.description || '', villaNumber: ticketInfo.villaNumber || '' });
+        } else {
+          msg = await buildOutOfScopeMsg({ ticketId: ticketInfo.ticketId, clientName: ticketInfo.client?.name || '', description: ticketInfo.description || '', villaNumber: ticketInfo.villaNumber || '' });
+        }
+        
+        const sendResult = await sendWAText(uid, phone, msg);
+        if (!sendResult.sent && sendResult.error === 'NOT_ON_WHATSAPP') {
+          res.status(400).json({ error: "تعذر إغلاق التذكرة: رقم العميل غير مسجل في الواتساب. يرجى تصحيح الرقم أو تغيير الحالة يدوياً." });
+          return;
+        } else if (!sendResult.sent && sendResult.error === 'NOT_CONNECTED') {
+          res.status(400).json({ error: "تعذر إغلاق التذكرة: خدمة الواتساب غير متصلة. يرجى توصيل الواتساب أو الإغلاق يدوياً." });
+          return;
+        }
+      } else {
+        res.status(400).json({ error: "لا يوجد رقم هاتف مسجل للعميل. يرجى إضافة رقم أو تغيير الحالة يدوياً." });
+        return;
+      }
+    }
+
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },
       data: { status, closureNotes: notes || null, closedAt: closeType === 'out_of_scope' ? new Date() : null },
       select: { id: true, ticketId: true, clientId: true, description: true, villaNumber: true, status: true },
     });
-    const uid = req.uid!;
-    if (closeType === 'absent')       autoSendAbsent(uid, ticket).catch(() => {});
-    if (closeType === 'out_of_scope') autoSendOutOfScope(uid, ticket).catch(() => {});
+    
     res.json({ ok: true, status });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
