@@ -475,16 +475,6 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
       });
     }
 
-    // Fallback: If client not found (e.g., due to @lid) and no quoted text,
-    // find the most recently updated ticket globally that is waiting for a reply.
-    if (!pendingAppointment) {
-      console.log(`[WA] Checking for global pending appointment as fallback...`);
-      pendingAppointment = await prisma.ticket.findFirst({
-        where: { appointmentAwaitingReply: true },
-        orderBy: { createdAt: 'desc' }
-      });
-    }
-    
     console.log(`[WA] pendingAppointment:`, pendingAppointment ? pendingAppointment.id : 'None');
 
     // قائمة بالكلمات المفتاحية المتعلقة بالوقت والأيام
@@ -514,33 +504,16 @@ async function handleWATextReply(userId: string, senderJid: string, text: string
     if (pendingAppointment) {
       console.log(`[WA] Found pending appointment for ticket: ${pendingAppointment.ticketId}`);
       
-      const clientIdToUpdate = pendingAppointment.clientId;
-      if (clientIdToUpdate) {
-        // تحديث جميع التذاكر المفتوحة لهذا العميل التي تنتظر موعداً
-        await prisma.ticket.updateMany({
-          where: { 
-            clientId: clientIdToUpdate,
-            appointmentAwaitingReply: true
-          },
-          data: {
-            appointmentTime: text,
-            appointmentAwaitingReply: false,
-            // حالة pending تعني معلقة بانتظار المشرف
-            status: 'pending'
-          }
-        });
-        console.log(`[WA] Updated all waiting tickets for client ${clientIdToUpdate}`);
-      } else {
-        // Fallback in case there is no clientId attached (rare)
-        await prisma.ticket.update({
-          where: { id: pendingAppointment.id },
-          data: {
-            appointmentTime: text,
-            appointmentAwaitingReply: false,
-            status: pendingAppointment.status === 'waiting' ? 'pending' : pendingAppointment.status
-          }
-        });
-      }
+      // تحديث التذكرة المحددة فقط
+      await prisma.ticket.update({
+        where: { id: pendingAppointment.id },
+        data: {
+          appointmentTime: text,
+          appointmentAwaitingReply: false,
+          status: pendingAppointment.status === 'waiting' ? 'pending' : 'pending' // Usually transitions to pending when appointment is set
+        }
+      });
+      console.log(`[WA] Updated ticket ${pendingAppointment.ticketId} with appointment time`);
       
       getIO()?.emit('ticket-updated', { id: pendingAppointment.id });
       
