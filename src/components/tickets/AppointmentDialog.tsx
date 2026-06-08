@@ -33,9 +33,9 @@ const DEFAULT_TIME_OPTIONS = [
 ];
 
 const RANGE_PRESETS = [
+  { label: 'يومين', days: 2 },
   { label: '3 أيام', days: 3 },
   { label: '5 أيام', days: 5 },
-  { label: '7 أيام', days: 7 },
 ];
 
 function addDays(dateStr: string, n: number): string {
@@ -64,7 +64,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
   
   // State
   const [startDate, setStartDate] = useState(todayStr());
-  const [rangeDays, setRangeDays] = useState(3);
+  const [rangeDays, setRangeDays] = useState(2);
   const [timeOptions, setTimeOptions] = useState([...DEFAULT_TIME_OPTIONS, { label: 'وقت محدد', value: 'custom' }]);
   const [timeMode, setTimeMode] = useState(DEFAULT_TIME_OPTIONS[0].value);
   const [customTime, setCustomTime] = useState('09:00');
@@ -95,7 +95,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
       setStartDate(todayStr());
     }
     setNotes(primaryTicket.appointmentNotes || '');
-    setRangeDays(3);
+    setRangeDays(2);
     setCustomTime('09:00');
     setShowPreview(false);
     setConflicts([]);
