@@ -196,6 +196,7 @@ export function DirectAppointmentDialog({
                     placeholder="ابحث بالاسم أو الفيلا..."
                     value={clientSearch}
                     onChange={e => setClientSearch(e.target.value)}
+                    onKeyDown={e => e.stopPropagation()}
                     className="h-8 bg-transparent border-none text-right focus-visible:ring-0 px-0"
                   />
                 </div>

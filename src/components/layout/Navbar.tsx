@@ -185,7 +185,7 @@ export function Navbar() {
   return (
     <>
       {/* ═══════════════ MOBILE TOP BAR ═══════════════ */}
-      <header className="lg:hidden fixed top-0 inset-x-0 z-50 h-14 bg-card/90 backdrop-blur-xl border-b border-border px-3 flex items-center justify-between">
+      <header className="print:hidden lg:hidden fixed top-0 inset-x-0 z-50 h-14 bg-card/90 backdrop-blur-xl border-b border-border px-3 flex items-center justify-between">
         {/* Left: Actions */}
         <div className="flex items-center gap-0.5">
           <NotifBell side="bottom" />
@@ -208,7 +208,7 @@ export function Navbar() {
       </header>
 
       {/* ═══════════════ MOBILE BOTTOM NAV ═══════════════ */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border safe-area-pb">
+      <nav className="print:hidden lg:hidden fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border safe-area-pb">
         <div className="flex items-center h-16 px-1">
           {bottomItems.map(item => {
             const active = isActive(item.path);
@@ -289,7 +289,7 @@ export function Navbar() {
       </nav>
 
       {/* ═══════════════ DESKTOP SIDEBAR ═══════════════ */}
-      <aside className="hidden lg:flex fixed right-0 top-0 h-full w-60 bg-card border-l border-border flex-col z-40">
+      <aside className="print:hidden hidden lg:flex fixed right-0 top-0 h-full w-60 bg-card border-l border-border flex-col z-40">
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 pt-6 pb-4 shrink-0">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center p-1.5 shrink-0">

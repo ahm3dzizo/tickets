@@ -36,9 +36,10 @@ export function Layout({ children }: LayoutProps) {
         pt-14 pb-safe
         px-4 sm:px-5
         lg:pt-0 lg:pb-6 lg:pr-[264px] lg:pl-8
+        print:p-0 print:m-0 print:block print:w-full
         min-h-dvh
       ">
-        <div className="max-w-[1400px] py-6 lg:py-8 page-in">
+        <div className="max-w-[1400px] py-6 lg:py-8 print:py-0 print:max-w-none page-in">
           {children}
         </div>
       </main>
