@@ -137,6 +137,25 @@ export default function Clients() {
     return true;
   });
 
+  if (search) {
+    const s = search.toLowerCase();
+    filtered.sort((a, b) => {
+      const aExact = String(a.villaNumber || '') === s || String(a.phone || '') === s || (a.name || '').toLowerCase() === s;
+      const bExact = String(b.villaNumber || '') === s || String(b.phone || '') === s || (b.name || '').toLowerCase() === s;
+      
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+
+      const aStarts = String(a.villaNumber || '').startsWith(s) || String(a.phone || '').startsWith(s) || (a.name || '').toLowerCase().startsWith(s);
+      const bStarts = String(b.villaNumber || '').startsWith(s) || String(b.phone || '').startsWith(s) || (b.name || '').toLowerCase().startsWith(s);
+      
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      return 0; // Fallback to original order
+    });
+  }
+
   const projectName = (id: string) => projects.find(p => p.id === id)?.name || '---';
 
   return (

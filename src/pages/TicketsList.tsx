@@ -34,6 +34,7 @@ export default function TicketsList() {
   const [reassigning, setReassigning] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('ticketsListTab') || 'linked');
 
   const loadData = async () => {
     if (!user) return;
@@ -52,7 +53,16 @@ export default function TicketsList() {
       const allTickets = await ticketsApi.getAll(params);
       setTickets(allTickets as Ticket[]);
     } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+    finally { 
+      setLoading(false); 
+      const scrollY = sessionStorage.getItem('ticketsListScrollY');
+      if (scrollY) {
+        setTimeout(() => {
+          window.scrollTo(0, parseInt(scrollY, 10));
+          sessionStorage.removeItem('ticketsListScrollY');
+        }, 100);
+      }
+    }
   };
 
   useEffect(() => { loadData(); }, [user]);
@@ -247,7 +257,11 @@ export default function TicketsList() {
         </div>
 
         {/* ── Tabs ──────────────────────────────────────────────── */}
-        <Tabs defaultValue="linked" className="w-full">
+        <Tabs 
+          value={activeTab} 
+          onValueChange={val => { setActiveTab(val); sessionStorage.setItem('ticketsListTab', val); }} 
+          className="w-full"
+        >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <TabsList className="bg-muted/50 border border-border h-10 p-1 rounded-2xl w-full sm:w-auto">
               <TabsTrigger
@@ -318,6 +332,7 @@ export default function TicketsList() {
                 hideProjectColumn={!showProjectColumn}
                 projects={projects}
                 showInlineFilters
+                stateKey="tl_linked"
               />
             </div>
           </TabsContent>
@@ -336,6 +351,7 @@ export default function TicketsList() {
                 projects={projects}
                 showInlineFilters
                 onRefresh={loadData}
+                stateKey="tl_unlinked"
               />
             </div>
           </TabsContent>
@@ -366,6 +382,7 @@ export default function TicketsList() {
                 projects={projects}
                 showInlineFilters
                 onRefresh={loadData}
+                stateKey="tl_unclassified"
               />
             </div>
           </TabsContent>

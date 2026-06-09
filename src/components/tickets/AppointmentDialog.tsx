@@ -42,7 +42,16 @@ function addDays(dateStr: string, n: number): string {
   if (!dateStr) return todayStr();
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return todayStr();
-  d.setDate(d.getDate() + n);
+  
+  let added = 0;
+  while (added < n) {
+    d.setDate(d.getDate() + 1);
+    // تخطي يوم الجمعة (5 = الجمعة)
+    if (d.getDay() !== 5) {
+      added++;
+    }
+  }
+  
   return d.toISOString().split('T')[0];
 }
 

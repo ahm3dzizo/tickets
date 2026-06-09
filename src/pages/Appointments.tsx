@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
-  AlertTriangle, MapPin, User, Filter,
+  Plus, Users
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -11,77 +11,66 @@ import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-
-// ── مساعدات ───────────────────────────────────────────────────────────────────
-function getWeekDays(referenceDate: Date): Date[] {
-  const day = referenceDate.getDay(); // 0=Sunday
-  // نبدأ من الأحد
-  const startOfWeek = new Date(referenceDate);
-  startOfWeek.setDate(referenceDate.getDate() - day);
-  startOfWeek.setHours(0, 0, 0, 0);
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(startOfWeek);
-    d.setDate(startOfWeek.getDate() + i);
-    return d;
-  });
-}
+import { useTicketTypes } from '@/contexts/TicketTypesContext';
+import { QuickAddSpecialtyDialog } from '@/components/tickets/QuickAddSpecialtyDialog';
 
 function dateStr(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-function formatDay(d: Date): string {
-  return d.toLocaleDateString('ar-EG', { weekday: 'short', day: 'numeric' });
-}
-
-function formatMonth(d: Date): string {
-  return d.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
-}
-
-// ألوان المشرفين
-const SUP_COLORS = [
-  'bg-blue-500/20 border-blue-500/40 text-blue-300',
-  'bg-purple-500/20 border-purple-500/40 text-purple-300',
-  'bg-emerald-500/20 border-emerald-500/40 text-emerald-300',
-  'bg-amber-500/20 border-amber-500/40 text-amber-300',
-  'bg-rose-500/20 border-rose-500/40 text-rose-300',
-  'bg-cyan-500/20 border-cyan-500/40 text-cyan-300',
-];
-
-const typeTranslations: Record<string, string> = {
-  electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب',
-  paints: 'دهانات', painting: 'دهانات', cracks: 'تشققات',
-  ceramics: 'سيراميك', tiles: 'سيراميك', drainage: 'صرف',
-  ac_ventilation: 'تكييف', pumps: 'مضخات', waterproofing: 'عزل',
-  general: 'عام',
-};
-
 export default function Appointments() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { typeTranslations } = useTicketTypes();
 
-  const [refDate, setRefDate] = useState(new Date());
+  const [refDate, setRefDate] = useState(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  
+  const [daysToShow, setDaysToShow] = useState(window.innerWidth < 768 ? 1 : window.innerWidth < 1024 ? 2 : 3);
+
+  useEffect(() => {
+    const handleResize = () => setDaysToShow(window.innerWidth < 768 ? 1 : window.innerWidth < 1024 ? 2 : 3);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const displayedDays = useMemo(() => {
+    return Array.from({ length: daysToShow }, (_, i) => {
+      const d = new Date(refDate);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  }, [refDate, daysToShow]);
+
+  const from = dateStr(displayedDays[0]);
+  const to = dateStr(displayedDays[displayedDays.length - 1]);
+
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<any[]>([]);
   const [supervisors, setSupervisors] = useState<any[]>([]);
   const [filterSup, setFilterSup] = useState<string>('');
   const [filterProject, setFilterProject] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
 
-  const weekDays = useMemo(() => getWeekDays(refDate), [refDate]);
-  const from = dateStr(weekDays[0]);
-  const to = dateStr(weekDays[6]);
+  // Add Specialty Dialog State
+  const [addSpecOpen, setAddSpecOpen] = useState(false);
+  const [addSpecData, setAddSpecData] = useState<any>(null);
 
-  // ── جلب المواعيد ──
   const loadAppointments = async () => {
     setLoading(true);
     try {
+      // Fetch without supervisorId to get ALL specialties for the client
+      // We will filter locally based on supervisor later
       const data = await appointmentsApi.getCalendar({
         from,
         to,
-        supervisorId: (user?.role === 'supervisor' && !filterSup) ? user.uid : filterSup || undefined,
         projectId: filterProject || undefined,
+        // If user is supervisor, maybe we still fetch all and filter locally so they can see other specialties too.
+        // Wait, if the backend restricts supervisors to only their own tickets, we might not get other tickets.
+        // But let's fetch what we can.
       });
       setAppointments(data);
     } catch {
@@ -103,89 +92,128 @@ export default function Appointments() {
     }
   }, [user]);
 
-  useEffect(() => { loadAppointments(); }, [from, to, filterSup, filterProject, user]);
+  useEffect(() => { loadAppointments(); }, [from, to, filterProject, user]);
 
-  // ── تجميع المواعيد حسب اليوم ──
-  const byDay = useMemo(() => {
+  // Group by day -> then by client
+  const groupedByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
-    for (const day of weekDays) {
+    for (const day of displayedDays) {
       map[dateStr(day)] = [];
     }
+
+    const allByDate: Record<string, any[]> = {};
     for (const appt of appointments) {
       const d = (appt.appointmentTime || '').split(' ')[0];
-      if (map[d]) map[d].push(appt);
+      if (!allByDate[d]) allByDate[d] = [];
+      allByDate[d].push(appt);
     }
-    return map;
-  }, [appointments, weekDays]);
 
-  // ── خريطة ألوان المشرفين ──
-  const supColorMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    let idx = 0;
-    for (const appt of appointments) {
-      const ids: string[] = appt.assignedSupervisorIds || [];
-      for (const id of ids) {
-        if (!map[id]) {
-          map[id] = SUP_COLORS[idx % SUP_COLORS.length];
-          idx++;
+    for (const d of Object.keys(map)) {
+      const dayAppts = allByDate[d] || [];
+      const clientMap: Record<string, any> = {};
+
+      for (const appt of dayAppts) {
+        const key = appt.villaNumber + '_' + (appt.projectId || '');
+        if (!clientMap[key]) {
+          clientMap[key] = {
+            clientId: appt.clientId,
+            clientName: appt.clientName,
+            villaNumber: appt.villaNumber,
+            projectId: appt.projectId,
+            appointmentTime: appt.appointmentTime,
+            types: new Set<string>(),
+            sups: new Set<string>(),
+            tickets: [],
+          };
         }
+        if (appt.type) clientMap[key].types.add(appt.type);
+        if (appt.detectedTypes) appt.detectedTypes.forEach((t: string) => clientMap[key].types.add(t));
+        if (appt.assignedSupervisorIds) appt.assignedSupervisorIds.forEach((s: string) => clientMap[key].sups.add(s));
+        clientMap[key].tickets.push(appt);
       }
+
+      let groups = Object.values(clientMap);
+      
+      // Filter by Supervisor
+      if (filterSup) {
+        groups = groups.filter(g => g.sups.has(filterSup));
+      } else if (user?.role === 'supervisor') {
+        groups = groups.filter(g => g.sups.has(user.uid));
+      }
+
+      // Sort groups by time
+      groups.sort((a, b) => {
+        const timeA = (a.appointmentTime || '').split(' ')[1] || '99:99';
+        const timeB = (b.appointmentTime || '').split(' ')[1] || '99:99';
+        return timeA.localeCompare(timeB);
+      });
+
+      map[d] = groups;
     }
     return map;
-  }, [appointments]);
+  }, [appointments, displayedDays, filterSup, user]);
 
-  const todayStr = dateStr(new Date());
-
-  const prevWeek = () => {
+  const prevDays = () => {
     const d = new Date(refDate);
-    d.setDate(d.getDate() - 7);
+    d.setDate(d.getDate() - daysToShow);
     setRefDate(d);
   };
 
-  const nextWeek = () => {
+  const nextDays = () => {
     const d = new Date(refDate);
-    d.setDate(d.getDate() + 7);
+    d.setDate(d.getDate() + daysToShow);
     setRefDate(d);
   };
 
-  const goToday = () => setRefDate(new Date());
+  const goToday = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    setRefDate(d);
+  };
+
+  const handleOpenAddSpecialty = (group: any) => {
+    setAddSpecData(group);
+    setAddSpecOpen(true);
+  };
 
   return (
     <Layout>
-      <div className="space-y-4" dir="rtl">
+      <div className="space-y-6 page-in" dir="rtl">
 
         {/* ── Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-extrabold text-foreground tracking-tight">
-              📅 تقويم المواعيد
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
+              <CalendarDays className="w-7 h-7 text-blue-500" />
+              جدول المواعيد
             </h1>
-            <p className="text-muted-foreground text-sm mt-0.5">
-              {formatMonth(weekDays[0])} — {appointments.length} موعد
+            <p className="text-muted-foreground text-sm mt-1">
+              متابعة مواعيد الزيارات للعملاء وتخصصات الصيانة المطلوبة
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* فلتر المشرف (admin فقط) */}
+          <div className="flex flex-wrap items-center gap-2">
             {user?.role === 'admin' && supervisors.length > 0 && (
-              <select
-                value={filterSup}
-                onChange={e => setFilterSup(e.target.value)}
-                className="bg-card border border-border rounded-xl px-3 h-9 text-sm text-foreground"
-              >
-                <option value="">كل المشرفين</option>
-                {supervisors.map((s: any) => (
-                  <option key={s.uid} value={s.uid}>{s.displayName}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <Users className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <select
+                  value={filterSup}
+                  onChange={e => setFilterSup(e.target.value)}
+                  className="bg-card border border-border rounded-xl pl-3 pr-9 h-10 text-sm text-foreground font-bold appearance-none hover:border-slate-500 transition-colors"
+                >
+                  <option value="">كل المشرفين</option>
+                  {supervisors.map((s: any) => (
+                    <option key={s.uid} value={s.uid}>{s.displayName}</option>
+                  ))}
+                </select>
+              </div>
             )}
 
-            {/* فلتر المشروع */}
             {projects.length > 0 && (
               <select
                 value={filterProject}
                 onChange={e => setFilterProject(e.target.value)}
-                className="bg-card border border-border rounded-xl px-3 h-9 text-sm text-foreground"
+                className="bg-card border border-border rounded-xl px-3 h-10 text-sm text-foreground font-bold hover:border-slate-500 transition-colors"
               >
                 <option value="">كل المشاريع</option>
                 {projects.map((p: any) => (
@@ -198,217 +226,141 @@ export default function Appointments() {
               onClick={loadAppointments}
               variant="outline"
               size="icon"
-              className="h-9 w-9 border-border bg-card"
+              className="h-10 w-10 rounded-xl border-border bg-card hover:bg-white/5"
             >
               <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
             </Button>
           </div>
         </div>
 
-        {/* ── Week Navigation ── */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <Button onClick={nextWeek} variant="ghost" size="icon" className="h-8 w-8">
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={goToday}
-                className="text-xs font-bold text-primary hover:text-primary/80 transition-colors px-2 py-1 rounded-lg hover:bg-primary/5"
-              >
-                اليوم
-              </button>
-              <span className="text-sm font-bold text-foreground">
-                {weekDays[0].toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })}
-                {' — '}
-                {weekDays[6].toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-            </div>
-            <Button onClick={prevWeek} variant="ghost" size="icon" className="h-8 w-8">
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {/* ── Grid الأسبوعي ── */}
-          <div className="grid grid-cols-7 divide-x divide-x-reverse divide-border">
-            {weekDays.map(day => {
-              const ds = dateStr(day);
-              const dayAppts = byDay[ds] || [];
-              const isToday = ds === todayStr;
-
-              return (
-                <div key={ds} className={cn('min-h-[200px] p-1.5', isToday && 'bg-primary/5')}>
-                  {/* رأس اليوم */}
-                  <div className={cn(
-                    'text-center py-1.5 mb-1.5 rounded-xl',
-                    isToday ? 'bg-primary text-primary-foreground' : ''
-                  )}>
-                    <p className={cn('text-[10px] font-bold', isToday ? 'text-primary-foreground' : 'text-muted-foreground')}>
-                      {day.toLocaleDateString('ar-EG', { weekday: 'short' })}
-                    </p>
-                    <p className={cn('text-sm font-black', isToday ? 'text-primary-foreground' : 'text-foreground')}>
-                      {day.getDate()}
-                    </p>
-                    {dayAppts.length > 0 && (
-                      <span className={cn(
-                        'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
-                        isToday ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/10 text-primary'
-                      )}>
-                        {dayAppts.length}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* المواعيد */}
-                  <div className="space-y-1">
-                    {dayAppts.map((appt: any) => {
-                      const supIds: string[] = appt.assignedSupervisorIds || [];
-                      const firstSupColor = supIds.length > 0 ? (supColorMap[supIds[0]] || SUP_COLORS[0]) : SUP_COLORS[0];
-                      const time = (appt.appointmentTime || '').split(' ')[1];
-                      const isShared = supIds.length > 1;
-
-                      return (
-                        <Link
-                          key={appt.id}
-                          to={`/tickets/${appt.id}`}
-                          className={cn(
-                            'block text-[10px] border rounded-lg px-1.5 py-1 leading-tight hover:opacity-80 transition-opacity cursor-pointer',
-                            firstSupColor
-                          )}
-                        >
-                          <div className="flex items-center gap-0.5 mb-0.5">
-                            {time && <Clock className="w-2.5 h-2.5 shrink-0 opacity-70" />}
-                            <span className="font-bold truncate">{time || appt.clientName}</span>
-                            {isShared && (
-                              <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-current opacity-60" title="مشترك" />
-                            )}
-                          </div>
-                          <p className="opacity-70 truncate">{time ? appt.clientName : ''}</p>
-                          <p className="opacity-60 truncate">فيلا {appt.villaNumber}</p>
-                          {appt.type && (
-                            <p className="opacity-50 truncate">{typeTranslations[appt.type] || appt.type}</p>
-                          )}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {/* ── Navigation ── */}
+        <div className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl p-2 w-fit mx-auto shadow-sm">
+          <Button onClick={prevDays} variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white/5">
+            <ChevronRight className="w-5 h-5" />
+          </Button>
+          <Button onClick={goToday} variant="ghost" className="h-9 px-4 rounded-xl font-bold hover:bg-white/5 text-slate-300">
+            اليوم
+          </Button>
+          <Button onClick={nextDays} variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white/5">
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
         </div>
 
-        {/* ── قسم اليوم التفصيلي ── */}
-        {byDay[todayStr]?.length > 0 && (
-          <div className="bg-card border border-blue-500/20 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-              <Badge variant="secondary" className="text-[10px] text-blue-400">
-                {byDay[todayStr].length} موعد
-              </Badge>
-              <h3 className="font-bold text-sm flex items-center gap-1.5 text-blue-400">
-                <CalendarDays className="w-3.5 h-3.5" />
-                مواعيد اليوم — تفصيلي
-              </h3>
-            </div>
-            <div className="divide-y divide-border">
-              {byDay[todayStr].map((appt: any) => {
-                const supIds: string[] = appt.assignedSupervisorIds || [];
-                const sups = Array.isArray(appt.assignedSupervisors) ? appt.assignedSupervisors : [];
-                const time = (appt.appointmentTime || '').split(' ')[1];
+        {/* ── Days Grid ── */}
+        <div className={cn(
+          "grid gap-4 items-start",
+          daysToShow === 1 ? "grid-cols-1" : daysToShow === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+        )}>
+          {displayedDays.map(day => {
+             const ds = dateStr(day);
+             const groups = groupedByDay[ds] || [];
+             const isToday = ds === dateStr(new Date());
 
-                return (
-                  <Link
-                    key={appt.id}
-                    to={`/tickets/${appt.id}`}
-                    className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors"
-                  >
-                    {/* الوقت */}
-                    <div className="text-center shrink-0 w-14">
-                      <p className="text-lg font-black text-blue-400 tabular-nums">{time || '--:--'}</p>
-                    </div>
+             return (
+               <div key={ds} className={cn(
+                 "bg-card border rounded-3xl overflow-hidden flex flex-col max-h-[75vh] shadow-xl shadow-black/20 transition-colors",
+                 isToday ? "border-blue-500/40 bg-blue-500/5 ring-1 ring-blue-500/20" : "border-border"
+               )}>
+                 {/* Day Header */}
+                 <div className={cn(
+                   "p-5 border-b flex items-center justify-between sticky top-0 z-10 backdrop-blur-md",
+                   isToday ? "bg-blue-500/10 border-blue-500/20" : "bg-white/5 border-border"
+                 )}>
+                   <div>
+                     <h3 className={cn("font-black text-xl", isToday ? "text-blue-400" : "text-white")}>
+                       {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
+                     </h3>
+                     <p className="text-xs text-slate-400 font-medium mt-0.5">
+                       {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
+                     </p>
+                   </div>
+                   <Badge variant="outline" className={cn(
+                     "px-3 py-1 text-sm font-black border",
+                     isToday ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-300 border-slate-500/20"
+                   )}>
+                     {groups.length} موعد
+                   </Badge>
+                 </div>
+                 
+                 {/* Clients List */}
+                 <div className="overflow-y-auto flex-1 p-3 space-y-3 no-scrollbar">
+                   {loading && appointments.length === 0 ? (
+                     <div className="flex justify-center py-10"><RefreshCw className="w-5 h-5 animate-spin text-slate-500" /></div>
+                   ) : groups.map((group, idx) => {
+                     const time = (group.appointmentTime || '').split(' ')[1] || '---';
+                     return (
+                       <div key={idx} className="bg-background border border-border rounded-2xl p-4 flex flex-col gap-3 relative hover:border-slate-600 transition-colors group">
+                          
+                          {/* Top Row: Villa & Time */}
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1 min-w-0 pr-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-black text-white text-base truncate">فيلا {group.villaNumber}</h4>
+                              </div>
+                              {group.clientName && group.clientName !== '---' && (
+                                <p className="text-xs text-slate-400 font-medium truncate mt-0.5">{group.clientName}</p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-1.5 min-w-[70px] shrink-0">
+                              <Clock className="w-3.5 h-3.5 text-emerald-400 mb-0.5" />
+                              <span className="text-emerald-300 font-black tabular-nums text-sm">{time}</span>
+                            </div>
+                          </div>
 
-                    {/* التفاصيل */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-foreground truncate">
-                        {appt.clientName} — فيلا {appt.villaNumber}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground">#{appt.ticketId}</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {typeTranslations[appt.type] || appt.type}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-[9px] px-1.5 py-0',
-                            appt.status === 'pending' ? 'text-amber-400 border-amber-500/30' :
-                            appt.status === 'in_progress' ? 'text-blue-400 border-blue-500/30' :
-                            'text-slate-400 border-border'
-                          )}
-                        >
-                          {appt.status}
-                        </Badge>
-                      </div>
-                      {sups.length > 0 && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <User className="w-2.5 h-2.5 text-muted-foreground" />
-                          <span className="text-[10px] text-muted-foreground">
-                            {sups.map((s: any) => s.name).join('، ')}
-                          </span>
-                          {sups.length > 1 && (
-                            <span className="text-[9px] bg-purple-500/20 text-purple-400 px-1 rounded">مشترك</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                          {/* Specialties Tags */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            {Array.from(group.types).map(t => (
+                              <span key={t as string} className="text-[10px] font-bold px-2 py-1 rounded-lg border bg-slate-500/10 text-slate-300 border-slate-500/20">
+                                {typeTranslations[t as string] || t as string}
+                              </span>
+                            ))}
+                            <button 
+                              onClick={() => handleOpenAddSpecialty(group)}
+                              className="text-[10px] font-bold px-2 py-1 rounded-lg border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-400 transition-colors flex items-center gap-1 bg-transparent hover:bg-white/5"
+                            >
+                              <Plus className="w-3 h-3" />
+                              تخصص
+                            </button>
+                          </div>
 
-                    {/* ملاحظات */}
-                    {appt.appointmentNotes && (
-                      <div className="shrink-0 max-w-[120px]">
-                        <p className="text-[10px] text-muted-foreground truncate">{appt.appointmentNotes}</p>
-                      </div>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── Legend ── */}
-        {Object.keys(supColorMap).length > 0 && (
-          <div className="bg-card border border-border rounded-xl px-4 py-3">
-            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-2">المشرفون</p>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(supColorMap).slice(0, 6).map(([supId, color]) => {
-                const supName = appointments
-                  .flatMap((a: any) => a.assignedSupervisors || [])
-                  .find((s: any) => s?.id === supId)?.name || supId.slice(-4);
-                return (
-                  <div key={supId} className={cn('px-2 py-0.5 rounded-full border text-[10px] font-bold', color)}>
-                    {supName}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!loading && appointments.length === 0 && (
-          <div className="bg-card border border-dashed border-border rounded-2xl py-16 text-center">
-            <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-40" />
-            <h3 className="font-bold text-foreground">لا توجد مواعيد هذا الأسبوع</h3>
-            <p className="text-muted-foreground text-sm mt-1">قم بتحديد مواعيد من صفحة التذاكر</p>
-            <Button
-              className="mt-4 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl"
-              onClick={() => navigate('/tickets')}
-            >
-              الذهاب للتذاكر
-            </Button>
-          </div>
-        )}
+                          {/* Tickets Links */}
+                          <div className="flex flex-wrap gap-1 mt-1">
+                             {group.tickets.map((t: any) => (
+                               <Link key={t.id} to={`/tickets/${t.id}`} className="text-[10px] text-blue-400 hover:underline">
+                                 #{t.ticketId || t.id.slice(0,6)}
+                               </Link>
+                             ))}
+                          </div>
+                       </div>
+                     )
+                   })}
+                   {groups.length === 0 && !loading && (
+                     <div className="flex flex-col items-center justify-center py-12 text-slate-500 opacity-60">
+                       <CalendarDays className="w-10 h-10 mb-3" />
+                       <p className="text-sm font-bold">لا توجد مواعيد</p>
+                     </div>
+                   )}
+                 </div>
+               </div>
+             )
+          })}
+        </div>
       </div>
+
+      {/* Add Specialty Dialog */}
+      {addSpecOpen && addSpecData && (
+        <QuickAddSpecialtyDialog
+          open={addSpecOpen}
+          onOpenChange={setAddSpecOpen}
+          villaNumber={addSpecData.villaNumber}
+          ticketId={addSpecData.tickets[0]?.id}
+          existingDetectedTypes={addSpecData.tickets[0]?.detectedTypes}
+          existingSupervisorIds={addSpecData.tickets[0]?.assignedSupervisorIds}
+          existingSupervisors={addSpecData.tickets[0]?.assignedSupervisors}
+          supervisors={supervisors}
+          onSuccess={loadAppointments}
+        />
+      )}
     </Layout>
   );
 }

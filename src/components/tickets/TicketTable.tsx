@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, Clock } from 'lucide-react';
@@ -218,6 +217,7 @@ interface TicketTableProps {
   projects?: Record<string, { name: string; abbreviation?: string }>;
   showInlineFilters?: boolean;
   onRefresh?: () => void;
+  stateKey?: string; // Add stateKey for persisting filters
 }
 
 export function TicketTable({
@@ -232,6 +232,7 @@ export function TicketTable({
   projects,
   showInlineFilters = false,
   onRefresh,
+  stateKey,
 }: TicketTableProps) {
   const navigate = useNavigate();
 
@@ -246,17 +247,26 @@ export function TicketTable({
   const mergedTypeBg: Record<string, string>        = { ...typeBgStatic,    ...dbTypeBg };
 
   // ── Local filter state ────────────────────────────────────────────────────
-  const [localSearch,  setLocalSearch]  = useState('');
-  const [localStatus,  setLocalStatus]  = useState('');
-  const [localType,    setLocalType]    = useState<string>('');
-  const [localProject, setLocalProject] = useState('');
-  const [showClosed,   setShowClosed]   = useState(false);
+  const [localSearch,  setLocalSearch]  = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_search`) || '' : '');
+  const [localStatus,  setLocalStatus]  = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_status`) || '' : '');
+  const [localType,    setLocalType]    = useState<string>(() => stateKey ? sessionStorage.getItem(`${stateKey}_type`) || '' : '');
+  const [localProject, setLocalProject] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_project`) || '' : '');
+  const [showClosed,   setShowClosed]   = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_closed`) === 'true' : false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_search`, localSearch); }, [localSearch, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_status`, localStatus); }, [localStatus, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_type`, localType); }, [localType, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_project`, localProject); }, [localProject, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_closed`, String(showClosed)); }, [showClosed, stateKey]);
 
   // ── Sort state (default: oldest first) ───────────────────────────────────
   type SortKey = 'date' | 'days' | 'priority' | 'status' | 'ref' | 'client';
-  const [sortKey, setSortKey] = useState<SortKey>('date');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sortKey, setSortKey] = useState<SortKey>(() => (stateKey ? (sessionStorage.getItem(`${stateKey}_sortKey`) as SortKey) : null) || 'date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() => (stateKey ? (sessionStorage.getItem(`${stateKey}_sortDir`) as 'asc'|'desc') : null) || 'asc');
+
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_sortKey`, sortKey); }, [sortKey, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_sortDir`, sortDir); }, [sortDir, stateKey]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -291,6 +301,20 @@ export function TicketTable({
     const open   = arr.filter(t => !closedSet.has(t.status));
     const closed = arr.filter(t =>  closedSet.has(t.status));
     const cmp = (a: Ticket, b: Ticket) => {
+      // Search prioritization
+      if (localSearch) {
+        const s = localSearch.toLowerCase();
+        const aExact = String(a.villaNumber) === s || String(a.ticketId) === s || String(a.refNumber) === s || String(a.clientName || '').toLowerCase() === s;
+        const bExact = String(b.villaNumber) === s || String(b.ticketId) === s || String(b.refNumber) === s || String(b.clientName || '').toLowerCase() === s;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+
+        const aStarts = String(a.villaNumber).startsWith(s) || String(a.ticketId).startsWith(s) || String(a.refNumber).startsWith(s);
+        const bStarts = String(b.villaNumber).startsWith(s) || String(b.ticketId).startsWith(s) || String(b.refNumber).startsWith(s);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+      }
+
       const av = getTicketSortVal(a, sortKey);
       const bv = getTicketSortVal(b, sortKey);
       const diff = typeof av === 'number' && typeof bv === 'number'
@@ -581,7 +605,10 @@ export function TicketTable({
 
             const handleCardClick = () => {
               if (canSelect && inSelectionMode) { toggleOne(ticket.id); return; }
-              if (!inSelectionMode) navigate(`/tickets/${ticket.id}`);
+              if (!inSelectionMode) {
+                sessionStorage.setItem('ticketsListScrollY', window.scrollY.toString());
+                navigate(`/tickets/${ticket.id}`);
+              }
             };
 
             return (
@@ -796,6 +823,7 @@ export function TicketTable({
                       )}
                       onClick={e => {
                         if ((e.target as HTMLElement).closest('button')) return;
+                        sessionStorage.setItem('ticketsListScrollY', window.scrollY.toString());
                         navigate(`/tickets/${ticket.id}`);
                       }}
                     >
