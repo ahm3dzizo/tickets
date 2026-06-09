@@ -267,7 +267,18 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
               type="date"
               value={startDate}
               min={todayStr()}
-              onChange={e => setStartDate(e.target.value)}
+              onChange={e => {
+                const val = e.target.value;
+                if (!val) return;
+                const d = new Date(val);
+                if (d.getDay() === 5) {
+                  toast.error('لا يمكن تحديد الموعد يوم الجمعة (إجازة)، تم تحويله للسبت تلقائياً.');
+                  d.setDate(d.getDate() + 1);
+                  setStartDate(d.toISOString().split('T')[0]);
+                } else {
+                  setStartDate(val);
+                }
+              }}
               className="w-full bg-white/5 border border-border rounded-xl h-11 px-3 text-slate-200 text-sm [color-scheme:dark]"
             />
           </div>

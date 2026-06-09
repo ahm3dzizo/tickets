@@ -15,7 +15,8 @@ import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { QuickAddSpecialtyDialog } from '@/components/tickets/QuickAddSpecialtyDialog';
 
 function dateStr(d: Date): string {
-  return d.toISOString().split('T')[0];
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offset).toISOString().split('T')[0];
 }
 
 export default function Appointments() {
