@@ -423,7 +423,7 @@ export default function Appointments() {
       </div>
 
       {/* --- Print Layout --- */}
-      <div className="hidden print:block print:w-[210mm] print:min-h-[297mm] print:bg-white print:text-black print:p-4 mx-auto" dir="rtl">
+      <div className="hidden print:block print:w-full print:bg-white print:text-black print:p-0" dir="rtl">
         <h2 className="text-xl font-black text-center mb-4 border-b border-black pb-2">
           جدول المواعيد - {new Date(dateStr(refDate)).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </h2>
