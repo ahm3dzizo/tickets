@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
-  Plus, Users, Ticket as TicketIcon
+  Plus, Users, Ticket as TicketIcon, CalendarPlus
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { QuickAddSpecialtyDialog } from '@/components/tickets/QuickAddSpecialtyDialog';
+import { DirectAppointmentDialog } from '@/components/tickets/DirectAppointmentDialog';
 
 function dateStr(d: Date): string {
   const offset = d.getTimezoneOffset() * 60000;
@@ -23,6 +24,8 @@ export default function Appointments() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { typeTranslations } = useTicketTypes();
+
+  const [directApptDate, setDirectApptDate] = useState<string | null>(null);
 
   const [refDate, setRefDate] = useState(() => {
     const d = new Date();
@@ -260,7 +263,7 @@ export default function Appointments() {
         </div>
 
         {/* ── Carousel Hero UI ── */}
-        <div className="relative w-full h-[75vh] min-h-[500px] flex justify-center items-center overflow-hidden py-4 -mt-2">
+        <div className="relative w-full h-[65vh] min-h-[450px] max-h-[650px] flex justify-center items-center overflow-hidden py-4 -mt-2">
           {displayedDays.map((day, idx) => {
             const ds = dateStr(day);
             const groups = groupedByDay[ds] || [];
@@ -272,7 +275,7 @@ export default function Appointments() {
             const isLeft = idx === 2; // Next Day
 
             // Carousel Slide Base Styling
-            const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col bg-card rounded-[2rem] overflow-hidden shadow-2xl border w-full max-w-[90%] md:max-w-[420px] h-[95%]";
+            const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col bg-card rounded-[1.5rem] overflow-hidden shadow-2xl border w-full max-w-[85%] sm:max-w-[380px] h-[95%]";
             
             let posClass = "";
             let interactiveClass = "";
@@ -283,11 +286,11 @@ export default function Appointments() {
                 isToday ? "border-blue-500/40 bg-blue-500/5 ring-4 ring-blue-500/10" : "border-slate-500/30"
               );
             } else if (isRight) {
-              posClass = "z-10 scale-[0.85] opacity-[0.65] translate-y-8 translate-x-[18%] sm:translate-x-[40%] md:translate-x-[60%] lg:translate-x-[75%] blur-[0.5px] border-border/50 shadow-none";
-              interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.88] cursor-pointer";
+              posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 translate-x-[25%] sm:translate-x-[45%] md:translate-x-[65%] lg:translate-x-[80%] blur-[1px] border-border/50 shadow-none";
+              interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.85] cursor-pointer";
             } else if (isLeft) {
-              posClass = "z-10 scale-[0.85] opacity-[0.65] translate-y-8 -translate-x-[18%] sm:-translate-x-[40%] md:-translate-x-[60%] lg:-translate-x-[75%] blur-[0.5px] border-border/50 shadow-none";
-              interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.88] cursor-pointer";
+              posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 -translate-x-[25%] sm:-translate-x-[45%] md:-translate-x-[65%] lg:-translate-x-[80%] blur-[1px] border-border/50 shadow-none";
+              interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.85] cursor-pointer";
             }
 
             // Hide sides entirely on small phones to avoid overlap mess, or just show them peeked?
@@ -303,7 +306,6 @@ export default function Appointments() {
                   if (isLeft) nextDay();
                 }}
               >
-                {/* Day Header */}
                 <div className={cn(
                   "p-5 lg:p-6 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 z-10 backdrop-blur-xl",
                   isToday ? "bg-blue-500/10 border-blue-500/20" : "bg-white/5 border-border"
@@ -316,12 +318,23 @@ export default function Appointments() {
                       {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
                     </p>
                   </div>
-                  <Badge variant="outline" className={cn(
-                    "px-4 py-1.5 text-base font-black border rounded-xl w-fit",
-                    isToday ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-300 border-slate-500/20"
-                  )}>
-                    {groups.length} موعد
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={cn(
+                      "px-4 py-1.5 text-base font-black border rounded-xl w-fit",
+                      isToday ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-300 border-slate-500/20"
+                    )}>
+                      {groups.length} موعد
+                    </Badge>
+                    {isCenter && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); setDirectApptDate(ds); }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-9 px-4 shadow-lg flex items-center gap-1.5"
+                      >
+                        <CalendarPlus className="w-4 h-4" /> إضافة موعد
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Clients List */}
@@ -420,6 +433,18 @@ export default function Appointments() {
           existingSupervisors={addSpecData.tickets[0]?.assignedSupervisors}
           supervisors={supervisors}
           onSuccess={loadAppointments}
+        />
+      )}
+      {/* Direct Appointment Dialog */}
+      {directApptDate && (
+        <DirectAppointmentDialog
+          open={!!directApptDate}
+          onOpenChange={(v) => !v && setDirectApptDate(null)}
+          dateStr={directApptDate}
+          onSuccess={() => {
+            loadAppointments();
+            loadOpenTicketsCount();
+          }}
         />
       )}
     </Layout>

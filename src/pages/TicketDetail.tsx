@@ -32,6 +32,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { useTicketTypes } from '@/contexts/TicketTypesContext';
+import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
 import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
@@ -478,7 +480,7 @@ export default function TicketDetail() {
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 text-xs">موعد الزيارة</span>
-                    <span className="text-amber-500 font-bold">{ticket.appointmentTime || 'لم يحدد بعد'}</span>
+                    <span className="text-amber-500 font-bold">{formatAppointmentDayTime(ticket.appointmentTime)}</span>
                   </div>
                   <div className="space-y-2">
                     <span className="text-slate-500 text-xs block text-right">ملاحظات الموعد</span>

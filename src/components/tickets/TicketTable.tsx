@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { MoreHorizontal, Eye, Edit2, MessageSquare, Square, CheckSquare, Search, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, Clock } from 'lucide-react';
+import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare } from 'lucide-react';
+import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
 import { toast } from 'sonner';
@@ -905,7 +906,7 @@ export function TicketTable({
                             <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد العميل
                           </span>
                         ) : ticket.appointmentTime ? (
-                          <span className="text-[11px] text-emerald-400 font-bold">{ticket.appointmentTime}</span>
+                          <span className="text-[11px] text-emerald-400 font-bold">{formatAppointmentDayTime(ticket.appointmentTime)}</span>
                         ) : ticket.closureNotes ? (
                           <span className="text-[10px] text-slate-500 line-clamp-1">{ticket.closureNotes}</span>
                         ) : (
