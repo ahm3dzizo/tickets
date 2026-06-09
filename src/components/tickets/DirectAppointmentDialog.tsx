@@ -37,6 +37,7 @@ export function DirectAppointmentDialog({
   
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [time, setTime] = useState('09:00');
+  const [notes, setNotes] = useState('');
 
   const { typeTranslations } = useTicketTypes();
   const mergedTypes = Object.keys(typeTranslations).length > 0 ? typeTranslations : {
@@ -61,6 +62,7 @@ export function DirectAppointmentDialog({
     setOpenTickets([]);
     setSelectedTypes([]);
     setTime('09:00');
+    setNotes('');
   };
 
   // Fetch open tickets when a client is selected
@@ -118,6 +120,8 @@ export function DirectAppointmentDialog({
         for (let i = 0; i < openTickets.length; i++) {
           const t = openTickets[i];
           const payload: any = { appointmentTime, status: 'waiting' };
+          if (notes) payload.appointmentNotes = notes;
+          
           // Append new types to the first ticket only
           if (i === 0 && updatedDetectedTypes.length > (first.detectedTypes?.length || 0)) {
             payload.detectedTypes = updatedDetectedTypes;
@@ -127,7 +131,7 @@ export function DirectAppointmentDialog({
       } else {
         // No open tickets => Create a new one
         const nextId = await ticketsApi.getNextId(projectId);
-        promises.push(ticketsApi.create({
+        const payload: any = {
           ticketId: nextId,
           refNumber: selectedVilla,
           projectId,
@@ -141,7 +145,9 @@ export function DirectAppointmentDialog({
           priority: 3,
           appointmentTime,
           createdAt: new Date().toISOString()
-        }));
+        };
+        if (notes) payload.appointmentNotes = notes;
+        promises.push(ticketsApi.create(payload));
       }
 
       await Promise.all(promises);
@@ -277,6 +283,19 @@ export function DirectAppointmentDialog({
                 );
               })}
             </div>
+          </div>
+
+          {/* Notes Selection */}
+          <div className="space-y-2">
+            <Label className="text-slate-500 text-[11px] uppercase font-bold tracking-widest block text-right">
+              ملاحظات إضافية (تظهر للفنيين)
+            </Label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="اكتب ملاحظات إضافية بخصوص الموعد..."
+              className="w-full bg-white/5 border border-border rounded-xl p-3 text-slate-200 text-sm h-20 resize-none text-right placeholder:text-slate-600"
+            />
           </div>
 
         </div>

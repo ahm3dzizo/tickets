@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { QuickAddSpecialtyDialog } from '@/components/tickets/QuickAddSpecialtyDialog';
 import { DirectAppointmentDialog } from '@/components/tickets/DirectAppointmentDialog';
+import { ClientTicketsModal } from '@/components/tickets/ClientTicketsModal';
+import { Printer } from 'lucide-react';
 
 function dateStr(d: Date): string {
   const offset = d.getTimezoneOffset() * 60000;
@@ -26,6 +28,7 @@ export default function Appointments() {
   const { typeTranslations } = useTicketTypes();
 
   const [directApptDate, setDirectApptDate] = useState<string | null>(null);
+  const [clientTicketsModal, setClientTicketsModal] = useState<{ villa: string, project: string, notes: string } | null>(null);
 
   const [refDate, setRefDate] = useState(() => {
     const d = new Date();
@@ -283,7 +286,7 @@ export default function Appointments() {
             if (isCenter) {
               posClass = cn(
                 "z-20 scale-100 opacity-100 translate-y-0 translate-x-0 border-2",
-                isToday ? "border-blue-500/40 bg-blue-500/5 ring-4 ring-blue-500/10" : "border-slate-500/30"
+                isToday ? "border-slate-600 bg-slate-900/60 backdrop-blur-2xl ring-2 ring-blue-500/20" : "border-slate-700/50 bg-card/90 backdrop-blur-md"
               );
             } else if (isRight) {
               posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 translate-x-[25%] sm:translate-x-[45%] md:translate-x-[65%] lg:translate-x-[80%] blur-[1px] border-border/50 shadow-none";
@@ -341,7 +344,13 @@ export default function Appointments() {
                 <div className="overflow-y-auto flex-1 p-4 lg:p-5 space-y-4 no-scrollbar bg-gradient-to-b from-transparent to-background/50">
                   {loading && appointments.length === 0 && isCenter ? (
                     <div className="flex justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-slate-500" /></div>
-                  ) : groups.map((group, idx) => {
+                  ) : [...groups].sort((a,b) => {
+                     const ta = (a.appointmentTime || '').split(' ')[1] || '00:00';
+                     const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
+                     return ta.localeCompare(tb);
+                   }).map((group, idx) => {
+                     const note = group.tickets.find((t:any) => t.appointmentNotes)?.appointmentNotes || '';
+
                     const time = (group.appointmentTime || '').split(' ')[1] || '---';
                     const clientKey = group.villaNumber + '_' + (group.projectId || '');
                     const totalOpen = openTicketsMap[clientKey] || 0;
@@ -353,7 +362,7 @@ export default function Appointments() {
                           "bg-card/80 border rounded-2xl p-5 flex flex-col gap-4 relative transition-all duration-300 shadow-sm",
                           isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50"
                         )}
-                        onClick={e => isCenter ? e.stopPropagation() : undefined} // Prevent clicking card from navigating if it's center
+                        onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
                       >
                         
                         {/* Top Row: Villa & Time */}
