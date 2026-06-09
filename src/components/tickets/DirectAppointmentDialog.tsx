@@ -101,6 +101,12 @@ export function DirectAppointmentDialog({
       return;
     }
 
+    const existingAppt = openTickets.find(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr));
+    if (existingAppt) {
+      toast.error(`هذا العميل لديه موعد مجدول بالفعل في هذا اليوم (${existingAppt.appointmentTime}) ولا يمكن تكرار الموعد.`);
+      return;
+    }
+
     setLoading(true);
     try {
       const appointmentTime = `${dateStr} ${time}`;
@@ -226,7 +232,16 @@ export function DirectAppointmentDialog({
           </div>
 
           {/* Open Tickets Info */}
-          {selectedVilla && !fetchingTickets && openTickets.length > 0 && (
+          {selectedVilla && !fetchingTickets && openTickets.length > 0 && openTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr)) && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-right">
+              <p className="text-sm text-red-400 font-bold mb-1">تنبيه: العميل لديه موعد مسبق اليوم</p>
+              <p className="text-xs text-red-400/70">
+                هذا العميل لديه موعد مجدول بالفعل في هذا اليوم ({openTickets.find(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr))?.appointmentTime}) ولا يمكن تكراره هنا.
+              </p>
+            </div>
+          )}
+
+          {selectedVilla && !fetchingTickets && openTickets.length > 0 && !openTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr)) && (
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-right">
               <p className="text-sm text-blue-300 font-bold mb-1">يوجد {openTickets.length} تذاكر مفتوحة</p>
               <p className="text-xs text-blue-300/70">سيتم ربط الموعد بهذه التذاكر تلقائياً.</p>
@@ -304,10 +319,15 @@ export function DirectAppointmentDialog({
         <DialogFooter className="pt-2 gap-3">
           <Button
             onClick={handleSave}
-            disabled={loading || !selectedClientId}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 font-bold"
+            disabled={loading || !selectedClientId || openTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr))}
+            className={cn(
+              "w-full text-white rounded-xl h-11 font-bold",
+              openTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr)) 
+                ? "bg-slate-700 cursor-not-allowed opacity-50"
+                : "bg-blue-600 hover:bg-blue-700"
+            )}
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تأكيد وحفظ המوعد'}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تأكيد وحفظ الموعد'}
           </Button>
         </DialogFooter>
       </DialogContent>
