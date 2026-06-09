@@ -285,9 +285,8 @@ export default function Appointments() {
 
               if (isCenter) {
                 posClass = cn(
-                  "z-20 scale-100 opacity-100 translate-y-0 translate-x-0 border-2",
-                  "border-slate-600 bg-slate-900/60 backdrop-blur-2xl shadow-xl",
-                  isToday ? "ring-2 ring-blue-500/50" : ""
+                  "z-20 scale-100 opacity-100 translate-y-0 translate-x-0 border-2 bg-card",
+                  isToday ? "border-blue-500/40 ring-4 ring-blue-500/10" : "border-slate-500/30"
                 );
               } else if (isRight) {
                 posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 translate-x-[25%] sm:translate-x-[45%] md:translate-x-[65%] lg:translate-x-[80%] blur-[1px] border-border/50 shadow-none";
@@ -315,10 +314,10 @@ export default function Appointments() {
                     isToday ? "bg-blue-500/10 border-blue-500/20" : "bg-white/5 border-border"
                   )}>
                     <div>
-                      <h3 className={cn("font-black text-2xl lg:text-3xl", isToday ? "text-blue-400" : "text-white")}>
+                      <h3 className={cn("font-black text-2xl lg:text-3xl", isToday ? "text-blue-600 dark:text-blue-400" : "text-foreground")}>
                         {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
                       </h3>
-                      <p className="text-sm text-slate-400 font-medium mt-1">
+                      <p className="text-sm text-muted-foreground font-medium mt-1">
                         {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
                       </p>
                     </div>
