@@ -424,10 +424,10 @@ export default function Appointments() {
 
       {/* --- Print Layout --- */}
       <div className="hidden print:block print:w-[210mm] print:min-h-[297mm] print:bg-white print:text-black print:p-4 mx-auto" dir="rtl">
-        <h2 className="text-2xl font-black text-center mb-6 border-b pb-4">
+        <h2 className="text-xl font-black text-center mb-4 border-b border-black pb-2">
           جدول المواعيد - {new Date(dateStr(refDate)).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           {(() => {
              const ds = dateStr(refDate);
              const rawGroups = groupedByDay[ds] || [];
@@ -440,20 +440,20 @@ export default function Appointments() {
                const tA = (g.appointmentTime || '').split(' ')[1] || '---';
                const note = g.tickets.find((t:any) => t.appointmentNotes)?.appointmentNotes || 'لا توجد ملاحظات إضافية';
                return (
-                 <div key={i} className="border-2 border-black rounded-xl p-4 flex flex-col gap-2 break-inside-avoid shadow-sm">
-                   <div className="flex justify-between items-center border-b border-black pb-2">
-                     <h3 className="font-bold text-lg">فيلا {g.villaNumber}</h3>
-                     <span className="font-black text-xl tabular-nums">{tA}</span>
+                 <div key={i} className="border border-black rounded-lg p-2 flex flex-col gap-1 break-inside-avoid">
+                   <div className="flex justify-between items-center border-b border-black/30 pb-1">
+                     <h3 className="font-bold text-base">فيلا {g.villaNumber}</h3>
+                     <span className="font-black text-base tabular-nums">{tA}</span>
                    </div>
-                   <div className="flex flex-wrap gap-1 mt-1">
+                   <div className="flex flex-wrap gap-1 mt-0.5">
                      {Array.from(g.types).map(t => (
-                        <span key={t as string} className="text-xs border border-gray-400 rounded px-1.5 py-0.5">
+                        <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1 py-0.5 leading-none">
                           {typeTranslations[t as string] || t as string}
                         </span>
                      ))}
                    </div>
-                   <div className="mt-2 text-sm text-gray-700 bg-gray-100 p-2 rounded-lg border border-dashed border-gray-400">
-                     <strong>الملاحظات: </strong> {note}
+                   <div className="mt-1 text-xs text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-snug line-clamp-2">
+                     <span className="font-bold">الملاحظات: </span> {note}
                    </div>
                  </div>
                )
