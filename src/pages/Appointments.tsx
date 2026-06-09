@@ -286,7 +286,8 @@ export default function Appointments() {
               if (isCenter) {
                 posClass = cn(
                   "z-20 scale-100 opacity-100 translate-y-0 translate-x-0 border-2",
-                  isToday ? "border-slate-600 bg-slate-900/60 backdrop-blur-2xl ring-2 ring-blue-500/20" : "border-slate-700/50 bg-card/90 backdrop-blur-md"
+                  "border-slate-600 bg-slate-900/60 backdrop-blur-2xl shadow-xl",
+                  isToday ? "ring-2 ring-blue-500/50" : ""
                 );
               } else if (isRight) {
                 posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 translate-x-[25%] sm:translate-x-[45%] md:translate-x-[65%] lg:translate-x-[80%] blur-[1px] border-border/50 shadow-none";
