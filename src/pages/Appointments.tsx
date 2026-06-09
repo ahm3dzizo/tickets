@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
-  Plus, Users
+  Plus, Users, Ticket as TicketIcon
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { appointmentsApi, projectsApi, usersApi } from '@/lib/api';
+import { appointmentsApi, projectsApi, usersApi, ticketsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
@@ -29,26 +29,18 @@ export default function Appointments() {
     return d;
   });
   
-  const [daysToShow, setDaysToShow] = useState(window.innerWidth < 768 ? 1 : window.innerWidth < 1024 ? 2 : 3);
-
-  useEffect(() => {
-    const handleResize = () => setDaysToShow(window.innerWidth < 768 ? 1 : window.innerWidth < 1024 ? 2 : 3);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
+  // We always show 3 days: Prev, Active, Next
   const displayedDays = useMemo(() => {
-    return Array.from({ length: daysToShow }, (_, i) => {
-      const d = new Date(refDate);
-      d.setDate(d.getDate() + i);
-      return d;
-    });
-  }, [refDate, daysToShow]);
+    const prev = new Date(refDate); prev.setDate(prev.getDate() - 1);
+    const next = new Date(refDate); next.setDate(next.getDate() + 1);
+    return [prev, refDate, next];
+  }, [refDate]);
 
   const from = dateStr(displayedDays[0]);
-  const to = dateStr(displayedDays[displayedDays.length - 1]);
+  const to = dateStr(displayedDays[2]);
 
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [openTicketsMap, setOpenTicketsMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<any[]>([]);
   const [supervisors, setSupervisors] = useState<any[]>([]);
@@ -62,21 +54,38 @@ export default function Appointments() {
   const loadAppointments = async () => {
     setLoading(true);
     try {
-      // Fetch without supervisorId to get ALL specialties for the client
-      // We will filter locally based on supervisor later
       const data = await appointmentsApi.getCalendar({
         from,
         to,
         projectId: filterProject || undefined,
-        // If user is supervisor, maybe we still fetch all and filter locally so they can see other specialties too.
-        // Wait, if the backend restricts supervisors to only their own tickets, we might not get other tickets.
-        // But let's fetch what we can.
       });
       setAppointments(data);
     } catch {
       toast.error('فشل جلب المواعيد');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadOpenTicketsCount = async () => {
+    if (!user) return;
+    try {
+      const params: any = {};
+      if (user.role === 'supervisor') params.supervisorId = user.uid;
+      else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
+      
+      const allTickets = await ticketsApi.getAll(params);
+      const map: Record<string, number> = {};
+      
+      allTickets.forEach((t: any) => {
+        if (t.status !== 'closed' && t.status !== 'out-of-scope') {
+          const key = t.villaNumber + '_' + (t.projectId || '');
+          map[key] = (map[key] || 0) + 1;
+        }
+      });
+      setOpenTicketsMap(map);
+    } catch {
+      // Silently fail if count fails
     }
   };
 
@@ -90,6 +99,8 @@ export default function Appointments() {
     if (user.role === 'admin') {
       usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => {});
     }
+
+    loadOpenTicketsCount();
   }, [user]);
 
   useEffect(() => { loadAppointments(); }, [from, to, filterProject, user]);
@@ -153,15 +164,15 @@ export default function Appointments() {
     return map;
   }, [appointments, displayedDays, filterSup, user]);
 
-  const prevDays = () => {
+  const prevDay = () => {
     const d = new Date(refDate);
-    d.setDate(d.getDate() - daysToShow);
+    d.setDate(d.getDate() - 1);
     setRefDate(d);
   };
 
-  const nextDays = () => {
+  const nextDay = () => {
     const d = new Date(refDate);
-    d.setDate(d.getDate() + daysToShow);
+    d.setDate(d.getDate() + 1);
     setRefDate(d);
   };
 
@@ -171,7 +182,8 @@ export default function Appointments() {
     setRefDate(d);
   };
 
-  const handleOpenAddSpecialty = (group: any) => {
+  const handleOpenAddSpecialty = (group: any, e: React.MouseEvent) => {
+    e.stopPropagation();
     setAddSpecData(group);
     setAddSpecOpen(true);
   };
@@ -234,115 +246,163 @@ export default function Appointments() {
         </div>
 
         {/* ── Navigation ── */}
-        <div className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl p-2 w-fit mx-auto shadow-sm">
-          <Button onClick={prevDays} variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white/5">
+        <div className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl p-2 w-fit mx-auto shadow-sm relative z-30">
+          <Button onClick={prevDay} variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white/5">
             <ChevronRight className="w-5 h-5" />
           </Button>
           <Button onClick={goToday} variant="ghost" className="h-9 px-4 rounded-xl font-bold hover:bg-white/5 text-slate-300">
             اليوم
           </Button>
-          <Button onClick={nextDays} variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white/5">
+          <Button onClick={nextDay} variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white/5">
             <ChevronLeft className="w-5 h-5" />
           </Button>
         </div>
 
-        {/* ── Days Grid ── */}
-        <div className={cn(
-          "grid gap-4 items-start",
-          daysToShow === 1 ? "grid-cols-1" : daysToShow === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-        )}>
-          {displayedDays.map(day => {
-             const ds = dateStr(day);
-             const groups = groupedByDay[ds] || [];
-             const isToday = ds === dateStr(new Date());
+        {/* ── Carousel Hero UI ── */}
+        <div className="relative w-full h-[75vh] min-h-[500px] flex justify-center items-center overflow-hidden py-4 -mt-2">
+          {displayedDays.map((day, idx) => {
+            const ds = dateStr(day);
+            const groups = groupedByDay[ds] || [];
+            const isToday = ds === dateStr(new Date());
+            
+            // Layout logical positions
+            const isRight = idx === 0; // Previous Day
+            const isCenter = idx === 1; // Current Day
+            const isLeft = idx === 2; // Next Day
 
-             return (
-               <div key={ds} className={cn(
-                 "bg-card border rounded-3xl overflow-hidden flex flex-col max-h-[75vh] shadow-xl shadow-black/20 transition-colors",
-                 isToday ? "border-blue-500/40 bg-blue-500/5 ring-1 ring-blue-500/20" : "border-border"
-               )}>
-                 {/* Day Header */}
-                 <div className={cn(
-                   "p-5 border-b flex items-center justify-between sticky top-0 z-10 backdrop-blur-md",
-                   isToday ? "bg-blue-500/10 border-blue-500/20" : "bg-white/5 border-border"
-                 )}>
-                   <div>
-                     <h3 className={cn("font-black text-xl", isToday ? "text-blue-400" : "text-white")}>
-                       {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
-                     </h3>
-                     <p className="text-xs text-slate-400 font-medium mt-0.5">
-                       {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
-                     </p>
-                   </div>
-                   <Badge variant="outline" className={cn(
-                     "px-3 py-1 text-sm font-black border",
-                     isToday ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-300 border-slate-500/20"
-                   )}>
-                     {groups.length} موعد
-                   </Badge>
-                 </div>
-                 
-                 {/* Clients List */}
-                 <div className="overflow-y-auto flex-1 p-3 space-y-3 no-scrollbar">
-                   {loading && appointments.length === 0 ? (
-                     <div className="flex justify-center py-10"><RefreshCw className="w-5 h-5 animate-spin text-slate-500" /></div>
-                   ) : groups.map((group, idx) => {
-                     const time = (group.appointmentTime || '').split(' ')[1] || '---';
-                     return (
-                       <div key={idx} className="bg-background border border-border rounded-2xl p-4 flex flex-col gap-3 relative hover:border-slate-600 transition-colors group">
-                          
-                          {/* Top Row: Villa & Time */}
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1 min-w-0 pr-1">
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-black text-white text-base truncate">فيلا {group.villaNumber}</h4>
+            // Carousel Slide Base Styling
+            const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col bg-card rounded-[2rem] overflow-hidden shadow-2xl border w-full max-w-[90%] md:max-w-[420px] h-[95%]";
+            
+            let posClass = "";
+            let interactiveClass = "";
+
+            if (isCenter) {
+              posClass = cn(
+                "z-20 scale-100 opacity-100 translate-y-0 translate-x-0 border-2",
+                isToday ? "border-blue-500/40 bg-blue-500/5 ring-4 ring-blue-500/10" : "border-slate-500/30"
+              );
+            } else if (isRight) {
+              posClass = "z-10 scale-[0.85] opacity-[0.65] translate-y-8 translate-x-[18%] sm:translate-x-[40%] md:translate-x-[60%] lg:translate-x-[75%] blur-[0.5px] border-border/50 shadow-none";
+              interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.88] cursor-pointer";
+            } else if (isLeft) {
+              posClass = "z-10 scale-[0.85] opacity-[0.65] translate-y-8 -translate-x-[18%] sm:-translate-x-[40%] md:-translate-x-[60%] lg:-translate-x-[75%] blur-[0.5px] border-border/50 shadow-none";
+              interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.88] cursor-pointer";
+            }
+
+            // Hide sides entirely on small phones to avoid overlap mess, or just show them peeked?
+            // With translate-x-[18%] they peek a bit. It looks good.
+            const mobileClass = isCenter ? "flex" : "hidden sm:flex";
+
+            return (
+              <div 
+                key={ds} 
+                className={cn(cardClass, posClass, mobileClass, interactiveClass)}
+                onClick={() => {
+                  if (isRight) prevDay();
+                  if (isLeft) nextDay();
+                }}
+              >
+                {/* Day Header */}
+                <div className={cn(
+                  "p-5 lg:p-6 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 z-10 backdrop-blur-xl",
+                  isToday ? "bg-blue-500/10 border-blue-500/20" : "bg-white/5 border-border"
+                )}>
+                  <div>
+                    <h3 className={cn("font-black text-2xl lg:text-3xl", isToday ? "text-blue-400" : "text-white")}>
+                      {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
+                    </h3>
+                    <p className="text-sm text-slate-400 font-medium mt-1">
+                      {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className={cn(
+                    "px-4 py-1.5 text-base font-black border rounded-xl w-fit",
+                    isToday ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-300 border-slate-500/20"
+                  )}>
+                    {groups.length} موعد
+                  </Badge>
+                </div>
+                
+                {/* Clients List */}
+                <div className="overflow-y-auto flex-1 p-4 lg:p-5 space-y-4 no-scrollbar bg-gradient-to-b from-transparent to-background/50">
+                  {loading && appointments.length === 0 && isCenter ? (
+                    <div className="flex justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-slate-500" /></div>
+                  ) : groups.map((group, idx) => {
+                    const time = (group.appointmentTime || '').split(' ')[1] || '---';
+                    const clientKey = group.villaNumber + '_' + (group.projectId || '');
+                    const totalOpen = openTicketsMap[clientKey] || 0;
+
+                    return (
+                      <div 
+                        key={idx} 
+                        className={cn(
+                          "bg-card/80 border rounded-2xl p-5 flex flex-col gap-4 relative transition-all duration-300 shadow-sm",
+                          isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50"
+                        )}
+                        onClick={e => isCenter ? e.stopPropagation() : undefined} // Prevent clicking card from navigating if it's center
+                      >
+                        
+                        {/* Top Row: Villa & Time */}
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="flex-1 min-w-0 pr-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-black text-white text-lg truncate">فيلا {group.villaNumber}</h4>
+                            </div>
+                            {group.clientName && group.clientName !== '---' && (
+                              <p className="text-sm text-slate-400 font-medium truncate mt-1">{group.clientName}</p>
+                            )}
+
+                            {/* Open Tickets Counter Hero Badge */}
+                            {totalOpen > 0 && (
+                              <div className="mt-2 inline-flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-bold px-2.5 py-1 rounded-lg">
+                                <TicketIcon className="w-3.5 h-3.5" />
+                                <span>{totalOpen} تذاكر مفتوحة للعميل</span>
                               </div>
-                              {group.clientName && group.clientName !== '---' && (
-                                <p className="text-xs text-slate-400 font-medium truncate mt-0.5">{group.clientName}</p>
-                              )}
-                            </div>
-                            <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-1.5 min-w-[70px] shrink-0">
-                              <Clock className="w-3.5 h-3.5 text-emerald-400 mb-0.5" />
-                              <span className="text-emerald-300 font-black tabular-nums text-sm">{time}</span>
-                            </div>
+                            )}
                           </div>
+                          <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-2 min-w-[80px] shrink-0 shadow-inner">
+                            <Clock className="w-4 h-4 text-emerald-400 mb-1" />
+                            <span className="text-emerald-300 font-black tabular-nums text-base">{time}</span>
+                          </div>
+                        </div>
 
-                          {/* Specialties Tags */}
-                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                            {Array.from(group.types).map(t => (
-                              <span key={t as string} className="text-[10px] font-bold px-2 py-1 rounded-lg border bg-slate-500/10 text-slate-300 border-slate-500/20">
-                                {typeTranslations[t as string] || t as string}
-                              </span>
+                        {/* Specialties Tags */}
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
+                          {Array.from(group.types).map(t => (
+                            <span key={t as string} className="text-xs font-bold px-3 py-1.5 rounded-xl border bg-slate-800/80 text-slate-200 border-slate-700 shadow-sm">
+                              {typeTranslations[t as string] || t as string}
+                            </span>
+                          ))}
+                          <button 
+                            onClick={(e) => handleOpenAddSpecialty(group, e)}
+                            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-400 hover:bg-slate-800 transition-all flex items-center gap-1.5"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            إضافة تخصص
+                          </button>
+                        </div>
+
+                        {/* Tickets Links */}
+                        <div className="flex flex-wrap gap-2 mt-1">
+                            {group.tickets.map((t: any) => (
+                              <Link key={t.id} to={`/tickets/${t.id}`} onClick={e => e.stopPropagation()} className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline bg-blue-500/5 px-2 py-0.5 rounded-md transition-colors">
+                                #{t.ticketId || t.id.slice(0,6)}
+                              </Link>
                             ))}
-                            <button 
-                              onClick={() => handleOpenAddSpecialty(group)}
-                              className="text-[10px] font-bold px-2 py-1 rounded-lg border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-400 transition-colors flex items-center gap-1 bg-transparent hover:bg-white/5"
-                            >
-                              <Plus className="w-3 h-3" />
-                              تخصص
-                            </button>
-                          </div>
-
-                          {/* Tickets Links */}
-                          <div className="flex flex-wrap gap-1 mt-1">
-                             {group.tickets.map((t: any) => (
-                               <Link key={t.id} to={`/tickets/${t.id}`} className="text-[10px] text-blue-400 hover:underline">
-                                 #{t.ticketId || t.id.slice(0,6)}
-                               </Link>
-                             ))}
-                          </div>
-                       </div>
-                     )
-                   })}
-                   {groups.length === 0 && !loading && (
-                     <div className="flex flex-col items-center justify-center py-12 text-slate-500 opacity-60">
-                       <CalendarDays className="w-10 h-10 mb-3" />
-                       <p className="text-sm font-bold">لا توجد مواعيد</p>
-                     </div>
-                   )}
-                 </div>
-               </div>
-             )
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {groups.length === 0 && !loading && isCenter && (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-500 opacity-60">
+                      <CalendarDays className="w-16 h-16 mb-4 opacity-50" />
+                      <p className="text-lg font-bold">لا توجد مواعيد</p>
+                      <p className="text-sm mt-2 opacity-80">جميع الفنيين متاحين في هذا اليوم</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
           })}
         </div>
       </div>
