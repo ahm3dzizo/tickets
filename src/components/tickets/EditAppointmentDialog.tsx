@@ -39,7 +39,11 @@ export function EditAppointmentDialog({ open, onOpenChange, group, onSuccess }: 
 
     try {
       const promises = group.tickets.map((t: any) => 
-        ticketsApi.update(t.id, { appointmentTime: newAppointmentTime })
+        ticketsApi.update(t.id, { 
+          appointmentTime: newAppointmentTime,
+          appointmentAwaitingReply: false,
+          status: t.status === 'waiting' ? 'pending' : t.status
+        })
       );
       await Promise.all(promises);
       toast.success('تم تعديل الموعد بنجاح');

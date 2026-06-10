@@ -240,11 +240,11 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="bg-card border-border text-slate-200 sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/50 max-h-[90vh] overflow-y-auto"
+        className="bg-card border-border text-foreground sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/20 dark:shadow-black/50 max-h-[90vh] overflow-y-auto"
         dir="rtl"
       >
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
+          <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
             <CalendarDays className="w-5 h-5 text-amber-400" />
             تحديد موعد {tickets.length > 1 ? `لعدد ${tickets.length} تذاكر` : 'الزيارة'}
           </DialogTitle>
@@ -260,7 +260,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
 
           {/* ── تاريخ البداية ── */}
           <div className="space-y-2">
-            <Label className="text-slate-400 text-[11px] uppercase font-bold tracking-wider block">
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
               تاريخ بداية الفترة
             </Label>
             <input
@@ -279,13 +279,13 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
                   setStartDate(val);
                 }
               }}
-              className="w-full bg-white/5 border border-border rounded-xl h-11 px-3 text-slate-200 text-sm [color-scheme:dark]"
+              className="w-full bg-background border border-input rounded-xl h-11 px-3 text-foreground text-sm"
             />
           </div>
 
           {/* ── مدة الرانج ── */}
           <div className="space-y-2">
-            <Label className="text-slate-400 text-[11px] uppercase font-bold tracking-wider block">
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
               مدة الرانج المُرسَلة للعميل
             </Label>
             <div className="flex gap-2">
@@ -296,8 +296,8 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
                   className={cn(
                     'flex-1 h-10 rounded-xl text-sm font-bold border transition-all',
                     rangeDays === p.days
-                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                      : 'bg-white/5 border-border text-slate-500 hover:border-slate-400'
+                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-300'
+                      : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
                   )}
                 >
                   {p.label}
@@ -308,7 +308,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
             {/* عرض الرانج */}
             <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2.5 text-sm">
               <CalendarDays className="w-4 h-4 text-amber-400 shrink-0" />
-              <span className="text-amber-300 font-bold">
+              <span className="text-amber-700 dark:text-amber-300 font-bold">
                 {formatDateAr(startDate)} ← {formatDateAr(endDate)}
               </span>
             </div>
@@ -316,7 +316,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
 
           {/* ── الوقت المفضل ── */}
           <div className="space-y-2">
-            <Label className="text-slate-400 text-[11px] uppercase font-bold tracking-wider block">
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
               الوقت المفضل للزيارة
             </Label>
             <div className="grid grid-cols-2 gap-2">
@@ -327,8 +327,8 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
                   className={cn(
                     'h-10 rounded-xl text-xs font-bold border transition-all px-2',
                     timeMode === opt.value
-                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                      : 'bg-white/5 border-border text-slate-500 hover:border-slate-400'
+                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-700 dark:text-blue-300'
+                      : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
                   )}
                 >
                   {opt.label}
@@ -340,7 +340,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
                 type="time"
                 value={customTime}
                 onChange={e => setCustomTime(e.target.value)}
-                className="w-full bg-white/5 border border-border rounded-xl h-11 px-3 text-slate-200 text-sm [color-scheme:dark]"
+                className="w-full bg-background border border-input rounded-xl h-11 px-3 text-foreground text-sm"
               />
             )}
           </div>
@@ -355,9 +355,9 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
             )}>
               <div className="flex items-center gap-2">
                 {checkingConflicts
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
-                  : <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />}
-                <span className={cn('text-xs font-bold', conflicts.length > 0 ? 'text-orange-300' : 'text-slate-400')}>
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                  : <AlertTriangle className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400" />}
+                <span className={cn('text-xs font-bold', conflicts.length > 0 ? 'text-orange-600 dark:text-orange-300' : 'text-muted-foreground')}>
                   {checkingConflicts
                     ? 'جارٍ فحص التعارضات...'
                     : `${conflicts.length} موعد آخر في نفس الفترة`}
@@ -366,14 +366,14 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
               {conflicts.length > 0 && (
                 <div className="space-y-1">
                   {conflicts.slice(0, 3).map((c: any, i) => (
-                    <div key={i} className="text-[11px] text-orange-200/80 bg-orange-500/10 rounded-lg px-2 py-1">
+                    <div key={i} className="text-[11px] text-orange-800 dark:text-orange-200/80 bg-orange-500/10 rounded-lg px-2 py-1">
                       تذكرة #{c.ticketId} — {c.clientName} (فيلا {c.villaNumber}) | {c.appointmentTime?.split(' ')[0]}
                     </div>
                   ))}
                   {conflicts.length > 3 && (
-                    <p className="text-[10px] text-orange-400">... و{conflicts.length - 3} أخرى</p>
+                    <p className="text-[10px] text-orange-600 dark:text-orange-400">... و{conflicts.length - 3} أخرى</p>
                   )}
-                  <p className="text-[10px] text-orange-400/70 mt-1">يمكن المتابعة — التحذير للمعلومية فقط</p>
+                  <p className="text-[10px] text-orange-600/70 dark:text-orange-400/70 mt-1">يمكن المتابعة — التحذير للمعلومية فقط</p>
                 </div>
               )}
               {!checkingConflicts && conflicts.length === 0 && (
@@ -387,21 +387,21 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
 
           {/* ── ملاحظات ── */}
           <div className="space-y-2">
-            <Label className="text-slate-400 text-[11px] uppercase font-bold tracking-wider block">
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
               ملاحظات (اختياري)
             </Label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="أي تعليمات للفني أو العميل..."
-              className="w-full bg-white/5 border border-border rounded-xl p-3 text-right text-slate-200 text-sm resize-none h-20 placeholder:text-slate-600"
+              className="w-full bg-background border border-input rounded-xl p-3 text-right text-foreground text-sm resize-none h-20 placeholder:text-muted-foreground"
             />
           </div>
 
           {/* ── Preview رسالة WhatsApp ── */}
           <button
             onClick={() => setShowPreview(v => !v)}
-            className="flex items-center gap-2 text-xs text-slate-400 hover:text-slate-200 transition-colors font-bold w-full"
+            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors font-bold w-full"
           >
             <Eye className="w-3.5 h-3.5" />
             {showPreview ? 'إخفاء' : 'معاينة'} رسالة WhatsApp
@@ -411,7 +411,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
           {showPreview && (
             <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
               <p className="text-[10px] text-emerald-400 font-bold mb-2 uppercase tracking-wider">معاينة الرسالة</p>
-              <pre className="text-[11px] text-slate-300 whitespace-pre-wrap font-sans leading-relaxed">
+              <pre className="text-[11px] text-foreground/80 whitespace-pre-wrap font-sans leading-relaxed">
                 {dynamicPreview}
               </pre>
             </div>
@@ -423,7 +423,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
               onClick={handleSave}
               disabled={isBusy || !startDate}
               variant="outline"
-              className="flex-1 border-border bg-white/5 text-slate-300 hover:text-white rounded-xl h-12 font-bold text-sm"
+              className="flex-1 border-input bg-background text-foreground hover:bg-muted rounded-xl h-12 font-bold text-sm"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 me-1.5" />}
               حفظ فقط
@@ -435,7 +435,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
                 'flex-1 rounded-xl h-12 font-bold text-sm shadow-lg',
                 clientPhone
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-muted text-muted-foreground cursor-not-allowed'
               )}
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 me-1.5" />}

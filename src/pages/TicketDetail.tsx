@@ -228,7 +228,8 @@ export default function TicketDetail() {
       await ticketsApi.update(ticket.id, {
         appointmentTime,
         appointmentNotes: apptNotes,
-        status: ticket.status === 'open' ? 'pending' : ticket.status,
+        appointmentAwaitingReply: false,
+        status: ticket.status === 'open' || ticket.status === 'waiting' ? 'pending' : ticket.status,
       });
 
       // إرسال رسالة الموعد عبر واتساب تلقائياً
@@ -608,7 +609,7 @@ export default function TicketDetail() {
                 <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest text-right">إجراءات سريعة</CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-2">
-                {ticket.appointmentAwaitingReply && (
+                {ticket.appointmentAwaitingReply && ticket.status === 'waiting' && (
                   <div className="w-full flex items-center justify-between p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 mb-3">
                     <div className="flex items-center gap-2 text-orange-400">
                       <Clock className="w-4 h-4 animate-pulse" />

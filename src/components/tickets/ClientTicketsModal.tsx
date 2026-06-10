@@ -65,9 +65,9 @@ export function ClientTicketsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[450px] rounded-3xl" dir="rtl">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-[450px] rounded-3xl" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-white text-right flex items-center gap-2">
+          <DialogTitle className="text-lg font-bold text-foreground text-right flex items-center gap-2">
             <TicketIcon className="w-5 h-5 text-blue-400" />
             التذاكر المفتوحة (فيلا {villaNumber})
           </DialogTitle>
@@ -75,34 +75,34 @@ export function ClientTicketsModal({
 
         <div className="space-y-4 py-2">
           {fetching ? (
-            <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-slate-500" /></div>
+            <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : tickets.length === 0 ? (
-            <p className="text-center text-sm text-slate-500 py-4">لا توجد تذاكر مفتوحة حالياً.</p>
+            <p className="text-center text-sm text-muted-foreground py-4">لا توجد تذاكر مفتوحة حالياً.</p>
           ) : (
             <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
               {tickets.map(t => (
-                <div key={t.id} className="bg-white/5 border border-border p-3 rounded-xl flex flex-col gap-2">
+                <div key={t.id} className="bg-background border border-input p-3 rounded-xl flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-blue-400">#{t.ticketId || t.id.slice(0,6)}</span>
-                    <Link to={`/tickets/${t.id}`} className="text-[10px] bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-white transition-colors">
+                    <span className="text-xs font-bold text-blue-500 dark:text-blue-400">#{t.ticketId || t.id.slice(0,6)}</span>
+                    <Link to={`/tickets/${t.id}`} className="text-[10px] bg-muted hover:bg-muted/80 text-foreground px-2 py-1 rounded transition-colors">
                       عرض التفاصيل
                     </Link>
                   </div>
-                  <p className="text-sm text-slate-300 line-clamp-2 leading-relaxed">{t.description}</p>
+                  <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{t.description}</p>
                 </div>
               ))}
             </div>
           )}
 
           <div className="space-y-2 pt-2 border-t border-border/50">
-            <Label className="text-slate-500 text-[11px] uppercase font-bold tracking-widest block text-right">
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block text-right">
               ملاحظات للموعد
             </Label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="تعديل الملاحظات الفنية لهذا الموعد..."
-              className="w-full bg-white/5 border border-border rounded-xl p-3 text-slate-200 text-sm h-20 resize-none text-right focus:border-blue-500/50"
+              className="w-full bg-background border border-input rounded-xl p-3 text-foreground text-sm h-20 resize-none text-right placeholder:text-muted-foreground focus:border-blue-500/50"
             />
           </div>
         </div>

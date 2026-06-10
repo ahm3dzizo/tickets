@@ -678,7 +678,7 @@ export function TicketTable({
                       {supervisorNames.length > 0 && (
                         <span className="text-[11px] text-amber-400/80 font-medium truncate">{supervisorNames.join('، ')}</span>
                       )}
-                      {ticket.appointmentAwaitingReply ? (
+                      {ticket.appointmentAwaitingReply && ticket.status === 'waiting' ? (
                         <span className="text-[11px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded flex items-center gap-1 w-max">
                           <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد العميل
                         </span>
@@ -901,7 +901,7 @@ export function TicketTable({
                         )}
                       </td>
                       <td className="px-4 py-3 text-center w-24">
-                        {ticket.appointmentAwaitingReply ? (
+                        {ticket.appointmentAwaitingReply && ticket.status === 'waiting' ? (
                           <span className="text-[10px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded flex items-center gap-1 justify-center whitespace-nowrap">
                             <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد العميل
                           </span>

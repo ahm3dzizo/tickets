@@ -260,21 +260,8 @@ export default function Appointments() {
             </div>
           </div>
 
-          {/* ── Navigation ── */}
-          <div className="flex items-center justify-center gap-2 bg-card border border-border rounded-2xl p-2 w-fit mx-auto shadow-sm relative z-30">
-            <Button onClick={prevDay} variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white/5">
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-            <Button onClick={goToday} variant="ghost" className="h-9 px-4 rounded-xl font-bold hover:bg-white/5 text-slate-300">
-              اليوم
-            </Button>
-            <Button onClick={nextDay} variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white/5">
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-          </div>
-
           {/* ── Carousel Hero UI ── */}
-          <div className="relative w-full h-[82vh] min-h-[550px] max-h-[950px] flex justify-center items-center overflow-hidden py-4 -mt-2">
+          <div className="relative w-full h-[84vh] min-h-[550px] max-h-[950px] flex justify-center items-center overflow-hidden py-2">
             {displayedDays.map((day, idx) => {
               const ds = dateStr(day);
               const groups = groupedByDay[ds] || [];
@@ -321,13 +308,29 @@ export default function Appointments() {
                     "p-3 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 z-10 backdrop-blur-xl",
                     isToday ? "bg-blue-500/10 border-blue-500/20" : "bg-white/5 border-border"
                   )}>
-                    <div>
-                      <h3 className={cn("font-black text-xl lg:text-2xl", isToday ? "text-blue-600 dark:text-blue-400" : "text-foreground")}>
-                        {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
-                      </h3>
-                      <p className="text-xs text-muted-foreground font-medium mt-0.5">
-                        {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
-                      </p>
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <h3 className={cn("font-black text-xl lg:text-2xl", isToday ? "text-blue-600 dark:text-blue-400" : "text-foreground")}>
+                          {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
+                        </h3>
+                        <p className="text-xs text-muted-foreground font-medium mt-0.5">
+                          {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </p>
+                      </div>
+                      
+                      {isCenter && (
+                        <div className="flex items-center gap-1 bg-background border border-border rounded-xl p-0.5 shadow-sm">
+                          <Button onClick={(e) => { e.stopPropagation(); prevDay(); }} variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted">
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                          <Button onClick={(e) => { e.stopPropagation(); goToday(); }} variant="ghost" className="h-8 px-3 rounded-lg font-bold text-xs hover:bg-muted">
+                            اليوم
+                          </Button>
+                          <Button onClick={(e) => { e.stopPropagation(); nextDay(); }} variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted">
+                            <ChevronLeft className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className={cn(

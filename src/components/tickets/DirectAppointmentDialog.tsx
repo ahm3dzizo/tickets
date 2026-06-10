@@ -125,7 +125,7 @@ export function DirectAppointmentDialog({
         
         for (let i = 0; i < openTickets.length; i++) {
           const t = openTickets[i];
-          const payload: any = { appointmentTime, status: 'waiting' };
+          const payload: any = { appointmentTime, status: 'pending', appointmentAwaitingReply: false };
           if (notes) payload.appointmentNotes = notes;
           
           // Append new types to the first ticket only
@@ -147,7 +147,8 @@ export function DirectAppointmentDialog({
           description: `موعد صيانة مجدول يدوياً للمشرف (${selectedTypes.map(t => mergedTypes[t] || t).join('، ')})`,
           type: selectedTypes[0],
           detectedTypes: selectedTypes,
-          status: 'waiting',
+          status: 'pending',
+          appointmentAwaitingReply: false,
           priority: 3,
           appointmentTime,
           createdAt: new Date().toISOString()
@@ -173,31 +174,31 @@ export function DirectAppointmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[420px] rounded-3xl" dir="rtl">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-[420px] rounded-3xl" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-white text-right flex items-center gap-2">
+          <DialogTitle className="text-lg font-bold text-foreground text-right flex items-center gap-2">
             <CalendarPlus className="w-5 h-5 text-blue-400" />
             إضافة موعد مباشر
           </DialogTitle>
-          <p className="text-sm text-slate-400 text-right mt-1">{displayDateStr}</p>
+          <p className="text-sm text-muted-foreground text-right mt-1">{displayDateStr}</p>
         </DialogHeader>
 
         <div className="space-y-6 py-2">
           {/* Client Selection */}
           <div className="space-y-2">
-            <Label className="text-slate-500 text-[11px] uppercase font-bold tracking-widest block text-right">العميل</Label>
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block text-right">العميل</Label>
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12">
+                  <Button variant="outline" className="w-full justify-between border-input bg-background text-foreground hover:bg-muted rounded-xl h-12">
                     <Home className="w-4 h-4 opacity-50" />
                     <span className="truncate mx-2">{selectedClientDisplay}</span>
                   </Button>
                 }
               />
-              <DropdownMenuContent className="bg-card border-border text-slate-200 w-[450px] max-h-[300px] overflow-y-auto">
-                <div className="p-2 border-b border-white/10 sticky top-0 bg-card z-10 flex items-center gap-2 px-3">
-                  <Search className="w-4 h-4 text-slate-400" />
+              <DropdownMenuContent className="bg-card border-border text-foreground w-[450px] max-h-[300px] overflow-y-auto">
+                <div className="p-2 border-b border-border sticky top-0 bg-card z-10 flex items-center gap-2 px-3">
+                  <Search className="w-4 h-4 text-muted-foreground" />
                   <Input 
                     placeholder="ابحث بالاسم أو الفيلا..."
                     value={clientSearch}
@@ -207,7 +208,7 @@ export function DirectAppointmentDialog({
                   />
                 </div>
                 {clients.length === 0 ? (
-                  <DropdownMenuItem disabled className="text-slate-500 text-start justify-start">جارٍ التحميل...</DropdownMenuItem>
+                  <DropdownMenuItem disabled className="text-muted-foreground text-start justify-start">جارٍ التحميل...</DropdownMenuItem>
                 ) : (
                   clients
                     .filter(c => c.name.includes(clientSearch) || c.villaNumber.includes(clientSearch))
@@ -215,7 +216,7 @@ export function DirectAppointmentDialog({
                     .map(c => (
                     <DropdownMenuItem
                       key={c.id}
-                      className="hover:bg-white/5 cursor-pointer text-start justify-start"
+                      className="hover:bg-muted cursor-pointer text-start justify-start"
                       onClick={() => {
                         setSelectedClientId(c.id);
                         setSelectedVilla(c.villaNumber);
@@ -234,8 +235,8 @@ export function DirectAppointmentDialog({
           {/* Open Tickets Info */}
           {selectedVilla && !fetchingTickets && openTickets.length > 0 && openTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr)) && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-right">
-              <p className="text-sm text-red-400 font-bold mb-1">تنبيه: العميل لديه موعد مسبق اليوم</p>
-              <p className="text-xs text-red-400/70">
+              <p className="text-sm text-red-500 font-bold mb-1">تنبيه: العميل لديه موعد مسبق اليوم</p>
+              <p className="text-xs text-red-500/70">
                 هذا العميل لديه موعد مجدول بالفعل في هذا اليوم ({openTickets.find(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr))?.appointmentTime}) ولا يمكن تكراره هنا.
               </p>
             </div>
@@ -243,41 +244,41 @@ export function DirectAppointmentDialog({
 
           {selectedVilla && !fetchingTickets && openTickets.length > 0 && !openTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr)) && (
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-right">
-              <p className="text-sm text-blue-300 font-bold mb-1">يوجد {openTickets.length} تذاكر مفتوحة</p>
-              <p className="text-xs text-blue-300/70">سيتم ربط الموعد بهذه التذاكر تلقائياً.</p>
+              <p className="text-sm text-blue-500 font-bold mb-1">يوجد {openTickets.length} تذاكر مفتوحة</p>
+              <p className="text-xs text-blue-500/70">سيتم ربط الموعد بهذه التذاكر تلقائياً.</p>
             </div>
           )}
 
           {selectedVilla && !fetchingTickets && openTickets.length === 0 && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-right">
-              <p className="text-sm text-amber-300 font-bold mb-1">لا توجد تذاكر مفتوحة للعميل</p>
-              <p className="text-xs text-amber-300/70">سيتم إنشاء تذكرة جديدة تلقائياً لتوثيق الموعد بالتخصصات المختارة.</p>
+              <p className="text-sm text-amber-500 font-bold mb-1">لا توجد تذاكر مفتوحة للعميل</p>
+              <p className="text-xs text-amber-500/70">سيتم إنشاء تذكرة جديدة تلقائياً لتوثيق الموعد بالتخصصات المختارة.</p>
             </div>
           )}
 
           {fetchingTickets && (
-            <div className="flex items-center gap-2 text-slate-500 text-sm justify-center">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm justify-center">
               <Loader2 className="w-4 h-4 animate-spin" /> جلب بيانات التذاكر...
             </div>
           )}
 
           {/* Time Selection */}
           <div className="space-y-2">
-            <Label className="text-slate-500 text-[11px] uppercase font-bold tracking-widest block text-right">الوقت</Label>
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block text-right">الوقت</Label>
             <div className="relative">
-              <Clock className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" />
+              <Clock className="w-4 h-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2" />
               <input
                 type="time"
                 value={time}
                 onChange={e => setTime(e.target.value)}
-                className="w-full bg-white/5 border border-border rounded-xl h-11 pr-10 pl-3 text-slate-200 text-sm [color-scheme:dark]"
+                className="w-full bg-background border border-input rounded-xl h-11 pr-10 pl-3 text-foreground text-sm"
               />
             </div>
           </div>
 
           {/* Specialties Selection */}
           <div className="space-y-2">
-            <Label className="text-slate-500 text-[11px] uppercase font-bold tracking-widest block text-right">
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block text-right">
               تخصصات الصيانة المطلوبة
             </Label>
             <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
@@ -290,8 +291,8 @@ export function DirectAppointmentDialog({
                     className={cn(
                       'px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1.5',
                       isSelected
-                        ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                        : 'bg-white/5 border-border text-slate-400 hover:border-slate-300'
+                        ? 'bg-blue-500/20 border-blue-500/40 text-blue-700 dark:text-blue-300'
+                        : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
                     )}
                   >
                     {v as React.ReactNode}
@@ -303,14 +304,14 @@ export function DirectAppointmentDialog({
 
           {/* Notes Selection */}
           <div className="space-y-2">
-            <Label className="text-slate-500 text-[11px] uppercase font-bold tracking-widest block text-right">
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block text-right">
               ملاحظات إضافية (تظهر للفنيين)
             </Label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="اكتب ملاحظات إضافية بخصوص الموعد..."
-              className="w-full bg-white/5 border border-border rounded-xl p-3 text-slate-200 text-sm h-20 resize-none text-right placeholder:text-slate-600"
+              className="w-full bg-background border border-input rounded-xl p-3 text-foreground text-sm h-20 resize-none text-right placeholder:text-muted-foreground"
             />
           </div>
 
@@ -323,8 +324,8 @@ export function DirectAppointmentDialog({
             className={cn(
               "w-full text-white rounded-xl h-11 font-bold",
               openTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr)) 
-                ? "bg-slate-700 cursor-not-allowed opacity-50"
-                : "bg-blue-600 hover:bg-blue-700"
+                ? "bg-muted text-muted-foreground cursor-not-allowed opacity-100"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
             )}
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تأكيد وحفظ الموعد'}
