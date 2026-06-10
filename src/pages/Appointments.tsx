@@ -231,17 +231,6 @@ export default function Appointments() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="بحث برقم الفيلا أو العميل..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-card border border-border rounded-xl pl-3 pr-9 h-10 text-sm text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[180px] sm:w-[220px]"
-                />
-              </div>
-
               {user?.role === 'admin' && supervisors.length > 0 && (
                 <div className="relative">
                   <Users className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -363,6 +352,17 @@ export default function Appointments() {
                       </Badge>
                       {isCenter && (
                         <div className="flex items-center gap-1.5">
+                          <div className="relative ml-1 sm:ml-2">
+                            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                            <input
+                              type="text"
+                              placeholder="بحث..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="bg-background border border-input rounded-xl pl-2 pr-8 h-8 text-xs text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[100px] sm:w-[140px]"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
                           <Button
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); setDirectApptDate(ds); }}
