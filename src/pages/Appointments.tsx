@@ -504,19 +504,19 @@ export default function Appointments() {
                const tA = (g.appointmentTime || '').split(' ')[1] || '---';
                const note = g.tickets.find((t:any) => t.appointmentNotes)?.appointmentNotes || 'لا توجد ملاحظات إضافية';
                return (
-                 <div key={i} className="border border-black rounded-lg p-1 flex flex-col gap-0.5 break-inside-avoid overflow-hidden">
-                   <div className="flex justify-between items-center border-b border-black/30 pb-0.5">
+                 <div key={i} className="border border-black rounded-lg p-2 min-h-[80px] flex flex-col gap-1.5 break-inside-avoid overflow-hidden justify-center">
+                   <div className="flex justify-between items-center border-b border-black/30 pb-1">
                      <h3 className="font-bold text-sm leading-tight">فيلا {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || 'بدون رقم'})</span></h3>
                      <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
                    </div>
-                   <div className="flex flex-wrap gap-0.5">
+                   <div className="flex flex-wrap gap-1 mt-0.5">
                      {Array.from(g.types).map(t => (
-                        <span key={t as string} className="text-[9px] font-bold border border-gray-400 rounded px-1 py-[1px] leading-none">
+                        <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
                           {typeTranslations[t as string] || t as string}
                         </span>
                      ))}
                    </div>
-                   <div className="text-[10px] text-gray-800 bg-gray-50 p-1 rounded border border-dashed border-gray-300 leading-tight line-clamp-1 mt-0.5">
+                   <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
                      <span className="font-bold">الملاحظات: </span> {note}
                    </div>
                  </div>
