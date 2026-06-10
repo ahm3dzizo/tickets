@@ -335,7 +335,7 @@ export default function Appointments() {
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className={cn(
                         "px-3 py-1 text-sm font-black border rounded-xl w-fit",
-                        isToday ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-300 border-slate-500/20"
+                        isToday ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20"
                       )}>
                         {groups.length} موعد
                       </Badge>
@@ -351,7 +351,7 @@ export default function Appointments() {
                           <Button
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); window.print(); }}
-                            className="bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
+                            className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
                           >
                             <Printer className="w-3.5 h-3.5" /> طباعة
                           </Button>
@@ -380,7 +380,7 @@ export default function Appointments() {
                             <div 
                               key={idx} 
                               className={cn(
-                                "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-white/5",
+                                "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-muted",
                                 isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50"
                               )}
                               onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
@@ -390,22 +390,22 @@ export default function Appointments() {
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex-1 min-w-0 pr-1">
                                   <div className="flex items-center gap-2">
-                                    <h4 className="font-black text-white text-base truncate">فيلا {group.villaNumber} {totalOpen > 0 && <span className="text-amber-500 font-bold text-xs">({totalOpen})</span>}</h4>
+                                    <h4 className="font-black text-foreground text-base truncate">فيلا {group.villaNumber} {totalOpen > 0 && <span className="text-amber-600 dark:text-amber-500 font-bold text-xs">({totalOpen})</span>}</h4>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1">
                                   {isCenter && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); setEditApptGroup(group); }}
-                                      className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 rounded-xl h-8 px-2 transition-colors mr-1"
+                                      className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl h-8 px-2 transition-colors mr-1"
                                       title="تعديل وتأجيل الموعد"
                                     >
                                       <Pencil className="w-3.5 h-3.5" />
                                     </button>
                                   )}
                                   <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1 min-w-[65px] shrink-0 shadow-inner">
-                                    <Clock className="w-3.5 h-3.5 text-emerald-400 mb-0.5" />
-                                    <span className="text-emerald-300 font-black tabular-nums text-sm">{time}</span>
+                                    <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 mb-0.5" />
+                                    <span className="text-emerald-700 dark:text-emerald-300 font-black tabular-nums text-sm">{time}</span>
                                   </div>
                                 </div>
                               </div>
@@ -413,13 +413,13 @@ export default function Appointments() {
                               {/* Specialties Tags */}
                               <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
                                 {Array.from(group.types).map(t => (
-                                  <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-slate-800/80 text-slate-200 border-slate-700 shadow-sm">
+                                  <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-slate-800 text-slate-200 dark:bg-slate-800/80 dark:text-slate-200 border-slate-700 shadow-sm">
                                     {mergedTypes[t as string] || t as string}
                                   </span>
                                 ))}
                                 <button 
                                   onClick={(e) => handleOpenAddSpecialty(group, e)}
-                                  className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-400 hover:bg-slate-800 transition-all flex items-center gap-1"
+                                  className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 hover:bg-muted transition-all flex items-center gap-1"
                                 >
                                   <Plus className="w-3 h-3" />
                                   إضافة تخصص
@@ -427,14 +427,14 @@ export default function Appointments() {
                               </div>
 
                               {/* Notes */}
-                              {note && (<div className="text-[11px] text-slate-300 bg-white/5 p-1.5 rounded-lg mt-0.5 border border-white/10 flex gap-1.5"><span className="font-bold shrink-0 text-slate-400">ملاحظة:</span><span className="line-clamp-2 leading-snug">{note}</span></div>)}
+                              {note && (<div className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded-lg mt-0.5 border border-input flex gap-1.5"><span className="font-bold shrink-0 text-foreground/70">ملاحظة:</span><span className="line-clamp-2 leading-snug">{note}</span></div>)}
                             </div>
                           )
                         })}
                       </div>
                     )}
                     {groups.length === 0 && !loading && isCenter && (
-                      <div className="flex flex-col items-center justify-center py-20 text-slate-500 opacity-60">
+                      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-60">
                         <CalendarDays className="w-16 h-16 mb-4 opacity-50" />
                         <p className="text-lg font-bold">لا توجد مواعيد</p>
                         <p className="text-sm mt-2 opacity-80">جميع الفنيين متاحين في هذا اليوم</p>
