@@ -144,6 +144,7 @@ export default function Appointments() {
           clientMap[key] = {
             clientId: appt.clientId,
             clientName: appt.clientName,
+            clientPhone: appt.client?.phone || null,
             villaNumber: appt.villaNumber,
             projectId: appt.projectId,
             appointmentTime: appt.appointmentTime,
@@ -450,6 +451,21 @@ export default function Appointments() {
 
                               {/* Notes */}
                               {note && (<div className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded-lg mt-0.5 border border-input flex gap-1.5"><span className="font-bold shrink-0 text-foreground/70">ملاحظة:</span><span className="line-clamp-2 leading-snug">{note}</span></div>)}
+                            
+                              {/* Supervisors (Screen Only) */}
+                              {group.sups && group.sups.size > 0 && (
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
+                                  <span className="text-[10px] font-bold text-muted-foreground">المشرفين:</span>
+                                  {Array.from(group.sups).map(sId => {
+                                    const sup = supervisors.find(s => s.uid === sId || s.id === sId);
+                                    return (
+                                      <span key={sId as string} className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800">
+                                        {sup ? (sup.displayName || sup.name) : 'غير معروف'}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           )
                         })}
@@ -490,7 +506,7 @@ export default function Appointments() {
                return (
                  <div key={i} className="border border-black rounded-lg p-1 flex flex-col gap-0.5 break-inside-avoid overflow-hidden">
                    <div className="flex justify-between items-center border-b border-black/30 pb-0.5">
-                     <h3 className="font-bold text-sm leading-tight">فيلا {g.villaNumber}</h3>
+                     <h3 className="font-bold text-sm leading-tight">فيلا {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || 'بدون رقم'})</span></h3>
                      <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
                    </div>
                    <div className="flex flex-wrap gap-0.5">

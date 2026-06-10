@@ -171,6 +171,7 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
         assignedSupervisorIds: true,
         assignedSupervisors: true,
         priority: true,
+        client: { select: { phone: true } },
       },
       orderBy: { appointmentTime: "asc" },
     });
