@@ -171,7 +171,7 @@ export default function Appointments() {
       if (searchQuery) {
         const sq = searchQuery.toLowerCase();
         groups = groups.filter(g => 
-          (g.villa && String(g.villa).toLowerCase().includes(sq)) ||
+          (g.villaNumber && String(g.villaNumber).toLowerCase().includes(sq)) ||
           (g.clientName && String(g.clientName).toLowerCase().includes(sq)) ||
           (g.tickets.some((t: any) => t.ticketId && String(t.ticketId).toLowerCase().includes(sq)))
         );
