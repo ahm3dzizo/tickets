@@ -43,6 +43,30 @@ const SPECIALTY_COLOR: Record<string, string> = {
   general:     'bg-slate-500/10 text-slate-400 border-slate-500/20',
 };
 
+const STATIC_FALLBACKS: Record<string, string> = {
+  electricity: 'كهرباء',
+  plumbing: 'سباكة',
+  doors: 'أبواب',
+  doors_windows: 'أبواب ونوافذ',
+  paints: 'دهانات',
+  ceramics: 'سيراميك',
+  drainage: 'صرف صحي',
+  ac_ventilation: 'تكييف وتهوية',
+  waterproofing: 'عزل مائي',
+  pest_control: 'مكافحة حشرات',
+  general: 'عام',
+  cracks: 'شروخ وتصدعات',
+  grading: 'تسوية',
+  gypsum: 'جبس',
+  lighting: 'إضاءة',
+  aluminum: 'ألمنيوم',
+  hvac: 'تكييف',
+  smart_home: 'نظام ذكي',
+  swimming_pool: 'مسبح',
+  landscaping: 'زراعة وحدائق',
+  mechanics: 'ميكانيكا / سباكة',
+};
+
 // ─── Context ───────────────────────────────────────────────────────────────────
 const TicketTypesContext = createContext<TicketTypesContextValue>({
   typeTranslations: {},
@@ -69,7 +93,7 @@ export function TicketTypesProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => { load(); }, [load]);
 
-  const typeTranslations: Record<string, string> = {};
+  const typeTranslations: Record<string, string> = { ...STATIC_FALLBACKS };
   const typeBg: Record<string, string> = {};
 
   types.forEach((t, idx) => {
