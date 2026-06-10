@@ -95,9 +95,9 @@ export function QuickAddSpecialtyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[400px] rounded-3xl" dir="rtl">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-[400px] rounded-3xl" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-white text-right flex items-center gap-2">
+          <DialogTitle className="text-lg font-bold text-foreground text-right flex items-center gap-2">
             <Plus className="w-5 h-5 text-blue-400" />
             إضافة تخصص (فيلا {villaNumber})
           </DialogTitle>
@@ -105,7 +105,7 @@ export function QuickAddSpecialtyDialog({
 
         <div className="space-y-5 py-2">
           <div className="space-y-2">
-            <Label className="text-slate-500 text-[11px] uppercase font-bold tracking-widest block text-right">
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-widest block text-right">
               التخصص
             </Label>
             <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
@@ -116,8 +116,8 @@ export function QuickAddSpecialtyDialog({
                   className={cn(
                     'px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all',
                     selectedType === k
-                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                      : 'bg-white/5 border-border text-slate-400 hover:border-slate-300'
+                      ? 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-300'
+                      : 'bg-muted/50 border-border text-muted-foreground hover:border-slate-400 dark:hover:border-slate-500'
                   )}
                 >
                   {v as React.ReactNode}
@@ -127,7 +127,7 @@ export function QuickAddSpecialtyDialog({
           </div>
 
           <div className="space-y-2">
-            <Label className="text-slate-500 text-[11px] uppercase font-bold tracking-widest block text-right">
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-widest block text-right">
               المشرف (اختياري)
             </Label>
             <div className="space-y-1 max-h-36 overflow-y-auto">
@@ -136,12 +136,12 @@ export function QuickAddSpecialtyDialog({
                 className={cn(
                   'flex items-center justify-between px-3 py-2 rounded-xl border cursor-pointer transition-all',
                   !selectedSupId
-                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-300'
-                    : 'bg-white/5 border-border text-slate-400 hover:border-slate-500'
+                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-300'
+                    : 'bg-muted/50 border-border text-muted-foreground hover:border-slate-400 dark:hover:border-slate-500'
                 )}
               >
                 <span className="text-sm font-bold">بدون مشرف محدد</span>
-                <div className={cn('w-3.5 h-3.5 rounded border-2 shrink-0', !selectedSupId ? 'bg-blue-500 border-blue-500' : 'border-slate-600')} />
+                <div className={cn('w-3.5 h-3.5 rounded border-2 shrink-0', !selectedSupId ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/50')} />
               </div>
               {supervisors.map(s => {
                 const sId = s.uid || s.id;
@@ -153,12 +153,12 @@ export function QuickAddSpecialtyDialog({
                     className={cn(
                       'flex items-center justify-between px-3 py-2 rounded-xl border cursor-pointer transition-all',
                       selectedSupId === sId
-                        ? 'bg-blue-500/10 border-blue-500/30 text-blue-300'
-                        : 'bg-white/5 border-border text-slate-400 hover:border-slate-500'
+                        ? 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-300'
+                        : 'bg-muted/50 border-border text-muted-foreground hover:border-slate-400 dark:hover:border-slate-500'
                     )}
                   >
                     <span className="text-sm font-bold">{sName}</span>
-                    <div className={cn('w-3.5 h-3.5 rounded border-2 shrink-0', selectedSupId === sId ? 'bg-blue-500 border-blue-500' : 'border-slate-600')} />
+                    <div className={cn('w-3.5 h-3.5 rounded border-2 shrink-0', selectedSupId === sId ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/50')} />
                   </div>
                 );
               })}

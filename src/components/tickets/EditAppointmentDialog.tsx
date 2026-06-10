@@ -54,9 +54,9 @@ export function EditAppointmentDialog({ open, onOpenChange, group, onSuccess }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[400px] rounded-3xl" dir="rtl">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-[400px] rounded-3xl" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-white text-right flex items-center gap-2">
+          <DialogTitle className="text-lg font-bold text-foreground text-right flex items-center gap-2">
             <CalendarClock className="w-5 h-5 text-amber-500" />
             تعديل وتأجيل الموعد (فيلا {group?.villaNumber})
           </DialogTitle>
@@ -64,21 +64,21 @@ export function EditAppointmentDialog({ open, onOpenChange, group, onSuccess }: 
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label className="text-slate-400">التاريخ الجديد</Label>
+            <Label className="text-muted-foreground">التاريخ الجديد</Label>
             <Input 
               type="date" 
               value={date} 
               onChange={e => setDate(e.target.value)} 
-              className="bg-white/5 border-border text-white"
+              className="bg-background border-input text-foreground"
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-slate-400">الوقت الجديد</Label>
+            <Label className="text-muted-foreground">الوقت الجديد</Label>
             <Input 
               type="time" 
               value={time} 
               onChange={e => setTime(e.target.value)} 
-              className="bg-white/5 border-border text-white"
+              className="bg-background border-input text-foreground"
             />
           </div>
         </div>
