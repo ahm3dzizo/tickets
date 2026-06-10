@@ -791,7 +791,7 @@ export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess
                         setLoading(true);
                         setProgress(0.1);
                         try {
-                          const result = await ticketsApi.importExcel(file, selectedProjectId);
+                          const result = await ticketsApi.importExcel(file, selectedProjectId, (p) => setProgress(p));
                           setProgress(1);
                           const parts = [];
                           if (result.added > 0) parts.push(`✅ إضافة ${result.added} (مصنف: ${result.classified ?? 0}، غير مصنف: ${result.unclassified ?? 0})`);

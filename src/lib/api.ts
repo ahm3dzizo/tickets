@@ -139,20 +139,48 @@ export const ticketsApi = {
   deleteAll:    ()                                     => del<any>('/tickets'),
   getNextId:    (projectId: string)                    => get<{ nextId: string }>(`/tickets/next-id?projectId=${projectId}`).then(res => res.nextId),
   getTicketIds: (projectId: string)                    => get<{ ticketId: string; id: string; type: string; status: string; closedAt: string | null }[]>(`/tickets/ticketids?projectId=${projectId}`),
-  importExcel:  (file: File, projectId: string) => {
+  importExcel: async (file: File, projectId: string, onProgress?: (p: number) => void) => {
     const form = new FormData();
     form.append('file', file);
     form.append('projectId', projectId);
     const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
-    return fetch('/api/import-excel', {
+    
+    const response = await fetch('/api/import-excel', {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
-    }).then(async r => {
-      const json = await r.json();
-      if (!r.ok) throw new Error(json.error || 'فشل الاستيراد');
-      return json as { ok: boolean; added: number; updated: number; skippedInFile: number; skippedInDB: number; failed: number; classified: number; unclassified: number; errors: string[] };
     });
+
+    if (!response.body) throw new Error('لا يوجد استجابة من السيرفر');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let result = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+      for (const line of lines) {
+        let data: any = null;
+        try {
+          data = JSON.parse(line);
+          if (data.error) throw new Error(data.error);
+          if (data.progress && onProgress) onProgress(data.progress);
+          if (data.done) result = data.result;
+        } catch (e: any) {
+          if (e.message !== 'Unexpected end of JSON input') {
+             if (data?.error) throw new Error(data.error);
+             throw e;
+          }
+        }
+      }
+    }
+
+    if (!result) throw new Error('اكتمل الطلب ولكن لم يتم إرجاع نتيجة');
+    return result as { ok: boolean; added: number; updated: number; skippedInFile: number; skippedInDB: number; failed: number; classified: number; unclassified: number; errors: string[] };
   },
 };
 

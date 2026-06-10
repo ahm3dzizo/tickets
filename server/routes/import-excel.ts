@@ -113,6 +113,17 @@ function resolveExcelTypes(rawExcelType: string, typeMap: Map<string, string>): 
 router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, res) => {
   if (!req.file) return res.status(400).json({ error: "لم يتم رفع ملف" });
 
+  res.setHeader("X-Accel-Buffering", "no");
+  res.setHeader("Content-Type", "application/x-ndjson");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  const sendProgress = (p: number) => {
+    res.write(JSON.stringify({ progress: p }) + "\n");
+  };
+
+  sendProgress(0.05);
+
   const projectId = req.body.projectId as string;
   if (!projectId) {
     fs.unlinkSync(req.file.path);
@@ -129,7 +140,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     });
     if (!project) {
       fs.unlinkSync(filePath);
-      return res.status(404).json({ error: "المشروع غير موجود" });
+      res.write(JSON.stringify({ error: "المشروع غير موجود" }) + "\n");
+      return res.end();
     }
     const projectAbbr = (project.abbreviation || "").toUpperCase();
 
@@ -172,7 +184,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     const allData = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: "" }) as any[];
     if (allData.length === 0) {
-      return res.status(400).json({ error: "الملف فارغ أو لا يحتوي على بيانات" });
+      res.write(JSON.stringify({ error: "الملف فارغ أو لا يحتوي على بيانات" }) + "\n");
+      return res.end();
     }
 
     // Auto-map columns
@@ -210,6 +223,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const clientMap = new Map(clientRows.map((c) => [normalizeVillaNumber(String(c.villaNumber)), c]));
     const typeIdMap = new Map(ticketTypes.map((t) => [t.key, t.id]));
     const typeNameMap = new Map(ticketTypes.map((t) => [t.key, t.nameAr]));
+
+    sendProgress(0.2);
 
     // ── 5. Process rows ───────────────────────────────────────────────────────
     const toCreate: any[] = [];
@@ -320,6 +335,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       }
     }
 
+    sendProgress(0.4);
+
     // ── 6. Bulk create in batches ──────────────────────────────────────────────
     const BATCH = 200;
     let added = 0;
@@ -359,8 +376,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         );
         const results = await Promise.all(updatePromises);
         updated += results.filter(Boolean).length;
+        sendProgress(0.7 + (i / toUpdate.length) * 0.25);
       }
     }
+
+    sendProgress(0.98);
 
     // ── 8. Log ─────────────────────────────────────────────────────────────────
     const classifiedCount = toCreate.filter(t => t.type !== 'unclassified').length;
@@ -389,22 +409,27 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       });
     } catch { /* non-critical */ }
 
-    res.json({
-      ok: true,
-      added,
-      updated,
-      skippedInFile,   // مكرر في الملف نفسه
-      skippedInDB,     // موجود في DB بدون تغيير
-      failed,
-      classified: classifiedCount,
-      unclassified: unclassifiedCount,
-      errors: errors.slice(0, 10),
-    });
+    res.write(JSON.stringify({
+      done: true,
+      result: {
+        ok: true,
+        added,
+        updated,
+        skippedInFile,
+        skippedInDB,
+        failed,
+        classified: classifiedCount,
+        unclassified: unclassifiedCount,
+        errors: errors.slice(0, 10),
+      }
+    }) + "\n");
+    res.end();
   } catch (err: any) {
     // Clean up temp file on error
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     console.error("[ImportExcel] error:", err);
-    res.status(500).json({ error: err.message || "فشل الاستيراد" });
+    res.write(JSON.stringify({ error: err.message || "فشل الاستيراد" }) + "\n");
+    res.end();
   }
 });
 
