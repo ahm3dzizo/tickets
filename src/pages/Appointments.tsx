@@ -547,10 +547,11 @@ export default function Appointments() {
         />
       )}
       {editApptGroup && (
-        <EditAppointmentDialog
-          open={!!editApptGroup}
-          onOpenChange={(v) => !v && setEditApptGroup(null)}
+        <EditAppointmentDialog 
+          open={!!editApptGroup} 
+          onOpenChange={(op) => !op && setEditApptGroup(null)} 
           group={editApptGroup}
+          supervisors={supervisors}
           onSuccess={loadAppointments}
         />
       )}
