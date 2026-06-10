@@ -123,6 +123,7 @@ export function EditAppointmentDialog({ open, onOpenChange, group, supervisors =
             appointmentTime: newAppointmentTime,
             appointmentAwaitingReply: false,
             appointmentNotes: notes,
+            assignedSupervisorId: selectedSupIds.length > 0 ? selectedSupIds[0] : null,
             assignedSupervisorIds: selectedSupIds,
             assignedSupervisors,
             detectedTypes: dTypes,
@@ -138,6 +139,7 @@ export function EditAppointmentDialog({ open, onOpenChange, group, supervisors =
             appointmentAwaitingReply: false,
             appointmentNotes: '',
             status: 'open',
+            assignedSupervisorId: null,
             assignedSupervisorIds: [],
             assignedSupervisors: [],
             detectedTypes: []
