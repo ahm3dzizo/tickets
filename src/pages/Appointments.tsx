@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
-  Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer
+  Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { QuickAddSpecialtyDialog } from '@/components/tickets/QuickAddSpecialtyDialog';
 import { DirectAppointmentDialog } from '@/components/tickets/DirectAppointmentDialog';
 import { ClientTicketsModal } from '@/components/tickets/ClientTicketsModal';
+import { EditAppointmentDialog } from '@/components/tickets/EditAppointmentDialog';
 
 function dateStr(d: Date): string {
   const offset = d.getTimezoneOffset() * 60000;
@@ -28,6 +29,7 @@ export default function Appointments() {
 
   const [directApptDate, setDirectApptDate] = useState<string | null>(null);
   const [clientTicketsModal, setClientTicketsModal] = useState<{ villa: string, project: string, notes: string } | null>(null);
+  const [editApptGroup, setEditApptGroup] = useState<any>(null);
 
   const [refDate, setRefDate] = useState(() => {
     const d = new Date();
@@ -310,39 +312,39 @@ export default function Appointments() {
                   }}
                 >
                   <div className={cn(
-                    "p-5 lg:p-6 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 z-10 backdrop-blur-xl",
+                    "p-3 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 z-10 backdrop-blur-xl",
                     isToday ? "bg-blue-500/10 border-blue-500/20" : "bg-white/5 border-border"
                   )}>
                     <div>
-                      <h3 className={cn("font-black text-2xl lg:text-3xl", isToday ? "text-blue-600 dark:text-blue-400" : "text-foreground")}>
+                      <h3 className={cn("font-black text-xl lg:text-2xl", isToday ? "text-blue-600 dark:text-blue-400" : "text-foreground")}>
                         {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
                       </h3>
-                      <p className="text-sm text-muted-foreground font-medium mt-1">
+                      <p className="text-xs text-muted-foreground font-medium mt-0.5">
                         {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className={cn(
-                        "px-4 py-1.5 text-base font-black border rounded-xl w-fit",
+                        "px-3 py-1 text-sm font-black border rounded-xl w-fit",
                         isToday ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-300 border-slate-500/20"
                       )}>
                         {groups.length} موعد
                       </Badge>
                       {isCenter && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <Button
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); setDirectApptDate(ds); }}
-                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-9 px-4 shadow-lg flex items-center gap-1.5"
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
                           >
-                            <CalendarPlus className="w-4 h-4" /> إضافة موعد
+                            <CalendarPlus className="w-3.5 h-3.5" /> إضافة
                           </Button>
                           <Button
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); window.print(); }}
-                            className="bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold h-9 px-4 shadow-lg flex items-center gap-1.5"
+                            className="bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
                           >
-                            <Printer className="w-4 h-4" /> طباعة
+                            <Printer className="w-3.5 h-3.5" /> طباعة
                           </Button>
                         </div>
                       )}
@@ -350,7 +352,7 @@ export default function Appointments() {
                   </div>
                   
                   {/* Clients List */}
-                  <div className="overflow-y-auto flex-1 p-4 lg:p-5 space-y-4 no-scrollbar bg-gradient-to-b from-transparent to-background/50">
+                  <div className="overflow-y-auto flex-1 p-2 sm:p-3 space-y-2.5 no-scrollbar bg-gradient-to-b from-transparent to-background/50">
                     {loading && appointments.length === 0 && isCenter ? (
                       <div className="flex justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-slate-500" /></div>
                     ) : [...groups].sort((a,b) => {
@@ -367,43 +369,54 @@ export default function Appointments() {
                         <div 
                           key={idx} 
                           className={cn(
-                            "bg-card/80 border rounded-2xl p-4 flex flex-col gap-3 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-white/5",
+                            "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-white/5",
                             isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50"
                           )}
                           onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
                         >
                           
                           {/* Top Row: Villa & Time */}
-                          <div className="flex justify-between items-start gap-4">
+                          <div className="flex justify-between items-start gap-2">
                             <div className="flex-1 min-w-0 pr-1">
                               <div className="flex items-center gap-2">
-                                <h4 className="font-black text-white text-lg truncate">فيلا {group.villaNumber} {totalOpen > 0 && <span className="text-amber-500 font-bold text-sm">({totalOpen})</span>}</h4>
+                                <h4 className="font-black text-white text-base truncate">فيلا {group.villaNumber} {totalOpen > 0 && <span className="text-amber-500 font-bold text-xs">({totalOpen})</span>}</h4>
                               </div>
                             </div>
-                            <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-2 min-w-[80px] shrink-0 shadow-inner">
-                              <Clock className="w-4 h-4 text-emerald-400 mb-1" />
-                              <span className="text-emerald-300 font-black tabular-nums text-base">{time}</span>
+                            <div className="flex items-center gap-1">
+                              {isCenter && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setEditApptGroup(group); }}
+                                  className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 rounded-xl h-8 px-2 transition-colors mr-1"
+                                  title="تعديل وتأجيل الموعد"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1 min-w-[65px] shrink-0 shadow-inner">
+                                <Clock className="w-3.5 h-3.5 text-emerald-400 mb-0.5" />
+                                <span className="text-emerald-300 font-black tabular-nums text-sm">{time}</span>
+                              </div>
                             </div>
                           </div>
 
                           {/* Specialties Tags */}
-                          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
                             {Array.from(group.types).map(t => (
-                              <span key={t as string} className="text-xs font-bold px-3 py-1.5 rounded-xl border bg-slate-800/80 text-slate-200 border-slate-700 shadow-sm">
+                              <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-slate-800/80 text-slate-200 border-slate-700 shadow-sm">
                                 {typeTranslations[t as string] || t as string}
                               </span>
                             ))}
                             <button 
                               onClick={(e) => handleOpenAddSpecialty(group, e)}
-                              className="text-xs font-bold px-3 py-1.5 rounded-xl border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-400 hover:bg-slate-800 transition-all flex items-center gap-1.5"
+                              className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-400 hover:bg-slate-800 transition-all flex items-center gap-1"
                             >
-                              <Plus className="w-3.5 h-3.5" />
+                              <Plus className="w-3 h-3" />
                               إضافة تخصص
                             </button>
                           </div>
 
                           {/* Notes */}
-                          {note && (<div className="text-xs text-slate-300 bg-white/5 p-2 rounded-lg mt-1 border border-white/10 flex gap-2"><span className="font-bold shrink-0 text-slate-400">ملاحظة:</span><span className="line-clamp-2">{note}</span></div>)}
+                          {note && (<div className="text-[11px] text-slate-300 bg-white/5 p-1.5 rounded-lg mt-0.5 border border-white/10 flex gap-1.5"><span className="font-bold shrink-0 text-slate-400">ملاحظة:</span><span className="line-clamp-2 leading-snug">{note}</span></div>)}
                         </div>
                       )
                     })}
@@ -424,10 +437,10 @@ export default function Appointments() {
 
       {/* --- Print Layout --- */}
       <div className="hidden print:block print:w-full print:bg-white print:text-black print:p-0" dir="rtl">
-        <h2 className="text-xl font-black text-center mb-4 border-b border-black pb-2">
+        <h2 className="text-lg font-black text-center mb-2 border-b border-black pb-1">
           جدول المواعيد - {new Date(dateStr(refDate)).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </h2>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
           {(() => {
              const ds = dateStr(refDate);
              const rawGroups = groupedByDay[ds] || [];
@@ -440,19 +453,19 @@ export default function Appointments() {
                const tA = (g.appointmentTime || '').split(' ')[1] || '---';
                const note = g.tickets.find((t:any) => t.appointmentNotes)?.appointmentNotes || 'لا توجد ملاحظات إضافية';
                return (
-                 <div key={i} className="border border-black rounded-lg p-2 flex flex-col gap-1 break-inside-avoid">
-                   <div className="flex justify-between items-center border-b border-black/30 pb-1">
-                     <h3 className="font-bold text-base">فيلا {g.villaNumber}</h3>
-                     <span className="font-black text-base tabular-nums">{tA}</span>
+                 <div key={i} className="border border-black rounded-lg p-1 flex flex-col gap-0.5 break-inside-avoid overflow-hidden">
+                   <div className="flex justify-between items-center border-b border-black/30 pb-0.5">
+                     <h3 className="font-bold text-sm leading-tight">فيلا {g.villaNumber}</h3>
+                     <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
                    </div>
-                   <div className="flex flex-wrap gap-1 mt-0.5">
+                   <div className="flex flex-wrap gap-0.5">
                      {Array.from(g.types).map(t => (
-                        <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1 py-0.5 leading-none">
+                        <span key={t as string} className="text-[9px] font-bold border border-gray-400 rounded px-1 py-[1px] leading-none">
                           {typeTranslations[t as string] || t as string}
                         </span>
                      ))}
                    </div>
-                   <div className="mt-1 text-xs text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-snug line-clamp-2">
+                   <div className="text-[10px] text-gray-800 bg-gray-50 p-1 rounded border border-dashed border-gray-300 leading-tight line-clamp-1 mt-0.5">
                      <span className="font-bold">الملاحظات: </span> {note}
                    </div>
                  </div>
@@ -495,6 +508,14 @@ export default function Appointments() {
           villaNumber={clientTicketsModal.villa}
           projectId={clientTicketsModal.project}
           initialNotes={clientTicketsModal.notes}
+          onSuccess={loadAppointments}
+        />
+      )}
+      {editApptGroup && (
+        <EditAppointmentDialog
+          open={!!editApptGroup}
+          onOpenChange={(v) => !v && setEditApptGroup(null)}
+          group={editApptGroup}
           onSuccess={loadAppointments}
         />
       )}

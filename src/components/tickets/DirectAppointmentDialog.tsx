@@ -70,7 +70,7 @@ export function DirectAppointmentDialog({
     if (!selectedClientId || !selectedVilla) return;
     setFetchingTickets(true);
     // Fetch all tickets for this project and filter
-    ticketsApi.getAll({ projectId })
+    ticketsApi.getAll({ projectId, includeDirectAppts: true })
       .then(res => {
          const tks = res.filter((t: any) => t.villaNumber === selectedVilla && !['closed', 'out-of-scope'].includes(t.status));
          setOpenTickets(tks);

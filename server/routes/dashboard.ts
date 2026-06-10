@@ -28,6 +28,11 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       where.assignedSupervisorIds = { has: user.uid };
     }
 
+    const ticketsWhere: any = {
+      ...where,
+      NOT: { description: { startsWith: 'موعد صيانة مجدول يدوياً للمشرف' } }
+    };
+
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
     const todayStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -52,7 +57,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     }
 
     const activeTickets = await prisma.ticket.findMany({
-      where: { ...where, status: { in: ["open", "in_progress", "pending", "waiting"] } },
+      where: { ...ticketsWhere, status: { in: ["open", "in_progress", "pending", "waiting"] } },
       select: { id: true, ticketId: true, clientName: true, villaNumber: true, type: true, status: true, createdAt: true, assignedSupervisors: true, issuedAt: true, appointmentTime: true },
     });
 
@@ -105,21 +110,21 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     const todayAppts = apptsList.slice(0, 20);
 
     const [total, openCount, closedCount, unclassified] = await Promise.all([
-      prisma.ticket.count({ where }),
-      prisma.ticket.count({ where: { ...where, status: "open" } }),
-      prisma.ticket.count({ where: { ...where, status: "closed" } }),
-      prisma.ticket.count({ where: { ...where, type: "unclassified" } }),
+      prisma.ticket.count({ where: ticketsWhere }),
+      prisma.ticket.count({ where: { ...ticketsWhere, status: "open" } }),
+      prisma.ticket.count({ where: { ...ticketsWhere, status: "closed" } }),
+      prisma.ticket.count({ where: { ...ticketsWhere, type: "unclassified" } }),
     ]);
 
     const closedToday = await prisma.ticket.count({
-      where: { ...where, status: "closed", closedAt: { gte: todayStart, lt: todayEnd } },
+      where: { ...ticketsWhere, status: "closed", closedAt: { gte: todayStart, lt: todayEnd } },
     });
 
     // Last 7 days trend — pure ORM to avoid raw SQL enum issues
     const days7ago = new Date(now.getTime() - 6 * 86_400_000);
     days7ago.setHours(0, 0, 0, 0);
     const tickets7days = await prisma.ticket.findMany({
-      where: { ...where, createdAt: { gte: days7ago } },
+      where: { ...ticketsWhere, createdAt: { gte: days7ago } },
       select: { createdAt: true, status: true },
     });
     const dayMap: Record<string, { opened: number; closed: number }> = {};
@@ -139,7 +144,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
 
     // Per supervisor summary
     const supTickets = await prisma.ticket.findMany({
-      where: { ...where, assignedSupervisorId: { not: null }, status: { not: "closed" } },
+      where: { ...ticketsWhere, assignedSupervisorId: { not: null }, status: { not: "closed" } },
       select: { assignedSupervisorId: true, status: true },
     });
     const supMap: Record<string, { open: number; inProgress: number; pending: number }> = {};

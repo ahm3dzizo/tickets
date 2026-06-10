@@ -33,7 +33,7 @@ export function ClientTicketsModal({
     if (open && villaNumber) {
       setNotes(initialNotes);
       setFetching(true);
-      ticketsApi.getAll({ projectId, status: 'open' })
+      ticketsApi.getAll({ projectId, status: 'open', includeDirectAppts: true })
         .then(res => {
           const tks = res.filter((t: any) => t.villaNumber === villaNumber && !['closed', 'out-of-scope'].includes(t.status));
           setTickets(tks);

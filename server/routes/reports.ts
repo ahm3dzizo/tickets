@@ -26,7 +26,9 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { projectId, from, to } = req.query as Record<string, string>;
 
-    const where: any = {};
+    const where: any = {
+      NOT: { description: { startsWith: 'موعد صيانة مجدول يدوياً للمشرف' } }
+    };
     if (projectId) where.projectId = projectId;
 
     // Date filter applies to issuedAt (string) handled in JS, use createdAt only as fallback for DB filter

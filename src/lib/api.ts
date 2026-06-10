@@ -117,12 +117,14 @@ export const ticketsApi = {
     projectIds?: string[];
     supervisorId?: string;
     status?: string;
+    includeDirectAppts?: boolean;
   }) => {
     const q = new URLSearchParams();
     if (params?.projectId)    q.set('projectId', params.projectId);
     if (params?.projectIds?.length) q.set('projectIds', params.projectIds.join(','));
     if (params?.supervisorId) q.set('supervisorId', params.supervisorId);
     if (params?.status)       q.set('status', params.status);
+    if (params?.includeDirectAppts) q.set('includeDirectAppts', 'true');
     const qs = q.toString();
     return get<any[]>(`/tickets${qs ? `?${qs}` : ''}`);
   },

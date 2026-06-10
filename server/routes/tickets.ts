@@ -191,6 +191,10 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   if (supervisorId) where.assignedSupervisorIds = { has: supervisorId };
   if (status) where.status = status;
 
+  if (req.query.includeDirectAppts !== 'true') {
+    where.NOT = { description: { startsWith: 'موعد صيانة مجدول يدوياً للمشرف' } };
+  }
+
   if (role !== "admin") {
     // Only allow tickets in user's projects
     if (where.projectId && typeof where.projectId === 'string') {
