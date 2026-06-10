@@ -26,6 +26,12 @@ export default function Appointments() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { typeTranslations } = useTicketTypes();
+  const mergedTypes: Record<string, string> = {
+    electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات',
+    ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية',
+    waterproofing: 'عزل مائي', pest_control: 'مكافحة حشرات', general: 'عام',
+    ...typeTranslations
+  };
 
   const [directApptDate, setDirectApptDate] = useState<string | null>(null);
   const [clientTicketsModal, setClientTicketsModal] = useState<{ villa: string, project: string, notes: string } | null>(null);
@@ -268,7 +274,7 @@ export default function Appointments() {
           </div>
 
           {/* ── Carousel Hero UI ── */}
-          <div className="relative w-full h-[65vh] min-h-[450px] max-h-[650px] flex justify-center items-center overflow-hidden py-4 -mt-2">
+          <div className="relative w-full h-[82vh] min-h-[550px] max-h-[950px] flex justify-center items-center overflow-hidden py-4 -mt-2">
             {displayedDays.map((day, idx) => {
               const ds = dateStr(day);
               const groups = groupedByDay[ds] || [];
@@ -280,7 +286,7 @@ export default function Appointments() {
               const isLeft = idx === 2; // Next Day
 
               // Carousel Slide Base Styling
-              const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden shadow-2xl border w-full max-w-[85%] md:max-w-[500px] h-[95%]";
+              const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden shadow-2xl border w-full max-w-[90%] md:max-w-[750px] lg:max-w-[850px] h-[95%]";
               
               let posClass = "";
               let interactiveClass = "";
@@ -352,74 +358,78 @@ export default function Appointments() {
                   </div>
                   
                   {/* Clients List */}
-                  <div className="overflow-y-auto flex-1 p-2 sm:p-3 space-y-2.5 no-scrollbar bg-gradient-to-b from-transparent to-background/50">
+                  <div className="overflow-y-auto flex-1 p-2 sm:p-3 no-scrollbar bg-gradient-to-b from-transparent to-background/50">
                     {loading && appointments.length === 0 && isCenter ? (
                       <div className="flex justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-slate-500" /></div>
-                    ) : [...groups].sort((a,b) => {
-                       const ta = (a.appointmentTime || '').split(' ')[1] || '00:00';
-                       const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
-                       return ta.localeCompare(tb);
-                     }).map((group, idx) => {
-                      const note = group.tickets.find((t:any) => t.appointmentNotes)?.appointmentNotes || '';
-                      const time = (group.appointmentTime || '').split(' ')[1] || '---';
-                      const clientKey = group.villaNumber + '_' + (group.projectId || '');
-                      const totalOpen = openTicketsMap[clientKey] || 0;
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 h-max pb-2">
+                        {[...groups].sort((a,b) => {
+                           const ta = (a.appointmentTime || '').split(' ')[1] || '00:00';
+                           const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
+                           return ta.localeCompare(tb);
+                         }).map((group, idx) => {
+                          const note = group.tickets.find((t:any) => t.appointmentNotes)?.appointmentNotes || '';
+                          const time = (group.appointmentTime || '').split(' ')[1] || '---';
+                          const clientKey = group.villaNumber + '_' + (group.projectId || '');
+                          const totalOpen = openTicketsMap[clientKey] || 0;
 
-                      return (
-                        <div 
-                          key={idx} 
-                          className={cn(
-                            "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-white/5",
-                            isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50"
-                          )}
-                          onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
-                        >
-                          
-                          {/* Top Row: Villa & Time */}
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="flex-1 min-w-0 pr-1">
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-black text-white text-base truncate">فيلا {group.villaNumber} {totalOpen > 0 && <span className="text-amber-500 font-bold text-xs">({totalOpen})</span>}</h4>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {isCenter && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setEditApptGroup(group); }}
-                                  className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 rounded-xl h-8 px-2 transition-colors mr-1"
-                                  title="تعديل وتأجيل الموعد"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
+                          return (
+                            <div 
+                              key={idx} 
+                              className={cn(
+                                "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-white/5",
+                                isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50"
                               )}
-                              <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1 min-w-[65px] shrink-0 shadow-inner">
-                                <Clock className="w-3.5 h-3.5 text-emerald-400 mb-0.5" />
-                                <span className="text-emerald-300 font-black tabular-nums text-sm">{time}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Specialties Tags */}
-                          <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
-                            {Array.from(group.types).map(t => (
-                              <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-slate-800/80 text-slate-200 border-slate-700 shadow-sm">
-                                {typeTranslations[t as string] || t as string}
-                              </span>
-                            ))}
-                            <button 
-                              onClick={(e) => handleOpenAddSpecialty(group, e)}
-                              className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-400 hover:bg-slate-800 transition-all flex items-center gap-1"
+                              onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
                             >
-                              <Plus className="w-3 h-3" />
-                              إضافة تخصص
-                            </button>
-                          </div>
+                              
+                              {/* Top Row: Villa & Time */}
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex-1 min-w-0 pr-1">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="font-black text-white text-base truncate">فيلا {group.villaNumber} {totalOpen > 0 && <span className="text-amber-500 font-bold text-xs">({totalOpen})</span>}</h4>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {isCenter && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setEditApptGroup(group); }}
+                                      className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 rounded-xl h-8 px-2 transition-colors mr-1"
+                                      title="تعديل وتأجيل الموعد"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1 min-w-[65px] shrink-0 shadow-inner">
+                                    <Clock className="w-3.5 h-3.5 text-emerald-400 mb-0.5" />
+                                    <span className="text-emerald-300 font-black tabular-nums text-sm">{time}</span>
+                                  </div>
+                                </div>
+                              </div>
 
-                          {/* Notes */}
-                          {note && (<div className="text-[11px] text-slate-300 bg-white/5 p-1.5 rounded-lg mt-0.5 border border-white/10 flex gap-1.5"><span className="font-bold shrink-0 text-slate-400">ملاحظة:</span><span className="line-clamp-2 leading-snug">{note}</span></div>)}
-                        </div>
-                      )
-                    })}
+                              {/* Specialties Tags */}
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
+                                {Array.from(group.types).map(t => (
+                                  <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-slate-800/80 text-slate-200 border-slate-700 shadow-sm">
+                                    {mergedTypes[t as string] || t as string}
+                                  </span>
+                                ))}
+                                <button 
+                                  onClick={(e) => handleOpenAddSpecialty(group, e)}
+                                  className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-400 hover:bg-slate-800 transition-all flex items-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  إضافة تخصص
+                                </button>
+                              </div>
+
+                              {/* Notes */}
+                              {note && (<div className="text-[11px] text-slate-300 bg-white/5 p-1.5 rounded-lg mt-0.5 border border-white/10 flex gap-1.5"><span className="font-bold shrink-0 text-slate-400">ملاحظة:</span><span className="line-clamp-2 leading-snug">{note}</span></div>)}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                     {groups.length === 0 && !loading && isCenter && (
                       <div className="flex flex-col items-center justify-center py-20 text-slate-500 opacity-60">
                         <CalendarDays className="w-16 h-16 mb-4 opacity-50" />

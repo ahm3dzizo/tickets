@@ -166,6 +166,7 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
         appointmentNotes: true,
         status: true,
         type: true,
+        detectedTypes: true,
         projectId: true,
         assignedSupervisorIds: true,
         assignedSupervisors: true,
