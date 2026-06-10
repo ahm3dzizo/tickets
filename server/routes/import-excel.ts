@@ -339,20 +339,27 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // ── 7. Bulk update status/type ─────────────────────────────────────────────
     let updated = 0;
     if (toUpdate.length > 0) {
-      const updatePromises = toUpdate.map((u) =>
-        prisma.ticket.update({
-          where: { id: u.id },
-          data: {
-            status: u.status as any,
-            closedAt: u.closedAt ? new Date(u.closedAt) : null,
-            ...(u.type && u.type !== "unclassified"
-              ? { type: u.type, typeId: u.typeId || null, detectedTypes: u.detectedTypes ?? [u.type] }
-              : {}),
-          },
-        }).catch(() => null)
-      );
-      const results = await Promise.all(updatePromises);
-      updated = results.filter(Boolean).length;
+      const BATCH_UPD = 100;
+      for (let i = 0; i < toUpdate.length; i += BATCH_UPD) {
+        const batch = toUpdate.slice(i, i + BATCH_UPD);
+        const updatePromises = batch.map((u) =>
+          prisma.ticket.update({
+            where: { id: u.id },
+            data: {
+              status: u.status as any,
+              closedAt: u.closedAt ? new Date(u.closedAt) : null,
+              ...(u.type && u.type !== "unclassified"
+                ? { type: u.type, typeId: u.typeId || null, detectedTypes: u.detectedTypes ?? [u.type] }
+                : {}),
+            },
+          }).catch((err) => {
+            console.error(`[ImportUpdateError] ticket ${u.id}:`, err);
+            return null;
+          })
+        );
+        const results = await Promise.all(updatePromises);
+        updated += results.filter(Boolean).length;
+      }
     }
 
     // ── 8. Log ─────────────────────────────────────────────────────────────────
