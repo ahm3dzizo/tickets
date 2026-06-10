@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
-  Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil
+  Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -60,6 +60,7 @@ export default function Appointments() {
   const [supervisors, setSupervisors] = useState<any[]>([]);
   const [filterSup, setFilterSup] = useState<string>('');
   const [filterProject, setFilterProject] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Add Specialty Dialog State
   const [addSpecOpen, setAddSpecOpen] = useState(false);
@@ -166,6 +167,16 @@ export default function Appointments() {
         groups = groups.filter(g => g.sups.has(user.uid));
       }
 
+      // Filter by Search
+      if (searchQuery) {
+        const sq = searchQuery.toLowerCase();
+        groups = groups.filter(g => 
+          (g.villa && String(g.villa).toLowerCase().includes(sq)) ||
+          (g.clientName && String(g.clientName).toLowerCase().includes(sq)) ||
+          (g.tickets.some((t: any) => t.ticketId && String(t.ticketId).toLowerCase().includes(sq)))
+        );
+      }
+
       // Sort groups by time
       groups.sort((a, b) => {
         const timeA = (a.appointmentTime || '').split(' ')[1] || '99:99';
@@ -220,6 +231,17 @@ export default function Appointments() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="بحث برقم الفيلا أو العميل..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-card border border-border rounded-xl pl-3 pr-9 h-10 text-sm text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[180px] sm:w-[220px]"
+                />
+              </div>
+
               {user?.role === 'admin' && supervisors.length > 0 && (
                 <div className="relative">
                   <Users className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
