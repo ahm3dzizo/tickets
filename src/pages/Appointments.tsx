@@ -187,7 +187,7 @@ export default function Appointments() {
       map[d] = groups;
     }
     return map;
-  }, [appointments, displayedDays, filterSup, user]);
+  }, [appointments, displayedDays, filterSup, user, searchQuery]);
 
   const prevDay = () => {
     const d = new Date(refDate);
