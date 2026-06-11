@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare } from 'lucide-react';
@@ -367,6 +367,26 @@ export function TicketTable({
     : applySortAndGroup(baseTickets);
 
   const displayTickets = focalClientKey ? [...focalTickets, ...otherTickets] : otherTickets;
+
+  const [visibleCount, setVisibleCount] = useState(20);
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [localSearch, localStatus, localType, localProject, showClosed, sortKey, sortDir, focalClientKey, baseTickets.length]);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const observerRef = useCallback((node: HTMLDivElement | null) => {
+    if (observer.current) observer.current.disconnect();
+    if (node) {
+      observer.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount(prev => prev + 20);
+        }
+      });
+      observer.current.observe(node);
+    }
+  }, []);
+
+  const renderedTickets = displayTickets.slice(0, visibleCount);
   const focalCount     = focalTickets.length;
 
   const hasSelection = !!onSelectionChange;
@@ -578,7 +598,7 @@ export function TicketTable({
       {/* ── MOBILE CARD VIEW ─────────────────────────────────────────────── */}
       {displayTickets.length > 0 && (
         <div className="flex flex-col gap-2 p-2 md:hidden" dir="rtl">
-          {displayTickets.map((ticket, index) => {
+          {renderedTickets.map((ticket, index) => {
             const createdAt = (ticket.createdAt as any)?.toDate
               ? (ticket.createdAt as any).toDate()
               : new Date(ticket.createdAt as any);
@@ -712,6 +732,11 @@ export function TicketTable({
               </React.Fragment>
             );
           })}
+          {visibleCount < displayTickets.length && (
+            <div className="h-10 flex items-center justify-center text-slate-500" ref={observerRef}>
+              <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+          )}
         </div>
       )}
 
@@ -773,7 +798,7 @@ export function TicketTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {displayTickets.map((ticket, index) => {
+              {renderedTickets.map((ticket, index) => {
                 const createdAt = (ticket.createdAt as any)?.toDate
                   ? (ticket.createdAt as any).toDate()
                   : new Date(ticket.createdAt as any);
@@ -950,6 +975,11 @@ export function TicketTable({
               })}
             </tbody>
           </table>
+          {visibleCount < displayTickets.length && (
+            <div className="h-14 flex items-center justify-center text-slate-500" ref={observerRef}>
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+          )}
         </div>
       )}
 

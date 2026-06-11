@@ -72,7 +72,7 @@ export function DirectAppointmentDialog({
     // Fetch all tickets for this project and filter
     ticketsApi.getAll({ projectId, includeDirectAppts: true })
       .then(res => {
-         const tks = res.filter((t: any) => t.villaNumber === selectedVilla && !['closed', 'out-of-scope'].includes(t.status));
+         const tks = res.filter((t: any) => t.villaNumber === selectedVilla && !['closed', 'out-of-scope', 'completed'].includes(t.status));
          setOpenTickets(tks);
          
          // Pre-select existing types
