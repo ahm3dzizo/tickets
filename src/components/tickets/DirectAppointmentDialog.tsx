@@ -125,7 +125,7 @@ export function DirectAppointmentDialog({
         
         for (let i = 0; i < openTickets.length; i++) {
           const t = openTickets[i];
-          const payload: any = { appointmentTime, status: 'pending', appointmentAwaitingReply: false };
+          const payload: any = { appointmentTime, status: 'pending', appointmentAwaitingReply: false, isDirectAppointment: true };
           if (notes) payload.appointmentNotes = notes;
           
           // Append new types to the first ticket only
@@ -151,6 +151,7 @@ export function DirectAppointmentDialog({
           appointmentAwaitingReply: false,
           priority: 3,
           appointmentTime,
+          isDirectAppointment: true,
           createdAt: new Date().toISOString()
         };
         if (notes) payload.appointmentNotes = notes;

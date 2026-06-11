@@ -122,6 +122,7 @@ export function EditAppointmentDialog({ open, onOpenChange, group, supervisors =
           ticketsApi.update(t.id, {
             appointmentTime: newAppointmentTime,
             appointmentAwaitingReply: false,
+            isDirectAppointment: true,
             appointmentNotes: notes,
             assignedSupervisorId: selectedSupIds.length > 0 ? selectedSupIds[0] : null,
             assignedSupervisorIds: selectedSupIds,
@@ -137,6 +138,7 @@ export function EditAppointmentDialog({ open, onOpenChange, group, supervisors =
           ticketsApi.update(t.id, {
             appointmentTime: null,
             appointmentAwaitingReply: false,
+            isDirectAppointment: false,
             appointmentNotes: '',
             status: 'open',
             assignedSupervisorId: null,

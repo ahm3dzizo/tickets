@@ -245,9 +245,15 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     const ticketIds = ticketId.split(',');
     const tickets = await prisma.ticket.findMany({
       where: { id: { in: ticketIds } },
-      select: { id: true, ticketId: true, clientName: true, villaNumber: true },
+      select: { id: true, ticketId: true, clientName: true, villaNumber: true, isDirectAppointment: true },
     });
     if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
+
+    const hasDirectAppointment = tickets.some(t => t.isDirectAppointment);
+    if (hasDirectAppointment) {
+      res.status(400).json({ error: 'لا يمكن إرسال خيارات مواعيد لتذكرة تحتوي على موعد مباشر مؤكد. قم بإلغاء الموعد يدوياً أولاً.' });
+      return;
+    }
 
     const combinedTicketIds = tickets.map(t => t.ticketId).join(' و ');
     const firstTicket = tickets[0];

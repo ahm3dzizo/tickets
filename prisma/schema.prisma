@@ -81,6 +81,7 @@ model Ticket {
   appointmentTime       String?
   appointmentNotes      String?
   appointmentAwaitingReply Boolean @default(false)
+  isDirectAppointment   Boolean @default(false)
   closureNotes          String?
   maintenanceItems      Json?
   createdAt             DateTime       @default(now())

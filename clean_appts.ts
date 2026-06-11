@@ -3,7 +3,7 @@ import prisma from "./server/db.js";
 async function cleanInvalidAppointments() {
   console.log("Fetching tickets with appointmentTime...");
   const tickets = await prisma.ticket.findMany({
-    where: { appointmentTime: { not: null } },
+    where: { appointmentTime: { not: null }, isDirectAppointment: false },
   });
 
   console.log(`Found ${tickets.length} tickets with an appointmentTime.`);

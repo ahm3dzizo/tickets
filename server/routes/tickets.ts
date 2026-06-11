@@ -397,6 +397,7 @@ router.post("/", requireAuth, async (req, res) => {
         closureNotes: data.closureNotes || null,
         maintenanceItems: data.maintenanceItems ?? undefined,
         closedAt: data.closedAt ? new Date(data.closedAt) : null,
+        isDirectAppointment: data.isDirectAppointment ?? false,
       },
     });
 
@@ -559,6 +560,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       clientId:             data.clientId             ?? undefined,
       clientName:           data.clientName           ?? undefined,
       villaNumber:          data.villaNumber          ?? undefined,
+      isDirectAppointment:  data.isDirectAppointment  ?? undefined,
     };
 
     // ── Auto-reassign supervisor when classification changes ───────────────
