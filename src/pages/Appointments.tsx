@@ -27,9 +27,11 @@ export default function Appointments() {
   const navigate = useNavigate();
   const { typeTranslations } = useTicketTypes();
   const mergedTypes: Record<string, string> = {
-    electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات',
-    ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية',
-    waterproofing: 'عزل مائي', pest_control: 'مكافحة حشرات', general: 'عام',
+    electricity: 'كهرباء', electrical: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات', painting: 'دهانات',
+    ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية', hvac: 'تكييف', ac: 'تكييف',
+    waterproofing: 'عزل مائي', pest_control: 'مكافحة حشرات', general: 'عام', carpentry: 'نجارة', civil: 'مدني', mechanics: 'ميكانيكا',
+    doors_windows: 'أبواب ونوافذ', cracks: 'شروخ وتصدعات', grading: 'تسوية', gypsum: 'جبس', lighting: 'إضاءة', aluminum: 'ألمنيوم',
+    smart_home: 'نظام ذكي', swimming_pool: 'مسبح', landscaping: 'زراعة وحدائق',
     ...typeTranslations
   };
 
@@ -512,7 +514,7 @@ export default function Appointments() {
                    <div className="flex flex-wrap gap-1 mt-0.5">
                      {Array.from(g.types).map(t => (
                         <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
-                          {typeTranslations[t as string] || t as string}
+                          {mergedTypes[t as string] || t as string}
                         </span>
                      ))}
                    </div>
