@@ -29,8 +29,8 @@ export default function Appointments() {
   const mergedTypes: Record<string, string> = {
     electricity: 'كهرباء', electrical: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات', painting: 'دهانات',
     ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية', hvac: 'تكييف', ac: 'تكييف',
-    waterproofing: 'عزل مائي', pest_control: 'مكافحة حشرات', general: 'عام', carpentry: 'نجارة', civil: 'مدني', mechanics: 'ميكانيكا',
-    doors_windows: 'أبواب ونوافذ', cracks: 'شروخ وتصدعات', grading: 'تسوية', gypsum: 'جبس', lighting: 'إضاءة', aluminum: 'ألمنيوم',
+    waterproofing: 'عزل', pest_control: 'مكافحة حشرات', general: 'عام', carpentry: 'نجارة', civil: 'مدني', mechanics: 'ميكانيكا',
+    doors_windows: 'أبواب ونوافذ', cracks: 'كراك', grading: 'ترويبه', gypsum: 'جبس', lighting: 'إضاءة', aluminum: 'ألمنيوم',
     smart_home: 'نظام ذكي', swimming_pool: 'مسبح', landscaping: 'زراعة وحدائق',
     ...typeTranslations
   };
@@ -44,7 +44,7 @@ export default function Appointments() {
     d.setHours(0, 0, 0, 0);
     return d;
   });
-  
+
   // We always show 3 days: Prev, Active, Next
   const displayedDays = useMemo(() => {
     const prev = new Date(refDate); prev.setDate(prev.getDate() - 1);
@@ -90,10 +90,10 @@ export default function Appointments() {
       const params: any = {};
       if (user.role === 'supervisor') params.supervisorId = user.uid;
       else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
-      
+
       const allTickets = await ticketsApi.getAll(params);
       const map: Record<string, number> = {};
-      
+
       allTickets.forEach((t: any) => {
         if (t.status !== 'closed' && t.status !== 'out-of-scope') {
           const key = t.villaNumber + '_' + (t.projectId || '');
@@ -111,10 +111,10 @@ export default function Appointments() {
     projectsApi.getAll().then((p: any[]) => {
       const filtered = user.role === 'admin' ? p : p.filter(proj => user.projectIds?.includes(proj.id));
       setProjects(filtered);
-    }).catch(() => {});
-    
+    }).catch(() => { });
+
     if (user.role === 'admin') {
-      usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => {});
+      usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => { });
     }
 
     loadOpenTicketsCount();
@@ -162,7 +162,7 @@ export default function Appointments() {
       }
 
       let groups = Object.values(clientMap);
-      
+
       // Filter by Supervisor
       if (filterSup) {
         groups = groups.filter(g => g.sups.has(filterSup));
@@ -173,7 +173,7 @@ export default function Appointments() {
       // Filter by Search
       if (searchQuery) {
         const sq = searchQuery.toLowerCase();
-        groups = groups.filter(g => 
+        groups = groups.filter(g =>
           (g.villaNumber && String(g.villaNumber).toLowerCase().includes(sq)) ||
           (g.clientName && String(g.clientName).toLowerCase().includes(sq)) ||
           (g.tickets.some((t: any) => t.ticketId && String(t.ticketId).toLowerCase().includes(sq)))
@@ -280,7 +280,7 @@ export default function Appointments() {
               const ds = dateStr(day);
               const groups = groupedByDay[ds] || [];
               const isToday = ds === dateStr(new Date());
-              
+
               // Layout logical positions
               const isRight = idx === 0; // Previous Day
               const isCenter = idx === 1; // Current Day
@@ -288,7 +288,7 @@ export default function Appointments() {
 
               // Carousel Slide Base Styling
               const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden shadow-2xl border w-full max-w-[90%] md:max-w-[750px] lg:max-w-[850px] h-[95%]";
-              
+
               let posClass = "";
               let interactiveClass = "";
 
@@ -310,8 +310,8 @@ export default function Appointments() {
               const mobileClass = isCenter ? "flex" : "hidden sm:flex";
 
               return (
-                <div 
-                  key={ds} 
+                <div
+                  key={ds}
                   className={cn(cardClass, posClass, mobileClass, interactiveClass)}
                   onClick={() => {
                     if (isRight) prevDay();
@@ -331,7 +331,7 @@ export default function Appointments() {
                           {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
                         </p>
                       </div>
-                      
+
                       {isCenter && (
                         <div className="flex items-center gap-1 bg-background border border-border rounded-xl p-0.5 shadow-sm">
                           <Button onClick={(e) => { e.stopPropagation(); prevDay(); }} variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted">
@@ -384,33 +384,33 @@ export default function Appointments() {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Clients List */}
                   <div className="overflow-y-auto flex-1 p-2 sm:p-3 no-scrollbar bg-gradient-to-b from-transparent to-background/50">
                     {loading && appointments.length === 0 && isCenter ? (
                       <div className="flex justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-slate-500" /></div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 h-max pb-2">
-                        {[...groups].sort((a,b) => {
-                           const ta = (a.appointmentTime || '').split(' ')[1] || '00:00';
-                           const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
-                           return ta.localeCompare(tb);
-                         }).map((group, idx) => {
-                          const note = group.tickets.find((t:any) => t.appointmentNotes)?.appointmentNotes || '';
+                        {[...groups].sort((a, b) => {
+                          const ta = (a.appointmentTime || '').split(' ')[1] || '00:00';
+                          const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
+                          return ta.localeCompare(tb);
+                        }).map((group, idx) => {
+                          const note = group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
                           const time = (group.appointmentTime || '').split(' ')[1] || '---';
                           const clientKey = group.villaNumber + '_' + (group.projectId || '');
                           const totalOpen = openTicketsMap[clientKey] || 0;
 
                           return (
-                            <div 
-                              key={idx} 
+                            <div
+                              key={idx}
                               className={cn(
                                 "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-muted",
                                 isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50"
                               )}
                               onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
                             >
-                              
+
                               {/* Top Row: Villa & Time */}
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex-1 min-w-0 pr-1">
@@ -442,7 +442,7 @@ export default function Appointments() {
                                     {mergedTypes[t as string] || t as string}
                                   </span>
                                 ))}
-                                <button 
+                                <button
                                   onClick={(e) => handleOpenAddSpecialty(group, e)}
                                   className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 hover:bg-muted transition-all flex items-center gap-1"
                                 >
@@ -453,7 +453,7 @@ export default function Appointments() {
 
                               {/* Notes */}
                               {note && (<div className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded-lg mt-0.5 border border-input flex gap-1.5"><span className="font-bold shrink-0 text-foreground/70">ملاحظة:</span><span className="line-clamp-2 leading-snug">{note}</span></div>)}
-                            
+
                               {/* Supervisors (Screen Only) */}
                               {group.sups && group.sups.size > 0 && (
                                 <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
@@ -495,35 +495,35 @@ export default function Appointments() {
         </h2>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
           {(() => {
-             const ds = dateStr(refDate);
-             const rawGroups = groupedByDay[ds] || [];
-             const sorted = [...rawGroups].sort((a, b) => {
-               const tA = (a.appointmentTime || '').split(' ')[1] || '00:00';
-               const tB = (b.appointmentTime || '').split(' ')[1] || '00:00';
-               return tA.localeCompare(tB);
-             });
-             return sorted.map((g, i) => {
-               const tA = (g.appointmentTime || '').split(' ')[1] || '---';
-               const note = g.tickets.find((t:any) => t.appointmentNotes)?.appointmentNotes || 'لا توجد ملاحظات إضافية';
-               return (
-                 <div key={i} className="border border-black rounded-lg p-2 min-h-[80px] flex flex-col gap-1.5 break-inside-avoid overflow-hidden justify-center">
-                   <div className="flex justify-between items-center border-b border-black/30 pb-1">
-                     <h3 className="font-bold text-sm leading-tight">فيلا {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || 'بدون رقم'})</span></h3>
-                     <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
-                   </div>
-                   <div className="flex flex-wrap gap-1 mt-0.5">
-                     {Array.from(g.types).map(t => (
-                        <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
-                          {mergedTypes[t as string] || t as string}
-                        </span>
-                     ))}
-                   </div>
-                   <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
-                     <span className="font-bold">الملاحظات: </span> {note}
-                   </div>
-                 </div>
-               )
-             })
+            const ds = dateStr(refDate);
+            const rawGroups = groupedByDay[ds] || [];
+            const sorted = [...rawGroups].sort((a, b) => {
+              const tA = (a.appointmentTime || '').split(' ')[1] || '00:00';
+              const tB = (b.appointmentTime || '').split(' ')[1] || '00:00';
+              return tA.localeCompare(tB);
+            });
+            return sorted.map((g, i) => {
+              const tA = (g.appointmentTime || '').split(' ')[1] || '---';
+              const note = g.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || 'لا توجد ملاحظات إضافية';
+              return (
+                <div key={i} className="border border-black rounded-lg p-2 min-h-[80px] flex flex-col gap-1.5 break-inside-avoid overflow-hidden justify-center">
+                  <div className="flex justify-between items-center border-b border-black/30 pb-1">
+                    <h3 className="font-bold text-sm leading-tight">فيلا {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || 'بدون رقم'})</span></h3>
+                    <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {Array.from(g.types).map(t => (
+                      <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
+                        {mergedTypes[t as string] || t as string}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
+                    <span className="font-bold">الملاحظات: </span> {note}
+                  </div>
+                </div>
+              )
+            })
           })()}
         </div>
       </div>
@@ -565,9 +565,9 @@ export default function Appointments() {
         />
       )}
       {editApptGroup && (
-        <EditAppointmentDialog 
-          open={!!editApptGroup} 
-          onOpenChange={(op) => !op && setEditApptGroup(null)} 
+        <EditAppointmentDialog
+          open={!!editApptGroup}
+          onOpenChange={(op) => !op && setEditApptGroup(null)}
           group={editApptGroup}
           supervisors={supervisors}
           onSuccess={loadAppointments}
