@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ticketsApi, clientsApi } from '@/lib/api';
+import { ticketsApi, clientsApi, usersApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { Loader2, CalendarPlus, Search, Clock, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -38,6 +38,9 @@ export function DirectAppointmentDialog({
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [time, setTime] = useState('09:00');
   const [notes, setNotes] = useState('');
+  
+  const [supervisors, setSupervisors] = useState<any[]>([]);
+  const [selectedSupIds, setSelectedSupIds] = useState<string[]>([]);
 
   const { typeTranslations } = useTicketTypes();
   const mergedTypes = Object.keys(typeTranslations).length > 0 ? typeTranslations : {
@@ -49,6 +52,7 @@ export function DirectAppointmentDialog({
   useEffect(() => {
     if (open) {
       clientsApi.getAll().then(setClients).catch(() => {});
+      usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => {});
       reset();
     }
   }, [open]);
@@ -63,6 +67,7 @@ export function DirectAppointmentDialog({
     setSelectedTypes([]);
     setTime('09:00');
     setNotes('');
+    setSelectedSupIds([]);
   };
 
   // Fetch open tickets when a client is selected
@@ -82,6 +87,13 @@ export function DirectAppointmentDialog({
            if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => types.add(dt));
          });
          setSelectedTypes(Array.from(types));
+
+         // Pre-select existing supervisors
+         const supIds = new Set<string>();
+         tks.forEach((t: any) => {
+           if (t.assignedSupervisorIds) t.assignedSupervisorIds.forEach((s: string) => supIds.add(s));
+         });
+         setSelectedSupIds(Array.from(supIds));
       })
       .catch(() => {})
       .finally(() => setFetchingTickets(false));
@@ -118,6 +130,10 @@ export function DirectAppointmentDialog({
         if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => existingTypes.add(dt));
       });
 
+      const assignedSupervisors = supervisors
+        .filter(s => selectedSupIds.includes(s.uid || s.id))
+        .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
+
       if (openTickets.length > 0) {
         // Update all open tickets with the appointment time
         const first = openTickets[0];
@@ -127,6 +143,16 @@ export function DirectAppointmentDialog({
           const t = openTickets[i];
           const payload: any = { appointmentTime, status: 'pending', appointmentAwaitingReply: false, isDirectAppointment: true };
           if (notes) payload.appointmentNotes = notes;
+
+          if (selectedSupIds.length > 0) {
+            payload.assignedSupervisorIds = selectedSupIds;
+            payload.assignedSupervisorId = selectedSupIds[0];
+            payload.assignedSupervisors = assignedSupervisors;
+          } else {
+            payload.assignedSupervisorIds = [];
+            payload.assignedSupervisorId = null;
+            payload.assignedSupervisors = [];
+          }
           
           // Append new types to the first ticket only
           if (i === 0 && updatedDetectedTypes.length > (first.detectedTypes?.length || 0)) {
@@ -155,6 +181,11 @@ export function DirectAppointmentDialog({
           createdAt: new Date().toISOString()
         };
         if (notes) payload.appointmentNotes = notes;
+        if (selectedSupIds.length > 0) {
+          payload.assignedSupervisorIds = selectedSupIds;
+          payload.assignedSupervisorId = selectedSupIds[0];
+          payload.assignedSupervisors = assignedSupervisors;
+        }
         promises.push(ticketsApi.create(payload));
       }
 
@@ -300,6 +331,37 @@ export function DirectAppointmentDialog({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Supervisors Selection */}
+          <div className="space-y-2">
+            <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
+              المشرفين
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {supervisors.map(s => {
+                const sId = s.uid || s.id;
+                const sName = s.displayName || s.name;
+                const isSelected = selectedSupIds.includes(sId);
+                return (
+                  <button
+                    key={sId}
+                    type="button"
+                    onClick={() => setSelectedSupIds(prev => prev.includes(sId) ? prev.filter(x => x !== sId) : [...prev, sId])}
+                    className={cn(
+                      'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
+                      isSelected
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                        : 'bg-muted/30 border-border text-muted-foreground hover:border-slate-400 hover:bg-muted/80'
+                    )}
+                  >
+                    <div className={cn('w-3 h-3 rounded-[4px] border flex items-center justify-center shrink-0', isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40')} />
+                    {sName}
+                  </button>
+                );
+              })}
+              {supervisors.length === 0 && <div className="text-xs text-muted-foreground">لا يوجد مشرفين</div>}
             </div>
           </div>
 

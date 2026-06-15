@@ -148,7 +148,6 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
 
   const where: any = {
     appointmentTime: { not: null },
-    status: { notIn: ["closed", "out_of_scope"] },
   };
 
   if (supervisorId) where.assignedSupervisorIds = { has: supervisorId };

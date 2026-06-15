@@ -11,6 +11,7 @@ import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/TicketTable';
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
 import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
+import { SaveInternalAppointmentDialog } from '@/components/tickets/SaveInternalAppointmentDialog';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { Ticket, Project, Client } from '@/types';
@@ -34,6 +35,7 @@ export default function TicketsList() {
   const [reassigning, setReassigning] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
+  const [internalApptOpen, setInternalApptOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('ticketsListTab') || 'linked');
 
   const loadData = async () => {
@@ -134,8 +136,15 @@ export default function TicketsList() {
   const handleSendAppointment = () => {
     const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
     if (selected.length === 0) return;
-    setApptTicket(selected); // We'll update the state type
+    setApptTicket(selected);
     setApptOpen(true);
+  };
+
+  const handleInternalAppointment = () => {
+    const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
+    if (selected.length === 0) return;
+    setApptTicket(selected);
+    setInternalApptOpen(true);
   };
 
   const handleAutoLink = async () => {
@@ -395,6 +404,7 @@ export default function TicketsList() {
             isMultiClient={uniqueClientIds.size > 1}
             onStatusChange={handleBulkStatusChange}
             onAppointment={handleSendAppointment}
+            onInternalAppointment={handleInternalAppointment}
             onClose={() => setCloseDialogOpen(true)}
             onClear={() => setSelectedTicketIds([])}
             hidden={closeDialogOpen}
@@ -429,6 +439,15 @@ export default function TicketsList() {
               Object.values(clients).find(c => c.villaNumber === apptTicket[0].villaNumber)?.phone
             }
             onSuccess={() => { setApptOpen(false); setSelectedTicketIds([]); loadData(); }}
+          />
+        )}
+
+        {apptTicket && apptTicket.length > 0 && (
+          <SaveInternalAppointmentDialog
+            open={internalApptOpen}
+            onOpenChange={setInternalApptOpen}
+            tickets={apptTicket}
+            onSuccess={() => { setInternalApptOpen(false); setSelectedTicketIds([]); loadData(); }}
           />
         )}
 

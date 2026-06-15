@@ -131,7 +131,8 @@ export interface BulkActionBarProps {
   isMultiClient?: boolean;
   onStatusChange: (status: string) => void;
   onAppointment?: () => void;
-  onClose?: () => void;
+  onInternalAppointment?: () => void;
+  onClose: () => void;
   onClear: () => void;
   hidden?: boolean;
   statusOptions?: { key: string; label: string; danger?: boolean }[];
@@ -142,6 +143,7 @@ export function BulkActionBar({
   isMultiClient = false,
   onStatusChange,
   onAppointment,
+  onInternalAppointment,
   onClose,
   onClear,
   hidden = false,

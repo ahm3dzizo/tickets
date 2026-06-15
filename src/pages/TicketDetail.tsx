@@ -37,6 +37,7 @@ import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
 import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
+import { SaveInternalAppointmentDialog } from '@/components/tickets/SaveInternalAppointmentDialog';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -68,6 +69,7 @@ export default function TicketDetail() {
 
   // ── Appointment dialog state ──
   const [apptOpen, setApptOpen] = useState(false);
+  const [internalApptOpen, setInternalApptOpen] = useState(false);
   const [apptDate, setApptDate] = useState('');
   const [apptTime, setApptTime] = useState('');
   const [apptNotes, setApptNotes] = useState('');
@@ -626,16 +628,28 @@ export default function TicketDetail() {
                   </div>
                 ) : (
                   <>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start border-border bg-white/5 text-slate-400 hover:text-white text-xs h-12 rounded-2xl font-bold"
-                      onClick={() => {
-                        setApptOpen(true);
-                      }}
-                    >
-                      <CalendarDays className="w-4 h-4 me-2" />
-                      تحديد موعد زيارة
-                    </Button>
+                    <div className="flex gap-2 w-full">
+                      <Button
+                        variant="outline"
+                        className="flex-1 justify-center border-border bg-white/5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 text-xs h-12 rounded-2xl font-bold"
+                        onClick={() => {
+                          setInternalApptOpen(true);
+                        }}
+                      >
+                        <CalendarDays className="w-4 h-4 me-2" />
+                        إضافة موعد
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 justify-center border-border bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 text-xs h-12 rounded-2xl font-bold"
+                        onClick={() => {
+                          setApptOpen(true);
+                        }}
+                      >
+                        <CalendarDays className="w-4 h-4 me-2" />
+                        ترتيب موعد
+                      </Button>
+                    </div>
                     <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
                     <Button
                       variant="outline"
@@ -830,6 +844,15 @@ export default function TicketDetail() {
           }]}
           clientPhone={client?.phone}
           onSuccess={() => { setApptOpen(false); loadData(); }}
+        />
+      )}
+
+      {ticket && (
+        <SaveInternalAppointmentDialog
+          open={internalApptOpen}
+          onOpenChange={setInternalApptOpen}
+          tickets={[ticket]}
+          onSuccess={() => { setInternalApptOpen(false); loadData(); }}
         />
       )}
     </Layout>
