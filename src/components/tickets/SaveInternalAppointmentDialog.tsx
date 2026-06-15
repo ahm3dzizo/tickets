@@ -101,11 +101,13 @@ export function SaveInternalAppointmentDialog({
       const promises = tickets.map(t => {
         const payload: any = {
           appointmentTime,
-          status: 'pending',
           appointmentAwaitingReply: false,
           isDirectAppointment: true,
           appointmentNotes: notes || null,
         };
+        if (t.status !== 'closed') {
+          payload.status = 'pending';
+        }
 
         if (selectedTypes.length > 0) {
            payload.detectedTypes = selectedTypes;

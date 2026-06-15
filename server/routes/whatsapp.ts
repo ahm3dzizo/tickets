@@ -245,7 +245,7 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     const ticketIds = ticketId.split(',');
     const tickets = await prisma.ticket.findMany({
       where: { id: { in: ticketIds } },
-      select: { id: true, ticketId: true, clientName: true, villaNumber: true, isDirectAppointment: true },
+      select: { id: true, ticketId: true, clientName: true, villaNumber: true, isDirectAppointment: true, status: true },
     });
     if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
 
@@ -276,15 +276,17 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     const result = await sendWAText(uid, phone, msg);
     
     if (result.sent) {
-      await prisma.ticket.updateMany({
-        where: { id: { in: ticketIds } },
-        data: {
-          appointmentAwaitingReply: true,
-          status: 'waiting',
-          appointmentTime: null,
-          appointmentNotes: notes || null
-        }
-      });
+      for (const t of tickets) {
+        await prisma.ticket.update({
+          where: { id: t.id },
+          data: {
+            appointmentAwaitingReply: true,
+            ...(t.status !== 'closed' ? { status: 'waiting' } : {}),
+            appointmentTime: null,
+            appointmentNotes: notes || null
+          }
+        });
+      }
       res.json(result);
     } else {
       const errMsg = result.error === 'NOT_ON_WHATSAPP' 

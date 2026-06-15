@@ -141,7 +141,10 @@ export function DirectAppointmentDialog({
         
         for (let i = 0; i < openTickets.length; i++) {
           const t = openTickets[i];
-          const payload: any = { appointmentTime, status: 'pending', appointmentAwaitingReply: false, isDirectAppointment: true };
+          const payload: any = { appointmentTime, appointmentAwaitingReply: false, isDirectAppointment: true };
+          if (t.status !== 'closed') {
+            payload.status = 'pending';
+          }
           if (notes) payload.appointmentNotes = notes;
 
           if (selectedSupIds.length > 0) {

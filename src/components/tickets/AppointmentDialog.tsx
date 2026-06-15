@@ -187,7 +187,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
     try {
       const promises = tickets.map(t => ticketsApi.update(t.id, {
         appointmentAwaitingReply: true,
-        status: 'waiting',
+        ...(t.status !== 'closed' ? { status: 'waiting' } : {}),
         appointmentTime: appointmentTime,
         appointmentNotes: notes || null
       }));
