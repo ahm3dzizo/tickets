@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare } from 'lucide-react';
+import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
@@ -182,7 +182,15 @@ export function BulkActionBar({
             className="border-green-500/30 bg-green-500/10 text-green-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0"
             onClick={onAppointment}>
             <MessageCircle className="w-3.5 h-3.5" />
-            موعد
+            ترتيب موعد
+          </Button>
+        )}
+        {onInternalAppointment && !isMultiClient && (
+          <Button variant="outline" size="sm"
+            className="border-sky-500/30 bg-sky-500/10 text-sky-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0"
+            onClick={onInternalAppointment}>
+            <CalendarDays className="w-3.5 h-3.5" />
+            إضافة موعد
           </Button>
         )}
         {onClose && !isMultiClient && (
