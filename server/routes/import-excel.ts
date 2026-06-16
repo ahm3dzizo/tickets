@@ -250,6 +250,14 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         if (seenInFile.has(ticketId)) { skippedInFile++; continue; }
         seenInFile.add(ticketId);
 
+        const description = String(get("description") || "").trim();
+        
+        // تجاهل صفوف المواعيد التي يتم تصديرها من النظام (كأنها تذاكر جديدة)
+        if ((description.startsWith("الموعد") || description.startsWith("موعد")) && description.length < 100) {
+          skippedInFile++; 
+          continue;
+        }
+
         const rawVilla = String(get("villaNumber") || "").trim();
         const cleanVilla = normalizeVillaNumber(rawVilla);
         const refNumber = cleanVilla ? `${projectAbbr}-${cleanVilla}` : "";
@@ -261,7 +269,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           ? (normalizeClosedAt(get("closedAt"), issuedAt) ?? new Date(issuedAt).toISOString())
           : normalizeClosedAt(get("closedAt"), issuedAt);
 
-        const description = String(get("description") || "").trim();
         const rawExcelType = String(get("excelType") || "").trim();
         const excelTypes = resolveExcelTypes(rawExcelType, typeNameMap);
 

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { appointmentsApi, whatsappApi, ticketsApi, settingsApi } from '@/lib/api';
+import { appointmentsApi, whatsappApi, ticketsApi, settingsApi, usersApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 // ── أنواع ─────────────────────────────────────────────────────────────────────
@@ -19,6 +19,7 @@ interface AppointmentDialogProps {
     appointmentTime?: string;
     appointmentNotes?: string;
     assignedSupervisorIds?: string[];
+    assignedSupervisors?: any[];
     status: string;
   }[];
   clientPhone?: string;
@@ -83,6 +84,9 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
   const [sending, setSending] = useState(false);
   const [dynamicPreview, setDynamicPreview] = useState<string>('جاري تحميل الرسالة...');
 
+  const [supervisors, setSupervisors] = useState<any[]>([]);
+  const [selectedSupIds, setSelectedSupIds] = useState<string[]>([]);
+
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
 
@@ -108,6 +112,14 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
     setCustomTime('09:00');
     setShowPreview(false);
     setConflicts([]);
+    
+    if (primaryTicket.assignedSupervisorIds && primaryTicket.assignedSupervisorIds.length > 0) {
+      setSelectedSupIds(primaryTicket.assignedSupervisorIds);
+    } else {
+      setSelectedSupIds([]);
+    }
+
+    usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => {});
 
     settingsApi.getWorkHours().then(hours => {
       const opts = hours && hours.length > 0 ? hours : DEFAULT_TIME_OPTIONS;
@@ -123,7 +135,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
 
   // ── فحص التعارضات ──
   const checkConflicts = useCallback(async () => {
-    const supIds = primaryTicket.assignedSupervisorIds || [];
+    const supIds = selectedSupIds.length > 0 ? selectedSupIds : (primaryTicket.assignedSupervisorIds || []);
     if (supIds.length === 0 || !startDate) return;
     setCheckingConflicts(true);
     try {
@@ -139,7 +151,7 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
     } finally {
       setCheckingConflicts(false);
     }
-  }, [startDate, endDate, primaryTicket.id, primaryTicket.assignedSupervisorIds]);
+  }, [startDate, endDate, primaryTicket.id, selectedSupIds]);
 
   useEffect(() => {
     if (!open) return;
@@ -185,12 +197,28 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
   const handleSave = async () => {
     setSaving(true);
     try {
-      const promises = tickets.map(t => ticketsApi.update(t.id, {
-        appointmentAwaitingReply: true,
-        ...(t.status !== 'closed' ? { status: 'waiting' } : {}),
-        appointmentTime: appointmentTime,
-        appointmentNotes: notes || null
-      }));
+      const assignedSupervisorsList = supervisors
+        .filter(s => selectedSupIds.includes(s.uid || s.id))
+        .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
+
+      const promises = tickets.map(t => {
+        const payload: any = {
+          appointmentAwaitingReply: true,
+          ...(t.status !== 'closed' ? { status: 'waiting' } : {}),
+          appointmentTime: appointmentTime,
+          appointmentNotes: notes || null
+        };
+        if (selectedSupIds.length > 0) {
+          payload.assignedSupervisorIds = selectedSupIds;
+          payload.assignedSupervisorId = selectedSupIds[0];
+          payload.assignedSupervisors = assignedSupervisorsList;
+        } else {
+          payload.assignedSupervisorIds = [];
+          payload.assignedSupervisorId = null;
+          payload.assignedSupervisors = [];
+        }
+        return ticketsApi.update(t.id, payload);
+      });
       await Promise.all(promises);
       toast.success('تم حفظ المواعيد بنجاح');
       onSuccess?.();
@@ -384,6 +412,37 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
               )}
             </div>
           )}
+
+          {/* ── المشرفين ── */}
+          <div className="space-y-2">
+            <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
+              المشرفين
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {supervisors.map(s => {
+                const sId = s.uid || s.id;
+                const sName = s.displayName || s.name;
+                const isSelected = selectedSupIds.includes(sId);
+                return (
+                  <button
+                    key={sId}
+                    type="button"
+                    onClick={() => setSelectedSupIds(prev => prev.includes(sId) ? prev.filter(x => x !== sId) : [...prev, sId])}
+                    className={cn(
+                      'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
+                      isSelected
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                        : 'bg-muted/30 border-border text-muted-foreground hover:border-slate-400 hover:bg-muted/80'
+                    )}
+                  >
+                    <div className={cn('w-3 h-3 rounded-[4px] border flex items-center justify-center shrink-0', isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40')} />
+                    {sName}
+                  </button>
+                );
+              })}
+              {supervisors.length === 0 && <div className="text-xs text-muted-foreground">جاري تحميل المشرفين...</div>}
+            </div>
+          </div>
 
           {/* ── ملاحظات ── */}
           <div className="space-y-2">
