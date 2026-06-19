@@ -59,7 +59,7 @@ const patch = <T>(path: string, body: unknown) => request<T>('PATCH', path, body
 // ── Auth ─────────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (identifier: string, password: string) =>
-    request<{ token: string; user: any; requiresProfileCompletion?: boolean }>(
+    request<{ token: string; user: any; requiresProfileCompletion?: boolean; isFirstLogin?: boolean }>(
       'POST', 
       '/auth/login', 
       { identifier, password }, 
@@ -69,6 +69,10 @@ export const authApi = {
     request<{ token: string; user: any }>('POST', '/auth/register', data, { auth: false }),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ success: boolean }>('POST', '/auth/change-password', { currentPassword, newPassword }),
+  forgotPassword: (identifier: string) =>
+    request<{ success: boolean; message: string }>('POST', '/auth/forgot-password', { identifier }, { auth: false }),
+  resetPassword: (identifier: string, code: string, newPassword: string) =>
+    request<{ success: boolean; message: string }>('POST', '/auth/reset-password', { identifier, code, newPassword }, { auth: false }),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────

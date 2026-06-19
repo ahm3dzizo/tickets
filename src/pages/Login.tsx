@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Mail, Phone, Lock, Eye, EyeOff, UserPlus, HelpCircle, X } from 'lucide-react';
@@ -16,6 +17,11 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showNewEmployee, setShowNewEmployee] = useState(false);
   const [showForgotPass, setShowForgotPass] = useState(false);
+  const [forgotStep, setForgotStep] = useState<1|2>(1);
+  const [resetIdentifier, setResetIdentifier] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [resetNewPass, setResetNewPass] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
   const { login, isFirstLogin } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,6 +41,52 @@ export default function Login() {
       toast.error(error.message || 'فشل تسجيل الدخول. يرجى التحقق من البيانات.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetIdentifier.trim()) {
+      toast.error('يرجى إدخال رقم الهاتف');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const res = await authApi.forgotPassword(resetIdentifier);
+      toast.success(res.message);
+      setForgotStep(2);
+    } catch (error: any) {
+      toast.error(error.message || 'فشل إرسال الكود');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleForgotVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetCode.trim() || !resetNewPass.trim()) {
+      toast.error('يرجى إدخال الكود وكلمة المرور الجديدة');
+      return;
+    }
+    if (resetNewPass.length < 6) {
+      toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const res = await authApi.resetPassword(resetIdentifier, resetCode, resetNewPass);
+      toast.success(res.message);
+      setShowForgotPass(false);
+      setForgotStep(1);
+      setResetCode('');
+      setResetNewPass('');
+      setIdentifier(resetIdentifier);
+      setPassword(resetNewPass);
+      setLoginMethod('phone');
+    } catch (error: any) {
+      toast.error(error.message || 'فشل تعيين كلمة المرور');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -210,18 +262,58 @@ export default function Login() {
 
         {/* Forgot password panel */}
         {showForgotPass && (
-          <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="flex items-center justify-between">
-              <button onClick={() => setShowForgotPass(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
-              <p className="font-bold text-amber-400 text-sm flex items-center gap-2">
+              <button onClick={() => { setShowForgotPass(false); setForgotStep(1); }} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+              <p className="font-bold text-amber-500 text-sm flex items-center gap-2">
                 <HelpCircle className="w-4 h-4" />
-                نسيت كلمة المرور
+                استعادة كلمة المرور
               </p>
             </div>
-            <p className="text-right text-[12px] text-muted-foreground leading-relaxed">
-              تواصل مع مدير النظام لإعادة تعيين كلمة مرورك.<br />
-              يمكنه إعادة تفعيل حسابك من صفحة إدارة الفريق.
-            </p>
+            
+            {forgotStep === 1 ? (
+              <form onSubmit={handleForgotRequest} className="space-y-3">
+                <p className="text-right text-[12px] text-muted-foreground">أدخل رقم الهاتف المسجل لتصلك رسالة واتساب بكود الاستعادة.</p>
+                <Input
+                  type="tel"
+                  placeholder="رقم الهاتف (مثال: 05xxxxxxxx)"
+                  className="h-10 text-right bg-background border-amber-500/20 focus:border-amber-500/40"
+                  value={resetIdentifier}
+                  onChange={e => setResetIdentifier(e.target.value)}
+                  required
+                />
+                <Button type="submit" disabled={resetLoading} className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white shadow-none">
+                  {resetLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'إرسال الكود'}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleForgotVerify} className="space-y-3">
+                <p className="text-right text-[12px] text-muted-foreground">أدخل الكود المرسل إليك وكلمة المرور الجديدة.</p>
+                <Input
+                  type="text"
+                  placeholder="كود الاستعادة (6 أرقام)"
+                  className="h-10 text-center tracking-widest font-bold bg-background border-amber-500/20 focus:border-amber-500/40"
+                  value={resetCode}
+                  onChange={e => setResetCode(e.target.value)}
+                  maxLength={6}
+                  required
+                />
+                <Input
+                  type="password"
+                  placeholder="كلمة المرور الجديدة (6 أحرف على الأقل)"
+                  className="h-10 text-right bg-background border-amber-500/20 focus:border-amber-500/40"
+                  value={resetNewPass}
+                  onChange={e => setResetNewPass(e.target.value)}
+                  required
+                />
+                <Button type="submit" disabled={resetLoading} className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white shadow-none">
+                  {resetLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ كلمة المرور'}
+                </Button>
+                <button type="button" onClick={() => setForgotStep(1)} className="w-full text-[11px] text-muted-foreground hover:text-foreground">
+                  تعديل رقم الهاتف
+                </button>
+              </form>
+            )}
           </div>
         )}
 
