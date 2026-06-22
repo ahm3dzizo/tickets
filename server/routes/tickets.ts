@@ -231,11 +231,8 @@ router.get("/ticketids", requireAuth, async (req, res) => {
 router.get("/next-id", requireAuth, async (req, res) => {
   const { projectId } = req.query as { projectId?: string };
   try {
-    const where = projectId ? { projectId } : {};
-    
-    // Fetch all ticketIds to safely find the maximum numeric ID
+    // Fetch all ticketIds globally to safely find the maximum numeric ID
     const tickets = await prisma.ticket.findMany({
-      where,
       select: { ticketId: true },
     });
     
@@ -375,9 +372,21 @@ router.post("/", requireAuth, async (req, res) => {
     const typeKey = data.type || "general";
     const typeRecord = await prisma.ticketType.findFirst({ where: { key: typeKey }, select: { id: true } });
 
+    const ticketIdToUse = data.ticketId || String(Date.now()).slice(-6);
+
+    const existingTicket = await prisma.ticket.findUnique({
+      where: { ticketId: ticketIdToUse },
+      select: { id: true }
+    });
+
+    if (existingTicket) {
+      res.status(400).json({ error: `رقم التذكرة (${ticketIdToUse}) مستخدم مسبقاً. يرجى اختيار رقم آخر أو تركه فارغاً ليتم توليده تلقائياً.` });
+      return;
+    }
+
     const ticket = await prisma.ticket.create({
       data: {
-        ticketId: data.ticketId || String(Date.now()).slice(-6),
+        ticketId: ticketIdToUse,
         refNumber: data.refNumber,
         projectAbbr: data.projectAbbr || null,
         projectId, clientId: clientId || null,
