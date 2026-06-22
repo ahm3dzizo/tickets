@@ -209,8 +209,8 @@ export function DirectAppointmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card border-border text-foreground sm:max-w-[420px] rounded-3xl" dir="rtl">
-        <DialogHeader>
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-[420px] max-h-[90vh] flex flex-col rounded-3xl p-4 sm:p-6" dir="rtl">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-lg font-bold text-foreground text-right flex items-center gap-2">
             <CalendarPlus className="w-5 h-5 text-blue-400" />
             إضافة موعد مباشر
@@ -218,7 +218,7 @@ export function DirectAppointmentDialog({
           <p className="text-sm text-muted-foreground text-right mt-1">{displayDateStr}</p>
         </DialogHeader>
 
-        <div className="space-y-6 py-2">
+        <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 px-1 -mx-1 py-2">
           {/* Client Selection */}
           <div className="space-y-2">
             <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block text-right">العميل</Label>
@@ -278,9 +278,20 @@ export function DirectAppointmentDialog({
           )}
 
           {selectedVilla && !fetchingTickets && openTickets.length > 0 && !openTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr)) && (
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-right">
-              <p className="text-sm text-blue-500 font-bold mb-1">يوجد {openTickets.length} تذاكر مفتوحة</p>
-              <p className="text-xs text-blue-500/70">سيتم ربط الموعد بهذه التذاكر تلقائياً.</p>
+            <div className="space-y-2">
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-right">
+                <p className="text-sm text-blue-500 font-bold mb-1">يوجد {openTickets.length} تذاكر مفتوحة</p>
+                <p className="text-xs text-blue-500/70">سيتم ربط الموعد بهذه التذاكر تلقائياً.</p>
+              </div>
+              <div className="bg-muted/30 border border-border/50 rounded-2xl p-3 max-h-32 overflow-y-auto text-right no-scrollbar shrink-0">
+                {openTickets.map(t => (
+                  <div key={t.id} className="mb-2 last:mb-0 border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                    <span className="text-[10px] text-blue-400 font-bold ml-2">#{t.ticketId || t.id.slice(0, 6)}</span>
+                    {t.villaNumber && <span className="text-[10px] text-muted-foreground">فيلا {t.villaNumber}</span>}
+                    <p className="text-xs text-foreground mt-1 leading-relaxed">{t.description}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -342,7 +353,7 @@ export function DirectAppointmentDialog({
             <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
               المشرفين
             </Label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto no-scrollbar pb-1">
               {supervisors.map(s => {
                 const sId = s.uid || s.id;
                 const sName = s.displayName || s.name;
@@ -383,7 +394,7 @@ export function DirectAppointmentDialog({
 
         </div>
 
-        <DialogFooter className="pt-2 gap-3">
+        <DialogFooter className="shrink-0 pt-2 border-t border-border/50 gap-3">
           <Button
             onClick={handleSave}
             disabled={loading || !selectedClientId || openTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr))}

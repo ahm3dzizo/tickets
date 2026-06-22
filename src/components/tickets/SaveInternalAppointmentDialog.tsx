@@ -36,7 +36,7 @@ export function SaveInternalAppointmentDialog({
   const [addingType, setAddingType] = useState(false);
   const [dynamicTypes, setDynamicTypes] = useState<Record<string, string>>({});
 
-  const { typeTranslations } = useTicketTypes();
+  const { typeTranslations, refresh: refreshTicketTypes } = useTicketTypes();
   const mergedTypes: Record<string, string> = {
     electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات',
     ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية',
@@ -121,6 +121,7 @@ export function SaveInternalAppointmentDialog({
          });
       }
       
+      refreshTicketTypes();
       setCustomType('');
       toast.success('تمت إضافة التخصص وسيتعلم النظام منه');
     } catch (err: any) {
@@ -188,8 +189,8 @@ export function SaveInternalAppointmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card border-border text-foreground sm:max-w-[420px] rounded-3xl" dir="rtl">
-        <DialogHeader>
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-[420px] max-h-[90vh] flex flex-col rounded-3xl p-4 sm:p-6" dir="rtl">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-lg font-bold text-foreground text-right flex items-center gap-2">
             <CalendarPlus className="w-5 h-5 text-blue-500" />
             إضافة موعد (داخلي)
@@ -199,128 +200,130 @@ export function SaveInternalAppointmentDialog({
           </p>
         </DialogHeader>
 
-        <div className="bg-muted/30 border border-border/50 rounded-2xl p-3 max-h-32 overflow-y-auto mt-2 text-right no-scrollbar">
-          {tickets.map(t => (
-            <div key={t.id} className="mb-2 last:mb-0 border-b border-border/50 pb-2 last:border-0 last:pb-0">
-              <span className="text-[10px] text-blue-400 font-bold ml-2">#{t.ticketId || t.id.slice(0, 6)}</span>
-              {t.villaNumber && <span className="text-[10px] text-muted-foreground">فيلا {t.villaNumber}</span>}
-              <p className="text-xs text-foreground mt-1 leading-relaxed">{t.description}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold text-right block">التاريخ</Label>
-              <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-background h-11 rounded-xl" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold text-right block">الوقت</Label>
-              <Input type="time" value={time} onChange={e => setTime(e.target.value)} className="bg-background h-11 rounded-xl" />
-            </div>
+        <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 px-1 -mx-1 pb-2">
+          <div className="bg-muted/30 border border-border/50 rounded-2xl p-3 max-h-32 overflow-y-auto text-right no-scrollbar shrink-0">
+            {tickets.map(t => (
+              <div key={t.id} className="mb-2 last:mb-0 border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                <span className="text-[10px] text-blue-400 font-bold ml-2">#{t.ticketId || t.id.slice(0, 6)}</span>
+                {t.villaNumber && <span className="text-[10px] text-muted-foreground">فيلا {t.villaNumber}</span>}
+                <p className="text-xs text-foreground mt-1 leading-relaxed">{t.description}</p>
+              </div>
+            ))}
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
-              التخصصات المطلوبة
-            </Label>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(mergedTypes).map(([k, v]) => {
-                const isSelected = selectedTypes.includes(k);
-                return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold text-right block">التاريخ</Label>
+                <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-background h-11 rounded-xl" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold text-right block">الوقت</Label>
+                <Input type="time" value={time} onChange={e => setTime(e.target.value)} className="bg-background h-11 rounded-xl" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
+                التخصصات المطلوبة
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(mergedTypes).map(([k, v]) => {
+                  const isSelected = selectedTypes.includes(k);
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setSelectedTypes(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])}
+                      className={cn(
+                        'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
+                        isSelected
+                          ? 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400 shadow-sm'
+                          : 'bg-muted/30 border-border text-muted-foreground hover:border-slate-400 hover:bg-muted/80'
+                      )}
+                    >
+                      <div className={cn('w-2 h-2 rounded-full shrink-0', isSelected ? 'bg-blue-500' : 'bg-muted-foreground/30')} />
+                      {v as React.ReactNode}
+                    </button>
+                  );
+                })}
+                {selectedTypes.filter(k => !mergedTypes[k]).map(k => (
                   <button
                     key={k}
                     type="button"
-                    onClick={() => setSelectedTypes(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])}
-                    className={cn(
-                      'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
-                      isSelected
-                        ? 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400 shadow-sm'
-                        : 'bg-muted/30 border-border text-muted-foreground hover:border-slate-400 hover:bg-muted/80'
-                    )}
+                    onClick={() => setSelectedTypes(prev => prev.filter(x => x !== k))}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 bg-blue-500/10 border-blue-500/30 text-blue-600 shadow-sm"
                   >
-                    <div className={cn('w-2 h-2 rounded-full shrink-0', isSelected ? 'bg-blue-500' : 'bg-muted-foreground/30')} />
-                    {v as React.ReactNode}
+                    <div className="w-2 h-2 rounded-full shrink-0 bg-blue-500" />
+                    {k}
                   </button>
-                );
-              })}
-              {selectedTypes.filter(k => !mergedTypes[k]).map(k => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setSelectedTypes(prev => prev.filter(x => x !== k))}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 bg-blue-500/10 border-blue-500/30 text-blue-600 shadow-sm"
+                ))}
+              </div>
+              
+              <div className="flex items-center gap-2 mt-2">
+                <Input 
+                  placeholder="إضافة تخصص جديد (ويتعلم منه النظام)..." 
+                  value={customType}
+                  onChange={e => setCustomType(e.target.value)}
+                  onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); handleAddCustomType(); } }}
+                  className="h-9 text-xs bg-background border-border/50 rounded-xl flex-1 text-right"
+                />
+                <Button 
+                  type="button" 
+                  onClick={handleAddCustomType} 
+                  disabled={addingType || !customType.trim()}
+                  className="h-9 px-3 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border border-blue-500/20"
                 >
-                  <div className="w-2 h-2 rounded-full shrink-0 bg-blue-500" />
-                  {k}
-                </button>
-              ))}
+                  {addingType ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                </Button>
+              </div>
             </div>
-            
-            <div className="flex items-center gap-2 mt-2">
-              <Input 
-                placeholder="إضافة تخصص جديد (ويتعلم منه النظام)..." 
-                value={customType}
-                onChange={e => setCustomType(e.target.value)}
-                onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); handleAddCustomType(); } }}
-                className="h-9 text-xs bg-background border-border/50 rounded-xl flex-1 text-right"
+
+            <div className="space-y-2">
+              <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
+                المشرفين
+              </Label>
+              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto no-scrollbar pb-1">
+                {supervisors.map(s => {
+                  const sId = s.uid || s.id;
+                  const sName = s.displayName || s.name;
+                  const isSelected = selectedSupIds.includes(sId);
+                  return (
+                    <button
+                      key={sId}
+                      type="button"
+                      onClick={() => setSelectedSupIds(prev => prev.includes(sId) ? prev.filter(x => x !== sId) : [...prev, sId])}
+                      className={cn(
+                        'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
+                        isSelected
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                          : 'bg-muted/30 border-border text-muted-foreground hover:border-slate-400 hover:bg-muted/80'
+                      )}
+                    >
+                      <div className={cn('w-3 h-3 rounded-[4px] border flex items-center justify-center shrink-0', isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40')} />
+                      {sName}
+                    </button>
+                  );
+                })}
+                {supervisors.length === 0 && <div className="text-xs text-muted-foreground">لا يوجد مشرفين</div>}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold text-right block">
+                ملاحظات إضافية (تظهر للفنيين)
+              </Label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="أي تفاصيل تخص الموعد..."
+                className="w-full bg-background border border-input rounded-xl p-3 text-foreground text-sm h-20 resize-none text-right placeholder:text-muted-foreground"
               />
-              <Button 
-                type="button" 
-                onClick={handleAddCustomType} 
-                disabled={addingType || !customType.trim()}
-                className="h-9 px-3 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border border-blue-500/20"
-              >
-                {addingType ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              </Button>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
-              المشرفين
-            </Label>
-            <div className="flex flex-wrap gap-2">
-              {supervisors.map(s => {
-                const sId = s.uid || s.id;
-                const sName = s.displayName || s.name;
-                const isSelected = selectedSupIds.includes(sId);
-                return (
-                  <button
-                    key={sId}
-                    type="button"
-                    onClick={() => setSelectedSupIds(prev => prev.includes(sId) ? prev.filter(x => x !== sId) : [...prev, sId])}
-                    className={cn(
-                      'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
-                      isSelected
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                        : 'bg-muted/30 border-border text-muted-foreground hover:border-slate-400 hover:bg-muted/80'
-                    )}
-                  >
-                    <div className={cn('w-3 h-3 rounded-[4px] border flex items-center justify-center shrink-0', isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40')} />
-                    {sName}
-                  </button>
-                );
-              })}
-              {supervisors.length === 0 && <div className="text-xs text-muted-foreground">لا يوجد مشرفين</div>}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold text-right block">
-              ملاحظات إضافية (تظهر للفنيين)
-            </Label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="أي تفاصيل تخص الموعد..."
-              className="w-full bg-background border border-input rounded-xl p-3 text-foreground text-sm h-24 resize-none text-right placeholder:text-muted-foreground"
-            />
           </div>
         </div>
 
-        <DialogFooter className="pt-2">
+        <DialogFooter className="shrink-0 pt-2 border-t border-border/50">
           <Button
             onClick={handleSave}
             disabled={loading || !date || !time}
