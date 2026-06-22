@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { ticketsApi } from '@/lib/api';
 import { toast } from 'sonner';
-import { Loader2, CalendarPlus, Save } from 'lucide-react';
+import { Loader2, CalendarPlus, Save, Plus } from 'lucide-react';
 import { usersApi } from '@/lib/api';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { cn } from '@/lib/utils';
@@ -31,6 +31,9 @@ export function SaveInternalAppointmentDialog({
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [supervisors, setSupervisors] = useState<any[]>([]);
   const [selectedSupIds, setSelectedSupIds] = useState<string[]>([]);
+  
+  const [customType, setCustomType] = useState('');
+  const [addingType, setAddingType] = useState(false);
 
   const { typeTranslations } = useTicketTypes();
   const mergedTypes: Record<string, string> = {
@@ -83,6 +86,44 @@ export function SaveInternalAppointmentDialog({
       setSelectedSupIds(Array.from(supIds));
     }
   }, [open, tickets]);
+
+  const handleAddCustomType = async () => {
+    if (!customType.trim()) return;
+    setAddingType(true);
+    try {
+      const key = `type_${Date.now()}`;
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/admin/ticket-types', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+         body: JSON.stringify({ key, nameAr: customType.trim() })
+      });
+      
+      if (!res.ok) throw new Error('فشل إنشاء التخصص الجديد');
+      
+      const newType = await res.json();
+      
+      // Update local state to show it
+      mergedTypes[newType.key] = newType.nameAr;
+      setSelectedTypes(prev => [...prev, newType.key]);
+      
+      // Learn from the first ticket if available
+      if (tickets.length > 0 && tickets[0].description) {
+         await fetch('/api/classify/learn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ description: tickets[0].description, correctTypeKey: newType.key })
+         });
+      }
+      
+      setCustomType('');
+      toast.success('تمت إضافة التخصص وسيتعلم النظام منه');
+    } catch (err: any) {
+      toast.error(err.message || 'فشل إضافة التخصص');
+    } finally {
+      setAddingType(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!date || !time) {
@@ -153,6 +194,16 @@ export function SaveInternalAppointmentDialog({
           </p>
         </DialogHeader>
 
+        <div className="bg-muted/30 border border-border/50 rounded-2xl p-3 max-h-32 overflow-y-auto mt-2 text-right no-scrollbar">
+          {tickets.map(t => (
+            <div key={t.id} className="mb-2 last:mb-0 border-b border-border/50 pb-2 last:border-0 last:pb-0">
+              <span className="text-[10px] text-blue-400 font-bold ml-2">#{t.ticketId || t.id.slice(0, 6)}</span>
+              {t.villaNumber && <span className="text-[10px] text-muted-foreground">فيلا {t.villaNumber}</span>}
+              <p className="text-xs text-foreground mt-1 leading-relaxed">{t.description}</p>
+            </div>
+          ))}
+        </div>
+
         <div className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -189,6 +240,35 @@ export function SaveInternalAppointmentDialog({
                   </button>
                 );
               })}
+              {selectedTypes.filter(k => !mergedTypes[k]).map(k => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setSelectedTypes(prev => prev.filter(x => x !== k))}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 bg-blue-500/10 border-blue-500/30 text-blue-600 shadow-sm"
+                >
+                  <div className="w-2 h-2 rounded-full shrink-0 bg-blue-500" />
+                  {k.replace('type_', 'تخصص ')}
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex items-center gap-2 mt-2">
+              <Input 
+                placeholder="إضافة تخصص جديد (ويتعلم منه النظام)..." 
+                value={customType}
+                onChange={e => setCustomType(e.target.value)}
+                onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); handleAddCustomType(); } }}
+                className="h-9 text-xs bg-background border-border/50 rounded-xl flex-1 text-right"
+              />
+              <Button 
+                type="button" 
+                onClick={handleAddCustomType} 
+                disabled={addingType || !customType.trim()}
+                className="h-9 px-3 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border border-blue-500/20"
+              >
+                {addingType ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              </Button>
             </div>
           </div>
 
