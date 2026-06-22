@@ -750,7 +750,7 @@ export function TicketTable({
             );
           })}
           {visibleCount < displayTickets.length && (
-            <div className="h-10 flex items-center justify-center text-slate-500" ref={observerRef}>
+            <div className="h-10 flex items-center justify-center text-slate-500">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
           )}
@@ -992,11 +992,13 @@ export function TicketTable({
               })}
             </tbody>
           </table>
-          {visibleCount < displayTickets.length && (
-            <div className="h-14 flex items-center justify-center text-slate-500" ref={observerRef}>
-              <Loader2 className="w-6 h-6 animate-spin" />
-            </div>
-          )}
+        </div>
+      )}
+
+      {/* ── SHARED PAGINATION OBSERVER ── */}
+      {visibleCount < displayTickets.length && (
+        <div className="h-14 flex items-center justify-center text-slate-500" ref={observerRef}>
+          <Loader2 className="w-6 h-6 animate-spin" />
         </div>
       )}
 
