@@ -84,9 +84,13 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     overdueList.sort((a, b) => b.daysOpen - a.daysOpen);
     const overdueTickets = overdueList.slice(0, 10);
 
-    // Fetch appointments separately to avoid missing any statuses
+    // Fetch appointments separately but exclude closed tickets
     const rawAppts = await prisma.ticket.findMany({
-      where: { ...where, appointmentTime: { not: null } },
+      where: { 
+        ...where, 
+        appointmentTime: { not: null },
+        status: { notIn: ["closed", "out-of-scope", "out_of_scope", "absent"] }
+      },
       select: { id: true, ticketId: true, clientName: true, villaNumber: true, appointmentTime: true, type: true, status: true },
     });
 

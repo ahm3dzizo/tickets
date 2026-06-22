@@ -92,14 +92,17 @@ export function SaveInternalAppointmentDialog({
     setAddingType(true);
     try {
       const key = `type_${Date.now()}`;
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token');
       const res = await fetch('/api/admin/ticket-types', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
          body: JSON.stringify({ key, nameAr: customType.trim() })
       });
       
-      if (!res.ok) throw new Error('فشل إنشاء التخصص الجديد');
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || 'فشل إنشاء التخصص الجديد');
+      }
       
       const newType = await res.json();
       
