@@ -77,7 +77,7 @@ export interface Ticket {
   issuedAt?: string;
   description: string;
   type: TicketType;
-  status: 'open' | 'in-progress' | 'pending' | 'completed' | 'closed' | 'waiting' | 'out-of-scope';
+  status: 'open' | 'in-progress' | 'in_progress' | 'pending' | 'completed' | 'closed' | 'waiting' | 'out-of-scope' | 'out_of_scope' | 'absent';
   priority: 'low' | 'medium' | 'high' | 'urgent' | number;
   assigneeName?: string;
   assignedSupervisorId?: string;

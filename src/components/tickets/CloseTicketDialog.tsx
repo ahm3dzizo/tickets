@@ -212,16 +212,34 @@ export function CloseTicketDialog({
     if (closeType === 'normal') return;
     setLoading(true);
     try {
-      const authToken = localStorage.getItem('retal_auth_token');
-      await Promise.all(selectedTickets.map(t =>
-        fetch(`/api/tickets/${t.id}/special-close`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
-          body: JSON.stringify({ closeType, notes }),
+      const isWhatsAppSent = targetClient?.phone && previewMessage;
+      
+      // إرسال رسالة الواتساب المجمعة أولاً
+      if (isWhatsAppSent) {
+        try {
+          await whatsappApi.send(targetClient.phone, previewMessage);
+        } catch (e: any) {
+          toast.error(`تعذر إرسال رسالة الواتساب: ${e.message || 'خطأ غير معروف'}`);
+          setLoading(false);
+          return;
+        }
+      } else if (previewMessage && !targetClient?.phone) {
+        toast.error("لا يوجد رقم هاتف مسجل للعميل لإرسال الرسالة.");
+        setLoading(false);
+        return;
+      }
+
+      // إغلاق التذاكر وتحديث الحالة
+      await Promise.all(selectedTickets.map(ticket =>
+        ticketsApi.update(ticket.id, {
+          status: closeType,
+          closedAt: new Date().toISOString(),
+          closureNotes: notes || (closeType === 'absent' ? 'إغلاق لعدم تواجد العميل' : 'إغلاق خارج الاختصاص')
         })
       ));
+
       const label = closeType === 'absent' ? 'عدم التواجد' : 'خارج الاختصاص';
-      toast.success(`تم إغلاق التذاكر (${label}) وإرسال الرسالة 💬`);
+      toast.success(`تم إغلاق التذاكر (${label})${isWhatsAppSent ? ' وإرسال الرسالة 💬' : ''}`);
       onSuccess();
       onOpenChange(false);
     } catch {

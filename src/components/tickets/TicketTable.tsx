@@ -67,19 +67,25 @@ export const typeTranslations: Record<string, string> = {
 export const statusTranslations: Record<string, string> = {
   open:            'مفتوحة',
   'in-progress':   'قيد التنفيذ',
+  'in_progress':   'قيد التنفيذ',
   pending:         'معلقة',
   completed:       'مكتملة',
   closed:          'مغلقة',
   'out-of-scope':  'خارج اختصاص',
+  'out_of_scope':  'خارج الاختصاص',
+  absent:          'عدم تواجد',
 };
 
 export const statusColors: Record<string, string> = {
   open:            'bg-blue-500/10 text-blue-400 border-blue-500/20',
   'in-progress':   'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  'in_progress':   'bg-amber-500/10 text-amber-400 border-amber-500/20',
   pending:         'bg-purple-500/10 text-purple-400 border-purple-500/20',
   completed:       'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   closed:          'bg-slate-500/10 text-slate-400 border-slate-500/20',
   'out-of-scope':  'bg-rose-500/10 text-rose-400 border-rose-500/20',
+  'out_of_scope':  'bg-rose-500/10 text-rose-400 border-rose-500/20',
+  absent:          'bg-amber-500/10 text-amber-400 border-amber-500/20',
 };
 
 const priorityBgMap: Record<number, string> = {
@@ -123,7 +129,8 @@ const DEFAULT_STATUS_OPTIONS = [
   { key: 'pending',       label: 'معلقة' },
   { key: 'completed',     label: 'مكتملة' },
   { key: 'closed',        label: 'مغلقة' },
-  { key: 'out-of-scope',  label: 'خارج اختصاص', danger: true },
+  { key: 'out_of_scope',  label: 'خارج اختصاص', danger: true },
+  { key: 'absent',        label: 'عدم تواجد', danger: true },
 ];
 
 export interface BulkActionBarProps {
@@ -151,12 +158,12 @@ export function BulkActionBar({
 }: BulkActionBarProps) {
   if (hidden) return null;
   const content = (
-    <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-2.5 bg-slate-900/95 backdrop-blur-md border border-blue-500/30 rounded-2xl shadow-2xl shadow-black/60 px-2.5 sm:px-4 py-2 sm:py-2.5 w-fit max-w-[calc(100vw-1rem)] sm:max-w-2xl" dir="rtl">
+    <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-2.5 bg-slate-900/95 backdrop-blur-md border border-blue-500/30 rounded-2xl shadow-2xl shadow-black/60 px-2.5 sm:px-4 py-2 sm:py-2.5 w-[calc(100vw-1rem)] sm:w-fit sm:max-w-2xl" dir="rtl">
       <div className="flex items-center gap-1.5 pl-2.5 sm:pl-3 border-l border-white/10 shrink-0">
         <span className="text-base sm:text-lg font-black text-blue-400">{count}</span>
         <span className="text-[10px] font-bold text-slate-500 hidden sm:block">مختارة</span>
       </div>
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 -mb-1">
         <DropdownMenu>
           <DropdownMenuTrigger render={
             <Button variant="outline" size="sm" className="border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0">
@@ -295,7 +302,7 @@ export function TicketTable({
     const ca = (t.createdAt as any)?.toDate ? (t.createdAt as any).toDate() : new Date(t.createdAt as any);
     const openDate = (t.issuedAt ? parseIssuedAt(t.issuedAt) : null) ?? ca;
     const closeDate = t.closedAt ? new Date(t.closedAt) : null;
-    const isClosed = t.status === 'closed' || t.status === 'out-of-scope';
+    const isClosed = t.status === 'closed' || t.status === 'out-of-scope' || t.status === 'out_of_scope' || t.status === 'absent';
     const endDate = (isClosed && closeDate) ? closeDate : new Date();
     switch (key) {
       case 'date':     return openDate.getTime();
@@ -308,7 +315,7 @@ export function TicketTable({
   };
 
   const applySortAndGroup = (arr: Ticket[]) => {
-    const closedSet = new Set(['closed', 'out-of-scope']);
+    const closedSet = new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']);
     const open   = arr.filter(t => !closedSet.has(t.status));
     const closed = arr.filter(t =>  closedSet.has(t.status));
     const cmp = (a: Ticket, b: Ticket) => {
@@ -336,7 +343,7 @@ export function TicketTable({
     return [...open].sort(cmp).concat([...closed].sort(cmp));
   };
 
-  const closedStatuses = new Set(['closed', 'out-of-scope']);
+  const closedStatuses = new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']);
 
   const baseTickets = showInlineFilters
     ? tickets.filter(t => {
@@ -614,7 +621,7 @@ export function TicketTable({
               : new Date(ticket.createdAt as any);
             const openDate  = (ticket.issuedAt ? parseIssuedAt(ticket.issuedAt) : null) ?? createdAt;
             const closeDate = ticket.closedAt ? new Date(ticket.closedAt) : null;
-            const isClosed  = ticket.status === 'closed' || ticket.status === 'out-of-scope';
+            const isClosed  = ticket.status === 'closed' || ticket.status === 'out-of-scope' || ticket.status === 'out_of_scope' || ticket.status === 'absent';
             const endDate   = (isClosed && closeDate) ? closeDate : new Date();
             const daysOpen  = differenceInDays(endDate, openDate);
             const daysBg    =
