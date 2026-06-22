@@ -34,13 +34,15 @@ export function SaveInternalAppointmentDialog({
   
   const [customType, setCustomType] = useState('');
   const [addingType, setAddingType] = useState(false);
+  const [dynamicTypes, setDynamicTypes] = useState<Record<string, string>>({});
 
   const { typeTranslations } = useTicketTypes();
   const mergedTypes: Record<string, string> = {
     electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات',
     ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية',
     waterproofing: 'عزل مائي', pest_control: 'مكافحة حشرات', general: 'عام',
-    ...typeTranslations
+    ...typeTranslations,
+    ...dynamicTypes
   };
 
   useEffect(() => {
@@ -107,7 +109,7 @@ export function SaveInternalAppointmentDialog({
       const newType = await res.json();
       
       // Update local state to show it
-      mergedTypes[newType.key] = newType.nameAr;
+      setDynamicTypes(prev => ({ ...prev, [newType.key]: newType.nameAr }));
       setSelectedTypes(prev => [...prev, newType.key]);
       
       // Learn from the first ticket if available
@@ -251,7 +253,7 @@ export function SaveInternalAppointmentDialog({
                   className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 bg-blue-500/10 border-blue-500/30 text-blue-600 shadow-sm"
                 >
                   <div className="w-2 h-2 rounded-full shrink-0 bg-blue-500" />
-                  {k.replace('type_', 'تخصص ')}
+                  {k}
                 </button>
               ))}
             </div>
