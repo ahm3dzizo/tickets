@@ -424,7 +424,7 @@ export default function TicketDetail() {
                 <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest text-right">وصف المشكلة</CardTitle>
               </CardHeader>
               <CardContent className="p-8">
-                <p className="text-slate-300 leading-relaxed text-right text-lg">{ticket.description}</p>
+                <p className="text-slate-300 leading-relaxed text-right text-lg whitespace-pre-wrap break-words">{ticket.description}</p>
               </CardContent>
             </Card>
 
