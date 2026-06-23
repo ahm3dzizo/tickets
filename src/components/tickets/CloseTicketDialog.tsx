@@ -10,7 +10,8 @@ import {
   Loader2,
   Copy,
   ExternalLink,
-  FolderOpen,
+  Download,
+  FileImage,
   ChevronDown,
   UserX,
   Ban,
@@ -122,12 +123,8 @@ export function CloseTicketDialog({
   const [maintItems, setMaintItems] = useState<{ description: string; status: string }[]>(
     selectedTickets.map(t => ({ description: t.description, status: 'تم' }))
   );
-  const [savedDirName, setSavedDirName] = useState<string | null>(null);
-
-  // Load saved dir name on mount
-  React.useEffect(() => {
-    getSavedDirHandle().then(h => setSavedDirName(h?.name ?? null));
-  }, []);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [savingReport, setSavingReport] = useState<'image' | 'pdf' | null>(null);
 
   const [closingMsgTemplate, setClosingMsgTemplate]     = useState('');
   const [absentMsgTemplate, setAbsentMsgTemplate]       = useState('');
@@ -167,26 +164,7 @@ export function CloseTicketDialog({
     setMaintItems(selectedTickets.map(t => ({ description: t.description, status: 'تم' })));
   }, [selectedTickets]);
 
-  const handlePickFolder = async () => {
-    if (!('showDirectoryPicker' in window)) {
-      toast.error('المتصفح لا يدعم اختيار المجلد — استخدم Chrome أو Edge');
-      return;
-    }
-    try {
-      const handle = await (window as any).showDirectoryPicker({ mode: 'readwrite', startIn: 'downloads' });
-      await saveDirHandle(handle);
-      setSavedDirName(handle.name);
-      toast.success(`تم تعيين مجلد الحفظ: ${handle.name}`);
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') toast.error('تعذّر اختيار المجلد');
-    }
-  };
 
-  const handleClearFolder = async () => {
-    await clearDirHandle();
-    setSavedDirName(null);
-    toast.info('تم إزالة مجلد الحفظ');
-  };
 
   const addMaintItem = () => {
     setMaintItems([...maintItems, { description: '', status: 'تم' }]);
@@ -207,6 +185,92 @@ export function CloseTicketDialog({
   const staticProjectName = selectedTickets[0]?.projectId
     ? projects?.[selectedTickets[0].projectId]?.name
     : undefined;
+
+  // ── بناء بيانات التقرير ──────────────────────────────────────────────────
+  const buildReportPayload = async () => {
+    let projectName = staticProjectName;
+    if (!projectName && mainTicket?.projectId) {
+      try {
+        const project = await projectsApi.get(mainTicket.projectId);
+        if (project) projectName = (project as Project).name;
+      } catch { /* ignore */ }
+    }
+    const priorityMap: Record<string, string> = {
+      low: 'منخفضة', medium: 'متوسطة', high: 'عالية', urgent: 'عاجلة جداً',
+      '3': 'منخفضة', '4': 'عادية', '6': 'متوسطة', '7': 'عالية', '9': 'عاجلة جداً',
+    };
+    const priorityLabel = mainTicket?.priority
+      ? (priorityMap[String(mainTicket.priority)] || String(mainTicket.priority))
+      : 'الأولوية';
+    return {
+      ticket_num: selectedTickets.map(t => t.ticketId || t.refNumber).join('، '),
+      villa: mainTicket?.villaNumber || '',
+      customer_name: targetClient?.name || mainTicket?.clientName || '',
+      phone: targetClient?.phone || '',
+      maint_items: maintItems.map(item => [item.description, item.status]),
+      notes,
+      block: targetClient?.blockNumber || '',
+      project: projectName || '',
+      ticket_date: mainTicket?.issuedAt || '',
+      priority: priorityLabel,
+      nhc: mainTicket?.projectAbbr || mainTicket?.refNumber?.split('-')[0] || '',
+    };
+  };
+
+  // ── حفظ التقرير فقط (بدون إغلاق تذاكر أو إرسال رسائل) ──────────────────
+  const handleSaveReportOnly = async (format: 'image' | 'pdf') => {
+    if (maintItems.length === 0) {
+      toast.error('يرجى إضافة بند صيانة واحد على الأقل');
+      return;
+    }
+    setSavingReport(format);
+    try {
+      const payload = await buildReportPayload();
+      const authToken = localStorage.getItem('retal_auth_token');
+      const response = await fetch('/api/generate-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) { toast.error('فشل إنشاء التقرير'); return; }
+      const blob = await response.blob();
+      const firstTicketNo = selectedTickets[0]?.ticketId || selectedTickets[0]?.refNumber || 'ticket';
+      const baseName = `${mainTicket?.villaNumber || 'villa'}-${firstTicketNo}`;
+      if (format === 'image') {
+        downloadBlob(blob, `${baseName}.jpg`);
+        toast.success('تم تحميل التقرير كصورة ✅');
+        setShowSaveModal(false);
+      } else {
+        const { jsPDF } = await import('jspdf');
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const imgUrl = URL.createObjectURL(blob);
+        await new Promise<void>((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const pageW = pdf.internal.pageSize.getWidth();
+            const pageH = pdf.internal.pageSize.getHeight();
+            const imgAspect = img.width / img.height;
+            const pdfW = pageW - 20;
+            const pdfH = pdfW / imgAspect;
+            pdf.addImage(imgUrl, 'JPEG', 10, 10, pdfW, Math.min(pdfH, pageH - 20));
+            pdf.save(`${baseName}.pdf`);
+            URL.revokeObjectURL(imgUrl);
+            resolve();
+          };
+          img.src = imgUrl;
+        });
+        toast.success('تم تحميل التقرير كـ PDF ✅');
+        setShowSaveModal(false);
+      }
+    } catch {
+      toast.error('فشل تحميل التقرير');
+    } finally {
+      setSavingReport(null);
+    }
+  };
 
   const handleSpecialClose = async () => {
     if (closeType === 'normal') return;
@@ -336,7 +400,6 @@ export function CloseTicketDialog({
           }
         } catch {
           await clearDirHandle();
-          setSavedDirName(null);
         }
       }
 
@@ -504,30 +567,17 @@ export function CloseTicketDialog({
         </div>
 
         <DialogFooter className="gap-3 pt-4 border-t border-white/5 flex-col sm:flex-row">
-          {/* Folder picker — only show on browsers that support it */}
-          {'showDirectoryPicker' in window && !isMobileDevice && (
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handlePickFolder}
-                className="border-slate-600 text-slate-300 hover:text-white rounded-xl gap-2 h-10 px-3 shrink-0"
-              >
-                <FolderOpen className="w-4 h-4" />
-                {savedDirName ? savedDirName : 'تعيين مجلد الحفظ'}
-              </Button>
-              {savedDirName && (
-                <button
-                  type="button"
-                  onClick={handleClearFolder}
-                  className="text-slate-500 hover:text-red-400 transition-colors"
-                  title="إزالة المجلد"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            {closeType === 'normal' && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSaveModal(true)}
+              className="border-slate-600 text-slate-300 hover:text-white rounded-xl gap-2 h-10 px-3 shrink-0"
+            >
+              <Download className="w-4 h-4" />
+              حفظ التقرير فقط
+            </Button>
           )}
           <Button 
             onClick={handleSubmit} 
@@ -550,7 +600,52 @@ export function CloseTicketDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+
+      {/* ── مودال اختيار صيغة التقرير ── */}
+      <Dialog open={showSaveModal} onOpenChange={setShowSaveModal}>
+        <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[320px] rounded-3xl p-6" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-white text-right flex items-center gap-2">
+              <Download className="w-4 h-4 text-blue-400" />
+              حفظ التقرير
+            </DialogTitle>
+            <p className="text-xs text-slate-400 text-right mt-1">
+              سيتم تحميل التقرير فقط — لن يتم إغلاق التذاكر أو إرسال أي رسائل
+            </p>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 mt-4">
+            <Button
+              onClick={() => handleSaveReportOnly('image')}
+              disabled={!!savingReport}
+              variant="outline"
+              className="h-13 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 font-bold gap-3 w-full justify-center py-3"
+            >
+              {savingReport === 'image'
+                ? <Loader2 className="w-5 h-5 animate-spin" />
+                : <FileImage className="w-5 h-5" />}
+              <div className="text-right">
+                <div className="text-sm font-bold">حفظ صورة</div>
+                <div className="text-[10px] text-blue-400/70 font-normal">تحميل كملف JPG</div>
+              </div>
+            </Button>
+            <Button
+              onClick={() => handleSaveReportOnly('pdf')}
+              disabled={!!savingReport}
+              variant="outline"
+              className="h-13 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 font-bold gap-3 w-full justify-center py-3"
+            >
+              {savingReport === 'pdf'
+                ? <Loader2 className="w-5 h-5 animate-spin" />
+                : <FileText className="w-5 h-5" />}
+              <div className="text-right">
+                <div className="text-sm font-bold">حفظ PDF</div>
+                <div className="text-[10px] text-red-400/70 font-normal">تحميل كملف PDF</div>
+              </div>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -71,10 +71,17 @@ export default function Appointments() {
   const loadAppointments = async () => {
     setLoading(true);
     try {
+      // المهندس يشوف مشاريعه فقط تلقائياً (ما لم يختر مشروع محدد)
+      const engineerProjectIds =
+        user?.role === 'engineer' && !filterProject && user.projectIds?.length
+          ? user.projectIds
+          : undefined;
+
       const data = await appointmentsApi.getCalendar({
         from,
         to,
         projectId: filterProject || undefined,
+        projectIds: engineerProjectIds,
       });
       setAppointments(data);
     } catch {
@@ -113,7 +120,7 @@ export default function Appointments() {
       setProjects(filtered);
     }).catch(() => { });
 
-    if (user.role === 'admin') {
+    if (user.role === 'admin' || user.role === 'supervisor' || user.role === 'engineer') {
       usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => { });
     }
 
@@ -234,7 +241,7 @@ export default function Appointments() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {user?.role === 'admin' && supervisors.length > 0 && (
+              {(user?.role === 'admin' || user?.role === 'engineer') && supervisors.length > 0 && (
                 <div className="relative">
                   <Users className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <select

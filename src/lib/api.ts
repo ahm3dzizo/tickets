@@ -285,12 +285,13 @@ export const appointmentsApi = {
     if (days) q.set('days', String(days));
     return get<any[]>(`/appointments/upcoming?${q.toString()}`);
   },
-  getCalendar: (params: { from: string; to: string; supervisorId?: string; projectId?: string }) => {
+  getCalendar: (params: { from: string; to: string; supervisorId?: string; projectId?: string; projectIds?: string[] }) => {
     const q = new URLSearchParams();
     q.set('from', params.from);
     q.set('to', params.to);
     if (params.supervisorId) q.set('supervisorId', params.supervisorId);
     if (params.projectId) q.set('projectId', params.projectId);
+    if (params.projectIds?.length && !params.projectId) q.set('projectIds', params.projectIds.join(','));
     return get<any[]>(`/appointments/calendar?${q.toString()}`);
   },
   subscribePush: (subscription: PushSubscriptionJSON) =>

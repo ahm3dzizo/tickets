@@ -134,11 +134,12 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
 // ─── GET /api/appointments/calendar ──────────────────────────────────────────
 // كل المواعيد في نطاق معين (للـ Calendar view)
 router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
-  const { from, to, supervisorId, projectId } = req.query as {
+  const { from, to, supervisorId, projectId, projectIds } = req.query as {
     from?: string;
     to?: string;
     supervisorId?: string;
     projectId?: string;
+    projectIds?: string;
   };
 
   if (!from || !to) {
@@ -152,6 +153,10 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
 
   if (supervisorId) where.assignedSupervisorIds = { has: supervisorId };
   if (projectId) where.projectId = projectId;
+  if (projectIds && !projectId) {
+    const ids = projectIds.split(',').filter(Boolean);
+    if (ids.length > 0) where.projectId = { in: ids };
+  }
 
   try {
     const tickets = await prisma.ticket.findMany({
