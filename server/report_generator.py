@@ -33,6 +33,8 @@ _LOGO_CANDIDATES = [
     os.path.join(SCRIPT_DIR, "logo.jpg"),
     os.path.join(SCRIPT_DIR, "public", "logo.jpg"),
     os.path.join(SCRIPT_DIR, "public", "logo.png"),
+    os.path.join(SCRIPT_DIR, "..", "public", "logo.jpg"),
+    os.path.join(SCRIPT_DIR, "..", "public", "logo.png"),
     os.path.join(SCRIPT_DIR, "logo.png"),
 ]
 LOGO_PATH = next((p for p in _LOGO_CANDIDATES if os.path.exists(p)), None)
