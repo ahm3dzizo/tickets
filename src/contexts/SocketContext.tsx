@@ -11,7 +11,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const socket = io(window.location.origin, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       autoConnect: true,
     });
     socketRef.current = socket;
