@@ -314,76 +314,89 @@ export function TicketTable({
     }
   };
 
-  const applySortAndGroup = (arr: Ticket[]) => {
-    const closedSet = new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']);
-    const open   = arr.filter(t => !closedSet.has(t.status));
-    const closed = arr.filter(t =>  closedSet.has(t.status));
-    const cmp = (a: Ticket, b: Ticket) => {
-      // Search prioritization
-      if (localSearch) {
-        const s = localSearch.toLowerCase();
-        const aExact = String(a.villaNumber) === s || String(a.ticketId) === s || String(a.refNumber) === s || String(a.clientName || '').toLowerCase() === s;
-        const bExact = String(b.villaNumber) === s || String(b.ticketId) === s || String(b.refNumber) === s || String(b.clientName || '').toLowerCase() === s;
-        if (aExact && !bExact) return -1;
-        if (!aExact && bExact) return 1;
+  const closedStatuses = useMemo(() => new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']), []);
 
-        const aStarts = String(a.villaNumber).startsWith(s) || String(a.ticketId).startsWith(s) || String(a.refNumber).startsWith(s);
-        const bStarts = String(b.villaNumber).startsWith(s) || String(b.ticketId).startsWith(s) || String(b.refNumber).startsWith(s);
-        if (aStarts && !bStarts) return -1;
-        if (!aStarts && bStarts) return 1;
-      }
+  const baseTickets = useMemo(() => {
+    if (!showInlineFilters) return tickets;
+    const s = localSearch.toLowerCase();
+    return tickets.filter(t => {
+      const isClosed = closedStatuses.has(t.status);
+      if (!showClosed && isClosed) return false;
+      const matchSearch = !s ||
+        t.villaNumber?.toLowerCase().includes(s) ||
+        t.description?.toLowerCase().includes(s) ||
+        t.clientName?.toLowerCase().includes(s) ||
+        t.ticketId?.toLowerCase().includes(s) ||
+        t.refNumber?.toLowerCase().includes(s);
+      const matchStatus  = !localStatus  || t.status === localStatus;
+      const matchType    = !localType    || t.type === localType || (t.detectedTypes as string[] | undefined)?.includes(localType);
+      const matchProject = !localProject || t.projectId === localProject;
+      return matchSearch && matchStatus && matchType && matchProject;
+    });
+  }, [tickets, showInlineFilters, showClosed, localSearch, localStatus, localType, localProject, closedStatuses]);
 
-      const av = getTicketSortVal(a, sortKey);
-      const bv = getTicketSortVal(b, sortKey);
-      const diff = typeof av === 'number' && typeof bv === 'number'
-        ? av - bv
-        : String(av).localeCompare(String(bv), 'ar');
-      return sortDir === 'asc' ? diff : -diff;
-    };
-    return [...open].sort(cmp).concat([...closed].sort(cmp));
-  };
-
-  const closedStatuses = new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']);
-
-  const baseTickets = showInlineFilters
-    ? tickets.filter(t => {
-        const isClosed = closedStatuses.has(t.status);
-        if (!showClosed && isClosed) return false;
-        const s = localSearch.toLowerCase();
-        const matchSearch = !s ||
-          t.villaNumber?.toLowerCase().includes(s) ||
-          t.description?.toLowerCase().includes(s) ||
-          t.clientName?.toLowerCase().includes(s) ||
-          t.ticketId?.toLowerCase().includes(s) ||
-          t.refNumber?.toLowerCase().includes(s);
-        const matchStatus  = !localStatus  || t.status === localStatus;
-        const matchType    = !localType    || t.type === localType || (t.detectedTypes as string[] | undefined)?.includes(localType);
-        const matchProject = !localProject || t.projectId === localProject;
-        return matchSearch && matchStatus && matchType && matchProject;
-      })
-    : tickets;
-
-
-  const focalClientKey = (() => {
+  const focalClientKey = useMemo(() => {
     if (!selectedIds || selectedIds.length === 0) return null;
     const sel = baseTickets.filter(t => selectedIds.includes(t.id));
     if (sel.length === 0) return null;
     const keys = new Set(sel.map(t => t.clientId || t.villaNumber || t.id));
     return keys.size === 1 ? [...keys][0] : null;
-  })();
+  }, [selectedIds, baseTickets]);
 
-  const focalClientName = focalClientKey
+  const focalClientName = useMemo(() => focalClientKey
     ? (baseTickets.find(t => (t.clientId || t.villaNumber || t.id) === focalClientKey)?.clientName ?? '')
-    : '';
+    : '', [focalClientKey, baseTickets]);
 
-  const focalTickets = focalClientKey
-    ? applySortAndGroup(baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) === focalClientKey))
-    : [];
-  const otherTickets = focalClientKey
-    ? applySortAndGroup(baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) !== focalClientKey))
-    : applySortAndGroup(baseTickets);
+  const displayTickets = useMemo(() => {
+    const s = localSearch.toLowerCase();
+    
+    // Pre-compute sort values to avoid O(N log N) date parsing overhead (Schwartzian transform)
+    const mapped = baseTickets.map(t => {
+      const av = getTicketSortVal(t, sortKey);
+      let isExact = false;
+      let isStarts = false;
+      if (s) {
+        isExact = String(t.villaNumber) === s || String(t.ticketId) === s || String(t.refNumber) === s || String(t.clientName || '').toLowerCase() === s;
+        if (!isExact) {
+          isStarts = String(t.villaNumber).startsWith(s) || String(t.ticketId).startsWith(s) || String(t.refNumber).startsWith(s);
+        }
+      }
+      return { ticket: t, val: av, isExact, isStarts };
+    });
 
-  const displayTickets = focalClientKey ? [...focalTickets, ...otherTickets] : otherTickets;
+    const cmp = (a: typeof mapped[0], b: typeof mapped[0]) => {
+      if (s) {
+        if (a.isExact && !b.isExact) return -1;
+        if (!a.isExact && b.isExact) return 1;
+        if (a.isStarts && !b.isStarts) return -1;
+        if (!a.isStarts && b.isStarts) return 1;
+      }
+      const diff = typeof a.val === 'number' && typeof b.val === 'number'
+        ? a.val - b.val
+        : String(a.val).localeCompare(String(b.val), 'ar');
+      return sortDir === 'asc' ? diff : -diff;
+    };
+
+    const applySortAndGroupMapped = (arr: typeof mapped) => {
+      const open = arr.filter(m => !closedStatuses.has(m.ticket.status));
+      const closed = arr.filter(m => closedStatuses.has(m.ticket.status));
+      return [...open].sort(cmp).concat([...closed].sort(cmp)).map(m => m.ticket);
+    };
+
+    if (focalClientKey) {
+      const focal = mapped.filter(m => (m.ticket.clientId || m.ticket.villaNumber || m.ticket.id) === focalClientKey);
+      const other = mapped.filter(m => (m.ticket.clientId || m.ticket.villaNumber || m.ticket.id) !== focalClientKey);
+      return [...applySortAndGroupMapped(focal), ...applySortAndGroupMapped(other)];
+    }
+    return applySortAndGroupMapped(mapped);
+  }, [baseTickets, focalClientKey, localSearch, sortKey, sortDir, closedStatuses]);
+
+  const focalCount = useMemo(() => {
+    if (!focalClientKey) return 0;
+    return baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) === focalClientKey).length;
+  }, [baseTickets, focalClientKey]);
+
+  const otherTicketsCount = baseTickets.length - focalCount;
 
   const [visibleCount, setVisibleCount] = useState(20);
   useEffect(() => {
@@ -659,9 +672,9 @@ export function TicketTable({
                     </span>
                   </div>
                 )}
-                {focalClientKey && index === focalCount && otherTickets.length > 0 && (
+                {focalClientKey && index === focalCount && otherTicketsCount > 0 && (
                   <div className="px-1 py-1.5 mt-0.5 border-t border-border/40">
-                    <span className="text-[10px] font-bold text-slate-500">باقي التذاكر ({otherTickets.length})</span>
+                    <span className="text-[10px] font-bold text-slate-500">باقي التذاكر ({otherTicketsCount})</span>
                   </div>
                 )}
                 <div
@@ -850,10 +863,10 @@ export function TicketTable({
                         </td>
                       </tr>
                     )}
-                    {focalClientKey && index === focalCount && otherTickets.length > 0 && (
+                    {focalClientKey && index === focalCount && otherTicketsCount > 0 && (
                       <tr>
                         <td colSpan={20} className="px-4 py-1.5 text-[10px] font-bold text-slate-500 bg-white/3 text-right border-b border-border/30">
-                          باقي التذاكر ({otherTickets.length})
+                          باقي التذاكر ({otherTicketsCount})
                         </td>
                       </tr>
                     )}
