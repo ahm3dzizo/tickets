@@ -26,6 +26,18 @@ export function DirectAppointmentDialog({
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<any[]>([]);
   const [clientSearch, setClientSearch] = useState('');
+  const [isClientFocused, setIsClientFocused] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsClientFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedVilla, setSelectedVilla] = useState('');
@@ -219,52 +231,59 @@ export function DirectAppointmentDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 px-1 -mx-1 py-2">
-          {/* Client Selection */}
-          <div className="space-y-2">
-            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block text-right">العميل</Label>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="outline" className="w-full justify-between border-input bg-background text-foreground hover:bg-muted rounded-xl h-12">
-                    <Home className="w-4 h-4 opacity-50" />
-                    <span className="truncate mx-2">{selectedClientDisplay}</span>
-                  </Button>
-                }
+          <div className="space-y-2 relative" ref={dropdownRef}>
+            <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block text-right">العميل أو الفيلا</Label>
+            <div className="relative">
+              <Search className="w-4 h-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2" />
+              <Input 
+                placeholder="ابحث بالاسم أو رقم الفيلا..."
+                value={isClientFocused ? clientSearch : (selectedClientId ? selectedClientDisplay : clientSearch)}
+                onChange={e => {
+                  setClientSearch(e.target.value);
+                  setIsClientFocused(true);
+                  if (selectedClientId) {
+                    setSelectedClientId('');
+                    setSelectedVilla('');
+                    setProjectId('');
+                    setClientName('');
+                  }
+                }}
+                onFocus={() => setIsClientFocused(true)}
+                className="w-full bg-background border border-input rounded-xl h-12 pr-10 pl-3 text-foreground text-sm text-right"
               />
-              <DropdownMenuContent className="bg-card border-border text-foreground w-[450px] max-h-[300px] overflow-y-auto">
-                <div className="p-2 border-b border-border sticky top-0 bg-card z-10 flex items-center gap-2 px-3">
-                  <Search className="w-4 h-4 text-muted-foreground" />
-                  <Input 
-                    placeholder="ابحث بالاسم أو الفيلا..."
-                    value={clientSearch}
-                    onChange={e => setClientSearch(e.target.value)}
-                    onKeyDown={e => e.stopPropagation()}
-                    className="h-8 bg-transparent border-none text-right focus-visible:ring-0 px-0"
-                  />
-                </div>
+            </div>
+            
+            {isClientFocused && (
+              <div className="absolute top-[100%] left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 max-h-[250px] overflow-y-auto no-scrollbar">
                 {clients.length === 0 ? (
-                  <DropdownMenuItem disabled className="text-muted-foreground text-start justify-start">جارٍ التحميل...</DropdownMenuItem>
+                  <div className="p-4 text-sm text-muted-foreground text-center">جارٍ التحميل...</div>
                 ) : (
-                  clients
-                    .filter(c => c.name.includes(clientSearch) || c.villaNumber.includes(clientSearch))
-                    .slice(0, 50) // limit for performance
-                    .map(c => (
-                    <DropdownMenuItem
-                      key={c.id}
-                      className="hover:bg-muted cursor-pointer text-start justify-start"
-                      onClick={() => {
-                        setSelectedClientId(c.id);
-                        setSelectedVilla(c.villaNumber);
-                        setProjectId(c.projectId);
-                        setClientName(c.name);
-                      }}
-                    >
-                      {c.name} - {c.villaNumber}
-                    </DropdownMenuItem>
-                  ))
+                  (() => {
+                    const filtered = clients.filter(c => c.name.includes(clientSearch) || c.villaNumber.includes(clientSearch)).slice(0, 50);
+                    if (filtered.length === 0) return <div className="p-4 text-sm text-muted-foreground text-center">لا يوجد نتائج</div>;
+                    return filtered.map(c => (
+                      <div
+                        key={c.id}
+                        className="px-4 py-3 hover:bg-muted cursor-pointer text-sm text-right transition-colors border-b border-border/50 last:border-0"
+                        onClick={() => {
+                          setSelectedClientId(c.id);
+                          setSelectedVilla(c.villaNumber);
+                          setProjectId(c.projectId);
+                          setClientName(c.name);
+                          setClientSearch('');
+                          setIsClientFocused(false);
+                        }}
+                      >
+                        <span className="font-bold text-foreground block">{c.name}</span>
+                        <span className="text-muted-foreground text-xs mt-0.5 block flex items-center gap-1">
+                          <Home className="w-3 h-3" /> فيلا {c.villaNumber}
+                        </span>
+                      </div>
+                    ));
+                  })()
                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </div>
+            )}
           </div>
 
           {/* Open Tickets Info */}
