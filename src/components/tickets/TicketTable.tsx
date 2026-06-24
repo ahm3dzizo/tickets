@@ -418,7 +418,6 @@ export function TicketTable({
   }, []);
 
   const renderedTickets = displayTickets.slice(0, visibleCount);
-  const focalCount     = focalTickets.length;
 
   const hasSelection = !!onSelectionChange;
   const allSelected  = hasSelection && baseTickets.length > 0 && baseTickets.every(t => selectedIds?.includes(t.id));
