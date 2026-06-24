@@ -392,13 +392,14 @@ export function TicketTable({
 
   const observer = useRef<IntersectionObserver | null>(null);
   const observerRef = useCallback((node: HTMLDivElement | null) => {
-    if (observer.current) observer.current.disconnect();
-    if (node) {
+    if (!observer.current) {
       observer.current = new IntersectionObserver(entries => {
-        if (entries[0].isIntersecting) {
+        if (entries.some(e => e.isIntersecting)) {
           setVisibleCount(prev => prev + 20);
         }
       });
+    }
+    if (node) {
       observer.current.observe(node);
     }
   }, []);
@@ -750,7 +751,7 @@ export function TicketTable({
             );
           })}
           {visibleCount < displayTickets.length && (
-            <div className="h-10 flex items-center justify-center text-slate-500">
+            <div className="h-10 flex items-center justify-center text-slate-500" ref={observerRef}>
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
           )}
@@ -992,13 +993,12 @@ export function TicketTable({
               })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* ── SHARED PAGINATION OBSERVER ── */}
-      {visibleCount < displayTickets.length && (
-        <div className="h-14 flex items-center justify-center text-slate-500" ref={observerRef}>
-          <Loader2 className="w-6 h-6 animate-spin" />
+          
+          {visibleCount < displayTickets.length && (
+            <div className="h-14 flex items-center justify-center text-slate-500" ref={observerRef}>
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+          )}
         </div>
       )}
 
