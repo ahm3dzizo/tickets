@@ -118,7 +118,7 @@ async function autoSendOutOfScope(uid: string, ticket: any) {
   } catch {}
 }
 
-async function classifyInBackground(description: string, ticketId: string, projectId?: string, keepManualSupervisors?: boolean) {
+async function classifyInBackground(description: string, ticketId: string, projectId?: string, keepManualSupervisors?: boolean, opts?: { skipGemini?: boolean }) {
   try {
     // لا نُعيد تصنيف التذاكر التي لها تصنيف موثوق (من Excel أو مستخدم) — فقط unclassified
     const existing = await prisma.ticket.findUnique({
@@ -127,7 +127,7 @@ async function classifyInBackground(description: string, ticketId: string, proje
     });
     if (existing?.type && existing.type !== "unclassified") return;
 
-    const classification = await classifyTicket(description, projectId);
+    const classification = await classifyTicket(description, projectId, opts);
     if (classification.primaryType === "unclassified") return; // لا نحفظ unclassified من keywords
 
     const typeToSpecialty = await buildTypeToSpecialtyMap();
@@ -172,6 +172,22 @@ async function classifyInBackground(description: string, ticketId: string, proje
     invalidateKeywordCache();
   } catch (err) {
     console.warn(` ⚠️ Background classify failed for ticket ${ticketId}:`, err);
+  }
+}
+
+// Processes a large list of tickets for background classification with limited concurrency
+// to avoid overwhelming the ML service or Gemini API during bulk imports.
+async function bulkClassifyInBackground(tickets: Array<{ id: string; description: string; projectId: string | null }>) {
+  const CONCURRENCY = 5;
+  const DELAY_MS = 200;
+  for (let i = 0; i < tickets.length; i += CONCURRENCY) {
+    const batch = tickets.slice(i, i + CONCURRENCY);
+    await Promise.allSettled(
+      batch.map(t => classifyInBackground((t.description || "").trim(), t.id, t.projectId || undefined, false, { skipGemini: true }))
+    );
+    if (i + CONCURRENCY < tickets.length) {
+      await new Promise(r => setTimeout(r, DELAY_MS));
+    }
   }
 }
 
@@ -525,13 +541,10 @@ router.post("/bulk", requireAuth, async (req, res) => {
         take: tickets.length,
       });
 
-      // نصنف في الخلفية فقط التذاكر غير المصنفة — نحمي تصنيف Excel
-      for (const t of createdTickets) {
-        if (t.type !== "unclassified") continue;
-        const desc = (t.description || "").trim();
-        if (desc.length >= 5) {
-          classifyInBackground(desc, t.id, t.projectId || undefined).catch(() => {});
-        }
+      // نصنف في الخلفية فقط التذاكر غير المصنفة — بتزامن محدود لتفادي تحميل زائد على Gemini/ML
+      const toClassify = createdTickets.filter(t => t.type === "unclassified" && (t.description || "").trim().length >= 5);
+      if (toClassify.length > 0) {
+        bulkClassifyInBackground(toClassify).catch(() => {});
       }
     }
 
