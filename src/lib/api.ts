@@ -143,10 +143,13 @@ export const ticketsApi = {
   deleteAll:    ()                                     => del<any>('/tickets'),
   getNextId:    (projectId: string)                    => get<{ nextId: string }>(`/tickets/next-id?projectId=${projectId}`).then(res => res.nextId),
   getTicketIds: (projectId: string)                    => get<{ ticketId: string; id: string; type: string; status: string; closedAt: string | null }[]>(`/tickets/ticketids?projectId=${projectId}`),
-  importExcel: async (file: File, projectId: string, onProgress?: (p: number) => void) => {
+  importExcel: async (file: File, projectId: string, closeMissingTickets: boolean = false, onProgress?: (p: number) => void) => {
     const form = new FormData();
     form.append('file', file);
     form.append('projectId', projectId);
+    if (closeMissingTickets) {
+      form.append('closeMissingTickets', 'true');
+    }
     const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
     
     const response = await fetch('/api/import-excel', {
@@ -160,14 +163,18 @@ export const ticketsApi = {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let result = null;
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n').filter(line => line.trim() !== '');
+      
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
+        if (!line.trim()) continue;
         let data: any = null;
         try {
           data = JSON.parse(line);
@@ -175,16 +182,24 @@ export const ticketsApi = {
           if (data.progress && onProgress) onProgress(data.progress);
           if (data.done) result = data.result;
         } catch (e: any) {
-          if (e.message !== 'Unexpected end of JSON input') {
-             if (data?.error) throw new Error(data.error);
-             throw e;
-          }
+          throw new Error(data?.error || e.message);
         }
       }
     }
 
+    if (buffer.trim()) {
+      try {
+        const data = JSON.parse(buffer);
+        if (data.error) throw new Error(data.error);
+        if (data.progress && onProgress) onProgress(data.progress);
+        if (data.done) result = data.result;
+      } catch (e) {
+        // Ignore trailing garbage
+      }
+    }
+
     if (!result) throw new Error('اكتمل الطلب ولكن لم يتم إرجاع نتيجة');
-    return result as { ok: boolean; added: number; updated: number; skippedInFile: number; skippedInDB: number; failed: number; classified: number; unclassified: number; errors: string[] };
+    return result as { ok: boolean; added: number; updated: number; closedMissing: number; skippedByDateFilter: number; skippedInFile: number; skippedInDB: number; failed: number; classified: number; unclassified: number; errors: string[] };
   },
 };
 

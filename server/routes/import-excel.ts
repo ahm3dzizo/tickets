@@ -203,16 +203,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       mapping[key] = autoMatch(cols, aliases);
     }
 
-    // Extract only needed fields — free the rest from memory
-    const NEEDED_COLS = new Set(Object.values(mapping).filter(Boolean));
-    const rows = allData.map((row: any) => {
-      const r: any = {};
-      for (const col of NEEDED_COLS) r[col] = row[col];
-      return r;
-    });
-    // Free the full data array
-    allData.length = 0;
-
     // ── 4. Load reference data + keywords cache (مرة واحدة للكل) ─────────────
     const [existingRows, clientRows, ticketTypes, keywordsCache] = await Promise.all([
       prisma.ticket.findMany({
@@ -229,6 +219,65 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     const existingMap = new Map(existingRows.map((t) => [String(t.ticketId).trim(), t]));
     const clientMap = new Map(clientRows.map((c) => [normalizeVillaNumber(String(c.villaNumber)), c]));
+
+    // ── 4.5 Filter old data if DB already has tickets (Save Memory & Time) ───
+    let cutoffTime = 0;
+    if (existingRows.length > 0) {
+      let maxTime = 0;
+      for (const row of allData) {
+        const rawDate = row[mapping["createdAt"]];
+        if (!rawDate) continue;
+        const dStr = normalizeDate(rawDate);
+        if (dStr) {
+          const t = new Date(dStr).getTime();
+          if (t > maxTime) maxTime = t;
+        }
+      }
+      if (maxTime > 0) {
+        cutoffTime = maxTime - (35 * 24 * 60 * 60 * 1000); // 35 days ago from latest excel ticket
+      }
+    }
+
+    // Extract only needed fields — free the rest from memory
+    const NEEDED_COLS = new Set(Object.values(mapping).filter(Boolean));
+    const rows = [];
+    let skippedByDateFilter = 0;
+
+    for (const row of allData) {
+      if (cutoffTime > 0) {
+        const rawStatus = row[mapping["status"]];
+        const status = normalizeStatus(rawStatus);
+        
+        if (status === "closed") {
+          const tId = String(row[mapping["ticketId"]] || "").trim();
+          const existing = existingMap.get(tId);
+          
+          let shouldSkip = false;
+          const rawDate = row[mapping["createdAt"]];
+          const dStr = normalizeDate(rawDate);
+          const t = dStr ? new Date(dStr).getTime() : 0;
+          
+          if (t > 0 && t < cutoffTime) {
+            if (!existing) {
+              shouldSkip = true; // Old, closed, not in DB -> ignore
+            } else if (existing.status === "closed") {
+              shouldSkip = true; // Old, closed, already closed in DB -> ignore
+            }
+          }
+          
+          if (shouldSkip) {
+            skippedByDateFilter++;
+            continue;
+          }
+        }
+      }
+      
+      const r: any = {};
+      for (const col of NEEDED_COLS) r[col] = row[col];
+      rows.push(r);
+    }
+    // Free the full data array
+    allData.length = 0;
     const typeIdMap = new Map(ticketTypes.map((t) => [t.key, t.id]));
     const typeNameMap = new Map(ticketTypes.map((t) => [t.key, t.nameAr]));
 
@@ -395,6 +444,34 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       }
     }
 
+    // ── 7.5 Close missing tickets if requested ─────────────────────────────────
+    let closedMissingCount = 0;
+    if (req.body.closeMissingTickets === "true") {
+      // Collect all valid ticketIds found in the file
+      const fileTicketIds = new Set(
+        rows.map(r => {
+          const tId = r[mapping["ticketId"]];
+          return tId ? String(tId).trim() : "";
+        }).filter(Boolean)
+      );
+
+      // Find all existing open tickets that are NOT in the file
+      const missingToUpdate = existingRows.filter(t => t.status !== "closed" && !fileTicketIds.has(String(t.ticketId).trim()));
+      
+      if (missingToUpdate.length > 0) {
+        const missingIds = missingToUpdate.map(t => t.id);
+        const BATCH_MIS = 200;
+        for (let i = 0; i < missingIds.length; i += BATCH_MIS) {
+          const batch = missingIds.slice(i, i + BATCH_MIS);
+          await prisma.ticket.updateMany({
+            where: { id: { in: batch } },
+            data: { status: "closed", closedAt: new Date() }
+          });
+          closedMissingCount += batch.length;
+        }
+      }
+    }
+
     sendProgress(0.98);
 
     // ── 8. Log ─────────────────────────────────────────────────────────────────
@@ -402,8 +479,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const unclassifiedCount = toCreate.filter(t => t.type === 'unclassified').length;
     console.log(
       `[ImportExcel] ${project.name} | ` +
-      `ملف: ${rows.length} صف | جديد: ${added} (مصنف: ${classifiedCount}, غير مصنف: ${unclassifiedCount}) | ` +
-      `تحديث: ${updated} | مكرر في الملف: ${skippedInFile} | موجود بدون تغيير: ${skippedInDB} | فشل: ${failed}`
+      `ملف: ${rows.length} صف | تجاوز لقدامتها: ${skippedByDateFilter} | جديد: ${added} (مصنف: ${classifiedCount}, غير مصنف: ${unclassifiedCount}) | ` +
+      `تحديث: ${updated} | إغلاق مفقود: ${closedMissingCount} | مكرر في الملف: ${skippedInFile} | موجود بدون تغيير: ${skippedInDB} | فشل: ${failed}`
     );
 
     // Save to import history
@@ -414,7 +491,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         timestamp: new Date().toISOString(),
         project: project.name,
         fileRows: rows.length,
-        added, updated, skippedInFile, skippedInDB, failed,
+        skippedByDateFilter,
+        added, updated, closedMissing: closedMissingCount, skippedInFile, skippedInDB, failed,
         mode: "server-side",
       });
       await prisma.systemSetting.upsert({
@@ -430,6 +508,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         ok: true,
         added,
         updated,
+        closedMissing: closedMissingCount,
+        skippedByDateFilter,
         skippedInFile,
         skippedInDB,
         failed,
