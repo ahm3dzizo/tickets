@@ -270,6 +270,7 @@ export function TicketTable({
   const [localType,    setLocalType]    = useState<string>(() => stateKey ? sessionStorage.getItem(`${stateKey}_type`) || '' : '');
   const [localProject, setLocalProject] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_project`) || '' : '');
   const [showClosed,   setShowClosed]   = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_closed`) === 'true' : false);
+  const [localSupervisor, setLocalSupervisor] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_supervisor`) || '' : '');
   const [exportModalOpen, setExportModalOpen] = useState(false);
 
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_search`, localSearch); }, [localSearch, stateKey]);
@@ -277,6 +278,26 @@ export function TicketTable({
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_type`, localType); }, [localType, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_project`, localProject); }, [localProject, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_closed`, String(showClosed)); }, [showClosed, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_supervisor`, localSupervisor); }, [localSupervisor, stateKey]);
+
+  const uniqueSupervisors = useMemo(() => {
+    const map = new Map<string, string>();
+    tickets.forEach(t => {
+      const sups = t.assignedSupervisors;
+      if (Array.isArray(sups)) {
+        sups.forEach(s => {
+          if (s && s.id && s.name) map.set(s.id, s.name);
+        });
+      } else if (typeof sups === 'object') {
+        Object.values(sups).forEach((s: any) => {
+          if (s && s.id && s.name) map.set(s.id, s.name);
+        });
+      } else if (t.assignedSupervisorId && t.assigneeName && t.assigneeName !== '---') {
+        map.set(t.assignedSupervisorId, t.assigneeName);
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  }, [tickets]);
 
   // ── Sort state (default: oldest first) ───────────────────────────────────
   type SortKey = 'date' | 'days' | 'priority' | 'status' | 'ref' | 'client';
@@ -331,9 +352,10 @@ export function TicketTable({
       const matchStatus  = !localStatus  || t.status === localStatus;
       const matchType    = !localType    || t.type === localType || (t.detectedTypes as string[] | undefined)?.includes(localType);
       const matchProject = !localProject || t.projectId === localProject;
-      return matchSearch && matchStatus && matchType && matchProject;
+      const matchSupervisor = !localSupervisor || t.assignedSupervisorId === localSupervisor || (t.assignedSupervisorIds as string[] | undefined)?.includes(localSupervisor);
+      return matchSearch && matchStatus && matchType && matchProject && matchSupervisor;
     });
-  }, [tickets, showInlineFilters, showClosed, localSearch, localStatus, localType, localProject, closedStatuses]);
+  }, [tickets, showInlineFilters, showClosed, localSearch, localStatus, localType, localProject, localSupervisor, closedStatuses]);
 
   const focalClientKey = useMemo(() => {
     if (!selectedIds || selectedIds.length === 0) return null;
@@ -553,6 +575,27 @@ export function TicketTable({
                 <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalProject('')}>كل المشاريع</DropdownMenuItem>
                 {Object.entries(projects).map(([id, p]) => (
                   <DropdownMenuItem key={id} className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalProject(id)}>{p.name}</DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* فلتر المشرف */}
+          {!hideSupervisorColumn && uniqueSupervisors.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={
+                <Button variant="outline" size="sm" className={cn(
+                  'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
+                  localSupervisor ? 'border-blue-500/50 bg-blue-500/10 text-blue-300' : 'bg-transparent text-slate-400',
+                )}>
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                  {localSupervisor ? (uniqueSupervisors.find(s => s.id === localSupervisor)?.name ?? 'المشرف') : 'المشرف'}
+                </Button>
+              } />
+              <DropdownMenuContent className="bg-card border-border text-slate-200 max-h-72 overflow-y-auto">
+                <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalSupervisor('')}>كل المشرفين</DropdownMenuItem>
+                {uniqueSupervisors.map((s) => (
+                  <DropdownMenuItem key={s.id} className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalSupervisor(s.id)}>{s.name}</DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
