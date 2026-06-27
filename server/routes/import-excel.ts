@@ -372,13 +372,23 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // ── Build appointments map to inherit for new duplicate tickets ─────────
     const activeAppointmentsByVilla = new Map<string, { time: string, notes: string | null }>();
     const activeAppointmentsByClient = new Map<string, { time: string, notes: string | null }>();
+    
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
     for (const t of existingRows) {
       if (t.appointmentTime && t.status !== "closed" && t.status !== "out_of_scope") {
-        if (t.villaNumber) {
-          activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), { time: t.appointmentTime, notes: t.appointmentNotes });
-        }
-        if (t.clientId) {
-          activeAppointmentsByClient.set(t.clientId, { time: t.appointmentTime, notes: t.appointmentNotes });
+        const apptDate = new Date(t.appointmentTime);
+        // Only inherit if the appointment is valid text OR a date >= start of today
+        const isFutureOrText = isNaN(apptDate.getTime()) || apptDate >= todayStart;
+        
+        if (isFutureOrText) {
+          if (t.villaNumber) {
+            activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), { time: t.appointmentTime, notes: t.appointmentNotes });
+          }
+          if (t.clientId) {
+            activeAppointmentsByClient.set(t.clientId, { time: t.appointmentTime, notes: t.appointmentNotes });
+          }
         }
       }
     }
