@@ -39,7 +39,7 @@ self.onmessage = (e: MessageEvent<{ buffer: ArrayBuffer; fieldDefs: FieldDef[] }
     let maxMatches = -1;
     let maxCols = -1;
 
-    for (let i = 0; i < Math.min(5, rawRows.length); i++) {
+    for (let i = 0; i < rawRows.length; i++) {
       const cols = rawRows[i].map(c => String(c).trim());
       let matches = 0;
       let nonEmptyCols = cols.filter(c => c !== '').length;
@@ -58,6 +58,11 @@ self.onmessage = (e: MessageEvent<{ buffer: ArrayBuffer; fieldDefs: FieldDef[] }
           headerRowIndex = i;
         }
       }
+
+      // بحث ذكي: التوقف المبكر إذا وجدنا 3 أعمدة معروفة على الأقل
+      if (maxMatches >= 3) break;
+      // التوقف عند 1000 صف كحد أقصى لتجنب الحلقات اللانهائية في الملفات غير المطابقة
+      if (i >= 1000) break;
     }
 
     const data = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: '' });

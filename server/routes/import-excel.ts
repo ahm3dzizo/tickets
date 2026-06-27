@@ -173,13 +173,21 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as any[][];
     let headerRowIndex = 0;
     let maxMatches = -1;
-    for (let i = 0; i < Math.min(5, rawRows.length); i++) {
+    // بحث ذكي: نفحص الصفوف حتى نجد صفاً يحتوي على 3 عناوين معروفة على الأقل كدليل قوي على أنه صف العناوين.
+    for (let i = 0; i < rawRows.length; i++) {
       const cols = rawRows[i].map((c: any) => String(c).trim());
       let matches = 0;
       for (const aliases of Object.values(fieldAliases)) {
         if (autoMatch(cols, aliases)) matches++;
       }
-      if (matches > maxMatches) { maxMatches = matches; headerRowIndex = i; }
+      if (matches > maxMatches) { 
+        maxMatches = matches; 
+        headerRowIndex = i; 
+      }
+      // إذا وجدنا تطابقاً قوياً (3 أعمدة فأكثر)، نتوقف عن البحث فوراً
+      if (maxMatches >= 3) break;
+      // حد أقصى للبحث لتجنب إجهاد الذاكرة في الملفات الضخمة التي لا تحتوي على عناوين معروفة
+      if (i >= 1000) break;
     }
 
     const allData = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: "" }) as any[];
