@@ -46,11 +46,36 @@ export async function classifyTicket(
   // ── 1. ML model ────────────────────────────────────────────────────────
   const mlResult = await classifyWithML(description);
 
+  // Load keywords once — used for override check and low-confidence fallback
+  const keywords = await loadKeywordsFromDB();
+
   if (mlResult && mlResult.primaryType !== "unclassified") {
     const threshold = LOW_SAMPLE_TYPES.has(mlResult.primaryType)
       ? ML_LOW_SAMPLE_THRESHOLD
       : ML_CONFIDENCE_THRESHOLD;
+
     if (mlResult.confidence >= threshold) {
+      // Keyword override: if keywords strongly signal a DIFFERENT type (score >= 7),
+      // prefer keywords over the ML result. Catches cases where ML was trained on
+      // mislabeled data (e.g., "تشققات" → paints, "رطوبة" → paints).
+      const KEYWORD_OVERRIDE_SCORE = 7;
+      const kwCheck = classifyFromKeywordsDB(description, keywords);
+      if (
+        kwCheck.primaryType !== "unclassified" &&
+        kwCheck.primaryType !== mlResult.primaryType &&
+        kwCheck.confidence >= KEYWORD_OVERRIDE_SCORE
+      ) {
+        return {
+          primaryType: kwCheck.primaryType,
+          allTypes:    kwCheck.allTypes,
+          typeId:      kwCheck.typeId,
+          subType:     kwCheck.subType,
+          subTypeId:   kwCheck.subTypeId,
+          confidence:  kwCheck.confidence,
+          source:      "keywords_override",
+        };
+      }
+
       // ML service now returns subType directly — use it, then resolve IDs
       const [typeId, subTypeId] = await Promise.all([
         resolveTypeId(mlResult.primaryType),
@@ -90,7 +115,21 @@ export async function classifyTicket(
       }
     }
 
-    // Gemini not available/failed → return low-confidence ML result
+    // Gemini not available/failed → try keywords before accepting low-confidence ML
+    const kwFallback = classifyFromKeywordsDB(description, keywords);
+    if (kwFallback.primaryType !== "unclassified" && kwFallback.confidence >= MIN_CLASSIFY_SCORE) {
+      return {
+        primaryType: kwFallback.primaryType,
+        allTypes:    kwFallback.allTypes,
+        typeId:      kwFallback.typeId,
+        subType:     kwFallback.subType,
+        subTypeId:   kwFallback.subTypeId,
+        confidence:  kwFallback.confidence,
+        source:      "keywords",
+      };
+    }
+
+    // Last resort: return low-confidence ML result
     const [typeId, subTypeId] = await Promise.all([
       resolveTypeId(mlResult.primaryType),
       mlResult.subType ? resolveSubTypeId(mlResult.subType, mlResult.primaryType) : Promise.resolve(null),
@@ -107,7 +146,6 @@ export async function classifyTicket(
   }
 
   // ── 2. ML service is down → keyword fallback ────────────────────────────
-  const keywords = await loadKeywordsFromDB();
   const kwResult = classifyFromKeywordsDB(description, keywords);
 
   if (kwResult.primaryType !== "unclassified" && kwResult.confidence >= MIN_CLASSIFY_SCORE) {
