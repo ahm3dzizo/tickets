@@ -362,7 +362,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const activeAppointmentsByVilla = new Map<string, { time: string, notes: string | null }>();
     const activeAppointmentsByClient = new Map<string, { time: string, notes: string | null }>();
     for (const t of existingRows) {
-      if (t.appointmentTime && t.status !== "closed" && t.status !== "out-of-scope") {
+      if (t.appointmentTime && t.status !== "closed" && t.status !== "out_of_scope") {
         if (t.villaNumber) {
           activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), { time: t.appointmentTime, notes: t.appointmentNotes });
         }
@@ -380,7 +380,18 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     // ── 5. Process rows ───────────────────────────────────────────────────────
     const toCreate: any[] = [];
-    const toUpdate: { id: string; status: string; closedAt: string | null; type?: string; typeId?: string; detectedTypes?: string[] }[] = [];
+    const toUpdate: { 
+      id: string; 
+      status: string; 
+      closedAt: string | null; 
+      type?: string; 
+      typeId?: string; 
+      detectedTypes?: string[];
+      assigneeName?: string | null;
+      assignedSupervisorId?: string | null;
+      assignedSupervisorIds?: string[];
+      assignedSupervisors?: any[];
+    }[] = [];
     let skippedInFile = 0;  // مكرر داخل الملف
     let skippedInDB  = 0;   // موجود في DB ولم يتغير
     const errors: string[] = [];
