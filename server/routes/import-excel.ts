@@ -329,7 +329,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const [existingRows, clientRows, ticketTypes, keywordsCache, typeToSpecialty, projectSups] = await Promise.all([
       prisma.ticket.findMany({
         where: { projectId },
-        select: { id: true, ticketId: true, type: true, status: true, closedAt: true },
+        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentNotes: true, clientId: true, villaNumber: true },
       }),
       prisma.client.findMany({
         where: { projectId },
@@ -357,6 +357,20 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     const existingMap = new Map(existingRows.map((t) => [String(t.ticketId).trim(), t]));
     const clientMap = new Map(clientRows.map((c) => [normalizeVillaNumber(String(c.villaNumber)), c]));
+
+    // ── Build appointments map to inherit for new duplicate tickets ─────────
+    const activeAppointmentsByVilla = new Map<string, { time: string, notes: string | null }>();
+    const activeAppointmentsByClient = new Map<string, { time: string, notes: string | null }>();
+    for (const t of existingRows) {
+      if (t.appointmentTime && t.status !== "closed" && t.status !== "out-of-scope") {
+        if (t.villaNumber) {
+          activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), { time: t.appointmentTime, notes: t.appointmentNotes });
+        }
+        if (t.clientId) {
+          activeAppointmentsByClient.set(t.clientId, { time: t.appointmentTime, notes: t.appointmentNotes });
+        }
+      }
+    }
 
     const rows = allData;
     const typeIdMap = new Map(ticketTypes.map((t) => [t.key, t.id]));
@@ -469,6 +483,10 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           continue;
         }
 
+        let inheritedAppt: { time: string, notes: string | null } | undefined;
+        if (cleanVilla) inheritedAppt = activeAppointmentsByVilla.get(cleanVilla);
+        if (!inheritedAppt && clientId) inheritedAppt = activeAppointmentsByClient.get(clientId);
+
         toCreate.push({
           ticketId,
           refNumber,
@@ -489,6 +507,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           assignedSupervisorIds: supervisorIds,
           assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
           detectedTypes: finalTypes,
+          appointmentTime: inheritedAppt?.time || null,
+          appointmentNotes: inheritedAppt?.notes || null,
           closedAt: closedAt ? new Date(closedAt) : null,
         });
       } catch (err: any) {
