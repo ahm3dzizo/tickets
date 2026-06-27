@@ -11,7 +11,80 @@ import multer from "multer";
 import fs from "fs";
 import * as XLSX from "xlsx";
 import prisma from "../db.js";
+import { Worker } from "worker_threads";
+import path from "path";
+import os from "os";
 import { loadKeywordsFromDB, classifyFromKeywordsDB } from "../classifier/keywords.js";
+
+// Helper to run XLSX parsing in a separate thread so it doesn't block the Node event loop
+function parseExcelAndDetectHeadersAsync(buffer: Buffer, fieldAliases: Record<string, string[]>): Promise<{ allData: any[], mapping: Record<string, string> }> {
+  return new Promise((resolve, reject) => {
+    const workerCode = `
+import { parentPort, workerData } from 'worker_threads';
+import * as XLSX from 'xlsx';
+
+const { buffer, fieldAliases } = workerData;
+
+function autoMatch(cols, aliases) {
+  for (const c of cols) {
+    const cLower = String(c).toLowerCase().trim();
+    if (aliases.some(a => cLower === a.toLowerCase())) return String(c);
+  }
+  return "";
+}
+
+try {
+  const wb = XLSX.read(buffer, { type: "buffer", cellFormula: false, cellHTML: false, cellStyles: false, cellNF: false, sheetStubs: false });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  
+  let headerRowIndex = 0;
+  let maxMatches = -1;
+  for (let i = 0; i < rawRows.length; i++) {
+    const cols = rawRows[i].map(c => String(c) || "");
+    let matches = 0;
+    for (const aliases of Object.values(fieldAliases)) {
+      if (autoMatch(cols, aliases)) matches++;
+    }
+    if (matches > maxMatches) { 
+      maxMatches = matches; 
+      headerRowIndex = i; 
+    }
+    if (maxMatches >= 3) break;
+    if (i >= 1000) break;
+  }
+
+  const allData = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: "" });
+  
+  const cols = Object.keys(allData[0] || {});
+  const mapping = {};
+  for (const [key, aliases] of Object.entries(fieldAliases)) {
+    mapping[key] = autoMatch(cols, aliases);
+  }
+
+  parentPort.postMessage({ allData, mapping });
+} catch (err) {
+  throw err;
+}
+    `;
+    const tempFile = path.join(os.tmpdir(), \`worker-\${Date.now()}.mjs\`);
+    fs.writeFileSync(tempFile, workerCode);
+    
+    const worker = new Worker(tempFile, { workerData: { buffer, fieldAliases } });
+    worker.on("message", (msg) => {
+      resolve(msg);
+      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    });
+    worker.on("error", (err) => {
+      reject(err);
+      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    });
+    worker.on("exit", code => {
+      if (code !== 0) reject(new Error("Worker stopped with exit code " + code));
+      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    });
+  });
+}
 
 const router = Router();
 const upload = multer({
@@ -145,21 +218,10 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     }
     const projectAbbr = (project.abbreviation || "").toUpperCase();
 
-    // ── 2. Parse Excel (memory-efficient: only cell values, no formulas/styles) ──
+    // ── 2 & 3. Parse Excel Asynchronously in a Worker Thread ──────────────────
     const buffer = fs.readFileSync(filePath);
-    const wb = XLSX.read(buffer, {
-      type: "buffer",
-      cellFormula: false,
-      cellHTML: false,
-      cellStyles: false,
-      cellNF: false,
-      sheetStubs: false,
-    });
     fs.unlinkSync(filePath); // حذف الملف المؤقت فوراً
-
-    const ws = wb.Sheets[wb.SheetNames[0]];
-
-    // ── 3. Detect header row ──────────────────────────────────────────────────
+    
     const fieldAliases: Record<string, string[]> = {
       ticketId:    ["رقم التذكرة", "ID", "id", "الرقم", "#", "رقم الطلب", "Case Number"],
       villaNumber: ["رقم الفيلا", "فيلا", "villa", "رقم الوحدة", "الوحدة", "Unit"],
@@ -170,37 +232,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       excelType:   ["تصنيف التذاكر", "التصنيف", "نوع التذاكر", "نوع المشكلة"],
     };
 
-    const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as any[][];
-    let headerRowIndex = 0;
-    let maxMatches = -1;
-    // بحث ذكي: نفحص الصفوف حتى نجد صفاً يحتوي على 3 عناوين معروفة على الأقل كدليل قوي على أنه صف العناوين.
-    for (let i = 0; i < rawRows.length; i++) {
-      const cols = rawRows[i].map((c: any) => String(c).trim());
-      let matches = 0;
-      for (const aliases of Object.values(fieldAliases)) {
-        if (autoMatch(cols, aliases)) matches++;
-      }
-      if (matches > maxMatches) { 
-        maxMatches = matches; 
-        headerRowIndex = i; 
-      }
-      // إذا وجدنا تطابقاً قوياً (3 أعمدة فأكثر)، نتوقف عن البحث فوراً
-      if (maxMatches >= 3) break;
-      // حد أقصى للبحث لتجنب إجهاد الذاكرة في الملفات الضخمة التي لا تحتوي على عناوين معروفة
-      if (i >= 1000) break;
-    }
+    const { allData, mapping } = await parseExcelAndDetectHeadersAsync(buffer, fieldAliases);
 
-    const allData = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: "" }) as any[];
     if (allData.length === 0) {
       res.write(JSON.stringify({ error: "الملف فارغ أو لا يحتوي على بيانات" }) + "\n");
       return res.end();
-    }
-
-    // Auto-map columns
-    const cols = Object.keys(allData[0] as object);
-    const mapping: Record<string, string> = {};
-    for (const [key, aliases] of Object.entries(fieldAliases)) {
-      mapping[key] = autoMatch(cols, aliases);
     }
 
     // ── 4. Load reference data + keywords cache (مرة واحدة للكل) ─────────────
@@ -243,7 +279,9 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const rows = [];
     let skippedByDateFilter = 0;
 
-    for (const row of allData) {
+    for (let index = 0; index < allData.length; index++) {
+      if (index % 5000 === 0) await new Promise(r => setImmediate(r)); // Yield event loop to prevent freezing
+      const row = allData[index];
       if (cutoffTime > 0) {
         const rawStatus = row[mapping["status"]];
         const status = normalizeStatus(rawStatus);
@@ -293,7 +331,9 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     const KEYWORD_MIN_SCORE = 2; // score 2 = مطابقتان = ثقة كافية
 
-    for (const row of rows) {
+    for (let index = 0; index < rows.length; index++) {
+      if (index % 5000 === 0) await new Promise(r => setImmediate(r)); // Yield event loop
+      const row = rows[index];
       try {
         const get = (key: string) => {
           const col = mapping[key];
