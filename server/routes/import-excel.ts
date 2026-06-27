@@ -67,7 +67,7 @@ try {
   throw err;
 }
     `;
-    const tempFile = path.join(os.tmpdir(), \`worker-\${Date.now()}.mjs\`);
+    const tempFile = path.join(os.tmpdir(), `worker-${Date.now()}.mjs`);
     fs.writeFileSync(tempFile, workerCode);
     
     const worker = new Worker(tempFile, { workerData: { buffer, fieldAliases } });
