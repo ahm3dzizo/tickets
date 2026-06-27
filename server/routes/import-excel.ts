@@ -14,7 +14,8 @@ import prisma from "../db.js";
 import { Worker } from "worker_threads";
 import path from "path";
 import os from "os";
-import { loadKeywordsFromDB, classifyFromKeywordsDB } from "../classifier/keywords.js";
+import { normalizeArabic, classifyFromKeywordsDB, loadKeywordsFromDB } from "../classifier/keywords.js";
+import { buildTypeToSpecialtyMap } from "../classifier/db-helpers.js";
 
 // Helper to run XLSX parsing in a separate thread so it doesn't block the Node event loop
 function parseExcelAndDetectHeadersAsync(buffer: Buffer, fieldAliases: Record<string, string[]>): Promise<{ allData: any[], mapping: Record<string, string>, skippedByDateFilter: number }> {
@@ -325,7 +326,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     }
 
     // ── 4. Load reference data + keywords cache (مرة واحدة للكل) ─────────────
-    const [existingRows, clientRows, ticketTypes, keywordsCache] = await Promise.all([
+    const [existingRows, clientRows, ticketTypes, keywordsCache, typeToSpecialty, projectSups] = await Promise.all([
       prisma.ticket.findMany({
         where: { projectId },
         select: { id: true, ticketId: true, type: true, status: true, closedAt: true },
@@ -336,7 +337,23 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       }),
       prisma.ticketType.findMany({ select: { id: true, key: true, nameAr: true } }),
       loadKeywordsFromDB(),
+      buildTypeToSpecialtyMap(),
+      prisma.user.findMany({
+        where: { role: "supervisor", projects: { some: { id: projectId } } },
+        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+      })
     ]);
+
+    const allSups = projectSups.length > 0 ? projectSups : await prisma.user.findMany({
+      where: { role: "supervisor" },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+    });
+
+    const getSpecs = (u: any): string[] => {
+      if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
+      if (u.specialty) return [u.specialty];
+      return ["general"];
+    };
 
     const existingMap = new Map(existingRows.map((t) => [String(t.ticketId).trim(), t]));
     const clientMap = new Map(clientRows.map((c) => [normalizeVillaNumber(String(c.villaNumber)), c]));
@@ -355,7 +372,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const errors: string[] = [];
     const seenInFile = new Set<string>(); // للكشف عن مكررات الملف نفسه
 
-    const KEYWORD_MIN_SCORE = 2; // score 2 = مطابقتان = ثقة كافية
+    const KEYWORD_MIN_SCORE = 1; // score 1 matches old unified import
 
     for (let index = 0; index < rows.length; index++) {
       if (index % 5000 === 0) await new Promise(r => setImmediate(r)); // Yield event loop
@@ -417,6 +434,14 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const clientId = client?.id || null;
         const clientName = client?.name || "";
 
+        // ── Assign Supervisors based on Final Types ──────────────────────────
+        const requiredSpecialties = [...new Set(finalTypes.map((t: string) => typeToSpecialty[t] || "general"))];
+        const matchedSups = allSups.filter((s: any) => getSpecs(s).some((sp: string) => requiredSpecialties.includes(sp)));
+        const finalSups = matchedSups.length > 0 ? matchedSups : allSups.filter((s: any) => getSpecs(s).includes("general"));
+        const supervisorList = finalSups.length > 0 ? finalSups : allSups;
+        const supervisorIds = supervisorList.map((s: any) => s.uid);
+        const primarySup = supervisorList[0];
+
         // Duplicate check (DB)
         const existing = existingMap.get(ticketId);
         if (existing) {
@@ -431,6 +456,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
               upd.type = finalType;
               upd.typeId = finalTypeId;
               upd.detectedTypes = finalTypes;
+              // Also update supervisors since we now classified it
+              upd.assigneeName = primarySup?.displayName || null;
+              upd.assignedSupervisorId = primarySup?.uid || null;
+              upd.assignedSupervisorIds = supervisorIds;
+              upd.assignedSupervisors = supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] }));
             }
             toUpdate.push(upd);
           } else {
@@ -454,9 +484,10 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           subTypeId: finalSubTypeId,
           status,
           priority: 3,
-          assigneeName: null,
-          assignedSupervisorId: null,
-          assignedSupervisorIds: [],
+          assigneeName: primarySup?.displayName || null,
+          assignedSupervisorId: primarySup?.uid || null,
+          assignedSupervisorIds: supervisorIds,
+          assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
           detectedTypes: finalTypes,
           closedAt: closedAt ? new Date(closedAt) : null,
         });
@@ -496,7 +527,15 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
               status: u.status as any,
               closedAt: u.closedAt ? new Date(u.closedAt) : null,
               ...(u.type && u.type !== "unclassified"
-                ? { type: u.type, typeId: u.typeId || null, detectedTypes: u.detectedTypes ?? [u.type] }
+                ? { 
+                    type: u.type, 
+                    typeId: u.typeId || null, 
+                    detectedTypes: u.detectedTypes ?? [u.type],
+                    assigneeName: u.assigneeName,
+                    assignedSupervisorId: u.assignedSupervisorId,
+                    assignedSupervisorIds: u.assignedSupervisorIds,
+                    assignedSupervisors: u.assignedSupervisors,
+                  }
                 : {}),
             },
           }).catch((err) => {
