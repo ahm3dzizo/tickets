@@ -212,12 +212,23 @@ function normalizeDate(raw: unknown): string {
     const d = excelSerialToDate(raw);
     if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
   }
-  const str = String(raw);
+  const str = String(raw).trim();
+  
+  // Try native parse first (handles M/D/YYYY like 6/18/2026)
+  const nativeDate = new Date(str);
+  if (!isNaN(nativeDate.getTime())) {
+    return nativeDate.toISOString().split("T")[0];
+  }
+
+  // Fallback for DD/MM/YYYY
   const parts = str.split("/");
   if (parts.length === 3) {
     let [day, month, year] = parts;
     if (year.length === 2) year = `20${year}`;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    const fallback = new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T12:00:00Z`);
+    if (!isNaN(fallback.getTime())) {
+      return fallback.toISOString().split("T")[0];
+    }
   }
   return str.split("T")[0] || new Date().toISOString().split("T")[0];
 }
