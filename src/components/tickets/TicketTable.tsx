@@ -23,6 +23,25 @@ import { useTicketTypes } from '@/contexts/TicketTypesContext';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+export const renderTableDescription = (text?: string) => {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urls = text.match(urlRegex) || [];
+  const cleanText = text.replace(urlRegex, '').trim();
+  
+  return (
+    <>
+      {cleanText}
+      {urls.length > 0 && (
+        <span className="inline-flex items-center gap-1 text-blue-400 mr-2 bg-blue-500/10 px-1.5 py-0.5 rounded text-[11px] font-bold" dir="rtl">
+          <FileImage className="w-3 h-3" />
+          مرفقات
+        </span>
+      )}
+    </>
+  );
+};
+
 export function parseIssuedAt(raw: unknown): Date | null {
   if (raw === null || raw === undefined || raw === '') return null;
   if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
@@ -759,7 +778,7 @@ export function TicketTable({
                     </div>
                   </div>
                   <div className="px-3 pb-2">
-                    <p className="text-slate-300 text-[13px] leading-relaxed line-clamp-2">{ticket.description}</p>
+                    <p className="text-slate-300 text-[13px] leading-relaxed line-clamp-2">{renderTableDescription(ticket.description)}</p>
                   </div>
                   <div className="flex items-end justify-between gap-2 px-3 pb-2.5 pt-1 border-t border-border/30">
                     <div className="flex flex-col gap-0.5 min-w-0">
@@ -946,7 +965,7 @@ export function TicketTable({
                         {format(openDate, 'd/M/yyyy')}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-300 min-w-[260px] max-w-[400px] leading-relaxed">
-                        <span className="line-clamp-3">{ticket.description}</span>
+                        <span className="line-clamp-3">{renderTableDescription(ticket.description)}</span>
                       </td>
                       <td className="px-3 py-3 text-center w-8">
                         <span

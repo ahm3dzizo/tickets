@@ -15,6 +15,7 @@ import {
   PhoneCall,
   ChevronDown,
   Clock,
+  ExternalLink,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,52 @@ export default function TicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [ticket, setTicket] = useState<Ticket | null>(null);
+
+  const renderDetailedDescription = (text?: string) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = text.match(urlRegex) || [];
+    const cleanText = text.replace(urlRegex, '').trim();
+  
+    const isImage = (url: string) => /\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i.test(url);
+    const isVideo = (url: string) => /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(url);
+  
+    return (
+      <div className="space-y-6">
+        {cleanText && (
+          <p className="text-slate-300 leading-relaxed text-right text-lg whitespace-pre-wrap break-words">
+            {cleanText}
+          </p>
+        )}
+        {urls.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 border-t border-white/5 pt-6">
+            {urls.map((url, i) => {
+              if (isImage(url)) {
+                return (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-white/10 bg-black/20 hover:border-white/30 transition-all flex items-center justify-center min-h-[160px]">
+                    <img src={url} alt={`مرفق ${i+1}`} className="w-full h-auto max-h-80 object-contain" />
+                  </a>
+                );
+              }
+              if (isVideo(url)) {
+                return (
+                  <div key={i} className="rounded-2xl overflow-hidden border border-white/10 bg-black/20 flex items-center justify-center min-h-[160px]">
+                    <video src={url} controls className="w-full h-auto max-h-80 outline-none" />
+                  </div>
+                );
+              }
+              return (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all h-max">
+                  <ExternalLink className="w-5 h-5 shrink-0" />
+                  <span className="text-sm font-bold truncate text-right w-full" dir="ltr">{url}</span>
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
   const [project, setProject] = useState<Project | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
@@ -424,7 +471,7 @@ export default function TicketDetail() {
                 <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest text-right">وصف المشكلة</CardTitle>
               </CardHeader>
               <CardContent className="p-8">
-                <p className="text-slate-300 leading-relaxed text-right text-lg whitespace-pre-wrap break-words">{ticket.description}</p>
+                {renderDetailedDescription(ticket.description)}
               </CardContent>
             </Card>
 
