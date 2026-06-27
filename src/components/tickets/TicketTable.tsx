@@ -288,7 +288,7 @@ export function TicketTable({
         sups.forEach(s => {
           if (s && s.id && s.name) map.set(s.id, s.name);
         });
-      } else if (typeof sups === 'object') {
+      } else if (sups && typeof sups === 'object') {
         Object.values(sups).forEach((s: any) => {
           if (s && s.id && s.name) map.set(s.id, s.name);
         });
@@ -481,7 +481,7 @@ export function TicketTable({
         const names = rawSups.map((s: any) => s?.name).filter(Boolean);
         if (names.length > 0) return names;
       }
-      if (typeof rawSups === 'object' && !Array.isArray(rawSups)) {
+      if (rawSups && typeof rawSups === 'object' && !Array.isArray(rawSups)) {
         const names = Object.values(rawSups as Record<string, { name: string }>)
           .map(s => s?.name).filter(Boolean);
         if (names.length > 0) return names;
