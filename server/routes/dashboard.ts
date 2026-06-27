@@ -89,7 +89,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       where: { 
         ...where, 
         appointmentTime: { not: null },
-        status: { notIn: ["closed", "out_of_scope", "absent"] }
+        status: { not: "closed" }
       },
       select: { id: true, ticketId: true, clientName: true, villaNumber: true, appointmentTime: true, type: true, status: true },
     });
