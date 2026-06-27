@@ -17,7 +17,7 @@ import os from "os";
 import { loadKeywordsFromDB, classifyFromKeywordsDB } from "../classifier/keywords.js";
 
 // Helper to run XLSX parsing in a separate thread so it doesn't block the Node event loop
-function parseExcelAndDetectHeadersAsync(buffer: Buffer, fieldAliases: Record<string, string[]>): Promise<{ allData: any[], mapping: Record<string, string> }> {
+function parseExcelAndDetectHeadersAsync(buffer: Buffer, fieldAliases: Record<string, string[]>): Promise<{ allData: any[], mapping: Record<string, string>, skippedByDateFilter: number }> {
   return new Promise((resolve, reject) => {
     const workerCode = `
 import { parentPort, workerData } from 'worker_threads';
@@ -62,7 +62,77 @@ try {
     mapping[key] = autoMatch(cols, aliases);
   }
 
-  parentPort.postMessage({ allData, mapping });
+  function excelSerialToDate(serial) {
+    return new Date((serial - 25569) * 86400 * 1000);
+  }
+  function normalizeDate(raw) {
+    if (!raw) return "";
+    if (raw instanceof Date && !isNaN(raw.getTime())) return raw.toISOString().split("T")[0];
+    if (typeof raw === "number" && raw > 1000 && raw < 100000) {
+      const d = excelSerialToDate(raw);
+      if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+    }
+    const str = String(raw);
+    const parts = str.split("/");
+    if (parts.length === 3) {
+      let [day, month, year] = parts;
+      if (year.length === 2) year = \`20\${year}\`;
+      return \`\${year}-\${month.padStart(2, "0")}-\${day.padStart(2, "0")}\`;
+    }
+    return str.split("T")[0] || "";
+  }
+  function normalizeStatus(rawStatus) {
+    if (rawStatus === null || rawStatus === undefined) return "open";
+    const s = String(rawStatus).toLowerCase().trim();
+    if (!s || s === "none" || s === "null" || s === "مفتوح" || s === "open" || s === "نشط") return "open";
+    if (
+      s === "مغلق" || s === "مغلوق" || s === "اغلاق" || s === "إغلاق" ||
+      s === "closed" || s === "close" || s === "done" || s === "تم" ||
+      s === "منتهي" || s === "منتهى" || s === "مكتمل" || s === "مكتملة" ||
+      s === "مكتمله" || s === "completed" || s === "out_of_scope" ||
+      s.startsWith("مغلق")
+    ) return "closed";
+    return "open";
+  }
+  
+  let maxTime = 0;
+  if (mapping["createdAt"]) {
+    for (const row of allData) {
+      const rawDate = row[mapping["createdAt"]];
+      const dStr = normalizeDate(rawDate);
+      if (dStr) {
+        const t = new Date(dStr).getTime();
+        if (t > maxTime) maxTime = t;
+      }
+    }
+  }
+
+  const cutoffTime = maxTime > 0 ? maxTime - (35 * 24 * 60 * 60 * 1000) : 0;
+  let skippedByDateFilter = 0;
+  
+  const NEEDED_COLS = Object.values(mapping).filter(Boolean);
+  const rows = [];
+  
+  for (const row of allData) {
+    if (cutoffTime > 0) {
+      const rawStatus = row[mapping["status"]];
+      const status = normalizeStatus(rawStatus);
+      if (status === "closed") {
+        const rawDate = row[mapping["createdAt"]];
+        const dStr = normalizeDate(rawDate);
+        const t = dStr ? new Date(dStr).getTime() : 0;
+        if (t > 0 && t < cutoffTime) {
+          skippedByDateFilter++;
+          continue;
+        }
+      }
+    }
+    const r = {};
+    for (const col of NEEDED_COLS) r[col] = row[col];
+    rows.push(r);
+  }
+
+  parentPort.postMessage({ allData: rows, mapping, skippedByDateFilter });
 } catch (err) {
   throw err;
 }
@@ -239,10 +309,12 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     let allData: any[];
     let mapping: Record<string, string>;
+    let skippedByDateFilter = 0;
     try {
       const result = await parseExcelAndDetectHeadersAsync(buffer, fieldAliases);
       allData = result.allData;
       mapping = result.mapping;
+      skippedByDateFilter = result.skippedByDateFilter;
     } finally {
       clearInterval(heartbeatInterval);
     }
@@ -269,66 +341,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const existingMap = new Map(existingRows.map((t) => [String(t.ticketId).trim(), t]));
     const clientMap = new Map(clientRows.map((c) => [normalizeVillaNumber(String(c.villaNumber)), c]));
 
-    // ── 4.5 Filter old data if DB already has tickets (Save Memory & Time) ───
-    let cutoffTime = 0;
-    if (existingRows.length > 0) {
-      let maxTime = 0;
-      for (const row of allData) {
-        const rawDate = row[mapping["createdAt"]];
-        if (!rawDate) continue;
-        const dStr = normalizeDate(rawDate);
-        if (dStr) {
-          const t = new Date(dStr).getTime();
-          if (t > maxTime) maxTime = t;
-        }
-      }
-      if (maxTime > 0) {
-        cutoffTime = maxTime - (35 * 24 * 60 * 60 * 1000); // 35 days ago from latest excel ticket
-      }
-    }
-
-    // Extract only needed fields — free the rest from memory
-    const NEEDED_COLS = new Set(Object.values(mapping).filter(Boolean));
-    const rows = [];
-    let skippedByDateFilter = 0;
-
-    for (let index = 0; index < allData.length; index++) {
-      if (index % 5000 === 0) await new Promise(r => setImmediate(r)); // Yield event loop to prevent freezing
-      const row = allData[index];
-      if (cutoffTime > 0) {
-        const rawStatus = row[mapping["status"]];
-        const status = normalizeStatus(rawStatus);
-        
-        if (status === "closed") {
-          const tId = String(row[mapping["ticketId"]] || "").trim();
-          const existing = existingMap.get(tId);
-          
-          let shouldSkip = false;
-          const rawDate = row[mapping["createdAt"]];
-          const dStr = normalizeDate(rawDate);
-          const t = dStr ? new Date(dStr).getTime() : 0;
-          
-          if (t > 0 && t < cutoffTime) {
-            if (!existing) {
-              shouldSkip = true; // Old, closed, not in DB -> ignore
-            } else if (existing.status === "closed") {
-              shouldSkip = true; // Old, closed, already closed in DB -> ignore
-            }
-          }
-          
-          if (shouldSkip) {
-            skippedByDateFilter++;
-            continue;
-          }
-        }
-      }
-      
-      const r: any = {};
-      for (const col of NEEDED_COLS) r[col] = row[col];
-      rows.push(r);
-    }
-    // Free the full data array
-    allData.length = 0;
+    const rows = allData;
     const typeIdMap = new Map(ticketTypes.map((t) => [t.key, t.id]));
     const typeNameMap = new Map(ticketTypes.map((t) => [t.key, t.nameAr]));
 
