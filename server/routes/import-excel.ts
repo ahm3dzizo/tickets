@@ -232,7 +232,20 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       excelType:   ["تصنيف التذاكر", "التصنيف", "نوع التذاكر", "نوع المشكلة"],
     };
 
-    const { allData, mapping } = await parseExcelAndDetectHeadersAsync(buffer, fieldAliases);
+    // Send heartbeat every 15 seconds to prevent Nginx from dropping the connection
+    const heartbeatInterval = setInterval(() => {
+      res.write(JSON.stringify({ progress: 0.05, message: "جاري تحليل الملف في الخلفية... الرجاء الانتظار" }) + "\n");
+    }, 15000);
+
+    let allData: any[];
+    let mapping: Record<string, string>;
+    try {
+      const result = await parseExcelAndDetectHeadersAsync(buffer, fieldAliases);
+      allData = result.allData;
+      mapping = result.mapping;
+    } finally {
+      clearInterval(heartbeatInterval);
+    }
 
     if (allData.length === 0) {
       res.write(JSON.stringify({ error: "الملف فارغ أو لا يحتوي على بيانات" }) + "\n");
