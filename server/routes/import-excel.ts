@@ -377,27 +377,34 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const existingMap = new Map(existingRows.map((t) => [normalizeTicketId(String(t.ticketId).trim()), t]));
     const clientMap = new Map(clientRows.map((c) => [normalizeVillaNumber(String(c.villaNumber)), c]));
 
-    // ── Build appointments map to inherit for new duplicate tickets ─────────
-    const activeAppointmentsByVilla = new Map<string, { time: string, notes: string | null }>();
-    const activeAppointmentsByClient = new Map<string, { time: string, notes: string | null }>();
-    
+    // ── Build appointments map to inherit for new tickets ──────────────────
+    // القاعدة: الموعد ينتقل للتذاكر الجديدة فقط لو كان في المستقبل (غداً فصاعداً)
+    // الموعد اليوم أو قبله يخص التذاكر القديمة ولا ينتقل
+    // الملاحظات (appointmentNotes) لا تنتقل لأن رسالة الواتساب ما بُعتتش للتذكرة الجديدة
+    const activeAppointmentsByVilla = new Map<string, string>();
+    const activeAppointmentsByClient = new Map<string, string>();
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
+    // غداً = اليوم التالي بداية من منتصف الليل
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
     for (const t of existingRows) {
-      if (t.appointmentTime && t.status !== "closed" && t.status !== "out_of_scope") {
-        const apptDate = new Date(t.appointmentTime);
-        // Only inherit if the appointment is valid text OR a date >= start of today
-        const isFutureOrText = isNaN(apptDate.getTime()) || apptDate >= todayStart;
-        
-        if (isFutureOrText) {
-          if (t.villaNumber) {
-            activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), { time: t.appointmentTime, notes: t.appointmentNotes });
-          }
-          if (t.clientId) {
-            activeAppointmentsByClient.set(t.clientId, { time: t.appointmentTime, notes: t.appointmentNotes });
-          }
-        }
+      if (!t.appointmentTime) continue;
+      if (t.status === "closed" || t.status === "out_of_scope") continue;
+
+      const apptDate = new Date(t.appointmentTime);
+      // فقط المواعيد المستقبلية (غداً فصاعداً) تنتقل للتذاكر الجديدة
+      const isStrictlyFuture = isNaN(apptDate.getTime()) || apptDate >= tomorrowStart;
+      if (!isStrictlyFuture) continue;
+
+      if (t.villaNumber) {
+        activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), t.appointmentTime);
+      }
+      if (t.clientId) {
+        activeAppointmentsByClient.set(t.clientId, t.appointmentTime);
       }
     }
 
@@ -524,9 +531,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           continue;
         }
 
-        let inheritedAppt: { time: string, notes: string | null } | undefined;
-        if (cleanVilla) inheritedAppt = activeAppointmentsByVilla.get(cleanVilla);
-        if (!inheritedAppt && clientId) inheritedAppt = activeAppointmentsByClient.get(clientId);
+        // ورث الموعد المستقبلي فقط (بدون الملاحظات — رسالة الواتساب ما بُعتتش للتذكرة الجديدة)
+        const inheritedTime: string | null =
+          (cleanVilla && activeAppointmentsByVilla.get(cleanVilla)) ||
+          (clientId && activeAppointmentsByClient.get(clientId)) ||
+          null;
 
         toCreate.push({
           ticketId,
@@ -548,8 +557,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           assignedSupervisorIds: supervisorIds,
           assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
           detectedTypes: finalTypes,
-          appointmentTime: inheritedAppt?.time || null,
-          appointmentNotes: inheritedAppt?.notes || null,
+          appointmentTime: inheritedTime,
+          appointmentNotes: null, // لا نورث الملاحظات — الرسالة لم تُرسل للتذكرة الجديدة
           closedAt: closedAt ? new Date(closedAt) : null,
         });
       } catch (err: any) {
@@ -559,38 +568,39 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     sendProgress(0.4);
 
-    // ── 5.5 Second-pass: inherit appointments for new open tickets that still have none ──
-    // يحدث لما رقم الفيلا مش متطابق تماماً أو العميل مش مربوط في أول مرور
-    // نبني خريطة أكثر شمولاً من كل التذاكر الموجودة المفتوحة ولها موعد قادم
+    // ── 5.5 Second-pass: inherit strictly-future appointments only ──────────
+    // يعالج حالات عدم تطابق رقم الفيلا في المرور الأول
+    // القاعدة: موعد اليوم أو قبله لا ينتقل — يخص التذاكر القديمة فقط
+    // الملاحظات لا تنتقل — رسالة الواتساب لم تُرسل للتذكرة الجديدة
     {
-      const villaApptMap = new Map<string, { time: string; notes: string | null }>();
-      const clientApptMap = new Map<string, { time: string; notes: string | null }>();
+      const villaApptMap2 = new Map<string, string>();
+      const clientApptMap2 = new Map<string, string>();
 
       for (const t of existingRows) {
         if (!t.appointmentTime) continue;
         if (t.status === "closed" || t.status === "out_of_scope") continue;
         const apptDate = new Date(t.appointmentTime);
-        const isFutureOrText = isNaN(apptDate.getTime()) || apptDate >= todayStart;
-        if (!isFutureOrText) continue;
+        // فقط المواعيد المستقبلية الصارمة (غداً فصاعداً)
+        const isStrictlyFuture = isNaN(apptDate.getTime()) || apptDate >= tomorrowStart;
+        if (!isStrictlyFuture) continue;
 
         const vKey = t.villaNumber ? normalizeVillaNumber(String(t.villaNumber)) : "";
-        if (vKey) villaApptMap.set(vKey, { time: t.appointmentTime, notes: t.appointmentNotes });
-        if (t.clientId) clientApptMap.set(t.clientId, { time: t.appointmentTime, notes: t.appointmentNotes });
+        if (vKey) villaApptMap2.set(vKey, t.appointmentTime);
+        if (t.clientId) clientApptMap2.set(t.clientId, t.appointmentTime);
       }
 
       for (const ticket of toCreate) {
-        // تخطي: التذاكر المغلقة أو التي لها موعد بالفعل
         if (ticket.appointmentTime || ticket.status === "closed") continue;
 
         const vKey = ticket.villaNumber ? normalizeVillaNumber(String(ticket.villaNumber)) : "";
-        const inherited =
-          (vKey && villaApptMap.get(vKey)) ||
-          (ticket.clientId && clientApptMap.get(ticket.clientId)) ||
-          undefined;
+        const inheritedTime =
+          (vKey && villaApptMap2.get(vKey)) ||
+          (ticket.clientId && clientApptMap2.get(ticket.clientId)) ||
+          null;
 
-        if (inherited) {
-          ticket.appointmentTime = inherited.time;
-          ticket.appointmentNotes = inherited.notes;
+        if (inheritedTime) {
+          ticket.appointmentTime = inheritedTime;
+          ticket.appointmentNotes = null; // لا نورث الملاحظات
         }
       }
     }
