@@ -66,11 +66,16 @@ async function main() {
     // الاحتفاظ بالتذكرة الأقدم (أول واحدة في الترتيب الزمني)
     // أو التي فيها بيانات أكثر (closureNotes أو appointmentTime)
     const sorted = [...group].sort((a, b) => {
-      // أولوية: التذاكر المغلقة أو التي فيها ملاحظات
+      // أولوية 1: التذاكر المغلقة أو المكتملة
+      const closedStatuses = ['closed', 'completed', 'out_of_scope'];
+      const aIsClosed = closedStatuses.includes(a.status) ? 1 : 0;
+      const bIsClosed = closedStatuses.includes(b.status) ? 1 : 0;
+      if (bIsClosed !== aIsClosed) return bIsClosed - aIsClosed;
+      // أولوية 2: التي فيها ملاحظات إغلاق
       const aScore = (a.closureNotes ? 2 : 0) + (a.appointmentTime ? 1 : 0);
       const bScore = (b.closureNotes ? 2 : 0) + (b.appointmentTime ? 1 : 0);
       if (bScore !== aScore) return bScore - aScore;
-      // ثانياً: الأقدم
+      // ثالثاً: الأقدم
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
 
