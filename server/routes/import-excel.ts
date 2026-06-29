@@ -169,6 +169,14 @@ function normalize(s: string) {
   return s.trim().toLowerCase().replace(/\s+/g, "");
 }
 
+// إزالة الأصفار البادئة من رقم التذكرة (مثال: "0019350" → "19350")
+function normalizeTicketId(raw: string): string {
+  if (!raw) return raw;
+  const trimmed = raw.trim();
+  if (/^\d+$/.test(trimmed)) return String(parseInt(trimmed, 10));
+  return trimmed;
+}
+
 function autoMatch(columns: string[], aliases: string[]): string {
   for (const alias of aliases) {
     const na = normalize(alias);
@@ -366,7 +374,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       return ["general"];
     };
 
-    const existingMap = new Map(existingRows.map((t) => [String(t.ticketId).trim(), t]));
+    const existingMap = new Map(existingRows.map((t) => [normalizeTicketId(String(t.ticketId).trim()), t]));
     const clientMap = new Map(clientRows.map((c) => [normalizeVillaNumber(String(c.villaNumber)), c]));
 
     // ── Build appointments map to inherit for new duplicate tickets ─────────
@@ -429,7 +437,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           return col ? row[col] : undefined;
         };
 
-        const ticketId = String(get("ticketId") || "").trim();
+        const rawTicketIdStr = String(get("ticketId") || "").trim();
+        const ticketId = normalizeTicketId(rawTicketIdStr);
         if (!ticketId) { skippedInFile++; continue; }
 
         // كشف مكررات الملف نفسه
@@ -549,6 +558,43 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     }
 
     sendProgress(0.4);
+
+    // ── 5.5 Second-pass: inherit appointments for new open tickets that still have none ──
+    // يحدث لما رقم الفيلا مش متطابق تماماً أو العميل مش مربوط في أول مرور
+    // نبني خريطة أكثر شمولاً من كل التذاكر الموجودة المفتوحة ولها موعد قادم
+    {
+      const villaApptMap = new Map<string, { time: string; notes: string | null }>();
+      const clientApptMap = new Map<string, { time: string; notes: string | null }>();
+
+      for (const t of existingRows) {
+        if (!t.appointmentTime) continue;
+        if (t.status === "closed" || t.status === "out_of_scope") continue;
+        const apptDate = new Date(t.appointmentTime);
+        const isFutureOrText = isNaN(apptDate.getTime()) || apptDate >= todayStart;
+        if (!isFutureOrText) continue;
+
+        const vKey = t.villaNumber ? normalizeVillaNumber(String(t.villaNumber)) : "";
+        if (vKey) villaApptMap.set(vKey, { time: t.appointmentTime, notes: t.appointmentNotes });
+        if (t.clientId) clientApptMap.set(t.clientId, { time: t.appointmentTime, notes: t.appointmentNotes });
+      }
+
+      for (const ticket of toCreate) {
+        // تخطي: التذاكر المغلقة أو التي لها موعد بالفعل
+        if (ticket.appointmentTime || ticket.status === "closed") continue;
+
+        const vKey = ticket.villaNumber ? normalizeVillaNumber(String(ticket.villaNumber)) : "";
+        const inherited =
+          (vKey && villaApptMap.get(vKey)) ||
+          (ticket.clientId && clientApptMap.get(ticket.clientId)) ||
+          undefined;
+
+        if (inherited) {
+          ticket.appointmentTime = inherited.time;
+          ticket.appointmentNotes = inherited.notes;
+        }
+      }
+    }
+
 
     // ── 6. Bulk create in batches ──────────────────────────────────────────────
     const BATCH = 200;
