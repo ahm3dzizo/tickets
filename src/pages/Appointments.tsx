@@ -483,6 +483,27 @@ export default function Appointments() {
                                   })}
                                 </div>
                               )}
+
+                              {/* Attachments (Screen Only - Implicit Preload) */}
+                              {(() => {
+                                const urls = group.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []);
+                                if (urls.length === 0) return null;
+                                return (
+                                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
+                                    <span className="text-[10px] font-bold text-muted-foreground shrink-0"><FileImage className="w-3 h-3 inline mr-1"/>مرفقات:</span>
+                                    {urls.map((url: string, idx: number) => (
+                                      <img
+                                        key={idx}
+                                        src={url}
+                                        alt="مرفق"
+                                        className="w-14 h-14 rounded-lg object-cover border border-border cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
+                                        onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
+                                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                      />
+                                    ))}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           )
                         })}
