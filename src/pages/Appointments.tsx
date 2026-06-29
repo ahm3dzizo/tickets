@@ -537,9 +537,15 @@ export default function Appointments() {
                     <span className="font-bold">الملاحظات: </span> {note}
                   </div>
                   {printWithImages && (
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    <div className="flex flex-wrap gap-2 mt-2 justify-center">
                       {g.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
-                        <img key={idx} src={url} alt="مرفق" className="w-24 h-24 object-cover rounded-lg border border-gray-300" />
+                        <img 
+                          key={idx} 
+                          src={url} 
+                          alt="مرفق" 
+                          className="h-48 max-w-full object-contain rounded-lg border border-gray-300"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
                       ))}
                     </div>
                   )}
@@ -595,6 +601,12 @@ export default function Appointments() {
           onSuccess={loadAppointments}
         />
       )}
+      {/* Image Preloader to ensure they are fetched before printing */}
+      <div className="fixed top-0 left-[-9999px] opacity-0 pointer-events-none">
+        {appointments.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
+          <img key={idx} src={url} alt="preload" />
+        ))}
+      </div>
     </Layout>
   );
 }
