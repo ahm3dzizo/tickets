@@ -541,34 +541,64 @@ export default function Appointments() {
             return sorted.map((g, i) => {
               const tA = (g.appointmentTime || '').split(' ')[1] || '---';
               const note = g.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || 'لا توجد ملاحظات إضافية';
+              const imageUrls: string[] = printWithImages
+                ? g.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || [])
+                : [];
+              const hasImages = imageUrls.length > 0;
               return (
-                <div key={i} className="border border-black rounded-lg p-2 min-h-[80px] flex flex-col gap-1.5 break-inside-avoid overflow-hidden justify-center">
+                <div
+                  key={i}
+                  className={`border border-black rounded-lg p-2 flex flex-col gap-1.5 break-inside-avoid overflow-hidden ${hasImages ? 'col-span-2' : 'col-span-1 min-h-[80px] justify-center'}`}
+                >
+                  {/* Header row */}
                   <div className="flex justify-between items-center border-b border-black/30 pb-1">
                     <h3 className="font-bold text-sm leading-tight">فيلا {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || 'بدون رقم'})</span></h3>
                     <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
                   </div>
-                  <div className="flex flex-wrap gap-1 mt-0.5">
-                    {Array.from(g.types).map(t => (
-                      <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
-                        {mergedTypes[t as string] || t as string}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
-                    <span className="font-bold">الملاحظات: </span> {note}
-                  </div>
-                  {printWithImages && (
-                    <div className="flex flex-wrap gap-2 mt-2 justify-center">
-                      {g.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
-                        <img 
-                          key={idx} 
-                          src={url} 
-                          alt="مرفق" 
-                          className="h-48 max-w-full object-contain rounded-lg border border-gray-300"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      ))}
+
+                  {hasImages ? (
+                    /* Full-width layout: info on right, images scrolling left */
+                    <div className="flex gap-3 items-start">
+                      {/* Left: info */}
+                      <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                        <div className="flex flex-wrap gap-1">
+                          {Array.from(g.types).map(t => (
+                            <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
+                              {mergedTypes[t as string] || t as string}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight">
+                          <span className="font-bold">الملاحظات: </span> {note}
+                        </div>
+                      </div>
+                      {/* Right: images in a horizontal row */}
+                      <div className="flex flex-row flex-wrap gap-1.5 justify-end" style={{ maxWidth: '70%' }}>
+                        {imageUrls.map((url: string, idx: number) => (
+                          <img
+                            key={idx}
+                            src={url}
+                            alt="مرفق"
+                            style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 6, border: '1px solid #ccc', flexShrink: 0 }}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ))}
+                      </div>
                     </div>
+                  ) : (
+                    /* Normal 1-column layout */
+                    <>
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {Array.from(g.types).map(t => (
+                          <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
+                            {mergedTypes[t as string] || t as string}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
+                        <span className="font-bold">الملاحظات: </span> {note}
+                      </div>
+                    </>
                   )}
                 </div>
               )
