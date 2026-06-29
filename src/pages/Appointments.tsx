@@ -354,7 +354,7 @@ export default function Appointments() {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline" className={cn(
                         "px-3 py-1 text-sm font-black border rounded-xl w-fit",
                         isToday ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20"
@@ -362,7 +362,7 @@ export default function Appointments() {
                         {groups.length} موعد
                       </Badge>
                       {isCenter && (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <div className="relative ml-1 sm:ml-2">
                             <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                             <input
@@ -390,7 +390,7 @@ export default function Appointments() {
                           </Button>
                           <Button
                             size="sm"
-                            onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setTimeout(() => window.print(), 100); }}
+                            onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setTimeout(() => window.print(), 500); }}
                             className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
                           >
                             <FileImage className="w-3.5 h-3.5" /> طباعة بالصور

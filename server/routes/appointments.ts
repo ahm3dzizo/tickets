@@ -168,6 +168,7 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
         villaNumber: true,
         appointmentTime: true,
         appointmentNotes: true,
+        description: true,
         status: true,
         type: true,
         detectedTypes: true,
