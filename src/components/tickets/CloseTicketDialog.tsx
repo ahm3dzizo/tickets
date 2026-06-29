@@ -121,7 +121,7 @@ export function CloseTicketDialog({
   const [copying, setCopying] = useState(false);
   const [notes, setNotes] = useState('');
   const [maintItems, setMaintItems] = useState<{ description: string; status: string }[]>(
-    selectedTickets.map(t => ({ description: t.description, status: 'تم' }))
+    selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم' }))
   );
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [savingReport, setSavingReport] = useState<'image' | 'pdf' | null>(null);
@@ -161,7 +161,7 @@ export function CloseTicketDialog({
 
   // Sync items if selectedTickets changes
   React.useEffect(() => {
-    setMaintItems(selectedTickets.map(t => ({ description: t.description, status: 'تم' })));
+    setMaintItems(selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم' })));
   }, [selectedTickets]);
 
 
@@ -525,9 +525,9 @@ export function CloseTicketDialog({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
                         <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'تم')}>تم</DropdownMenuItem>
-                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'لم يتم')}>لم يتم</DropdownMenuItem>
-                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'جاري العمل')}>جاري</DropdownMenuItem>
-                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'مرفوض')}>مرفوض</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'خارج اختصاص')}>خارج اختصاص</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'سوء استخدام')}>سوء استخدام</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'عدم تواجد')}>عدم تواجد</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     

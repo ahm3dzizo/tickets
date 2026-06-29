@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
-  Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search
+  Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search, FileImage
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -67,6 +67,7 @@ export default function Appointments() {
   // Add Specialty Dialog State
   const [addSpecOpen, setAddSpecOpen] = useState(false);
   const [addSpecData, setAddSpecData] = useState<any>(null);
+  const [printWithImages, setPrintWithImages] = useState(false);
 
   const loadAppointments = async () => {
     setLoading(true);
@@ -382,10 +383,17 @@ export default function Appointments() {
                           </Button>
                           <Button
                             size="sm"
-                            onClick={(e) => { e.stopPropagation(); window.print(); }}
+                            onClick={(e) => { e.stopPropagation(); setPrintWithImages(false); setTimeout(() => window.print(), 100); }}
                             className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
                           >
                             <Printer className="w-3.5 h-3.5" /> طباعة
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setTimeout(() => window.print(), 100); }}
+                            className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
+                          >
+                            <FileImage className="w-3.5 h-3.5" /> طباعة بالصور
                           </Button>
                         </div>
                       )}
@@ -528,6 +536,13 @@ export default function Appointments() {
                   <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
                     <span className="font-bold">الملاحظات: </span> {note}
                   </div>
+                  {printWithImages && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {g.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
+                        <img key={idx} src={url} alt="مرفق" className="w-24 h-24 object-cover rounded-lg border border-gray-300" />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })
