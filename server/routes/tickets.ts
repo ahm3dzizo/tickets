@@ -9,6 +9,15 @@ import { sendWAText, buildOpeningMsg, buildClosingMsg, buildAbsentMsg, buildOutO
 
 const router = Router();
 
+// إزالة الأصفار البادئة من رقم التذكرة (مثال: "0019350" → "19350")
+function normalizeTicketId(raw: string): string {
+  if (!raw) return raw;
+  const trimmed = raw.trim();
+  // فقط للأرقام النقية — نزيل الأصفار البادئة
+  if (/^\d+$/.test(trimmed)) return String(parseInt(trimmed, 10));
+  return trimmed;
+}
+
 // ── Enrich tickets: replace stored supervisor names with live names from DB ──
 async function enrichSupervisorNames<T extends { assignedSupervisorIds?: string[]; assignedSupervisors?: any }>(
   tickets: T[]
@@ -388,7 +397,7 @@ router.post("/", requireAuth, async (req, res) => {
     const typeKey = data.type || "general";
     const typeRecord = await prisma.ticketType.findFirst({ where: { key: typeKey }, select: { id: true } });
 
-    const ticketIdToUse = data.ticketId || String(Date.now()).slice(-6);
+    const ticketIdToUse = normalizeTicketId(data.ticketId || String(Date.now()).slice(-6));
 
     const existingTicket = await prisma.ticket.findUnique({
       where: { ticketId: ticketIdToUse },
@@ -470,7 +479,7 @@ router.post("/bulk", requireAuth, async (req, res) => {
 
       return {
         index,
-        ticketId: t.ticketId || String(now + Math.random()).slice(-6),
+        ticketId: normalizeTicketId(t.ticketId || String(now + Math.random()).slice(-6)),
         refNumber: t.refNumber || "", projectAbbr: t.projectAbbr || null,
         projectId: asTrimmedString(t.projectId) || "",
         clientId: asTrimmedString(t.clientId) || "",
