@@ -283,7 +283,7 @@ export default function Appointments() {
           </div>
 
           {/* ── Carousel Hero UI ── */}
-          <div className="relative w-full h-[84vh] min-h-[550px] max-h-[950px] flex justify-center items-center overflow-hidden py-2">
+          <div className="relative w-full h-[calc(100dvh-260px)] sm:h-[calc(100dvh-220px)] min-h-[460px] max-h-[950px] flex justify-center items-center overflow-hidden py-2">
             {displayedDays.map((day, idx) => {
               const ds = dateStr(day);
               const groups = groupedByDay[ds] || [];
@@ -295,7 +295,7 @@ export default function Appointments() {
               const isLeft = idx === 2; // Next Day
 
               // Carousel Slide Base Styling
-              const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden shadow-2xl border w-full max-w-[90%] md:max-w-[750px] lg:max-w-[850px] h-[95%]";
+              const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden shadow-2xl border w-full max-w-[94%] sm:max-w-[90%] md:max-w-[750px] lg:max-w-[850px] h-[95%]";
 
               let posClass = "";
               let interactiveClass = "";
@@ -315,6 +315,7 @@ export default function Appointments() {
 
               // Hide sides entirely on small phones to avoid overlap mess, or just show them peeked?
               // With translate-x-[18%] they peek a bit. It looks good.
+              // On mobile: only show center card. On sm+: show side cards peeking
               const mobileClass = isCenter ? "flex" : "hidden sm:flex";
 
               return (
@@ -327,77 +328,82 @@ export default function Appointments() {
                   }}
                 >
                   <div className={cn(
-                    "p-3 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 z-10 backdrop-blur-xl",
-                    isToday ? "bg-blue-500/10 border-blue-500/20" : "bg-white/5 border-border"
+                    "p-2.5 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2 sticky top-0 z-10 backdrop-blur-xl",
+                    isToday ? "bg-blue-500/10 border-blue-500/20" : "bg-card/90 border-border"
                   )}>
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <h3 className={cn("font-black text-xl lg:text-2xl", isToday ? "text-blue-600 dark:text-blue-400" : "text-foreground")}>
-                          {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
-                        </h3>
-                        <p className="text-xs text-muted-foreground font-medium mt-0.5">
-                          {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
-                        </p>
+                    {/* Row 1: Day name + nav arrows */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <h3 className={cn("font-black text-lg sm:text-2xl leading-tight", isToday ? "text-blue-600 dark:text-blue-400" : "text-foreground")}>
+                            {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
+                          </h3>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mt-0.5">
+                            {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
+                          </p>
+                        </div>
+
+                        {isCenter && (
+                          <div className="flex items-center gap-1 bg-background border border-border rounded-xl p-0.5 shadow-sm">
+                            <Button onClick={(e) => { e.stopPropagation(); prevDay(); }} variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg hover:bg-muted">
+                              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            </Button>
+                            <Button onClick={(e) => { e.stopPropagation(); goToday(); }} variant="ghost" className="h-7 sm:h-8 px-2 sm:px-3 rounded-lg font-bold text-[11px] sm:text-xs hover:bg-muted">
+                              اليوم
+                            </Button>
+                            <Button onClick={(e) => { e.stopPropagation(); nextDay(); }} variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg hover:bg-muted">
+                              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
 
-                      {isCenter && (
-                        <div className="flex items-center gap-1 bg-background border border-border rounded-xl p-0.5 shadow-sm">
-                          <Button onClick={(e) => { e.stopPropagation(); prevDay(); }} variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted">
-                            <ChevronRight className="w-4 h-4" />
-                          </Button>
-                          <Button onClick={(e) => { e.stopPropagation(); goToday(); }} variant="ghost" className="h-8 px-3 rounded-lg font-bold text-xs hover:bg-muted">
-                            اليوم
-                          </Button>
-                          <Button onClick={(e) => { e.stopPropagation(); nextDay(); }} variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted">
-                            <ChevronLeft className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Badge always visible */}
                       <Badge variant="outline" className={cn(
-                        "px-3 py-1 text-sm font-black border rounded-xl w-fit",
-                        isToday ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" : "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20"
+                        "px-2.5 py-1 text-xs sm:text-sm font-black border rounded-xl w-fit shrink-0",
+                        isToday ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" : "bg-muted text-muted-foreground border-border"
                       )}>
                         {groups.length} موعد
                       </Badge>
-                      {isCenter && (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <div className="relative ml-1 sm:ml-2">
-                            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                            <input
-                              type="text"
-                              placeholder="بحث..."
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                              className="bg-background border border-input rounded-xl pl-2 pr-8 h-8 text-xs text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[100px] sm:w-[140px]"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); setDirectApptDate(ds); }}
-                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
-                          >
-                            <CalendarPlus className="w-3.5 h-3.5" /> إضافة
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); setPrintWithImages(false); setTimeout(() => window.print(), 100); }}
-                            className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
-                          >
-                            <Printer className="w-3.5 h-3.5" /> طباعة
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setTimeout(() => window.print(), 500); }}
-                            className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-3 shadow-lg flex items-center gap-1.5 text-xs"
-                          >
-                            <FileImage className="w-3.5 h-3.5" /> طباعة بالصور
-                          </Button>
-                        </div>
-                      )}
                     </div>
+
+                    {/* Row 2: search + action buttons (center only) */}
+                    {isCenter && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="relative">
+                          <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="بحث..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="bg-background border border-input rounded-xl pl-2 pr-8 h-8 text-xs text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[90px] sm:w-[140px]"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); setDirectApptDate(ds); }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-8 px-2.5 shadow-lg flex items-center gap-1 text-xs"
+                        >
+                          <CalendarPlus className="w-3.5 h-3.5" /> إضافة
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); setPrintWithImages(false); setTimeout(() => window.print(), 100); }}
+                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2.5 shadow-lg items-center gap-1 text-xs hidden sm:flex"
+                        >
+                          <Printer className="w-3.5 h-3.5" /> طباعة
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setTimeout(() => window.print(), 500); }}
+                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2.5 shadow-lg items-center gap-1 text-xs hidden sm:flex"
+                        >
+                          <FileImage className="w-3.5 h-3.5" /> طباعة بالصور
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Clients List */}
@@ -453,7 +459,7 @@ export default function Appointments() {
                               {/* Specialties Tags */}
                               <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
                                 {Array.from(group.types).map(t => (
-                                  <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-slate-800 text-slate-200 dark:bg-slate-800/80 dark:text-slate-200 border-slate-700 shadow-sm">
+                                  <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-muted text-foreground border-border shadow-sm">
                                     {mergedTypes[t as string] || t as string}
                                   </span>
                                 ))}
