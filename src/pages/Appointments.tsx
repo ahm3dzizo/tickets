@@ -295,7 +295,7 @@ export default function Appointments() {
               const isLeft = idx === 2; // Next Day
 
               // Carousel Slide Base Styling
-              const cardClass = "absolute inset-0 m-auto transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden border w-full max-w-[94%] sm:max-w-[90%] md:max-w-[750px] lg:max-w-[850px] h-[95%]";
+              const cardClass = "absolute inset-x-0 top-2 bottom-2 sm:top-4 sm:bottom-4 mx-auto transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden border w-full max-w-[94%] sm:max-w-[90%] md:max-w-[750px] lg:max-w-[850px]";
 
               let posClass = "";
               let interactiveClass = "";
@@ -311,11 +311,11 @@ export default function Appointments() {
                     : "border-border dark:border-slate-600/60"
                 );
               } else if (isRight) {
-                posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 translate-x-[25%] sm:translate-x-[45%] md:translate-x-[65%] lg:translate-x-[80%] blur-[1px] border-border/50 bg-card shadow-none";
-                interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.85] cursor-pointer";
+                posClass = "z-10 scale-[0.85] opacity-[0.4] translate-y-4 translate-x-[15%] sm:translate-x-[25%] md:translate-x-[35%] lg:translate-x-[45%] blur-[1px] border-border/50 bg-card shadow-none";
+                interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.90] cursor-pointer";
               } else if (isLeft) {
-                posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 -translate-x-[25%] sm:-translate-x-[45%] md:-translate-x-[65%] lg:-translate-x-[80%] blur-[1px] border-border/50 bg-card shadow-none";
-                interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.85] cursor-pointer";
+                posClass = "z-10 scale-[0.85] opacity-[0.4] translate-y-4 -translate-x-[15%] sm:-translate-x-[25%] md:-translate-x-[35%] lg:-translate-x-[45%] blur-[1px] border-border/50 bg-card shadow-none";
+                interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.90] cursor-pointer";
               }
 
               // On mobile: only show center card. On sm+: show side cards peeking
