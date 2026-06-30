@@ -295,26 +295,29 @@ export default function Appointments() {
               const isLeft = idx === 2; // Next Day
 
               // Carousel Slide Base Styling
-              const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden shadow-2xl border w-full max-w-[94%] sm:max-w-[90%] md:max-w-[750px] lg:max-w-[850px] h-[95%]";
+              const cardClass = "absolute transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden border w-full max-w-[94%] sm:max-w-[90%] md:max-w-[750px] lg:max-w-[850px] h-[95%]";
 
               let posClass = "";
               let interactiveClass = "";
 
               if (isCenter) {
                 posClass = cn(
-                  "z-20 scale-100 opacity-100 translate-y-0 translate-x-0 border-2 bg-card",
-                  isToday ? "border-blue-500/40 ring-4 ring-blue-500/10" : "border-slate-500/30"
+                  // استخدام bg-popover بدلاً من bg-card لأنه أفتح في dark mode
+                  // مع shadow قوي وborder مرئي لضمان الظهور على كل الشاشات
+                  "z-20 scale-100 opacity-100 translate-y-0 translate-x-0 border-2 bg-popover",
+                  "shadow-[0_8px_40px_-8px_rgba(0,0,0,0.6)] dark:shadow-[0_8px_40px_-4px_rgba(59,130,246,0.15)]",
+                  isToday
+                    ? "border-blue-500/60 ring-4 ring-blue-500/15 dark:ring-blue-500/20"
+                    : "border-border dark:border-slate-600/60"
                 );
               } else if (isRight) {
-                posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 translate-x-[25%] sm:translate-x-[45%] md:translate-x-[65%] lg:translate-x-[80%] blur-[1px] border-border/50 shadow-none";
+                posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 translate-x-[25%] sm:translate-x-[45%] md:translate-x-[65%] lg:translate-x-[80%] blur-[1px] border-border/50 bg-card shadow-none";
                 interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.85] cursor-pointer";
               } else if (isLeft) {
-                posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 -translate-x-[25%] sm:-translate-x-[45%] md:-translate-x-[65%] lg:-translate-x-[80%] blur-[1px] border-border/50 shadow-none";
+                posClass = "z-10 scale-[0.80] opacity-[0.5] translate-y-6 -translate-x-[25%] sm:-translate-x-[45%] md:-translate-x-[65%] lg:-translate-x-[80%] blur-[1px] border-border/50 bg-card shadow-none";
                 interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.85] cursor-pointer";
               }
 
-              // Hide sides entirely on small phones to avoid overlap mess, or just show them peeked?
-              // With translate-x-[18%] they peek a bit. It looks good.
               // On mobile: only show center card. On sm+: show side cards peeking
               const mobileClass = isCenter ? "flex" : "hidden sm:flex";
 
@@ -407,7 +410,7 @@ export default function Appointments() {
                   </div>
 
                   {/* Clients List */}
-                  <div className="overflow-y-auto flex-1 p-2 sm:p-3 no-scrollbar bg-gradient-to-b from-transparent to-background/50">
+                  <div className="overflow-y-auto flex-1 p-2 sm:p-3 no-scrollbar">
                     {loading && appointments.length === 0 && isCenter ? (
                       <div className="flex justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-slate-500" /></div>
                     ) : (
