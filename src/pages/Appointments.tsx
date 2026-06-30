@@ -229,28 +229,30 @@ export default function Appointments() {
   return (
     <Layout>
       <div className="print:hidden">
-        <div className="space-y-6 page-in" dir="rtl">
+        <div className="space-y-2 sm:space-y-6 page-in" dir="rtl">
 
           {/* ── Header ── */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
-                <CalendarDays className="w-7 h-7 text-blue-500" />
-                جدول المواعيد
-              </h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                متابعة مواعيد الزيارات للعملاء وتخصصات الصيانة المطلوبة
-              </p>
+          <div className="flex flex-row items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              <CalendarDays className="w-5 h-5 sm:w-7 sm:h-7 text-blue-500 shrink-0" />
+              <div>
+                <h1 className="text-lg sm:text-3xl font-extrabold text-foreground tracking-tight leading-tight">
+                  جدول المواعيد
+                </h1>
+                <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
+                  متابعة مواعيد الزيارات للعملاء وتخصصات الصيانة المطلوبة
+                </p>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               {(user?.role === 'admin' || user?.role === 'engineer') && supervisors.length > 0 && (
                 <div className="relative">
-                  <Users className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <Users className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />
                   <select
                     value={filterSup}
                     onChange={e => setFilterSup(e.target.value)}
-                    className="bg-card border border-border rounded-xl pl-3 pr-9 h-10 text-sm text-foreground font-bold appearance-none hover:border-slate-500 transition-colors"
+                    className="bg-card border border-border rounded-xl pl-2 pr-7 sm:pl-3 sm:pr-9 h-8 sm:h-10 text-xs sm:text-sm text-foreground font-bold appearance-none hover:border-slate-500 transition-colors max-w-[120px] sm:max-w-none"
                   >
                     <option value="">كل المشرفين</option>
                     {supervisors.map((s: any) => (
@@ -264,7 +266,7 @@ export default function Appointments() {
                 <select
                   value={filterProject}
                   onChange={e => setFilterProject(e.target.value)}
-                  className="bg-card border border-border rounded-xl px-3 h-10 text-sm text-foreground font-bold hover:border-slate-500 transition-colors"
+                  className="bg-card border border-border rounded-xl px-2 sm:px-3 h-8 sm:h-10 text-xs sm:text-sm text-foreground font-bold hover:border-slate-500 transition-colors max-w-[110px] sm:max-w-none"
                 >
                   <option value="">كل المشاريع</option>
                   {projects.map((p: any) => (
@@ -277,15 +279,15 @@ export default function Appointments() {
                 onClick={loadAppointments}
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 rounded-xl border-border bg-card hover:bg-white/5"
+                className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl border-border bg-card hover:bg-white/5"
               >
-                <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+                <RefreshCw className={cn('w-3.5 h-3.5 sm:w-4 sm:h-4', loading && 'animate-spin')} />
               </Button>
             </div>
           </div>
 
           {/* ── Carousel Hero UI ── */}
-          <div className="relative w-full h-[calc(100dvh-320px)] sm:h-[calc(100dvh-220px)] min-h-[320px] sm:min-h-[460px] max-h-[950px] flex justify-center items-center overflow-hidden py-2">
+          <div className="relative w-full h-[calc(100dvh-220px)] min-h-[340px] max-h-[950px] flex justify-center items-center overflow-hidden py-2">
             {displayedDays.map((day, idx) => {
               const ds = dateStr(day);
               const groups = groupedByDay[ds] || [];
@@ -396,16 +398,18 @@ export default function Appointments() {
                         <Button
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setPrintWithImages(false); setPreloadImages(false); setTimeout(() => window.print(), 100); }}
-                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2.5 shadow-lg items-center gap-1 text-xs hidden sm:flex"
+                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
+                          title="طباعة"
                         >
-                          <Printer className="w-3.5 h-3.5" /> طباعة
+                          <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">طباعة</span>
                         </Button>
                         <Button
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setPreloadImages(true); setTimeout(() => window.print(), 1500); }}
-                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2.5 shadow-lg items-center gap-1 text-xs hidden sm:flex"
+                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
+                          title="طباعة بالصور"
                         >
-                          <FileImage className="w-3.5 h-3.5" /> طباعة بالصور
+                          <FileImage className="w-3.5 h-3.5" /> <span className="hidden sm:inline">طباعة بالصور</span>
                         </Button>
                       </div>
                     )}
