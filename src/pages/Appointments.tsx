@@ -67,7 +67,8 @@ export default function Appointments() {
   // Add Specialty Dialog State
   const [addSpecOpen, setAddSpecOpen] = useState(false);
   const [addSpecData, setAddSpecData] = useState<any>(null);
-  const [printWithImages, setPrintWithImages] = useState(false);
+  const [printWithImages, setPrintWithImages] = useState(false)
+  const [preloadImages, setPreloadImages] = useState(false);
 
   const loadAppointments = async () => {
     setLoading(true);
@@ -93,9 +94,10 @@ export default function Appointments() {
   };
 
   const loadOpenTicketsCount = async () => {
-    if (!user) return;
+    // Skip on mobile to avoid loading 3000+ tickets and crashing the browser tab
+    if (!user || window.innerWidth < 768) return;
     try {
-      const params: any = {};
+      const params: any = { limit: 500 };
       if (user.role === 'supervisor') params.supervisorId = user.uid;
       else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
 
@@ -283,7 +285,7 @@ export default function Appointments() {
           </div>
 
           {/* ── Carousel Hero UI ── */}
-          <div className="relative w-full h-[calc(100dvh-260px)] sm:h-[calc(100dvh-220px)] min-h-[460px] max-h-[950px] flex justify-center items-center overflow-hidden py-2">
+          <div className="relative w-full h-[calc(100dvh-320px)] sm:h-[calc(100dvh-220px)] min-h-[320px] sm:min-h-[460px] max-h-[950px] flex justify-center items-center overflow-hidden py-2">
             {displayedDays.map((day, idx) => {
               const ds = dateStr(day);
               const groups = groupedByDay[ds] || [];
@@ -393,14 +395,14 @@ export default function Appointments() {
                         </Button>
                         <Button
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); setPrintWithImages(false); setTimeout(() => window.print(), 100); }}
+                          onClick={(e) => { e.stopPropagation(); setPrintWithImages(false); setPreloadImages(false); setTimeout(() => window.print(), 100); }}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2.5 shadow-lg items-center gap-1 text-xs hidden sm:flex"
                         >
                           <Printer className="w-3.5 h-3.5" /> طباعة
                         </Button>
                         <Button
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setTimeout(() => window.print(), 500); }}
+                          onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setPreloadImages(true); setTimeout(() => window.print(), 1500); }}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2.5 shadow-lg items-center gap-1 text-xs hidden sm:flex"
                         >
                           <FileImage className="w-3.5 h-3.5" /> طباعة بالصور
@@ -661,12 +663,14 @@ export default function Appointments() {
           onSuccess={loadAppointments}
         />
       )}
-      {/* Image Preloader to ensure they are fetched before printing */}
-      <div className="fixed top-0 left-[-9999px] opacity-0 pointer-events-none">
-        {appointments.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
-          <img key={idx} src={url} alt="preload" />
-        ))}
-      </div>
+      {/* Image Preloader — only fires when user clicks "طباعة بالصور" to avoid mobile memory crash */}
+      {preloadImages && (
+        <div className="fixed top-0 left-[-9999px] opacity-0 pointer-events-none">
+          {appointments.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
+            <img key={idx} src={url} alt="preload" />
+          ))}
+        </div>
+      )}
     </Layout>
   );
 }
