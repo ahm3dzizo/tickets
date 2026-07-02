@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
-  Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search, FileImage
+  Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search, FileImage,
+  Phone, MessageCircle
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -38,14 +39,12 @@ export default function Appointments() {
   const [directApptDate, setDirectApptDate] = useState<string | null>(null);
   const [clientTicketsModal, setClientTicketsModal] = useState<{ villa: string, project: string, notes: string } | null>(null);
   const [editApptGroup, setEditApptGroup] = useState<any>(null);
-
   const [refDate, setRefDate] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   });
 
-  // We always show 3 days: Prev, Active, Next
   const displayedDays = useMemo(() => {
     const prev = new Date(refDate); prev.setDate(prev.getDate() - 1);
     const next = new Date(refDate); next.setDate(next.getDate() + 1);
@@ -64,16 +63,14 @@ export default function Appointments() {
   const [filterProject, setFilterProject] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Add Specialty Dialog State
   const [addSpecOpen, setAddSpecOpen] = useState(false);
   const [addSpecData, setAddSpecData] = useState<any>(null);
-  const [printWithImages, setPrintWithImages] = useState(false)
+  const [printWithImages, setPrintWithImages] = useState(false);
   const [preloadImages, setPreloadImages] = useState(false);
 
   const loadAppointments = async () => {
     setLoading(true);
     try {
-      // المهندس يشوف مشاريعه فقط تلقائياً (ما لم يختر مشروع محدد)
       const engineerProjectIds =
         user?.role === 'engineer' && !filterProject && user.projectIds?.length
           ? user.projectIds
@@ -94,7 +91,6 @@ export default function Appointments() {
   };
 
   const loadOpenTicketsCount = async () => {
-    // Skip on mobile to avoid loading 3000+ tickets and crashing the browser tab
     if (!user || window.innerWidth < 768) return;
     try {
       const params: any = { limit: 500 };
@@ -112,7 +108,7 @@ export default function Appointments() {
       });
       setOpenTicketsMap(map);
     } catch {
-      // Silently fail if count fails
+      // Silently fail
     }
   };
 
@@ -126,13 +122,11 @@ export default function Appointments() {
     if (user.role === 'admin' || user.role === 'supervisor' || user.role === 'engineer') {
       usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => { });
     }
-
     loadOpenTicketsCount();
   }, [user]);
 
   useEffect(() => { loadAppointments(); }, [from, to, filterProject, user]);
 
-  // Group by day -> then by client
   const groupedByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const day of displayedDays) {
@@ -173,14 +167,12 @@ export default function Appointments() {
 
       let groups = Object.values(clientMap);
 
-      // Filter by Supervisor
       if (filterSup) {
         groups = groups.filter(g => g.sups.has(filterSup));
       } else if (user?.role === 'supervisor') {
         groups = groups.filter(g => g.sups.has(user.uid));
       }
 
-      // Filter by Search
       if (searchQuery) {
         const sq = searchQuery.toLowerCase();
         groups = groups.filter(g =>
@@ -190,7 +182,6 @@ export default function Appointments() {
         );
       }
 
-      // Sort groups by time
       groups.sort((a, b) => {
         const timeA = (a.appointmentTime || '').split(' ')[1] || '99:99';
         const timeB = (b.appointmentTime || '').split(' ')[1] || '99:99';
@@ -224,6 +215,62 @@ export default function Appointments() {
     e.stopPropagation();
     setAddSpecData(group);
     setAddSpecOpen(true);
+  };
+
+  // ── Download all appointments as a single .ics file ──────────────────────
+  const downloadAllToCalendar = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ds = dateStr(refDate);
+    const groups = groupedByDay[ds] || [];
+    if (groups.length === 0) { toast.error('لا توجد مواعيد لهذا اليوم'); return; }
+
+    const events = groups.map(group => {
+      const apptTime           = group.appointmentTime || '';
+      const dateOnly           = apptTime.split(' ')[0] || ds;
+      const time               = apptTime.split(' ')[1] || '08:00';
+      const [year, month, day] = dateOnly.split('-');
+      const [hour, minute]     = time.split(':');
+      const endHour            = String(parseInt(hour) + 1).padStart(2, '0');
+
+      const dtStart = `${year}${month}${day}T${hour}${minute}00`;
+      const dtEnd   = `${year}${month}${day}T${endHour}${minute}00`;
+      const types   = Array.from(group.types).map((t: any) => mergedTypes[t] || t).join(' - ');
+      const note    = group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
+      const phone   = group.clientPhone ? `هاتف: ${group.clientPhone}` : '';
+      const desc    = [note ? `ملاحظات: ${note}` : '', phone].filter(Boolean).join('\n');
+
+      return [
+        'BEGIN:VEVENT',
+        `DTSTART:${dtStart}`,
+        `DTEND:${dtEnd}`,
+        `SUMMARY:فيلا ${group.villaNumber}${types ? ' - ' + types : ''}`,
+        desc ? `DESCRIPTION:${desc}` : '',
+        `LOCATION:فيلا ${group.villaNumber}`,
+        `UID:villa-${group.villaNumber}-${dateOnly}@maintenance`,
+        'END:VEVENT',
+      ].filter(Boolean).join('\r\n');
+    });
+
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Maintenance Schedule//AR',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      ...events,
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `appointments-${ds}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`تم تحميل ${groups.length} موعد — افتح الملف لإضافتهم للتقويم`);
   };
 
   return (
@@ -293,12 +340,10 @@ export default function Appointments() {
               const groups = groupedByDay[ds] || [];
               const isToday = ds === dateStr(new Date());
 
-              // Layout logical positions
-              const isRight = idx === 0; // Previous Day
-              const isCenter = idx === 1; // Current Day
-              const isLeft = idx === 2; // Next Day
+              const isRight  = idx === 0;
+              const isCenter = idx === 1;
+              const isLeft   = idx === 2;
 
-              // Carousel Slide Base Styling
               const cardClass = "absolute inset-x-0 top-2 bottom-2 sm:top-4 sm:bottom-4 mx-auto transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden border w-full max-w-[94%] sm:max-w-[90%] md:max-w-[750px] lg:max-w-[850px]";
 
               let posClass = "";
@@ -306,8 +351,6 @@ export default function Appointments() {
 
               if (isCenter) {
                 posClass = cn(
-                  // استخدام bg-popover بدلاً من bg-card لأنه أفتح في dark mode
-                  // مع shadow قوي وborder مرئي لضمان الظهور على كل الشاشات
                   "z-20 scale-100 opacity-100 translate-y-0 translate-x-0 border-2 bg-popover",
                   "shadow-[0_8px_40px_-8px_rgba(0,0,0,0.6)] dark:shadow-[0_8px_40px_-4px_rgba(59,130,246,0.15)]",
                   isToday
@@ -322,7 +365,6 @@ export default function Appointments() {
                 interactiveClass = "hover:blur-none hover:opacity-100 hover:scale-[0.90] cursor-pointer";
               }
 
-              // On mobile: only show center card. On sm+: show side cards peeking
               const mobileClass = isCenter ? "flex" : "hidden sm:flex";
 
               return (
@@ -365,7 +407,6 @@ export default function Appointments() {
                         )}
                       </div>
 
-                      {/* Badge always visible */}
                       <Badge variant="outline" className={cn(
                         "px-2.5 py-1 text-xs sm:text-sm font-black border rounded-xl w-fit shrink-0",
                         isToday ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" : "bg-muted text-muted-foreground border-border"
@@ -411,6 +452,15 @@ export default function Appointments() {
                         >
                           <FileImage className="w-3.5 h-3.5" /> <span className="hidden sm:inline">طباعة بالصور</span>
                         </Button>
+                        {/* ── Export to Calendar button ── */}
+                        <Button
+                          size="sm"
+                          onClick={downloadAllToCalendar}
+                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
+                          title="تصدير كل المواعيد للتقويم"
+                        >
+                          <CalendarPlus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">تقويم</span>
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -445,18 +495,42 @@ export default function Appointments() {
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex-1 min-w-0 pr-1">
                                   <div className="flex items-center gap-2">
-                                    <h4 className="font-black text-foreground text-base truncate">فيلا {group.villaNumber} {totalOpen > 0 && <span className="text-amber-600 dark:text-amber-500 font-bold text-xs">({totalOpen})</span>}</h4>
+                                    <h4 className="font-black text-foreground text-base truncate">
+                                      فيلا {group.villaNumber} {totalOpen > 0 && <span className="text-amber-600 dark:text-amber-500 font-bold text-xs">({totalOpen})</span>}
+                                    </h4>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1">
                                   {isCenter && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); setEditApptGroup(group); }}
-                                      className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl h-8 px-2 transition-colors mr-1"
+                                      className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl h-8 px-2 transition-colors"
                                       title="تعديل وتأجيل الموعد"
                                     >
                                       <Pencil className="w-3.5 h-3.5" />
                                     </button>
+                                  )}
+                                  {isCenter && group.clientPhone && (
+                                    <>
+                                      <a
+                                        href={`tel:${group.clientPhone}`}
+                                        onClick={e => e.stopPropagation()}
+                                        className="flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-500 rounded-xl h-8 px-2 transition-colors"
+                                        title="اتصال"
+                                      >
+                                        <Phone className="w-3.5 h-3.5" />
+                                      </a>
+                                      <a
+                                        href={`https://wa.me/${group.clientPhone.replace(/\D/g, '')}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={e => e.stopPropagation()}
+                                        className="flex items-center justify-center bg-[#25D366]/10 hover:bg-[#25D366]/25 border border-[#25D366]/30 text-[#25D366] rounded-xl h-8 px-2 transition-colors"
+                                        title="واتساب"
+                                      >
+                                        <MessageCircle className="w-3.5 h-3.5" />
+                                      </a>
+                                    </>
                                   )}
                                   <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1 min-w-[65px] shrink-0 shadow-inner">
                                     <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 mb-0.5" />
@@ -484,7 +558,7 @@ export default function Appointments() {
                               {/* Notes */}
                               {note && (<div className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded-lg mt-0.5 border border-input flex gap-1.5"><span className="font-bold shrink-0 text-foreground/70">ملاحظة:</span><span className="line-clamp-2 leading-snug">{note}</span></div>)}
 
-                              {/* Supervisors (Screen Only) */}
+                              {/* Supervisors */}
                               {group.sups && group.sups.size > 0 && (
                                 <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
                                   <span className="text-[10px] font-bold text-muted-foreground">المشرفين:</span>
@@ -499,7 +573,7 @@ export default function Appointments() {
                                 </div>
                               )}
 
-                              {/* Attachments (Screen Only - Implicit Preload) */}
+                              {/* Attachments */}
                               {(() => {
                                 const urls = group.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []);
                                 if (urls.length === 0) return null;
@@ -565,16 +639,13 @@ export default function Appointments() {
                   key={i}
                   className={`border border-black rounded-lg p-2 flex flex-col gap-1.5 break-inside-avoid overflow-hidden ${hasImages ? 'col-span-2' : 'col-span-1 min-h-[80px] justify-center'}`}
                 >
-                  {/* Header row */}
                   <div className="flex justify-between items-center border-b border-black/30 pb-1">
                     <h3 className="font-bold text-sm leading-tight">فيلا {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || 'بدون رقم'})</span></h3>
                     <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
                   </div>
 
                   {hasImages ? (
-                    /* Full-width layout: info on right, images scrolling left */
                     <div className="flex gap-3 items-start">
-                      {/* Left: info */}
                       <div className="flex flex-col gap-1.5 flex-1 min-w-0">
                         <div className="flex flex-wrap gap-1">
                           {Array.from(g.types).map(t => (
@@ -587,7 +658,6 @@ export default function Appointments() {
                           <span className="font-bold">الملاحظات: </span> {note}
                         </div>
                       </div>
-                      {/* Right: images in a horizontal row */}
                       <div className="flex flex-row flex-wrap gap-1.5 justify-end" style={{ maxWidth: '70%' }}>
                         {imageUrls.map((url: string, idx: number) => (
                           <img
@@ -601,7 +671,6 @@ export default function Appointments() {
                       </div>
                     </div>
                   ) : (
-                    /* Normal 1-column layout */
                     <>
                       <div className="flex flex-wrap gap-1 mt-0.5">
                         {Array.from(g.types).map(t => (
@@ -622,7 +691,7 @@ export default function Appointments() {
         </div>
       </div>
 
-      {/* Add Specialty Dialog */}
+      {/* Dialogs */}
       {addSpecOpen && addSpecData && (
         <QuickAddSpecialtyDialog
           open={addSpecOpen}
@@ -636,7 +705,6 @@ export default function Appointments() {
           onSuccess={loadAppointments}
         />
       )}
-      {/* Direct Appointment Dialog */}
       {directApptDate && (
         <DirectAppointmentDialog
           open={!!directApptDate}
@@ -667,7 +735,6 @@ export default function Appointments() {
           onSuccess={loadAppointments}
         />
       )}
-      {/* Image Preloader — only fires when user clicks "طباعة بالصور" to avoid mobile memory crash */}
       {preloadImages && (
         <div className="fixed top-0 left-[-9999px] opacity-0 pointer-events-none">
           {appointments.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
