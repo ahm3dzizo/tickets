@@ -833,7 +833,7 @@ export default function Appointments() {
         />
       )}
       {preloadImages && (
-        <div className="fixed top-0 left-[-9999px] opacity-0 pointer-events-none">
+        <div className="fixed top-0 left-[-9999px] opacity-0 pointer-events-none print:hidden">
           {appointments.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
             <img key={idx} src={url} alt="preload" />
           ))}
