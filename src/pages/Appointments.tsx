@@ -17,11 +17,88 @@ import { QuickAddSpecialtyDialog } from '@/components/tickets/QuickAddSpecialtyD
 import { DirectAppointmentDialog } from '@/components/tickets/DirectAppointmentDialog';
 import { ClientTicketsModal } from '@/components/tickets/ClientTicketsModal';
 import { EditAppointmentDialog } from '@/components/tickets/EditAppointmentDialog';
+import { TranslatedText } from '@/components/ui/TranslatedText';
+import { Languages } from 'lucide-react';
 
 function dateStr(d: Date): string {
   const offset = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - offset).toISOString().split('T')[0];
 }
+
+const TRANSLATIONS = {
+  ar: {
+    title: 'جدول المواعيد',
+    subtitle: 'متابعة مواعيد الزيارات للعملاء وتخصصات الصيانة المطلوبة',
+    allSups: 'كل المشرفين',
+    allProj: 'كل المشاريع',
+    add: 'إضافة',
+    print: 'طباعة',
+    printWithImages: 'طباعة بالصور',
+    calendar: 'تقويم',
+    search: 'بحث...',
+    villa: 'فيلا',
+    today: 'اليوم',
+    appointments: 'موعد',
+    addSpecialty: 'إضافة تخصص',
+    noteLabel: 'ملاحظة:',
+    notesLabel: 'الملاحظات:',
+    technicianNotesLabel: 'ملاحظات الفني (يدوي):',
+    supsLabel: 'المشرفين:',
+    attachLabel: 'مرفقات:',
+    noAppts: 'لا توجد مواعيد',
+    allAvailable: 'جميع الفنيين متاحين في هذا اليوم',
+    noPhone: 'بدون رقم',
+    noAdditionalNotes: 'لا توجد ملاحظات إضافية',
+  },
+  ur: {
+    title: 'اپوائنٹمنٹ شیڈول',
+    subtitle: 'کسٹمر کے دورے کے تقرریوں اور بحالی کی خصوصیات کی پیروی کریں',
+    allSups: 'تمام سپروائزر',
+    allProj: 'تمام پروجیکٹس',
+    add: 'شامل کریں',
+    print: 'پرنٹ کریں',
+    printWithImages: 'تصاویر کے ساتھ پرنٹ کریں',
+    calendar: 'کیلنڈر',
+    search: 'تلاش...',
+    villa: 'ولا',
+    today: 'آج',
+    appointments: 'اپوائنٹمنٹ',
+    addSpecialty: 'خصوصیت شامل کریں',
+    noteLabel: 'نوٹ:',
+    notesLabel: 'نوٹس:',
+    technicianNotesLabel: 'ٹیکنیشن کے نوٹس (دستی):',
+    supsLabel: 'سپروائزر:',
+    attachLabel: 'منسلکات:',
+    noAppts: 'کوئی اپوائنٹمنٹ نہیں',
+    allAvailable: 'تمام ٹیکنیشن آج دستیاب ہیں',
+    noPhone: 'کوئی نمبر نہیں',
+    noAdditionalNotes: 'کوئی اضافی نوٹس نہیں',
+  },
+  hi: {
+    title: 'अपॉइंटमेंट शेड्यूल',
+    subtitle: 'ग्राहक यात्रा नियुक्तियों और आवश्यक रखरखाव विशिष्टताओं का पालन करें',
+    allSups: 'सभी पर्यवेक्षक',
+    allProj: 'सभी प्रोजेक्ट्स',
+    add: 'जोड़ें',
+    print: 'प्रिंट करें',
+    printWithImages: 'चित्रों के साथ प्रिंट करें',
+    calendar: 'कैलेंडर',
+    search: 'खोज...',
+    villa: 'विला',
+    today: 'आज',
+    appointments: 'अपॉइंटमेंट',
+    addSpecialty: 'विशेषता जोड़ें',
+    noteLabel: 'नोट:',
+    notesLabel: 'नोट्स:',
+    technicianNotesLabel: 'तकनीशियन नोट्स (मैनुअल):',
+    supsLabel: 'पर्यवेक्षक:',
+    attachLabel: 'अनुलग्नक:',
+    noAppts: 'कोई अपॉइंटमेंट नहीं',
+    allAvailable: 'सभी तकनीशियन आज उपलब्ध हैं',
+    noPhone: 'कोई नंबर नहीं',
+    noAdditionalNotes: 'कोई अतिरिक्त नोट्स नहीं',
+  }
+};
 
 export default function Appointments() {
   const { user } = useAuth();
@@ -62,6 +139,8 @@ export default function Appointments() {
   const [filterSup, setFilterSup] = useState<string>('');
   const [filterProject, setFilterProject] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [lang, setLang] = useState<'ar' | 'ur' | 'hi'>('ar');
+  const t = TRANSLATIONS[lang];
 
   const [addSpecOpen, setAddSpecOpen] = useState(false);
   const [addSpecData, setAddSpecData] = useState<any>(null);
@@ -284,10 +363,10 @@ export default function Appointments() {
               <CalendarDays className="w-5 h-5 sm:w-7 sm:h-7 text-blue-500 shrink-0" />
               <div>
                 <h1 className="text-lg sm:text-3xl font-extrabold text-foreground tracking-tight leading-tight">
-                  جدول المواعيد
+                  {t.title}
                 </h1>
                 <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
-                  متابعة مواعيد الزيارات للعملاء وتخصصات الصيانة المطلوبة
+                  {t.subtitle}
                 </p>
               </div>
             </div>
@@ -301,7 +380,7 @@ export default function Appointments() {
                     onChange={e => setFilterSup(e.target.value)}
                     className="bg-card border border-border rounded-xl pl-2 pr-7 sm:pl-3 sm:pr-9 h-8 sm:h-10 text-xs sm:text-sm text-foreground font-bold appearance-none hover:border-slate-500 transition-colors max-w-[120px] sm:max-w-none"
                   >
-                    <option value="">كل المشرفين</option>
+                    <option value="">{t.allSups}</option>
                     {supervisors.map((s: any) => (
                       <option key={s.uid} value={s.uid}>{s.displayName}</option>
                     ))}
@@ -315,7 +394,7 @@ export default function Appointments() {
                   onChange={e => setFilterProject(e.target.value)}
                   className="bg-card border border-border rounded-xl px-2 sm:px-3 h-8 sm:h-10 text-xs sm:text-sm text-foreground font-bold hover:border-slate-500 transition-colors max-w-[110px] sm:max-w-none"
                 >
-                  <option value="">كل المشاريع</option>
+                  <option value="">{t.allProj}</option>
                   {projects.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.abbreviation || p.name}</option>
                   ))}
@@ -330,6 +409,18 @@ export default function Appointments() {
               >
                 <RefreshCw className={cn('w-3.5 h-3.5 sm:w-4 sm:h-4', loading && 'animate-spin')} />
               </Button>
+              <div className="relative">
+                <Languages className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />
+                <select
+                  value={lang}
+                  onChange={e => setLang(e.target.value as any)}
+                  className="bg-card border border-border rounded-xl pl-2 pr-7 sm:pl-3 sm:pr-9 h-8 sm:h-10 text-xs sm:text-sm text-foreground font-bold appearance-none hover:border-slate-500 transition-colors"
+                >
+                  <option value="ar">العربية</option>
+                  <option value="hi">हिन्दी</option>
+                  <option value="ur">اردو</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -385,10 +476,10 @@ export default function Appointments() {
                       <div className="flex items-center gap-3">
                         <div>
                           <h3 className={cn("font-black text-lg sm:text-2xl leading-tight", isToday ? "text-blue-600 dark:text-blue-400" : "text-foreground")}>
-                            {day.toLocaleDateString('ar-EG', { weekday: 'long' })}
+                            {day.toLocaleDateString(lang === 'hi' ? 'hi-IN' : lang === 'ur' ? 'ur-PK' : 'ar-EG', { weekday: 'long' })}
                           </h3>
                           <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mt-0.5">
-                            {day.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
+                            {day.toLocaleDateString(lang === 'hi' ? 'hi-IN' : lang === 'ur' ? 'ur-PK' : 'ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
                           </p>
                         </div>
 
@@ -398,7 +489,7 @@ export default function Appointments() {
                               <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </Button>
                             <Button onClick={(e) => { e.stopPropagation(); goToday(); }} variant="ghost" className="h-7 sm:h-8 px-2 sm:px-3 rounded-lg font-bold text-[11px] sm:text-xs hover:bg-muted">
-                              اليوم
+                              {t.today}
                             </Button>
                             <Button onClick={(e) => { e.stopPropagation(); nextDay(); }} variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg hover:bg-muted">
                               <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -411,7 +502,7 @@ export default function Appointments() {
                         "px-2.5 py-1 text-xs sm:text-sm font-black border rounded-xl w-fit shrink-0",
                         isToday ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" : "bg-muted text-muted-foreground border-border"
                       )}>
-                        {groups.length} موعد
+                        {groups.length} {t.appointments}
                       </Badge>
                     </div>
 
@@ -422,7 +513,7 @@ export default function Appointments() {
                           <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                           <input
                             type="text"
-                            placeholder="بحث..."
+                            placeholder={t.search}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="bg-background border border-input rounded-xl pl-2 pr-8 h-8 text-xs text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[90px] sm:w-[140px]"
@@ -434,32 +525,32 @@ export default function Appointments() {
                           onClick={(e) => { e.stopPropagation(); setDirectApptDate(ds); }}
                           className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-8 px-2.5 shadow-lg flex items-center gap-1 text-xs"
                         >
-                          <CalendarPlus className="w-3.5 h-3.5" /> إضافة
+                          <CalendarPlus className="w-3.5 h-3.5" /> {t.add}
                         </Button>
                         <Button
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setPrintWithImages(false); setPreloadImages(false); setTimeout(() => window.print(), 100); }}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title="طباعة"
+                          title={t.print}
                         >
-                          <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">طباعة</span>
+                          <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.print}</span>
                         </Button>
                         <Button
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setPreloadImages(true); setTimeout(() => window.print(), 1500); }}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title="طباعة بالصور"
+                          title={t.printWithImages}
                         >
-                          <FileImage className="w-3.5 h-3.5" /> <span className="hidden sm:inline">طباعة بالصور</span>
+                          <FileImage className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.printWithImages}</span>
                         </Button>
                         {/* ── Export to Calendar button ── */}
                         <Button
                           size="sm"
                           onClick={downloadAllToCalendar}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title="تصدير كل المواعيد للتقويم"
+                          title={t.calendar}
                         >
-                          <CalendarPlus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">تقويم</span>
+                          <CalendarPlus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.calendar}</span>
                         </Button>
                       </div>
                     )}
@@ -496,7 +587,7 @@ export default function Appointments() {
                                 <div className="flex-1 min-w-0 pr-1">
                                   <div className="flex items-center gap-2">
                                     <h4 className="font-black text-foreground text-base truncate">
-                                      فيلا {group.villaNumber} {totalOpen > 0 && <span className="text-amber-600 dark:text-amber-500 font-bold text-xs">({totalOpen})</span>}
+                                      {t.villa} {group.villaNumber} {totalOpen > 0 && <span className="text-amber-600 dark:text-amber-500 font-bold text-xs">({totalOpen})</span>}
                                     </h4>
                                   </div>
                                 </div>
@@ -543,7 +634,7 @@ export default function Appointments() {
                               <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
                                 {Array.from(group.types).map(t => (
                                   <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-muted text-foreground border-border shadow-sm">
-                                    {mergedTypes[t as string] || t as string}
+                                    <TranslatedText text={mergedTypes[t as string] || t as string} lang={lang} />
                                   </span>
                                 ))}
                                 <button
@@ -551,17 +642,17 @@ export default function Appointments() {
                                   className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 hover:bg-muted transition-all flex items-center gap-1"
                                 >
                                   <Plus className="w-3 h-3" />
-                                  إضافة تخصص
+                                  {t.addSpecialty}
                                 </button>
                               </div>
 
                               {/* Notes */}
-                              {note && (<div className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded-lg mt-0.5 border border-input flex gap-1.5"><span className="font-bold shrink-0 text-foreground/70">ملاحظة:</span><span className="line-clamp-2 leading-snug">{note}</span></div>)}
+                              {note && (<div className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded-lg mt-0.5 border border-input flex gap-1.5"><span className="font-bold shrink-0 text-foreground/70">{t.noteLabel}</span><span className="line-clamp-2 leading-snug"><TranslatedText text={note} lang={lang} /></span></div>)}
 
                               {/* Supervisors */}
                               {group.sups && group.sups.size > 0 && (
                                 <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
-                                  <span className="text-[10px] font-bold text-muted-foreground">المشرفين:</span>
+                                  <span className="text-[10px] font-bold text-muted-foreground">{t.supsLabel}</span>
                                   {Array.from(group.sups).map(sId => {
                                     const sup = supervisors.find(s => s.uid === sId || s.id === sId);
                                     return (
@@ -579,7 +670,7 @@ export default function Appointments() {
                                 if (urls.length === 0) return null;
                                 return (
                                   <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
-                                    <span className="text-[10px] font-bold text-muted-foreground shrink-0"><FileImage className="w-3 h-3 inline mr-1"/>مرفقات:</span>
+                                    <span className="text-[10px] font-bold text-muted-foreground shrink-0"><FileImage className="w-3 h-3 inline mr-1"/>{t.attachLabel}</span>
                                     {urls.map((url: string, idx: number) => (
                                       <img
                                         key={idx}
@@ -601,8 +692,8 @@ export default function Appointments() {
                     {groups.length === 0 && !loading && isCenter && (
                       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-60">
                         <CalendarDays className="w-16 h-16 mb-4 opacity-50" />
-                        <p className="text-lg font-bold">لا توجد مواعيد</p>
-                        <p className="text-sm mt-2 opacity-80">جميع الفنيين متاحين في هذا اليوم</p>
+                        <p className="text-lg font-bold">{t.noAppts}</p>
+                        <p className="text-sm mt-2 opacity-80">{t.allAvailable}</p>
                       </div>
                     )}
                   </div>
@@ -616,7 +707,7 @@ export default function Appointments() {
       {/* --- Print Layout --- */}
       <div className="hidden print:block print:w-full print:bg-white print:text-black print:p-0" dir="rtl">
         <h2 className="text-lg font-black text-center mb-2 border-b border-black pb-1">
-          جدول المواعيد - {new Date(dateStr(refDate)).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          {t.title} - {new Date(dateStr(refDate)).toLocaleDateString(lang === 'hi' ? 'hi-IN' : lang === 'ur' ? 'ur-PK' : 'ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </h2>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
           {(() => {
@@ -629,7 +720,7 @@ export default function Appointments() {
             });
             return sorted.map((g, i) => {
               const tA = (g.appointmentTime || '').split(' ')[1] || '---';
-              const note = g.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || 'لا توجد ملاحظات إضافية';
+              const note = g.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || t.noAdditionalNotes;
               const imageUrls: string[] = printWithImages
                 ? g.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || [])
                 : [];
@@ -640,7 +731,7 @@ export default function Appointments() {
                   className={`border border-black rounded-lg p-2 flex flex-col gap-1.5 break-inside-avoid overflow-hidden ${hasImages ? 'col-span-2' : 'col-span-1 min-h-[80px] justify-center'}`}
                 >
                   <div className="flex justify-between items-center border-b border-black/30 pb-1">
-                    <h3 className="font-bold text-sm leading-tight">فيلا {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || 'بدون رقم'})</span></h3>
+                    <h3 className="font-bold text-sm leading-tight">{t.villa} {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || t.noPhone})</span></h3>
                     <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
                   </div>
 
@@ -648,14 +739,17 @@ export default function Appointments() {
                     <div className="flex gap-3 items-start">
                       <div className="flex flex-col gap-1.5 flex-1 min-w-0">
                         <div className="flex flex-wrap gap-1">
-                          {Array.from(g.types).map(t => (
-                            <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
-                              {mergedTypes[t as string] || t as string}
+                          {Array.from(g.types).map(tp => (
+                            <span key={tp as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
+                              <TranslatedText text={mergedTypes[tp as string] || tp as string} lang={lang} />
                             </span>
                           ))}
                         </div>
                         <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight">
-                          <span className="font-bold">الملاحظات: </span> {note}
+                          <span className="font-bold">{t.notesLabel} </span> <TranslatedText text={note} lang={lang} />
+                        </div>
+                        <div className="text-[10px] text-gray-800 bg-white p-1.5 rounded border border-dashed border-gray-300 leading-tight min-h-[40px] mt-1">
+                          <span className="font-bold">{t.technicianNotesLabel} </span> 
                         </div>
                       </div>
                       <div className="flex flex-row flex-wrap gap-1.5 justify-end" style={{ maxWidth: '70%' }}>
@@ -673,14 +767,17 @@ export default function Appointments() {
                   ) : (
                     <>
                       <div className="flex flex-wrap gap-1 mt-0.5">
-                        {Array.from(g.types).map(t => (
-                          <span key={t as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
-                            {mergedTypes[t as string] || t as string}
+                        {Array.from(g.types).map(tp => (
+                          <span key={tp as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
+                            <TranslatedText text={mergedTypes[tp as string] || tp as string} lang={lang} />
                           </span>
                         ))}
                       </div>
                       <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
-                        <span className="font-bold">الملاحظات: </span> {note}
+                        <span className="font-bold">{t.notesLabel} </span> <TranslatedText text={note} lang={lang} />
+                      </div>
+                      <div className="text-[10px] text-gray-800 bg-white p-1.5 rounded border border-dashed border-gray-300 leading-tight min-h-[40px] mt-1">
+                        <span className="font-bold">{t.technicianNotesLabel} </span> 
                       </div>
                     </>
                   )}
