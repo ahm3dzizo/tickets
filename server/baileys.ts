@@ -118,6 +118,25 @@ export async function startWA(userId: string) {
       if (!msg.message || msg.key.fromMe) continue;
 
       const senderJid = msg.key.remoteJid!;
+      
+      // تجاهل رسائل المجموعات، القنوات (newsletters)، والحالات
+      if (senderJid.includes('@g.us') || senderJid.includes('@newsletter') || senderJid.includes('@broadcast')) {
+        continue;
+      }
+      
+      const rawPhone = senderJid.split('@')[0];
+      const suffix = rawPhone.slice(-9);
+
+      // التحقق من أن رقم المرسل مسجل كعميل في النظام
+      const isClient = await prisma.client.findFirst({
+        where: { phone: { endsWith: suffix } },
+        select: { id: true }
+      });
+
+      if (!isClient) {
+        continue; // تجاهل أي رسالة من رقم غير مسجل كعميل
+      }
+
       console.log(`[WA] Received message from ${senderJid}`);
 
       // ① list response (WhatsApp Business API — unlikely on personal accts)
