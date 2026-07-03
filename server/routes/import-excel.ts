@@ -316,7 +316,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       ticketId:    ["رقم التذكرة", "ID", "id", "الرقم", "#", "رقم الطلب", "Case Number"],
       villaNumber: ["رقم الفيلا", "فيلا", "villa", "رقم الوحدة", "الوحدة", "Unit"],
       createdAt:   ["التاريخ", "date", "تاريخ الإنشاء", "issuedAt", "Opened Date"],
-      description: ["الوصف", "وصف", "description", "المشكلة", "الملاحظات"],
+      description: ["وصف المشكلة", "الوصف", "وصف", "description", "المشكلة", "الملاحظات"],
       status:      ["حالة الإغلاق", "الحالة", "status", "حالة التذكرة", "حالة الاغلاق"],
       closedAt:    ["تاريخ الاغلاق", "تاريخ الإغلاق", "تاريخ الغلق", "closed date"],
       excelType:   ["تصنيف التذاكر", "التصنيف", "نوع التذاكر", "نوع المشكلة"],
@@ -348,7 +348,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const [existingRows, clientRows, ticketTypes, keywordsCache, typeToSpecialty, projectSups] = await Promise.all([
       prisma.ticket.findMany({
         where: { projectId },
-        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentNotes: true, clientId: true, villaNumber: true },
+        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentNotes: true, clientId: true, villaNumber: true, description: true },
       }),
       prisma.client.findMany({
         where: { projectId },
@@ -511,9 +511,18 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           const typeNeedsUpdate =
             (!existing.type || existing.type === "unclassified") &&
             finalType !== "unclassified";
+            
+          const descriptionNeedsUpdate = description && existing.description !== description;
 
-          if (statusChanged || typeNeedsUpdate) {
-            const upd: any = { id: existing.id, status, closedAt };
+          if (statusChanged || typeNeedsUpdate || descriptionNeedsUpdate) {
+            const upd: any = { id: existing.id };
+            if (statusChanged) {
+              upd.status = status;
+              upd.closedAt = closedAt;
+            }
+            if (descriptionNeedsUpdate) {
+              upd.description = description;
+            }
             if (typeNeedsUpdate) {
               upd.type = finalType;
               upd.typeId = finalTypeId;
@@ -632,8 +641,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           prisma.ticket.update({
             where: { id: u.id },
             data: {
-              status: u.status as any,
-              closedAt: u.closedAt ? new Date(u.closedAt) : null,
+              ...(u.status ? { status: u.status as any, closedAt: u.closedAt ? new Date(u.closedAt) : null } : {}),
+              ...(u.description ? { description: u.description } : {}),
               ...(u.type && u.type !== "unclassified"
                 ? { 
                     type: u.type, 
