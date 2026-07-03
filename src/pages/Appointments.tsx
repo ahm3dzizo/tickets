@@ -363,10 +363,10 @@ export default function Appointments() {
               <CalendarDays className="w-5 h-5 sm:w-7 sm:h-7 text-blue-500 shrink-0" />
               <div>
                 <h1 className="text-lg sm:text-3xl font-extrabold text-foreground tracking-tight leading-tight">
-                  {t.title}
+                  جدول المواعيد
                 </h1>
                 <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
-                  {t.subtitle}
+                  متابعة مواعيد الزيارات للعملاء وتخصصات الصيانة المطلوبة
                 </p>
               </div>
             </div>
@@ -380,7 +380,7 @@ export default function Appointments() {
                     onChange={e => setFilterSup(e.target.value)}
                     className="bg-card border border-border rounded-xl pl-2 pr-7 sm:pl-3 sm:pr-9 h-8 sm:h-10 text-xs sm:text-sm text-foreground font-bold appearance-none hover:border-slate-500 transition-colors max-w-[120px] sm:max-w-none"
                   >
-                    <option value="">{t.allSups}</option>
+                    <option value="">كل المشرفين</option>
                     {supervisors.map((s: any) => (
                       <option key={s.uid} value={s.uid}>{s.displayName}</option>
                     ))}
@@ -394,7 +394,7 @@ export default function Appointments() {
                   onChange={e => setFilterProject(e.target.value)}
                   className="bg-card border border-border rounded-xl px-2 sm:px-3 h-8 sm:h-10 text-xs sm:text-sm text-foreground font-bold hover:border-slate-500 transition-colors max-w-[110px] sm:max-w-none"
                 >
-                  <option value="">{t.allProj}</option>
+                  <option value="">كل المشاريع</option>
                   {projects.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.abbreviation || p.name}</option>
                   ))}
@@ -489,7 +489,7 @@ export default function Appointments() {
                               <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </Button>
                             <Button onClick={(e) => { e.stopPropagation(); goToday(); }} variant="ghost" className="h-7 sm:h-8 px-2 sm:px-3 rounded-lg font-bold text-[11px] sm:text-xs hover:bg-muted">
-                              {t.today}
+                              اليوم
                             </Button>
                             <Button onClick={(e) => { e.stopPropagation(); nextDay(); }} variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg hover:bg-muted">
                               <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -502,7 +502,7 @@ export default function Appointments() {
                         "px-2.5 py-1 text-xs sm:text-sm font-black border rounded-xl w-fit shrink-0",
                         isToday ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30" : "bg-muted text-muted-foreground border-border"
                       )}>
-                        {groups.length} {t.appointments}
+                        {groups.length} موعد
                       </Badge>
                     </div>
 
@@ -513,7 +513,7 @@ export default function Appointments() {
                           <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                           <input
                             type="text"
-                            placeholder={t.search}
+                            placeholder="بحث..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="bg-background border border-input rounded-xl pl-2 pr-8 h-8 text-xs text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[90px] sm:w-[140px]"
@@ -525,32 +525,32 @@ export default function Appointments() {
                           onClick={(e) => { e.stopPropagation(); setDirectApptDate(ds); }}
                           className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-8 px-2.5 shadow-lg flex items-center gap-1 text-xs"
                         >
-                          <CalendarPlus className="w-3.5 h-3.5" /> {t.add}
+                          <CalendarPlus className="w-3.5 h-3.5" /> إضافة
                         </Button>
                         <Button
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setPrintWithImages(false); setPreloadImages(false); setTimeout(() => window.print(), 100); }}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title={t.print}
+                          title="طباعة"
                         >
-                          <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.print}</span>
+                          <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">طباعة</span>
                         </Button>
                         <Button
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setPreloadImages(true); setTimeout(() => window.print(), 1500); }}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title={t.printWithImages}
+                          title="طباعة بالصور"
                         >
-                          <FileImage className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.printWithImages}</span>
+                          <FileImage className="w-3.5 h-3.5" /> <span className="hidden sm:inline">طباعة بالصور</span>
                         </Button>
                         {/* ── Export to Calendar button ── */}
                         <Button
                           size="sm"
                           onClick={downloadAllToCalendar}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title={t.calendar}
+                          title="تصدير كل المواعيد للتقويم"
                         >
-                          <CalendarPlus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.calendar}</span>
+                          <CalendarPlus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">تقويم</span>
                         </Button>
                       </div>
                     )}
@@ -707,7 +707,7 @@ export default function Appointments() {
       {/* --- Print Layout --- */}
       <div className="hidden print:block print:w-full print:bg-white print:text-black print:p-0" dir="rtl">
         <h2 className="text-lg font-black text-center mb-2 border-b border-black pb-1">
-          {t.title} - {new Date(dateStr(refDate)).toLocaleDateString(lang === 'hi' ? 'hi-IN' : lang === 'ur' ? 'ur-PK' : 'ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          جدول المواعيد - {new Date(dateStr(refDate)).toLocaleDateString(lang === 'hi' ? 'hi-IN' : lang === 'ur' ? 'ur-PK' : 'ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </h2>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
           {(() => {
