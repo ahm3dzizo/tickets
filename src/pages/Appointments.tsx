@@ -20,7 +20,7 @@ import { EditAppointmentDialog } from '@/components/tickets/EditAppointmentDialo
 import { TranslatedText } from '@/components/ui/TranslatedText';
 import { Languages } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import * as htmlToImage from 'html-to-image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 function dateStr(d: Date): string {
@@ -377,11 +377,10 @@ export default function Appointments() {
       if (!el) continue;
 
       try {
-        const canvas = await html2canvas(el, { scale: 2, useCORS: true, allowTaint: true });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const imgData = await htmlToImage.toJpeg(el, { quality: 0.95, pixelRatio: 2 });
         const pdf = new jsPDF('p', 'pt', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        const pdfHeight = (el.offsetHeight * pdfWidth) / el.offsetWidth;
         const pageHeight = pdf.internal.pageSize.getHeight();
         
         let heightLeft = pdfHeight;
