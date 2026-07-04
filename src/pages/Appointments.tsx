@@ -399,9 +399,9 @@ export default function Appointments() {
 
         const langName = l === 'ar' ? 'Arabic' : l === 'ur' ? 'Urdu' : 'Hindi';
         pdf.save(`Appointments-${langName}-${dateStr(refDate)}.pdf`);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Export error', err);
-        toast.error(`فشل تصدير ${l}`);
+        toast.error(`فشل تصدير ${l}: ${err?.message || 'Unknown error'}`);
       }
     }
     setIsExporting(false);
@@ -855,13 +855,13 @@ export default function Appointments() {
 
       {/* --- Export Layouts (Hidden) --- */}
       {isExporting && (
-        <div className="fixed top-[-20000px] left-0 w-[800px] pointer-events-none opacity-0">
+        <>
           {['ar', 'ur', 'hi'].filter(l => exportLangs[l]).map((exportLang: any) => (
-            <div key={exportLang}>
+            <div key={exportLang} className="fixed top-0 left-[-20000px] w-[800px] pointer-events-none opacity-0 z-[-1]">
               {renderPrintLayout(exportLang, exportWithImagesMode, 'export-layout')}
             </div>
           ))}
-        </div>
+        </>
       )}
 
       {/* Dialogs */}
