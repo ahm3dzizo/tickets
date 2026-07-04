@@ -19,6 +19,9 @@ import { ClientTicketsModal } from '@/components/tickets/ClientTicketsModal';
 import { EditAppointmentDialog } from '@/components/tickets/EditAppointmentDialog';
 import { TranslatedText } from '@/components/ui/TranslatedText';
 import { Languages } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 function dateStr(d: Date): string {
   const offset = d.getTimezoneOffset() * 60000;
@@ -141,6 +144,11 @@ export default function Appointments() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [lang, setLang] = useState<'ar' | 'ur' | 'hi'>('ar');
   const t = TRANSLATIONS[lang];
+
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportWithImagesMode, setExportWithImagesMode] = useState(false);
+  const [exportLangs, setExportLangs] = useState<Record<string, boolean>>({ ar: true, ur: true, hi: true });
+  const [isExporting, setIsExporting] = useState(false);
 
   const [addSpecOpen, setAddSpecOpen] = useState(false);
   const [addSpecData, setAddSpecData] = useState<any>(null);
@@ -352,6 +360,142 @@ export default function Appointments() {
     toast.success(`تم تحميل ${groups.length} موعد — افتح الملف لإضافتهم للتقويم`);
   };
 
+  const handleOpenExport = (e: React.MouseEvent, withImages: boolean) => {
+    e.stopPropagation();
+    setExportWithImagesMode(withImages);
+    setExportModalOpen(true);
+  };
+
+  const executeExport = async () => {
+    setIsExporting(true);
+    toast.info('جاري تحضير ملفات PDF، يرجى الانتظار...');
+    await new Promise(r => setTimeout(r, 4000));
+
+    const langs = ['ar', 'ur', 'hi'].filter(l => exportLangs[l]);
+    for (const l of langs) {
+      const el = document.getElementById(`export-layout-${l}`);
+      if (!el) continue;
+
+      try {
+        const canvas = await html2canvas(el, { scale: 2, useCORS: true, allowTaint: true });
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const pdf = new jsPDF('p', 'pt', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        
+        let heightLeft = pdfHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+          position = heightLeft - pdfHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+          heightLeft -= pageHeight;
+        }
+
+        const langName = l === 'ar' ? 'Arabic' : l === 'ur' ? 'Urdu' : 'Hindi';
+        pdf.save(`Appointments-${langName}-${dateStr(refDate)}.pdf`);
+      } catch (err) {
+        console.error('Export error', err);
+        toast.error(`فشل تصدير ${l}`);
+      }
+    }
+    setIsExporting(false);
+    setExportModalOpen(false);
+    toast.success('تم التصدير بنجاح');
+  };
+
+  const renderPrintLayout = (renderLang: 'ar'|'ur'|'hi', withImages: boolean, idPrefix = "") => {
+    const tr = TRANSLATIONS[renderLang];
+    const ds = dateStr(refDate);
+    const rawGroups = groupedByDay[ds] || [];
+    const sorted = [...rawGroups].sort((a, b) => {
+      const tA = (a.appointmentTime || '').split(' ')[1] || '00:00';
+      const tB = (b.appointmentTime || '').split(' ')[1] || '00:00';
+      return tA.localeCompare(tB);
+    });
+
+    return (
+      <div id={idPrefix ? `${idPrefix}-${renderLang}` : undefined} className="w-full bg-white text-black p-0" dir="rtl">
+        <h2 className="text-lg font-black text-center mb-2 border-b border-black pb-1">
+          {tr.title} - {new Date(dateStr(refDate)).toLocaleDateString(renderLang === 'hi' ? 'hi-IN' : renderLang === 'ur' ? 'ur-PK' : 'ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        </h2>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+          {sorted.map((g, i) => {
+            const tA = (g.appointmentTime || '').split(' ')[1] || '---';
+            const note = g.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || tr.noAdditionalNotes;
+            const imageUrls: string[] = withImages
+              ? g.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || [])
+              : [];
+            const hasImages = imageUrls.length > 0;
+            return (
+              <div
+                key={i}
+                className={`border border-black rounded-lg p-2 flex flex-col gap-1.5 break-inside-avoid overflow-hidden ${hasImages ? 'col-span-2' : 'col-span-1 min-h-[80px] justify-center'}`}
+              >
+                <div className="flex justify-between items-center border-b border-black/30 pb-1">
+                  <h3 className="font-bold text-sm leading-tight">{tr.villa} {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || tr.noPhone})</span></h3>
+                  <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
+                </div>
+                {hasImages ? (
+                  <div className="flex gap-3 items-start">
+                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {Array.from(g.types).map(tp => (
+                          <span key={tp as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
+                            <TranslatedText text={mergedTypes[tp as string] || tp as string} lang={renderLang} />
+                          </span>
+                        ))}
+                      </div>
+                      <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
+                        <span className="font-bold">{tr.notesLabel} </span> <TranslatedText text={note} lang={renderLang} />
+                      </div>
+                      <div className="text-[10px] text-gray-800 bg-white p-1.5 rounded border border-dashed border-gray-300 leading-tight min-h-[40px] mt-1">
+                        <span className="font-bold">{tr.technicianNotesLabel} </span> 
+                      </div>
+                    </div>
+                    <div className="flex flex-row flex-wrap gap-1.5 justify-end" style={{ maxWidth: '70%' }}>
+                      {imageUrls.map((url: string, idx: number) => (
+                        <img
+                          key={idx}
+                          src={url}
+                          alt="مرفق"
+                          style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 6, border: '1px solid #ccc', flexShrink: 0 }}
+                          crossOrigin="anonymous"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {Array.from(g.types).map(tp => (
+                        <span key={tp as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
+                          <TranslatedText text={mergedTypes[tp as string] || tp as string} lang={renderLang} />
+                        </span>
+                      ))}
+                    </div>
+                    <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
+                      <span className="font-bold">{tr.notesLabel} </span> <TranslatedText text={note} lang={renderLang} />
+                    </div>
+                    <div className="text-[10px] text-gray-800 bg-white p-1.5 rounded border border-dashed border-gray-300 leading-tight min-h-[40px] mt-1">
+                      <span className="font-bold">{tr.technicianNotesLabel} </span> 
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Layout>
       <div className="print:hidden">
@@ -529,19 +673,19 @@ export default function Appointments() {
                         </Button>
                         <Button
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); setPrintWithImages(false); setPreloadImages(false); setTimeout(() => window.print(), 100); }}
+                          onClick={(e) => handleOpenExport(e, false)}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title="طباعة"
+                          title="تصدير"
                         >
-                          <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">طباعة</span>
+                          <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">تصدير</span>
                         </Button>
                         <Button
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); setPrintWithImages(true); setPreloadImages(true); setTimeout(() => window.print(), 1500); }}
+                          onClick={(e) => handleOpenExport(e, true)}
                           className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title="طباعة بالصور"
+                          title="تصدير بالصور"
                         >
-                          <FileImage className="w-3.5 h-3.5" /> <span className="hidden sm:inline">طباعة بالصور</span>
+                          <FileImage className="w-3.5 h-3.5" /> <span className="hidden sm:inline">تصدير بالصور</span>
                         </Button>
                         {/* ── Export to Calendar button ── */}
                         <Button
@@ -705,88 +849,20 @@ export default function Appointments() {
       </div>
 
       {/* --- Print Layout --- */}
-      <div className="hidden print:block print:w-full print:bg-white print:text-black print:p-0" dir="rtl">
-        <h2 className="text-lg font-black text-center mb-2 border-b border-black pb-1">
-          جدول المواعيد - {new Date(dateStr(refDate)).toLocaleDateString(lang === 'hi' ? 'hi-IN' : lang === 'ur' ? 'ur-PK' : 'ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </h2>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-          {(() => {
-            const ds = dateStr(refDate);
-            const rawGroups = groupedByDay[ds] || [];
-            const sorted = [...rawGroups].sort((a, b) => {
-              const tA = (a.appointmentTime || '').split(' ')[1] || '00:00';
-              const tB = (b.appointmentTime || '').split(' ')[1] || '00:00';
-              return tA.localeCompare(tB);
-            });
-            return sorted.map((g, i) => {
-              const tA = (g.appointmentTime || '').split(' ')[1] || '---';
-              const note = g.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || t.noAdditionalNotes;
-              const imageUrls: string[] = printWithImages
-                ? g.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || [])
-                : [];
-              const hasImages = imageUrls.length > 0;
-              return (
-                <div
-                  key={i}
-                  className={`border border-black rounded-lg p-2 flex flex-col gap-1.5 break-inside-avoid overflow-hidden ${hasImages ? 'col-span-2' : 'col-span-1 min-h-[80px] justify-center'}`}
-                >
-                  <div className="flex justify-between items-center border-b border-black/30 pb-1">
-                    <h3 className="font-bold text-sm leading-tight">{t.villa} {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || t.noPhone})</span></h3>
-                    <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
-                  </div>
-
-                  {hasImages ? (
-                    <div className="flex gap-3 items-start">
-                      <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                        <div className="flex flex-wrap gap-1">
-                          {Array.from(g.types).map(tp => (
-                            <span key={tp as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
-                              <TranslatedText text={mergedTypes[tp as string] || tp as string} lang={lang} />
-                            </span>
-                          ))}
-                        </div>
-                        <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight">
-                          <span className="font-bold">{t.notesLabel} </span> <TranslatedText text={note} lang={lang} />
-                        </div>
-                        <div className="text-[10px] text-gray-800 bg-white p-1.5 rounded border border-dashed border-gray-300 leading-tight min-h-[40px] mt-1">
-                          <span className="font-bold">{t.technicianNotesLabel} </span> 
-                        </div>
-                      </div>
-                      <div className="flex flex-row flex-wrap gap-1.5 justify-end" style={{ maxWidth: '70%' }}>
-                        {imageUrls.map((url: string, idx: number) => (
-                          <img
-                            key={idx}
-                            src={url}
-                            alt="مرفق"
-                            style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 6, border: '1px solid #ccc', flexShrink: 0 }}
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex flex-wrap gap-1 mt-0.5">
-                        {Array.from(g.types).map(tp => (
-                          <span key={tp as string} className="text-[10px] font-bold border border-gray-400 rounded px-1.5 py-[2px] leading-none">
-                            <TranslatedText text={mergedTypes[tp as string] || tp as string} lang={lang} />
-                          </span>
-                        ))}
-                      </div>
-                      <div className="text-[10px] text-gray-800 bg-gray-50 p-1.5 rounded border border-dashed border-gray-300 leading-tight line-clamp-2 mt-auto">
-                        <span className="font-bold">{t.notesLabel} </span> <TranslatedText text={note} lang={lang} />
-                      </div>
-                      <div className="text-[10px] text-gray-800 bg-white p-1.5 rounded border border-dashed border-gray-300 leading-tight min-h-[40px] mt-1">
-                        <span className="font-bold">{t.technicianNotesLabel} </span> 
-                      </div>
-                    </>
-                  )}
-                </div>
-              )
-            })
-          })()}
-        </div>
+      <div className="hidden print:block print:w-full print:bg-white print:text-black print:p-0">
+        {renderPrintLayout(lang, printWithImages)}
       </div>
+
+      {/* --- Export Layouts (Hidden) --- */}
+      {isExporting && (
+        <div className="fixed top-[-20000px] left-0 w-[800px] pointer-events-none opacity-0">
+          {['ar', 'ur', 'hi'].filter(l => exportLangs[l]).map((exportLang: any) => (
+            <div key={exportLang}>
+              {renderPrintLayout(exportLang, exportWithImagesMode, 'export-layout')}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Dialogs */}
       {addSpecOpen && addSpecData && (
@@ -835,10 +911,62 @@ export default function Appointments() {
       {preloadImages && (
         <div className="fixed top-0 left-[-9999px] opacity-0 pointer-events-none print:hidden">
           {appointments.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
-            <img key={idx} src={url} alt="preload" />
+            <img key={idx} src={url} alt="preload" crossOrigin="anonymous" />
           ))}
         </div>
       )}
+
+      {/* Export Dialog */}
+      <Dialog open={exportModalOpen} onOpenChange={setExportModalOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تصدير المواعيد كـ PDF</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <p className="text-sm text-muted-foreground">اختر اللغات التي تريد تصدير ملفات PDF منفصلة لها:</p>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer font-bold">
+                <input
+                  type="checkbox"
+                  checked={exportLangs.ar}
+                  onChange={(e) => setExportLangs(prev => ({ ...prev, ar: e.target.checked }))}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                العربية
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer font-bold">
+                <input
+                  type="checkbox"
+                  checked={exportLangs.ur}
+                  onChange={(e) => setExportLangs(prev => ({ ...prev, ur: e.target.checked }))}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                الأوردو
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer font-bold">
+                <input
+                  type="checkbox"
+                  checked={exportLangs.hi}
+                  onChange={(e) => setExportLangs(prev => ({ ...prev, hi: e.target.checked }))}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                الهندية
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setExportModalOpen(false)}>إلغاء</Button>
+              <Button 
+                onClick={executeExport} 
+                disabled={isExporting || (!exportLangs.ar && !exportLangs.ur && !exportLangs.hi)}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isExporting ? <RefreshCw className="w-4 h-4 animate-spin ml-2" /> : null}
+                تصدير الملفات
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
