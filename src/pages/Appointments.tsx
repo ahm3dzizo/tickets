@@ -377,7 +377,11 @@ export default function Appointments() {
       if (!el) continue;
 
       try {
-        const imgData = await htmlToImage.toJpeg(el, { quality: 0.95, pixelRatio: 2 });
+        const imgData = await htmlToImage.toJpeg(el, { 
+          quality: 0.95, 
+          pixelRatio: 2,
+          imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+        });
         const pdf = new jsPDF('p', 'pt', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (el.offsetHeight * pdfWidth) / el.offsetWidth;
