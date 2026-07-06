@@ -1,28 +1,21 @@
 /**
- * Gemini Flash classifier — fallback when keyword confidence is too low.
- * Uses gemini-2.5-flash-lite-lite (fastest free model).
+ * NaraRouter (ex-Gemini) classifier — fallback when keyword confidence is too low.
+ * Uses NaraRouter with mistral-large model.
  *
- * Set GEMINI_API_KEY in .env to enable.
- * Free tier: 1500 requests/day, 1M tokens/day — more than enough.
+ * Set NARA_API_KEY in .env to enable.
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import prisma from "../db.js";
 import { loadKeywordsFromDB, normalizeArabic } from "./keywords.js";
 import { invalidateKeywordCache } from "./keywords.js";
 import { nudgeReclassifyWorker } from "./reclassify-worker.js";
 
-let _client: GoogleGenerativeAI | null = null;
-
-function getClient(): GoogleGenerativeAI | null {
-  if (!process.env.GEMINI_API_KEY) return null;
-  if (!_client) _client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  return _client;
-}
-
 export function geminiEnabled(): boolean {
-  return !!process.env.GEMINI_API_KEY;
+  return !!process.env.NARA_API_KEY;
 }
+
+const NARA_URL = "https://router.bynara.id/v1/chat/completions";
+const NARA_MODEL = "mistral-large";
 
 // ── Build available-types + subtypes list ──────────────────────────────────
 async function getActiveTypes(): Promise<{ key: string; nameAr: string; description?: string }[]> {
@@ -58,8 +51,8 @@ export interface GeminiClassifyResult {
 export async function classifyWithGemini(
   description: string
 ): Promise<GeminiClassifyResult | null> {
-  const client = getClient();
-  if (!client) return null;
+  const apiKey = process.env.NARA_API_KEY;
+  if (!apiKey) return null;
 
   try {
     const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
@@ -84,21 +77,32 @@ Rules:
 4. If description is vague → empty types array, null subType
 5. JSON only, no other text
 
-Problem: "${description}"
-
 Format: {"types":["key1"],"subType":"اسم النوع الفرعي أو null","confidence":0.9}`;
 
-    const model = client.getGenerativeModel({
-      model: "gemini-2.5-flash-lite",
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 200,
-        responseMimeType: "application/json",
+    const response = await fetch(NARA_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
       },
+      body: JSON.stringify({
+        model: NARA_MODEL,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: prompt },
+          { role: "user", content: `Problem: "${description}"` }
+        ]
+      })
     });
 
-    const result = await model.generateContent(prompt);
-    const text   = result.response.text().trim();
+    const data = await response.json();
+    if (!response.ok) {
+        console.error("[NaraRouter] API error:", data.error?.message || response.statusText);
+        return null;
+    }
+
+    const text = data.choices?.[0]?.message?.content?.trim() || "";
 
     // Parse JSON response — extract first {...} block regardless of surrounding text
     let parsed: { types?: string[]; subType?: string | null; confidence?: number; reason?: string };
@@ -108,7 +112,7 @@ Format: {"types":["key1"],"subType":"اسم النوع الفرعي أو null","
       if (!jsonMatch) throw new Error("No JSON object found");
       parsed = JSON.parse(jsonMatch[0]);
     } catch {
-      console.error("[Gemini] Failed to parse response:", text);
+      console.error("[NaraRouter] Failed to parse response:", text);
       return null;
     }
 
@@ -133,10 +137,10 @@ Format: {"types":["key1"],"subType":"اسم النوع الفرعي أو null","
       subTypeNameAr,
       confidence:    parsed.confidence ?? 0.8,
       reason:        parsed.reason ?? "",
-      source:        "gemini",
+      source:        "gemini", // Keeping this to avoid breaking DB source references
     };
   } catch (err: any) {
-    console.error("[Gemini] classify error:", err.message);
+    console.error("[NaraRouter] classify error:", err.message);
     return null;
   }
 }
@@ -153,8 +157,8 @@ export interface GeminiBatchResult {
 export async function classifyBatchWithGemini(
   items: { id: string; description: string }[]
 ): Promise<GeminiBatchResult[]> {
-  const client = getClient();
-  if (!client || items.length === 0) return [];
+  const apiKey = process.env.NARA_API_KEY;
+  if (!apiKey || items.length === 0) return [];
 
   const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
   if (types.length === 0) return [];
@@ -177,30 +181,39 @@ ${typesList}
 
 Rules: 1-2 main types max, subType = one sub-type name from the primary type (or null).
 
-Tickets:
-${ticketLines}
-
-Return JSON array:
+Return ONLY a JSON array. Format:
 [{"i":1,"types":["key1"],"subType":"اسم فرعي أو null","confidence":0.9}]`;
 
-  const model = client.getGenerativeModel({
-    model: "gemini-2.5-flash-lite",
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 800,
-      responseMimeType: "application/json",
-    },
-  });
-
   try {
-    const result = await model.generateContent(prompt);
-    const text   = result.response.text().trim();
+    const response = await fetch(NARA_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: NARA_MODEL,
+        temperature: 0.1,
+        messages: [
+          { role: "system", content: prompt },
+          { role: "user", content: `Tickets:\n${ticketLines}` }
+        ]
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+        console.error("[NaraRouter batch] API error:", data.error?.message || response.statusText);
+        throw new Error(data.error?.message || "NaraRouter Error");
+    }
+
+    const text = data.choices?.[0]?.message?.content?.trim() || "";
 
     // Extract JSON array from response
     const stripped  = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
     const arrMatch  = stripped.match(/\[[\s\S]*\]/);
     if (!arrMatch) {
-      console.error("[Gemini batch] No JSON array in response:", text.slice(0, 120));
+      console.error("[NaraRouter batch] No JSON array in response:", text.slice(0, 120));
       return [];
     }
 
@@ -226,7 +239,7 @@ Return JSON array:
         };
       });
   } catch (err: any) {
-    console.error("[Gemini batch] error:", err.message);
+    console.error("[NaraRouter batch] error:", err.message);
     throw err; // let worker handle 429
   }
 }
