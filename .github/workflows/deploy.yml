@@ -1,0 +1,55 @@
+name: Deploy API
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Deploy to Server via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USERNAME }}
+        port: ${{ secrets.SERVER_PORT }}
+        password: ${{ secrets.SERVER_PASSWORD }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script_stop: true
+        script: |
+          cd /opt/retal-api
+          echo "▶  Cleaning up and pulling..."
+          rm -f open-wa-session.*
+          git fetch origin
+          git checkout main
+          git reset --hard origin/main
+          git pull origin main
+          echo "▶  npm install..."
+          npm install --silent
+          echo "▶  npx prisma db push..."
+          npx prisma migrate deploy 2>/dev/null || npx prisma db push
+          echo "▶  npm run build (frontend + backend)..."
+          rm -rf dist
+          rm -rf node_modules/.vite
+          npm run build
+          echo "✔  Build ready"
+          echo "▶  Copying frontend to Nginx root..."
+          rm -rf /var/www/retal/*
+          cp -r dist/* /var/www/retal/
+          echo "▶  Clearing Nginx cache & reloading..."
+          [ -d /var/cache/nginx ] && rm -rf /var/cache/nginx/* || true
+          [ -d /tmp/nginx_cache ] && rm -rf /tmp/nginx_cache/* || true
+          nginx -s reload 2>/dev/null || systemctl reload nginx 2>/dev/null || true
+          echo "✔  Nginx reloaded"
+          echo "▶  pm2 restart API..."
+          pm2 restart retal-api --update-env
+          echo "▶  pm2 start/restart ML service..."
+          pm2 describe retal-ml > /dev/null 2>&1 && pm2 restart retal-ml || pm2 start ml/ecosystem.config.cjs
+          echo "✔  Services ready"
+          pm2 list
