@@ -25,28 +25,24 @@ interface ColumnDef {
 }
 
 const ALL_COLUMNS: ColumnDef[] = [
-  // التذكرة
-  { key: 'ticketId',     label: 'رقم التذكرة',       group: 'ticket', groupLabel: 'معلومات التذكرة' },
-  { key: 'refNumber',    label: 'المرجع',             group: 'ticket', groupLabel: 'معلومات التذكرة' },
-  { key: 'description',  label: 'وصف المشكلة',        group: 'ticket', groupLabel: 'معلومات التذكرة' },
-  { key: 'villaNumber',  label: 'رقم الفيلا',         group: 'ticket', groupLabel: 'معلومات التذكرة' },
-  { key: 'status',       label: 'الحالة',             group: 'ticket', groupLabel: 'معلومات التذكرة' },
-  { key: 'priority',     label: 'الأولوية',           group: 'ticket', groupLabel: 'معلومات التذكرة' },
-  { key: 'daysOpen',     label: 'عدد الأيام',         group: 'ticket', groupLabel: 'معلومات التذكرة' },
-  // العميل
-  { key: 'clientName',   label: 'اسم العميل',         group: 'client', groupLabel: 'العميل' },
-  { key: 'clientPhone',  label: 'رقم الهاتف',         group: 'client', groupLabel: 'العميل' },
-  { key: 'blockNumber',  label: 'البلوك',             group: 'client', groupLabel: 'العميل' },
-  // التواريخ
-  { key: 'issuedAt',     label: 'تاريخ الإنشاء',       group: 'dates',  groupLabel: 'التواريخ' },
-  { key: 'closedAt',     label: 'تاريخ الإغلاق',       group: 'dates',  groupLabel: 'التواريخ' },
-  { key: 'appointmentTime', label: 'موعد الصيانة',     group: 'dates',  groupLabel: 'التواريخ' },
-  // التصنيف
-  { key: 'type',         label: 'التخصص',             group: 'classification', groupLabel: 'التصنيف' },
-  { key: 'detectedTypes', label: 'جميع التخصصات',     group: 'classification', groupLabel: 'التصنيف' },
-  { key: 'supervisors',  label: 'المشرفون',           group: 'classification', groupLabel: 'التصنيف' },
-  { key: 'projectName',  label: 'المشروع',            group: 'classification', groupLabel: 'التصنيف' },
-  { key: 'projectAbbr',  label: 'اختصار المشروع',     group: 'classification', groupLabel: 'التصنيف' },
+  { key: 'ticketId',        label: 'رقم التذكرة',      group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'refNumber',       label: 'المرجع',            group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'description',     label: 'وصف المشكلة',       group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'villaNumber',     label: 'رقم الفيلا',        group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'status',          label: 'الحالة',            group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'priority',        label: 'الأولوية',          group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'daysOpen',        label: 'عدد الأيام',        group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'clientName',      label: 'اسم العميل',        group: 'client',         groupLabel: 'العميل' },
+  { key: 'clientPhone',     label: 'رقم الهاتف',        group: 'client',         groupLabel: 'العميل' },
+  { key: 'blockNumber',     label: 'البلوك',            group: 'client',         groupLabel: 'العميل' },
+  { key: 'issuedAt',        label: 'تاريخ الإنشاء',     group: 'dates',          groupLabel: 'التواريخ' },
+  { key: 'closedAt',        label: 'تاريخ الإغلاق',     group: 'dates',          groupLabel: 'التواريخ' },
+  { key: 'appointmentTime', label: 'موعد الصيانة',      group: 'dates',          groupLabel: 'التواريخ' },
+  { key: 'type',            label: 'التخصص',            group: 'classification', groupLabel: 'التصنيف' },
+  { key: 'detectedTypes',   label: 'جميع التخصصات',    group: 'classification', groupLabel: 'التصنيف' },
+  { key: 'supervisors',     label: 'المشرفون',          group: 'classification', groupLabel: 'التصنيف' },
+  { key: 'projectName',     label: 'المشروع',           group: 'classification', groupLabel: 'التصنيف' },
+  { key: 'projectAbbr',     label: 'اختصار المشروع',    group: 'classification', groupLabel: 'التصنيف' },
 ];
 
 const GROUPS = Array.from(new Map(ALL_COLUMNS.map(c => [c.group, c.groupLabel])).entries());
@@ -141,28 +137,28 @@ export function ExportTicketsModal({
         return ticket.appointmentTime || '';
       case 'type': {
         const typeTranslations: Record<string, string> = {
-          'electricity': 'كهرباء', 'plumbing': 'سباكة', 'doors': 'أبواب',
-          'paints': 'دهانات', 'cracks': 'تشققات', 'ceramics': 'سيراميك',
-          'tank_insulation': 'عزل خزان', 'drainage': 'صرف صحي',
-          'ac_ventilation': 'تكييف وتهوية', 'pumps': 'مضخات',
-          'doors_windows': 'أبواب ونوافذ', 'waterproofing': 'عزل مائي',
-          'grading': 'ميول وترويبة', 'pest_control': 'مكافحة حشرات',
-          'cleaning': 'تنظيف', 'structural': 'إنشائي',
-          'painting': 'دهانات', 'tiles': 'سيراميك',
+          electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب',
+          paints: 'دهانات', cracks: 'تشققات', ceramics: 'سيراميك',
+          tank_insulation: 'عزل خزان', drainage: 'صرف صحي',
+          ac_ventilation: 'تكييف وتهوية', pumps: 'مضخات',
+          doors_windows: 'أبواب ونوافذ', waterproofing: 'عزل مائي',
+          grading: 'ميول وترويبة', pest_control: 'مكافحة حشرات',
+          cleaning: 'تنظيف', structural: 'إنشائي',
+          painting: 'دهانات', tiles: 'سيراميك',
         };
         return typeTranslations[ticket.type] || ticket.type || '---';
       }
       case 'detectedTypes': {
         const types: string[] = (ticket as any).detectedTypes || [];
         const typeTranslations: Record<string, string> = {
-          'electricity': 'كهرباء', 'plumbing': 'سباكة', 'doors': 'أبواب',
-          'paints': 'دهانات', 'cracks': 'تشققات', 'ceramics': 'سيراميك',
-          'tank_insulation': 'عزل خزان', 'drainage': 'صرف صحي',
-          'ac_ventilation': 'تكييف وتهوية', 'pumps': 'مضخات',
-          'doors_windows': 'أبواب ونوافذ', 'waterproofing': 'عزل مائي',
-          'grading': 'ميول وترويبة', 'pest_control': 'مكافحة حشرات',
-          'cleaning': 'تنظيف', 'structural': 'إنشائي',
-          'painting': 'دهانات', 'tiles': 'سيراميك',
+          electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب',
+          paints: 'دهانات', cracks: 'تشققات', ceramics: 'سيراميك',
+          tank_insulation: 'عزل خزان', drainage: 'صرف صحي',
+          ac_ventilation: 'تكييف وتهوية', pumps: 'مضخات',
+          doors_windows: 'أبواب ونوافذ', waterproofing: 'عزل مائي',
+          grading: 'ميول وترويبة', pest_control: 'مكافحة حشرات',
+          cleaning: 'تنظيف', structural: 'إنشائي',
+          painting: 'دهانات', tiles: 'سيراميك',
         };
         return types.map(t => typeTranslations[t] || t).join('، ') || '---';
       }
@@ -182,14 +178,13 @@ export function ExportTicketsModal({
     }
   };
 
-  // ── Generate XLSX using HTML table (Excel opens HTML natively as RTL table) ──
+  // ── Generate XLSX ─────────────────────────────────────────────────────────
   const generateXLSX = (headers: string[], rows: string[][]): Blob => {
     const escapeHtml = (s: string) =>
       String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
     const renderHeaderRow = headers
       .map((h, i) => {
-        // أوّل عمود (الأخير RTL) يبقى يمين، باقي الأعمدة توسّط
         const align = i === 0 ? 'text-align:right;padding-right:12px' : 'text-align:center';
         return `<th style="background:#1e3a5f;color:white;padding:8px 10px;font-size:12px;font-weight:bold;border:1px solid #1e3a5f;${align};white-space:nowrap">${escapeHtml(h)}</th>`;
       })
@@ -249,6 +244,7 @@ export function ExportTicketsModal({
     URL.revokeObjectURL(url);
   };
 
+  // ── Export handler ────────────────────────────────────────────────────────
   const handleExport = async () => {
     if (selectedColumns.size === 0) {
       toast.error('اختر عموداً واحداً على الأقل للتصدير');
@@ -273,49 +269,236 @@ export function ExportTicketsModal({
         downloadBlob(blob, `تذاكر_${ticketCount}_${now}.xls`);
         toast.success(`تم تصدير ${ticketCount} تذكرة إلى Excel`);
       } else {
-        // ── PDF via html2canvas ─────────────────────────────────────────
+        // ── PDF ────────────────────────────────────────────────────────────
         const escapeHtml = (s: string) =>
           String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
         const headerCells = headers
-          .map(h => `<th style="background:#1e3a5f;color:white;padding:8px 10px;font-size:12px;font-weight:bold;border:1px solid #1e3a5f;text-align:center;white-space:nowrap">${escapeHtml(h)}</th>`)
+          .map(h => `<th>${escapeHtml(h)}</th>`)
           .join('');
 
         const bodyRowsHtml = rows
           .map((row, ri) => {
             const cells = row
-              .map(c => `<td style="padding:5px 7px;font-size:11px;border:1px solid #d1d5db;text-align:right;vertical-align:middle">${escapeHtml(c)}</td>`)
+              .map(c => `<td>${escapeHtml(c)}</td>`)
               .join('');
-            const bg = ri % 2 === 1 ? ' style="background:#f1f5f9"' : '';
-            return `<tr${bg}>${cells}</tr>`;
+            return `<tr class="${ri % 2 === 1 ? 'even' : ''}">${cells}</tr>`;
           })
           .join('');
 
         const html = `<!DOCTYPE html>
-<html dir="rtl">
-<head><meta charset="UTF-8"><title>تقرير التذاكر</title>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 <style>
-  body { font-family: 'Segoe UI', Tahoma, sans-serif; direction:rtl; text-align:right; padding:20px; margin:0; color:#1e293b; }
-  h1 { text-align: center; font-size: 20px; color: #1e3a5f; margin: 0 0 5px 0; }
-  .subtitle { text-align: center; font-size: 12px; color: #64748b; margin-bottom: 20px; }
-  table { width: 100%; border-collapse: collapse; font-size: 11px; }
-  th, td { padding: 6px 8px; border: 1px solid #d1d5db; text-align: center; }
-  th { background: #1e3a5f !important; color: white !important; font-weight: bold; white-space: nowrap; }
-  td { text-align: right; }
-  tr:nth-child(even) { background: #f1f5f9; }
-  .footer { text-align: center; font-size: 9px; color: #94a3b8; margin-top: 15px; }
-</style></head>
-<body>
-  <h1>تقرير التذاكر</h1>
-  <div class="subtitle">${ticketCount} تذكرة — ${format(new Date(), 'd/M/yyyy h:mm a')}</div>
-  <table>
-    <thead><tr>${headerCells}</tr></thead>
-    <tbody>${bodyRowsHtml}</tbody>
-  </table>
-  <div class="footer">تم إنشاؤه بواسطة نظام إدارة تذاكر الصيانة — ${format(new Date(), 'd/M/yyyy')}</div>
-</body></html>`;
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        // Use dynamic import of html2canvas
+  body {
+    font-family: 'Cairo', sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    direction: rtl;
+    background: #f1f5f9;
+    color: #1e293b;
+    padding: 36px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .page {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.10);
+  }
+
+  /* ── Header ── */
+  .header {
+    background: linear-gradient(135deg, #0f2544 0%, #1e40af 100%);
+    padding: 32px 36px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    color: white;
+  }
+
+  .header-eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0.55;
+    margin-bottom: 6px;
+  }
+
+  .header-title {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+  }
+
+  .header-meta {
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.6;
+    margin-top: 6px;
+  }
+
+  .header-stats {
+    display: flex;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .stat-pill {
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 14px;
+    padding: 14px 22px;
+    text-align: center;
+  }
+
+  .stat-pill .num {
+    display: block;
+    font-size: 30px;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .stat-pill .lbl {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 0.65;
+    margin-top: 5px;
+  }
+
+  /* ── Table ── */
+  .table-wrap {
+    padding: 28px 28px 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+  }
+
+  thead tr { background: #1e3a5f; }
+
+  th {
+    color: white;
+    font-family: 'Cairo', sans-serif;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    padding: 13px 16px;
+    text-align: center;
+    white-space: nowrap;
+    border-left: 1px solid rgba(255,255,255,0.08);
+  }
+
+  th:first-child { border-left: none; }
+
+  td {
+    padding: 11px 16px;
+    text-align: right;
+    color: #334155;
+    font-family: 'Cairo', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    border-bottom: 1px solid #f1f5f9;
+    border-left: 1px solid #f1f5f9;
+    vertical-align: middle;
+  }
+
+  td:first-child { border-left: none; }
+
+  tr.even td { background: #f8fafc; }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* ── Footer ── */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 28px 28px;
+    margin-top: 8px;
+  }
+
+  .footer-text {
+    font-size: 10px;
+    font-weight: 600;
+    color: #94a3b8;
+    letter-spacing: 0.5px;
+  }
+
+  .footer-divider {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to left, transparent, #e2e8f0, transparent);
+    margin: 0 20px;
+  }
+
+  .footer-date {
+    font-size: 10px;
+    font-weight: 700;
+    color: #cbd5e1;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+
+    <div class="header">
+      <div>
+        <div class="header-eyebrow">نظام إدارة الصيانة</div>
+        <h1 class="header-title">تقرير التذاكر</h1>
+        <p class="header-meta">
+          تاريخ الإصدار: ${format(new Date(), 'd/M/yyyy')}
+          &nbsp;—&nbsp;
+          ${format(new Date(), 'h:mm a')}
+        </p>
+      </div>
+      <div class="header-stats">
+        <div class="stat-pill">
+          <span class="num">${ticketCount}</span>
+          <span class="lbl">تذكرة</span>
+        </div>
+        <div class="stat-pill">
+          <span class="num">${selectedColumns.size}</span>
+          <span class="lbl">عمود</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>${headerCells}</tr></thead>
+        <tbody>${bodyRowsHtml}</tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      <span class="footer-text">نظام إدارة تذاكر الصيانة</span>
+      <div class="footer-divider"></div>
+      <span class="footer-date">${format(new Date(), 'd/M/yyyy')}</span>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
         const html2canvasModule = await import('html2canvas');
         const html2canvasFn = html2canvasModule.default;
 
@@ -324,36 +507,42 @@ export function ExportTicketsModal({
         tempDiv.style.position = 'fixed';
         tempDiv.style.top = '-99999px';
         tempDiv.style.left = '-99999px';
-        tempDiv.style.width = '1200px';
+        tempDiv.style.width = '1400px';
         document.body.appendChild(tempDiv);
+
+        // انتظر تحميل خط Cairo
+        await document.fonts.ready;
+        await new Promise(r => setTimeout(r, 600));
 
         const finalCanvas = await html2canvasFn(tempDiv, {
           scale: 2,
           useCORS: true,
           logging: false,
-          width: 1200,
+          width: 1400,
           height: tempDiv.scrollHeight,
+          allowTaint: true,
         });
 
         document.body.removeChild(tempDiv);
 
-        const imgData = finalCanvas.toDataURL('image/jpeg', 0.95);
-        const imgWidth = 297; // A4 landscape in mm
+        const imgData = finalCanvas.toDataURL('image/jpeg', 0.97);
+        const imgWidth = 297; // A4 landscape mm
         const imgHeight = (finalCanvas.height * imgWidth) / finalCanvas.width;
 
         const { default: jsPDF } = await import('jspdf');
         const doc = new jsPDF('l', 'mm', 'a4');
+        const pageH = doc.internal.pageSize.getHeight();
         let heightLeft = imgHeight;
         let position = 0;
 
         doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= doc.internal.pageSize.getHeight();
+        heightLeft -= pageH;
 
         while (heightLeft > 0) {
           position = heightLeft - imgHeight;
           doc.addPage();
           doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-          heightLeft -= doc.internal.pageSize.getHeight();
+          heightLeft -= pageH;
         }
 
         const pdfBlob = doc.output('blob');
@@ -374,6 +563,7 @@ export function ExportTicketsModal({
     return keys.every(k => selectedColumns.has(k));
   };
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[600px] rounded-3xl max-h-[90vh] overflow-y-auto">
@@ -474,7 +664,7 @@ export function ExportTicketsModal({
             </div>
           </div>
 
-          {/* Summary of visible columns */}
+          {/* Summary */}
           <div className="bg-white/5 rounded-xl p-3 text-xs text-slate-400 text-right">
             <span className="text-slate-300 font-bold">عدد الأعمدة المختارة: </span>
             {selectedColumns.size} من {ALL_COLUMNS.length}
