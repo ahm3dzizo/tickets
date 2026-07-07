@@ -16,6 +16,30 @@ const ML_LOW_SAMPLE_THRESHOLD = 0.30;
 // Keyword fallback threshold (used when ML service is down)
 const MIN_CLASSIFY_SCORE = 2;
 
+// ── bynara Rate Limiter (sliding window) ──────────────────────────────────
+// Free plan: 10 requests/minute
+const NARA_RPM_LIMIT = 10;
+const _naraCallTimestamps: number[] = [];
+
+function naraQuotaAvailable(): boolean {
+  const now = Date.now();
+  // Remove timestamps older than 60 seconds
+  while (_naraCallTimestamps.length > 0 && now - _naraCallTimestamps[0] > 60_000) {
+    _naraCallTimestamps.shift();
+  }
+  return _naraCallTimestamps.length < NARA_RPM_LIMIT;
+}
+
+function naraMarkUsed(): void {
+  _naraCallTimestamps.push(Date.now());
+}
+
+function naraQuotaStatus(): string {
+  const now = Date.now();
+  const active = _naraCallTimestamps.filter(t => now - t <= 60_000).length;
+  return `${active}/${NARA_RPM_LIMIT} req/min`;
+}
+
 export interface ClassificationResult {
   primaryType: string;
   allTypes:    string[];
@@ -32,9 +56,9 @@ export interface ClassificationResult {
 
 /**
  * Main classification pipeline:
- * 1. ML model (TF-IDF + Logistic Regression) — primary
- * 2. Gemini AI — fallback when ML confidence < 70%
- * 3. Keyword matching — last resort when ML service is down
+ * 1. NaraRouter/Gemini AI — primary (best accuracy)
+ * 2. ML model (TF-IDF + Logistic Regression) — fallback when Gemini unavailable
+ * 3. Keyword matching — last resort
  * 4. unclassified
  */
 export async function classifyTicket(
@@ -43,11 +67,45 @@ export async function classifyTicket(
   options?: { forceReclassify?: boolean; skipGemini?: boolean }
 ): Promise<ClassificationResult> {
 
-  // ── 1. ML model ────────────────────────────────────────────────────────
-  const mlResult = await classifyWithML(description);
-
-  // Load keywords once — used for override check and low-confidence fallback
+  // Load keywords once — used for override check and fallbacks
   const keywords = await loadKeywordsFromDB();
+
+  // ── 1. NaraRouter (bynara) — primary (rate-limited to 10 req/min) ────────
+  if (!options?.skipGemini && geminiEnabled()) {
+    if (naraQuotaAvailable()) {
+      naraMarkUsed();
+      try {
+        const geminiResult = await classifyWithGemini(description);
+        if (geminiResult && geminiResult.primaryType !== "unclassified") {
+          learnFromGeminiResult(description, geminiResult.allTypes).catch(() => {});
+          const [subType, subTypeId] = await resolveSubTypeFromML(description, geminiResult.primaryType);
+          return {
+            primaryType: geminiResult.primaryType,
+            allTypes:    geminiResult.allTypes,
+            typeId:      null,
+            subType,
+            subTypeId,
+            confidence:  geminiResult.confidence,
+            source:      "gemini",
+            reason:      geminiResult.reason,
+          };
+        }
+      } catch (err: any) {
+        // If 429 (rate limited by server), remove our optimistic timestamp
+        if (err.message?.includes('429') || err.message?.includes('rate')) {
+          _naraCallTimestamps.pop();
+          console.warn("[classify] NaraRouter 429 — quota full, falling back to ML");
+        } else {
+          console.error("[classify] NaraRouter primary error:", err.message);
+        }
+      }
+    } else {
+      console.log(`[classify] NaraRouter quota full (${naraQuotaStatus()}) — using ML`);
+    }
+  }
+
+  // ── 2. ML model — fallback when Gemini unavailable/failed ──────────────
+  const mlResult = await classifyWithML(description);
 
   if (mlResult && mlResult.primaryType !== "unclassified") {
     const threshold = LOW_SAMPLE_TYPES.has(mlResult.primaryType)
@@ -92,30 +150,7 @@ export async function classifyTicket(
       };
     }
 
-    // ML not confident enough → try Gemini
-    if (!options?.skipGemini && geminiEnabled()) {
-      try {
-        const geminiResult = await classifyWithGemini(description);
-        if (geminiResult && geminiResult.primaryType !== "unclassified") {
-          learnFromGeminiResult(description, geminiResult.allTypes).catch(() => {});
-          const [subType, subTypeId] = await resolveSubTypeFromML(description, geminiResult.primaryType);
-          return {
-            primaryType: geminiResult.primaryType,
-            allTypes:    geminiResult.allTypes,
-            typeId:      null,
-            subType,
-            subTypeId,
-            confidence:  geminiResult.confidence,
-            source:      "gemini",
-            reason:      geminiResult.reason,
-          };
-        }
-      } catch (err: any) {
-        console.error("[classify] Gemini fallback error:", err.message);
-      }
-    }
-
-    // Gemini not available/failed → try keywords before accepting low-confidence ML
+    // ML not confident enough → try keywords before accepting low-confidence ML
     const kwFallback = classifyFromKeywordsDB(description, keywords);
     if (kwFallback.primaryType !== "unclassified" && kwFallback.confidence >= MIN_CLASSIFY_SCORE) {
       return {
@@ -145,7 +180,7 @@ export async function classifyTicket(
     };
   }
 
-  // ── 2. ML service is down → keyword fallback ────────────────────────────
+  // ── 3. Keyword matching — last resort ───────────────────────────────────
   const kwResult = classifyFromKeywordsDB(description, keywords);
 
   if (kwResult.primaryType !== "unclassified" && kwResult.confidence >= MIN_CLASSIFY_SCORE) {
@@ -158,26 +193,6 @@ export async function classifyTicket(
       confidence:  kwResult.confidence,
       source:      "keywords",
     };
-  }
-
-  // ── 3. Gemini last resort ───────────────────────────────────────────────
-  if (!options?.skipGemini && geminiEnabled()) {
-    try {
-      const geminiResult = await classifyWithGemini(description);
-      if (geminiResult && geminiResult.primaryType !== "unclassified") {
-        learnFromGeminiResult(description, geminiResult.allTypes).catch(() => {});
-        return {
-          primaryType: geminiResult.primaryType,
-          allTypes:    geminiResult.allTypes,
-          typeId:      null,
-          confidence:  geminiResult.confidence,
-          source:      "gemini",
-          reason:      geminiResult.reason,
-        };
-      }
-    } catch (err: any) {
-      console.error("[classify] Gemini error:", err.message);
-    }
   }
 
   // ── 4. Unclassified ─────────────────────────────────────────────────────
