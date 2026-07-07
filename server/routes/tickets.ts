@@ -127,17 +127,26 @@ async function autoSendOutOfScope(uid: string, ticket: any) {
   } catch {}
 }
 
-async function classifyInBackground(description: string, ticketId: string, projectId?: string, keepManualSupervisors?: boolean, opts?: { skipGemini?: boolean }) {
+async function classifyInBackground(
+  description: string,
+  ticketId: string,
+  projectId?: string,
+  keepManualSupervisors?: boolean,
+  opts?: { skipGemini?: boolean; forceGemini?: boolean }
+): Promise<string | null> { // returns the classification source used
   try {
-    // لا نُعيد تصنيف التذاكر التي لها تصنيف موثوق (من Excel أو مستخدم) — فقط unclassified
+    // لا نُعيد تصنيف التذاكر التي لها تصنيف موثوق — إلا إذا كان طلب إعادة تصنيف بـ AI صريح
     const existing = await prisma.ticket.findUnique({
       where: { id: ticketId },
       select: { type: true },
     });
-    if (existing?.type && existing.type !== "unclassified") return;
+    if (!opts?.forceGemini && existing?.type && existing.type !== "unclassified") return null;
 
     const classification = await classifyTicket(description, projectId, opts);
-    if (classification.primaryType === "unclassified") return; // لا نحفظ unclassified من keywords
+    if (classification.primaryType === "unclassified") return null;
+
+    // لو forceGemini وكانت النتيجة من ML (مش AI) → لا تحفظ، انتظر جولة قادمة
+    if (opts?.forceGemini && classification.source !== "gemini") return classification.source;
 
     const typeToSpecialty = await buildTypeToSpecialtyMap();
     const allTypes: string[] = classification.allTypes;
@@ -179,24 +188,57 @@ async function classifyInBackground(description: string, ticketId: string, proje
     await prisma.ticket.updateMany({ where: { id: ticketId }, data: updateData });
     invalidateReferenceCache();
     invalidateKeywordCache();
+    return classification.source;
   } catch (err) {
     console.warn(` ⚠️ Background classify failed for ticket ${ticketId}:`, err);
+    return null;
   }
 }
 
-// Processes a large list of tickets for background classification with limited concurrency
-// to avoid overwhelming the ML service or Gemini API during bulk imports.
+// Processes a large list of tickets for background classification with limited concurrency.
+// 1st pass: bynara first (rate-limited) → ML fallback when quota full.
+// 2nd pass: after 65s (quota reset), retry ML-classified tickets with bynara only.
 async function bulkClassifyInBackground(tickets: Array<{ id: string; description: string; projectId: string | null }>) {
   const CONCURRENCY = 5;
-  const DELAY_MS = 200;
+  const DELAY_MS = 300;
+  const mlClassifiedIds: { id: string; description: string; projectId: string | null }[] = [];
+
+  // ── 1st pass: bynara when quota available, ML as fallback ───────────────
   for (let i = 0; i < tickets.length; i += CONCURRENCY) {
     const batch = tickets.slice(i, i + CONCURRENCY);
-    await Promise.allSettled(
-      batch.map(t => classifyInBackground((t.description || "").trim(), t.id, t.projectId || undefined, false, { skipGemini: true }))
+    const results = await Promise.allSettled(
+      batch.map(t => classifyInBackground((t.description || "").trim(), t.id, t.projectId || undefined, false))
     );
+    // collect tickets that fell back to ML (bynara quota was full)
+    results.forEach((result, idx) => {
+      const source = result.status === "fulfilled" ? result.value : null;
+      if (source && (source === "ml" || source === "ml_low_confidence" || source === "keywords")) {
+        mlClassifiedIds.push(batch[idx]);
+      }
+    });
     if (i + CONCURRENCY < tickets.length) {
       await new Promise(r => setTimeout(r, DELAY_MS));
     }
+  }
+
+  // ── 2nd pass: retry ML-classified tickets with bynara after quota resets ─
+  if (mlClassifiedIds.length > 0) {
+    console.log(`[bulk classify] Scheduling bynara retry for ${mlClassifiedIds.length} ML-classified tickets in 65s...`);
+    setTimeout(async () => {
+      console.log(`[bulk classify] Starting bynara retry pass for ${mlClassifiedIds.length} tickets...`);
+      let upgraded = 0;
+      for (let i = 0; i < mlClassifiedIds.length; i += CONCURRENCY) {
+        const batch = mlClassifiedIds.slice(i, i + CONCURRENCY);
+        const results = await Promise.allSettled(
+          batch.map(t => classifyInBackground((t.description || "").trim(), t.id, t.projectId || undefined, false, { forceGemini: true }))
+        );
+        results.forEach(r => { if (r.status === "fulfilled" && r.value === "gemini") upgraded++; });
+        if (i + CONCURRENCY < mlClassifiedIds.length) {
+          await new Promise(r => setTimeout(r, DELAY_MS));
+        }
+      }
+      console.log(`[bulk classify] Retry complete: ${upgraded}/${mlClassifiedIds.length} upgraded to bynara AI.`);
+    }, 65_000);
   }
 }
 
