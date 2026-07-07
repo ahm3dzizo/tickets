@@ -31,7 +31,15 @@ async function testAPI() {
             })
         });
 
-        const data = await response.json();
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error(`❌ الخادم أرجع رد غير متوقع (HTML بدلًا من JSON). كود الخطأ: ${response.status} ${response.statusText}`);
+            console.error("تفاصيل الرد (أول 100 حرف):", text.substring(0, 100).replace(/\n/g, " "));
+            return;
+        }
 
         if (!response.ok) {
             console.error("❌ خطأ من الخادم:", data.error?.message || response.statusText);
