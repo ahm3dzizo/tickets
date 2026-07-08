@@ -7,7 +7,7 @@ const BASE = '/api';
 const TOKEN_KEY = 'retal_auth_token';
 
 function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY) || localStorage.getItem('token');
 }
 
 export const authStorage = {
