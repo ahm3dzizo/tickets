@@ -150,13 +150,7 @@ export default function TicketsList() {
   const handleAutoLink = async () => {
     setAutoLinking(true);
     try {
-      const response = await fetch('/api/tickets/auto-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({})
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      const data = await ticketsApi.autoLink();
       toast.success(data.message);
       if (data.count > 0) loadData();
     } catch (err: any) { toast.error(err.message || 'فشل عملية الربط التلقائي'); }

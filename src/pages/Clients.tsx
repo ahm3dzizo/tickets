@@ -13,7 +13,7 @@ import { ClientForm } from '@/components/clients/ClientForm';
 import { DataImport } from '@/components/ui/DataImport';
 import { Project, Ticket as ClientTicket } from '@/types';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import {
@@ -44,7 +44,8 @@ export default function Clients() {
   const [clients, setClients]           = useState<any[]>([]);
   const [projects, setProjects]         = useState<Project[]>([]);
   const [loading, setLoading]           = useState(true);
-  const [search, setSearch]             = useState('');
+  const [searchParams]                  = useSearchParams();
+  const [search, setSearch]             = useState(searchParams.get('search') || '');
   const [filterProject, setFilterProject] = useState('');
   const [filterBlock, setFilterBlock]   = useState('');
   const [importOpen, setImportOpen]     = useState(false);

@@ -143,6 +143,7 @@ export const ticketsApi = {
   deleteAll:    ()                                     => del<any>('/tickets'),
   getNextId:    (projectId: string)                    => get<{ nextId: string }>(`/tickets/next-id?projectId=${projectId}`).then(res => res.nextId),
   getTicketIds: (projectId: string)                    => get<{ ticketId: string; id: string; type: string; status: string; closedAt: string | null }[]>(`/tickets/ticketids?projectId=${projectId}`),
+  autoLink:     ()                                     => post<{ count: number; message: string }>('/tickets/auto-link', {}),
   importExcel: async (file: File, projectId: string, closeMissingTickets: boolean = false, onProgress?: (p: number) => void) => {
     const form = new FormData();
     form.append('file', file);
@@ -211,8 +212,8 @@ export const whatsappApi = {
     get<{ qr: string }>('/whatsapp/qr'),
   pairByPhone: (phone: string) =>
     post<{ code: string }>('/whatsapp/pair', { phone }),
-  send: (phone: string, message: string) =>
-    post<{ sent: boolean; fallback: boolean }>('/whatsapp/send', { phone, message }),
+  send: (phone: string, message: string, ticketId?: string) =>
+    post<{ sent: boolean; fallback: boolean }>('/whatsapp/send', { phone, message, ticketId }),
   verify: () =>
     post<{ connected: boolean }>('/whatsapp/verify', {}),
   start: () =>

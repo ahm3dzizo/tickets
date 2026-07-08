@@ -67,6 +67,17 @@ router.post('/send', requireAuth, async (req: AuthRequest, res) => {
     res.status(400).json({ error: errMsg });
     return;
   }
+
+  // Log to audit if linked to a ticket
+  const ticketId = (req.body as any).ticketId;
+  if (ticketId) {
+    try {
+      await (prisma as any).ticketAudit.create({
+        data: { ticketId, field: 'واتساب', oldValue: null, newValue: 'تم إرسال رسالة يدوية للعميل', changedBy: uid }
+      });
+    } catch {}
+  }
+
   res.json(result);
 });
 
@@ -286,6 +297,11 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
             appointmentNotes: notes || null
           }
         });
+        try {
+          await (prisma as any).ticketAudit.create({
+            data: { ticketId: t.id, field: 'واتساب', oldValue: null, newValue: 'تم إرسال خيارات موعد للعميل', changedBy: uid }
+          });
+        } catch {}
       }
       res.json(result);
     } else {

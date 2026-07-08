@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
   User, 
@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
@@ -105,6 +106,7 @@ export default function TicketDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [editStatus, setEditStatus] = useState('');
   const [editPriority, setEditPriority] = useState('');
+  const [editDescription, setEditDescription] = useState('');
   const [editTypes, setEditTypes] = useState<TicketType[]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [availableSupervisors, setAvailableSupervisors] = useState<{uid: string; displayName: string; specialties: string[]}[]>([]);
@@ -202,6 +204,7 @@ export default function TicketDetail() {
     if (!ticket) return;
     setEditStatus(ticket.status);
     setEditPriority(String(ticket.priority));
+    setEditDescription(ticket.description || '');
     const initTypes = (ticket.detectedTypes as TicketType[] | undefined)?.length
       ? (ticket.detectedTypes as TicketType[])
       : [ticket.type];
@@ -243,6 +246,7 @@ export default function TicketDetail() {
       const selectedSupervisors = availableSupervisors.filter(s => editAssignedSupervisorIds.includes(s.uid));
       await ticketsApi.update(ticket.id, {
         status:                 editStatus,
+        description:            editDescription,
         priority:               isNaN(Number(editPriority)) ? editPriority : Number(editPriority),
         type:                   editTypes[0] as TicketType,
         detectedTypes:          editTypes,
@@ -514,7 +518,9 @@ export default function TicketDetail() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 text-xs">رقم الفيلا</span>
-                    <span className="text-white font-bold">{ticket.villaNumber}</span>
+                    <Link to={`/clients?search=${ticket.villaNumber}`} className="text-blue-400 font-bold hover:underline hover:text-blue-300 transition-colors">
+                      {ticket.villaNumber}
+                    </Link>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 text-xs">رقم البلوك</span>
@@ -803,6 +809,17 @@ export default function TicketDetail() {
                   <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditPriority('3')}>3 - منخفض</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+            </div>
+
+            {/* الوصف */}
+            <div className="space-y-1.5">
+              <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">وصف التذكرة</Label>
+              <Textarea 
+                value={editDescription} 
+                onChange={(e) => setEditDescription(e.target.value)} 
+                className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl min-h-[80px] text-right" 
+                placeholder="تفاصيل المشكلة..." 
+              />
             </div>
 
             {/* نوع الصيانة */}
