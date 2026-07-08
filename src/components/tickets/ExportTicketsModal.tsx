@@ -297,7 +297,7 @@ export function ExportTicketsModal({
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: Arial, Tahoma, sans-serif;
   direction: rtl;
   text-align: right;
   background: #f1f5f9;
@@ -315,9 +315,9 @@ body {
   padding: 11px 20px;
   background: linear-gradient(135deg, #0f2544, #1e40af);
   color: white;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: Arial, sans-serif;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: bold;
   border-radius: 10px;
   margin-bottom: 16px;
 }
@@ -351,15 +351,15 @@ kbd {
 
 .eyebrow {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: bold;
   opacity: 0.70;
   margin-bottom: 6px;
 }
 
 .header h1 {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: Arial, sans-serif;
   font-size: 28px;
-  font-weight: 900;
+  font-weight: bold;
   line-height: 1.2;
 }
 
@@ -367,7 +367,7 @@ kbd {
   font-size: 12px;
   opacity: 0.75;
   margin-top: 5px;
-  font-weight: 500;
+  font-weight: bold;
 }
 
 .stats { display: flex; gap: 10px; flex-shrink: 0; }
@@ -380,8 +380,8 @@ kbd {
   text-align: center;
 }
 
-.stat .num { display: block; font-size: 28px; font-weight: 900; line-height: 1; }
-.stat .lbl { display: block; font-size: 11px; font-weight: 600; opacity: 0.80; margin-top: 4px; }
+.stat .num { display: block; font-size: 28px; font-weight: bold; line-height: 1; }
+.stat .lbl { display: block; font-size: 11px; font-weight: bold; opacity: 0.80; margin-top: 4px; }
 
 /* Table */
 .table-wrap { padding: 20px 20px 0; }
@@ -398,9 +398,9 @@ thead { background: #1e3a5f; }
 
 th {
   color: white;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: Arial, sans-serif;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: bold;
   padding: 12px 14px;
   text-align: center;
   border-left: 1px solid rgba(255,255,255,0.10);
@@ -412,9 +412,9 @@ td {
   padding: 10px 14px;
   text-align: right;
   color: #334155;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: Arial, sans-serif;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: bold;
   border-bottom: 1px solid #e2e8f0;
   border-left: 1px solid #e2e8f0;
   vertical-align: middle;
