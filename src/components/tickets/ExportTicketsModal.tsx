@@ -158,7 +158,7 @@ export function ExportTicketsModal({
     switch (colKey) {
       case 'ticketId':    return ticket.ticketId  || '---';
       case 'refNumber':   return ticket.refNumber || '---';
-      case 'description': return ticket.description || '';
+      case 'description': return (ticket.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim();
       case 'villaNumber': return ticket.villaNumber  || '';
       case 'status':      return statusTranslations[ticket.status] || ticket.status || '---';
       case 'priority': {
