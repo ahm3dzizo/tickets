@@ -381,8 +381,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // القاعدة: الموعد ينتقل للتذاكر الجديدة فقط لو كان في المستقبل (غداً فصاعداً)
     // الموعد اليوم أو قبله يخص التذاكر القديمة ولا ينتقل
     // الملاحظات (appointmentNotes) لا تنتقل لأن رسالة الواتساب ما بُعتتش للتذكرة الجديدة
-    const activeAppointmentsByVilla = new Map<string, { time: string | null, awaitingReply: boolean }>();
-    const activeAppointmentsByClient = new Map<string, { time: string | null, awaitingReply: boolean }>();
+    const activeAppointmentsByVilla = new Map<string, string>();
+    const activeAppointmentsByClient = new Map<string, string>();
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -392,23 +392,19 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     tomorrowStart.setDate(tomorrowStart.getDate() + 1);
 
     for (const t of existingRows) {
-      if (!t.appointmentTime && !t.appointmentAwaitingReply) continue;
+      if (!t.appointmentTime) continue;
       if (t.status === "closed" || t.status === "out_of_scope") continue;
 
-      if (t.appointmentTime) {
-        const apptDate = new Date(t.appointmentTime);
-        // فقط المواعيد المستقبلية (غداً فصاعداً) تنتقل للتذاكر الجديدة
-        const isStrictlyFuture = isNaN(apptDate.getTime()) || apptDate >= tomorrowStart;
-        if (!isStrictlyFuture) continue;
-      }
-
-      const payload = { time: t.appointmentTime, awaitingReply: !!t.appointmentAwaitingReply };
+      const apptDate = new Date(t.appointmentTime);
+      // فقط المواعيد المستقبلية (غداً فصاعداً) تنتقل للتذاكر الجديدة
+      const isStrictlyFuture = isNaN(apptDate.getTime()) || apptDate >= tomorrowStart;
+      if (!isStrictlyFuture) continue;
 
       if (t.villaNumber) {
-        activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), payload);
+        activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), t.appointmentTime);
       }
       if (t.clientId) {
-        activeAppointmentsByClient.set(t.clientId, payload);
+        activeAppointmentsByClient.set(t.clientId, t.appointmentTime);
       }
     }
 
@@ -552,18 +548,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           continue;
         }
 
-        // ورث الموعد المستقبلي وعلامة الانتظار (بدون الملاحظات — رسالة الواتساب ما بُعتتش للتذكرة الجديدة)
-        const inheritedAppt: { time: string | null, awaitingReply: boolean } | null =
+        // ورث الموعد المستقبلي فقط (بدون الملاحظات — رسالة الواتساب ما بُعتتش للتذكرة الجديدة)
+        const inheritedTime: string | null =
           (cleanVilla && activeAppointmentsByVilla.get(cleanVilla)) ||
           (clientId && activeAppointmentsByClient.get(clientId)) ||
           null;
-
-        let finalStatus = status;
-        if (inheritedAppt && inheritedAppt.awaitingReply && status === 'open') {
-          finalStatus = 'waiting';
-        } else if (inheritedAppt && inheritedAppt.time && status === 'open') {
-          finalStatus = 'pending';
-        }
 
         toCreate.push({
           ticketId,
@@ -578,15 +567,14 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           type: finalType,
           typeId: finalTypeId,
           subTypeId: finalSubTypeId,
-          status: finalStatus,
+          status,
           priority: 3,
           assigneeName: primarySup?.displayName || null,
           assignedSupervisorId: primarySup?.uid || null,
           assignedSupervisorIds: supervisorIds,
           assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
           detectedTypes: finalTypes,
-          appointmentTime: inheritedAppt ? inheritedAppt.time : null,
-          appointmentAwaitingReply: inheritedAppt ? inheritedAppt.awaitingReply : false,
+          appointmentTime: inheritedTime,
           appointmentNotes: null, // لا نورث الملاحظات — الرسالة لم تُرسل للتذكرة الجديدة
           closedAt: closedAt ? new Date(closedAt) : null,
         });
