@@ -348,7 +348,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const [existingRows, clientRows, ticketTypes, keywordsCache, typeToSpecialty, projectSups] = await Promise.all([
       prisma.ticket.findMany({
         where: { projectId },
-        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentNotes: true, clientId: true, villaNumber: true, description: true },
+        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentAwaitingReply: true, appointmentNotes: true, clientId: true, villaNumber: true, description: true },
       }),
       prisma.client.findMany({
         where: { projectId },
@@ -381,8 +381,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // القاعدة: الموعد ينتقل للتذاكر الجديدة فقط لو كان في المستقبل (غداً فصاعداً)
     // الموعد اليوم أو قبله يخص التذاكر القديمة ولا ينتقل
     // الملاحظات (appointmentNotes) لا تنتقل لأن رسالة الواتساب ما بُعتتش للتذكرة الجديدة
-    const activeAppointmentsByVilla = new Map<string, string>();
-    const activeAppointmentsByClient = new Map<string, string>();
+    const activeAppointmentsByVilla = new Map<string, { time: string | null, awaitingReply: boolean }>();
+    const activeAppointmentsByClient = new Map<string, { time: string | null, awaitingReply: boolean }>();
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -392,19 +392,23 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     tomorrowStart.setDate(tomorrowStart.getDate() + 1);
 
     for (const t of existingRows) {
-      if (!t.appointmentTime) continue;
+      if (!t.appointmentTime && !t.appointmentAwaitingReply) continue;
       if (t.status === "closed" || t.status === "out_of_scope") continue;
 
-      const apptDate = new Date(t.appointmentTime);
-      // فقط المواعيد المستقبلية (غداً فصاعداً) تنتقل للتذاكر الجديدة
-      const isStrictlyFuture = isNaN(apptDate.getTime()) || apptDate >= tomorrowStart;
-      if (!isStrictlyFuture) continue;
+      if (t.appointmentTime) {
+        const apptDate = new Date(t.appointmentTime);
+        // فقط المواعيد المستقبلية (غداً فصاعداً) تنتقل للتذاكر الجديدة
+        const isStrictlyFuture = isNaN(apptDate.getTime()) || apptDate >= tomorrowStart;
+        if (!isStrictlyFuture) continue;
+      }
+
+      const payload = { time: t.appointmentTime, awaitingReply: !!t.appointmentAwaitingReply };
 
       if (t.villaNumber) {
-        activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), t.appointmentTime);
+        activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), payload);
       }
       if (t.clientId) {
-        activeAppointmentsByClient.set(t.clientId, t.appointmentTime);
+        activeAppointmentsByClient.set(t.clientId, payload);
       }
     }
 
@@ -548,11 +552,18 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           continue;
         }
 
-        // ورث الموعد المستقبلي فقط (بدون الملاحظات — رسالة الواتساب ما بُعتتش للتذكرة الجديدة)
-        const inheritedTime: string | null =
+        // ورث الموعد المستقبلي وعلامة الانتظار (بدون الملاحظات — رسالة الواتساب ما بُعتتش للتذكرة الجديدة)
+        const inheritedAppt: { time: string | null, awaitingReply: boolean } | null =
           (cleanVilla && activeAppointmentsByVilla.get(cleanVilla)) ||
           (clientId && activeAppointmentsByClient.get(clientId)) ||
           null;
+
+        let finalStatus = status;
+        if (inheritedAppt && inheritedAppt.awaitingReply && status === 'open') {
+          finalStatus = 'waiting';
+        } else if (inheritedAppt && inheritedAppt.time && status === 'open') {
+          finalStatus = 'pending';
+        }
 
         toCreate.push({
           ticketId,
@@ -567,14 +578,15 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           type: finalType,
           typeId: finalTypeId,
           subTypeId: finalSubTypeId,
-          status,
+          status: finalStatus,
           priority: 3,
           assigneeName: primarySup?.displayName || null,
           assignedSupervisorId: primarySup?.uid || null,
           assignedSupervisorIds: supervisorIds,
           assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
           detectedTypes: finalTypes,
-          appointmentTime: inheritedTime,
+          appointmentTime: inheritedAppt ? inheritedAppt.time : null,
+          appointmentAwaitingReply: inheritedAppt ? inheritedAppt.awaitingReply : false,
           appointmentNotes: null, // لا نورث الملاحظات — الرسالة لم تُرسل للتذكرة الجديدة
           closedAt: closedAt ? new Date(closedAt) : null,
         });
