@@ -121,7 +121,7 @@ const [loading, setLoading] = useState(false);
 const [copying, setCopying] = useState(false);
 const [notes, setNotes] = useState('');
 const [maintItems, setMaintItems] = useState<{ description: string; status: string }[]>(
-selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?://[^\s]+)/g, '').trim(), status: 'تم' }))
+selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم' }))
 );
 const [showSaveModal, setShowSaveModal] = useState(false);
 const [savingReport, setSavingReport] = useState<'image' | 'pdf' | null>(null);
@@ -161,7 +161,7 @@ WhatsAppService.processTemplate(closingMsgTemplate, msgParams);
 
 // Sync items if selectedTickets changes
 React.useEffect(() => {
-setMaintItems(selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?://[^\s]+)/g, '').trim(), status: 'تم' })));
+setMaintItems(selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم' })));
 }, [selectedTickets]);
 
 
@@ -231,8 +231,17 @@ const response = await fetch('/api/generate-report', {
 method: 'POST',
 headers: {
 'Content-Type': 'application/json',
-...(authToken ? { Authorization: Bearer ${authToken}} : {}), }, body: JSON.stringify(payload), }); if (!response.ok) { toast.error('فشل إنشاء التقرير'); return; } const blob = await response.blob(); const firstTicketNo = selectedTickets[0]?.ticketId || selectedTickets[0]?.refNumber || 'ticket'; const baseName = ``${mainTicket?.villaNumber || 'villa'}-${firstTicketNo}; if (format === 'image') { downloadBlob(blob, ``${baseName}.jpg);
-toast.success('تم تحميل التقرير كصورة ✅');
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}), 
+          }, 
+          body: JSON.stringify(payload), 
+        }); 
+        if (!response.ok) { toast.error('فشل إنشاء التقرير'); return; } 
+        const blob = await response.blob(); 
+        const firstTicketNo = selectedTickets[0]?.ticketId || selectedTickets[0]?.refNumber || 'ticket'; 
+        const baseName = `${mainTicket?.villaNumber || 'villa'}-${firstTicketNo}`; 
+        if (format === 'image') { 
+          downloadBlob(blob, `${baseName}.jpg`);
+          toast.success('تم تحميل التقرير كصورة ✅');
 setShowSaveModal(false);
 } else {
 const { jsPDF } = await import('jspdf');
@@ -247,8 +256,7 @@ const imgAspect = img.width / img.height;
 const pdfW = pageW - 20;
 const pdfH = pdfW / imgAspect;
 pdf.addImage(imgUrl, 'JPEG', 10, 10, pdfW, Math.min(pdfH, pageH - 20));
-pdf.save(${baseName}.pdf`);
-URL.revokeObjectURL(imgUrl);
+pdf.save(`${baseName}.pdf`);
 resolve();
 };
 img.src = imgUrl;
@@ -274,7 +282,7 @@ if (isWhatsAppSent) {
 try {
 await whatsappApi.send(targetClient.phone, previewMessage);
 } catch (e: any) {
-toast.error(تعذر إرسال رسالة الواتساب:${e.message || 'خطأ غير معروف'}`);
+toast.error(`تعذر إرسال رسالة الواتساب:${e.message || 'خطأ غير معروف'}`);
 setLoading(false);
 return;
 }
@@ -294,7 +302,7 @@ closureNotes: notes || (closeType === 'absent' ? 'إغلاق لعدم تواجد
 ));
 
 const label = closeType === 'absent' ? 'عدم التواجد' : 'خارج الاختصاص';
-toast.success(تم إغلاق التذاكر (${label})${isWhatsAppSent ? ' وإرسال الرسالة 💬' : ''});
+toast.success(`تم إغلاق التذاكر (${label})${isWhatsAppSent ? ' وإرسال الرسالة 💬' : ''}`);
 onSuccess();
 onOpenChange(false);
 } catch {
@@ -353,7 +361,7 @@ const response = await fetch('/api/generate-report', {
 method: 'POST',
 headers: {
 'Content-Type': 'application/json',
-...(authToken ? { Authorization: Bearer ${authToken}` } : {}),
+...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
 },
 body: JSON.stringify({
 ...reportPayload,
@@ -373,7 +381,7 @@ return;
 const blob = await response.blob();
 
 const firstTicketNo = selectedTickets[0]?.ticketId || selectedTickets[0]?.refNumber || 'ticket';
-const fileName = ``${mainTicket?.villaNumber || 'villa'}-${firstTicketNo}.jpg;
+const fileName = `${mainTicket?.villaNumber || 'villa'}-${firstTicketNo}.jpg`;
 let saved = false;
 
 // We no longer automatically download the blob to avoid cluttering the user's PC.
@@ -387,7 +395,7 @@ const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
 const writable = await fileHandle.createWritable();
 await writable.write(blob);
 await writable.close();
-toast.success(تم حفظ التقرير في${dirHandle.name}/${fileName});
+toast.success(`تم حفظ التقرير في ${dirHandle.name}/${fileName}`);
 }
 } catch {
 await clearDirHandle();
@@ -410,7 +418,7 @@ maintenanceItems: maintItems
 // الـ backend يبعت التقرير + طلب الموافقة تلقائيًا بعد 3 ثوانٍ
 
 const isWhatsAppSent = targetClient?.phone && previewMessage;
-toast.success(تم إغلاق التذاكر بنجاح${isWhatsAppSent ? ' — جارٍ إرسال التقرير وطلب الموافقة 💬' : ''}`);
+toast.success(`تم إغلاق التذاكر بنجاح${isWhatsAppSent ? ' — جارٍ إرسال التقرير وطلب الموافقة 💬' : ''}`);
 onSuccess();
 onOpenChange(false);
 } catch (error) {
@@ -436,7 +444,7 @@ return (
 <div className="text-right p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1">
 <div className="text-xs text-slate-500 font-bold uppercase tracking-widest">فيلا رقم {currentVilla}</div>
 <div className="text-sm font-bold text-blue-400">
-{selectedTickets.map(t => #${t.ticketId || t.refNumber}).join(' ، ')}
+{selectedTickets.map(t => `#${t.ticketId || t.refNumber}`).join(' ، ')}
 </div>
 </div>
 </DialogHeader>

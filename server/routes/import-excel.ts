@@ -420,6 +420,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       id: string; 
       status: string; 
       closedAt: string | null; 
+      description?: string;
       type?: string; 
       typeId?: string; 
       detectedTypes?: string[];
