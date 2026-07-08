@@ -34,24 +34,26 @@ interface ColumnDef {
 }
 
 const ALL_COLUMNS: ColumnDef[] = [
-  { key: 'ticketId',        label: 'رقم التذكرة',    group: 'ticket',         groupLabel: 'معلومات التذكرة' },
-  { key: 'refNumber',       label: 'المرجع',          group: 'ticket',         groupLabel: 'معلومات التذكرة' },
-  { key: 'description',     label: 'وصف المشكلة',     group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'projectAbbr',     label: 'المقاول',         group: 'classification', groupLabel: 'التصنيف' },
+  { key: 'refNumber',       label: 'رقم التذكرة',     group: 'ticket',         groupLabel: 'معلومات التذكرة' },
   { key: 'villaNumber',     label: 'رقم الفيلا',      group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'clientName',      label: 'اسم العميل',      group: 'client',         groupLabel: 'العميل' },
+  { key: 'issuedAt',        label: 'تاريخ الإنشاء',   group: 'dates',          groupLabel: 'التواريخ' },
+  { key: 'description',     label: 'وصف المشكلة',     group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'clientPhone',     label: 'رقم الهاتف',      group: 'client',         groupLabel: 'العميل' },
+  
+  // Optional columns
+  { key: 'ticketId',        label: 'المعرف الداخلي',  group: 'ticket',         groupLabel: 'معلومات التذكرة' },
   { key: 'status',          label: 'الحالة',          group: 'ticket',         groupLabel: 'معلومات التذكرة' },
   { key: 'priority',        label: 'الأولوية',        group: 'ticket',         groupLabel: 'معلومات التذكرة' },
   { key: 'daysOpen',        label: 'عدد الأيام',      group: 'ticket',         groupLabel: 'معلومات التذكرة' },
-  { key: 'clientName',      label: 'اسم العميل',      group: 'client',         groupLabel: 'العميل' },
-  { key: 'clientPhone',     label: 'رقم الهاتف',      group: 'client',         groupLabel: 'العميل' },
   { key: 'blockNumber',     label: 'البلوك',          group: 'client',         groupLabel: 'العميل' },
-  { key: 'issuedAt',        label: 'تاريخ الإنشاء',   group: 'dates',          groupLabel: 'التواريخ' },
   { key: 'closedAt',        label: 'تاريخ الإغلاق',   group: 'dates',          groupLabel: 'التواريخ' },
   { key: 'appointmentTime', label: 'موعد الصيانة',    group: 'dates',          groupLabel: 'التواريخ' },
   { key: 'type',            label: 'التخصص',          group: 'classification', groupLabel: 'التصنيف' },
   { key: 'detectedTypes',   label: 'جميع التخصصات',  group: 'classification', groupLabel: 'التصنيف' },
   { key: 'supervisors',     label: 'المشرفون',        group: 'classification', groupLabel: 'التصنيف' },
   { key: 'projectName',     label: 'المشروع',         group: 'classification', groupLabel: 'التصنيف' },
-  { key: 'projectAbbr',     label: 'اختصار المشروع',  group: 'classification', groupLabel: 'التصنيف' },
 ];
 
 const GROUPS = Array.from(
@@ -69,16 +71,15 @@ const GROUP_ICONS: Record<string, React.ReactNode> = {
 const PRESETS: Record<string, { label: string; keys: string[] }> = {
   minimal:  {
     label: 'مختصر',
-    keys:  ['ticketId', 'refNumber', 'villaNumber', 'status', 'clientName', 'issuedAt'],
+    keys:  ['projectAbbr', 'refNumber', 'villaNumber', 'clientName', 'issuedAt'],
   },
   standard: {
     label: 'أساسي',
-    keys:  ['ticketId', 'refNumber', 'description', 'villaNumber', 'status', 'clientName', 'issuedAt', 'type'],
+    keys:  ['projectAbbr', 'refNumber', 'villaNumber', 'clientName', 'issuedAt', 'description', 'clientPhone'],
   },
   extended: {
     label: 'موسع',
-    keys:  ['ticketId', 'refNumber', 'description', 'villaNumber', 'status', 'priority', 'daysOpen',
-            'clientName', 'clientPhone', 'issuedAt', 'closedAt', 'type', 'supervisors'],
+    keys:  ['projectAbbr', 'refNumber', 'villaNumber', 'clientName', 'issuedAt', 'description', 'clientPhone', 'status', 'priority', 'daysOpen', 'type', 'supervisors'],
   },
   full: {
     label: 'كامل',
@@ -203,37 +204,58 @@ export function ExportTicketsModal({
     }
   };
 
-  // ── XLSX via SheetJS (real .xlsx, RTL) ───────────────────────────────────────
+  // ── XLSX via ExcelJS (real .xlsx, RTL, formatted) ──────────────────────────
   const exportXLSX = async (headers: string[], rows: string[][], fileName: string) => {
-    // Dynamic import keeps the bundle lean
-    const XLSX = await import('xlsx');
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-
-    // RTL sheet direction + freeze first row
-    ws['!views'] = [{
-      rightToLeft: true,
-      state:       'frozen',
-      ySplit:      1,
-      xSplit:      0,
-      topLeftCell: 'A2',
-    }];
-
-    // Auto column widths (Arabic chars are ~2× wide visually)
-    ws['!cols'] = headers.map((h, i) => ({
-      wch: Math.min(
-        Math.max(h.length * 2, ...rows.map(r => (r[i] || '').length), 12),
-        55
-      ),
-    }));
-
-    XLSX.utils.book_append_sheet(wb, ws, 'تذاكر');
-
-    const buf  = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([buf], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    // Use exceljs for formatting
+    const ExcelJS = await import('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'نظام إدارة الصيانة';
+    const sheet = workbook.addWorksheet('تذاكر', {
+      views: [{ rightToLeft: true, state: 'frozen', ySplit: 1 }]
     });
+
+    // Add Header Row
+    const headerRow = sheet.addRow(headers);
+    headerRow.height = 25;
+    headerRow.eachCell((cell) => {
+      cell.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; // Tailwind blue-800
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+    });
+
+    // Add Data Rows
+    rows.forEach((rowData) => {
+      const row = sheet.addRow(rowData);
+      row.eachCell((cell) => {
+        // Enforce Arial font and size 11 for all data cells. Use text format '@' to prevent Hindi numerals
+        cell.font = { name: 'Arial', size: 11 };
+        cell.numFmt = '@'; 
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFEEEEEE' } }, 
+          left: { style: 'thin', color: { argb: 'FFEEEEEE' } }, 
+          bottom: { style: 'thin', color: { argb: 'FFEEEEEE' } }, 
+          right: { style: 'thin', color: { argb: 'FFEEEEEE' } }
+        };
+      });
+    });
+
+    // Auto Column Width
+    sheet.columns.forEach((col, index) => {
+      let maxLen = headers[index].length;
+      rows.forEach(r => {
+        const len = (r[index] || '').length;
+        if (len > maxLen) maxLen = len;
+      });
+      // Cap at 45 characters width
+      col.width = Math.min(Math.max(maxLen + 5, 15), 45);
+    });
+
+    const buf = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     Object.assign(document.createElement('a'), { href: url, download: fileName }).click();
     URL.revokeObjectURL(url);
@@ -372,7 +394,8 @@ kbd {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 13px; /* Increased font size */
+  table-layout: fixed; /* Force fixed layout so columns don't overflow */
 }
 
 thead { background: #1e3a5f; }
@@ -380,31 +403,33 @@ thead { background: #1e3a5f; }
 th {
   color: white;
   font-family: 'Cairo', sans-serif;
-  font-size: 11px;
+  font-size: 13px; /* Increased font size */
   font-weight: 700;
-  padding: 10px 14px;
+  padding: 12px 14px;
   text-align: center;
-  white-space: nowrap;
   border-left: 1px solid rgba(255,255,255,0.10);
+  border-bottom: 2px solid #0f2544;
 }
 th:last-child { border-left: none; }
 
 td {
-  padding: 8px 14px;
+  padding: 10px 14px;
   text-align: right;
   color: #334155;
   font-family: 'Cairo', sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  border-bottom: 1px solid #f1f5f9;
-  border-left: 1px solid #f1f5f9;
-  vertical-align: top;
-  word-break: break-word;
+  font-size: 12px; /* Increased font size */
+  font-weight: 600;
+  border-bottom: 1px solid #e2e8f0;
+  border-left: 1px solid #e2e8f0;
+  vertical-align: middle;
+  word-wrap: break-word; /* Ensure long words break */
+  overflow-wrap: break-word;
 }
 td:last-child { border-left: none; }
 
-tr.alt td { background: #f8fafc; }
-tbody tr:last-child td { border-bottom: none; }
+tr:nth-child(even) td { background: #f8fafc; }
+tr:nth-child(odd) td { background: #ffffff; }
+tbody tr:last-child td { border-bottom: 2px solid #1e3a5f; }
 
 /* Footer */
 .footer {
@@ -412,12 +437,12 @@ tbody tr:last-child td { border-bottom: none; }
   justify-content: space-between;
   align-items: center;
   padding: 14px 20px 18px;
-  font-size: 10px;
-  color: #94a3b8;
-  font-weight: 600;
-  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 700;
+  margin-top: 10px;
 }
-.footer-line { flex: 1; height: 1px; background: #f1f5f9; margin: 0 16px; }
+.footer-line { flex: 1; height: 1px; background: #e2e8f0; margin: 0 16px; }
 </style>
 </head>
 <body>
