@@ -675,16 +675,18 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // ── 7.5 Close missing tickets if requested ─────────────────────────────────
     let closedMissingCount = 0;
     if (req.body.closeMissingTickets === "true") {
-      // Collect all valid ticketIds found in the file
+      // Collect all valid ticketIds found in the file — MUST normalize to match DB storage
+      // (DB strips leading zeros via normalizeTicketId, e.g. "00198616" → "198616")
       const fileTicketIds = new Set(
         rows.map(r => {
           const tId = r[mapping["ticketId"]];
-          return tId ? String(tId).trim() : "";
+          return tId ? normalizeTicketId(String(tId).trim()) : "";
         }).filter(Boolean)
       );
 
       // Find all existing open tickets that are NOT in the file
-      const missingToUpdate = existingRows.filter(t => t.status !== "closed" && !fileTicketIds.has(String(t.ticketId).trim()));
+      // Use normalizeTicketId on both sides to ensure consistent comparison
+      const missingToUpdate = existingRows.filter(t => t.status !== "closed" && !fileTicketIds.has(normalizeTicketId(String(t.ticketId).trim())));
       
       if (missingToUpdate.length > 0) {
         const missingIds = missingToUpdate.map(t => t.id);
