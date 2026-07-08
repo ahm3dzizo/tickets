@@ -514,7 +514,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         // Duplicate check (DB)
         const existing = existingMap.get(ticketId);
         if (existing) {
-          const statusChanged = existing.status !== status;
+          // لا تقم بإرجاع التذكرة لحالة "مفتوحة" إذا كانت في حالة متقدمة (معلقة، قيد التنفيذ، أو مغلقة)
+          const statusChanged = existing.status !== status && !(status === 'open' && existing.status !== 'open');
           const typeNeedsUpdate =
             (!existing.type || existing.type === "unclassified") &&
             finalType !== "unclassified";
@@ -525,7 +526,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
             const upd: any = { id: existing.id };
             if (statusChanged) {
               upd.status = status;
-              upd.closedAt = closedAt;
+              if (closedAt) upd.closedAt = closedAt;
             }
             if (descriptionNeedsUpdate) {
               upd.description = description;
