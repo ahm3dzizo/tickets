@@ -448,6 +448,12 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const ticketId = normalizeTicketId(rawTicketIdStr);
         if (!ticketId) { skippedInFile++; continue; }
 
+        // تجاهل صفوف الـ Subtotal/Total في تقارير Salesforce:
+        // هذه الصفوف تحتوي على رقم تذكرة (مثل 86) لكن بدون تاريخ ووحدة سكنية
+        const rawDate = get("createdAt");
+        const rawVillaForCheck = String(get("villaNumber") || "").trim();
+        if (!rawDate && !rawVillaForCheck) { skippedInFile++; continue; }
+
         // كشف مكررات الملف نفسه
         if (seenInFile.has(ticketId)) { skippedInFile++; continue; }
         seenInFile.add(ticketId);
