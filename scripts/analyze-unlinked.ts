@@ -11,7 +11,7 @@ async function main() {
   });
 
   const unclassifiedTickets = await prisma.ticket.findMany({
-    where: { OR: [{ type: null }, { type: 'unclassified' }] },
+    where: { OR: [{ type: '' }, { type: 'unclassified' }] },
   });
 
   console.log(`Unlinked Tickets: ${unlinkedTickets.length}`);
@@ -56,7 +56,7 @@ async function main() {
       where: {
         OR: [
           { clientId: null },
-          { type: null },
+          { type: '' },
           { type: 'unclassified' }
         ]
       }
