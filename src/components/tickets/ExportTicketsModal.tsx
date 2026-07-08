@@ -284,9 +284,6 @@ export function ExportTicketsModal({
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="UTF-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
 <title>تقرير التذاكر — ${dateStr}</title>
 <style>
 @media print {
@@ -300,7 +297,7 @@ export function ExportTicketsModal({
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   direction: rtl;
   text-align: right;
   background: #f1f5f9;
@@ -318,7 +315,7 @@ body {
   padding: 11px 20px;
   background: linear-gradient(135deg, #0f2544, #1e40af);
   color: white;
-  font-family: 'Cairo', sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
   font-size: 13px;
   font-weight: 700;
   border-radius: 10px;
@@ -353,26 +350,24 @@ kbd {
 }
 
 .eyebrow {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 2px;
-  opacity: 0.50;
+  opacity: 0.70;
   margin-bottom: 6px;
-  text-transform: uppercase;
 }
 
 .header h1 {
-  font-family: 'Cairo', sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
   font-size: 28px;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .meta {
-  font-size: 11px;
-  opacity: 0.55;
+  font-size: 12px;
+  opacity: 0.75;
   margin-top: 5px;
-  font-weight: 400;
+  font-weight: 500;
 }
 
 .stats { display: flex; gap: 10px; flex-shrink: 0; }
@@ -386,7 +381,7 @@ kbd {
 }
 
 .stat .num { display: block; font-size: 28px; font-weight: 900; line-height: 1; }
-.stat .lbl { display: block; font-size: 10px; font-weight: 500; opacity: 0.60; margin-top: 4px; }
+.stat .lbl { display: block; font-size: 11px; font-weight: 600; opacity: 0.80; margin-top: 4px; }
 
 /* Table */
 .table-wrap { padding: 20px 20px 0; }
@@ -394,16 +389,17 @@ kbd {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px; /* Increased font size */
-  table-layout: fixed; /* Force fixed layout so columns don't overflow */
+  font-size: 13px;
+  table-layout: fixed;
+  border: 1px solid #e2e8f0;
 }
 
 thead { background: #1e3a5f; }
 
 th {
   color: white;
-  font-family: 'Cairo', sans-serif;
-  font-size: 13px; /* Increased font size */
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
   font-weight: 700;
   padding: 12px 14px;
   text-align: center;
@@ -416,13 +412,13 @@ td {
   padding: 10px 14px;
   text-align: right;
   color: #334155;
-  font-family: 'Cairo', sans-serif;
-  font-size: 12px; /* Increased font size */
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12px;
   font-weight: 600;
   border-bottom: 1px solid #e2e8f0;
   border-left: 1px solid #e2e8f0;
   vertical-align: middle;
-  word-wrap: break-word; /* Ensure long words break */
+  word-wrap: break-word;
   overflow-wrap: break-word;
 }
 td:last-child { border-left: none; }
