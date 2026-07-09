@@ -148,6 +148,7 @@ const DEFAULT_STATUS_OPTIONS = [
   { key: 'in-progress',   label: 'قيد التنفيذ' },
   { key: 'waiting',       label: 'بانتظار الموعد' },
   { key: 'pending',       label: 'معلقة' },
+  { key: 'contractor',    label: 'مقاول' },
   { key: 'completed',     label: 'مكتملة' },
   { key: 'closed',        label: 'مغلقة' },
   { key: 'out_of_scope',  label: 'خارج اختصاص', danger: true },
@@ -200,7 +201,13 @@ export function BulkActionBar({
               <DropdownMenuItem
                 key={opt.key}
                 className={cn('text-start justify-start hover:bg-white/5', opt.danger && 'hover:bg-rose-500/10 text-rose-400')}
-                onClick={() => onStatusChange(opt.key)}
+                onClick={() => {
+                  if (opt.key === 'contractor' && onContractor) {
+                    onContractor();
+                  } else {
+                    onStatusChange(opt.key);
+                  }
+                }}
               >
                 {opt.label}
               </DropdownMenuItem>
@@ -221,14 +228,6 @@ export function BulkActionBar({
             onClick={onInternalAppointment}>
             <CalendarDays className="w-3.5 h-3.5" />
             إضافة موعد
-          </Button>
-        )}
-        {onContractor && (
-          <Button variant="outline" size="sm"
-            className="border-violet-500/30 bg-violet-500/10 text-violet-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0"
-            onClick={onContractor}>
-            <HardHat className="w-3.5 h-3.5" />
-            مقاول
           </Button>
         )}
         {onClose && !isMultiClient && (

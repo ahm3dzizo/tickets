@@ -198,6 +198,7 @@ export default function ProjectDetail() {
                 { key: 'open', label: 'مفتوحة' },
                 { key: 'in-progress', label: 'جاري العمل' },
                 { key: 'waiting', label: 'بانتظار الموعد' },
+                { key: 'contractor', label: 'مقاول' },
               ]}
             />
           );
