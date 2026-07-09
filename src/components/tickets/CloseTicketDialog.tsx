@@ -125,6 +125,7 @@ selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?:
 );
 const [showSaveModal, setShowSaveModal] = useState(false);
 const [savingReport, setSavingReport] = useState<'image' | 'pdf' | null>(null);
+const [cardStatus, setCardStatus] = useState('تم');
 
 const [closingMsgTemplate, setClosingMsgTemplate] = useState('');
 const [absentMsgTemplate, setAbsentMsgTemplate] = useState('');
@@ -214,6 +215,7 @@ project: projectName || '',
 ticket_date: mainTicket?.issuedAt || '',
 priority: priorityLabel,
 nhc: mainTicket?.projectAbbr || mainTicket?.refNumber?.split('-')[0] || '',
+status: cardStatus,
 };
 };
 
@@ -524,8 +526,9 @@ render={<Button variant="outline" className="w-32 justify-between border-border 
 </DropdownMenuTrigger>
 <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
 <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'تم')}>تم</DropdownMenuItem>
-<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'لم يتم ')}> لم يتم  </DropdownMenuItem>
-<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'مقاول')}>مقاول </DropdownMenuItem>
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'لم يتم')}>لم يتم</DropdownMenuItem>
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'جاري')}>جاري</DropdownMenuItem>
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'مقاول')}>مقاول</DropdownMenuItem>
 <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'خارج اختصاص')}>خارج اختصاص</DropdownMenuItem>
 <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'سوء استخدام')}>سوء استخدام</DropdownMenuItem>
 <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => updateItem(index, 'status', 'عدم تواجد')}>عدم تواجد</DropdownMenuItem>
@@ -543,6 +546,30 @@ onChange={(e) => updateItem(index, 'description', e.target.value)}
 ))}
 </div>
 </div>
+
+{/* Card Status Section */}
+{closeType === 'normal' && (
+<div className="space-y-2 mb-4">
+<Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">حالة البطاقة</Label>
+<DropdownMenu>
+<DropdownMenuTrigger
+render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-white rounded-xl h-10 px-3 text-xs" />}
+>
+{cardStatus}
+<ChevronDown className="w-3 h-3 opacity-60" />
+</DropdownMenuTrigger>
+<DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setCardStatus('تم')}>تم</DropdownMenuItem>
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setCardStatus('لم يتم')}>لم يتم</DropdownMenuItem>
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setCardStatus('جاري')}>جاري</DropdownMenuItem>
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setCardStatus('مقاول')}>مقاول</DropdownMenuItem>
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setCardStatus('خارج اختصاص')}>خارج اختصاص</DropdownMenuItem>
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setCardStatus('سوء استخدام')}>سوء استخدام</DropdownMenuItem>
+<DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setCardStatus('عدم تواجد')}>عدم تواجد</DropdownMenuItem>
+</DropdownMenuContent>
+</DropdownMenu>
+</div>
+)}
 
 {/* Notes Section */}
 <div className="space-y-2">
