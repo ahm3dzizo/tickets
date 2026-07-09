@@ -254,6 +254,8 @@ model ContractorVilla {
   blockNumber  String?
   fromVilla    String?
   toVilla      String?
+  fromBlock    String?
+  toBlock      String?
   contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
   project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }

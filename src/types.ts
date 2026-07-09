@@ -112,6 +112,8 @@ export interface ContractorVilla {
   blockNumber?: string | null;
   fromVilla?: string | null;
   toVilla?: string | null;
+  fromBlock?: string | null;
+  toBlock?: string | null;
 }
 
 export interface Contractor {

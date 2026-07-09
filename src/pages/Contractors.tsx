@@ -42,11 +42,14 @@ interface AssignmentRow {
   blockNumber: string;
   fromVilla: string;
   toVilla: string;
+  fromBlock: string;
+  toBlock: string;
   mode: 'villa' | 'block' | 'range';
+  rangeType: 'villa' | 'block';
 }
 
 function newRow(): AssignmentRow {
-  return { id: Math.random().toString(36).slice(2), projectId: '', villaNumber: '', blockNumber: '', fromVilla: '', toVilla: '', mode: 'villa' };
+  return { id: Math.random().toString(36).slice(2), projectId: '', villaNumber: '', blockNumber: '', fromVilla: '', toVilla: '', fromBlock: '', toBlock: '', mode: 'villa', rangeType: 'villa' };
 }
 
 // ─── Contractor Form Dialog ───────────────────────────────────────────────────
@@ -84,7 +87,10 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
           blockNumber: a.blockNumber || '',
           fromVilla: a.fromVilla || '',
           toVilla: a.toVilla || '',
-          mode: a.villaNumber ? 'villa' : (a.fromVilla ? 'range' : 'block'),
+          fromBlock: a.fromBlock || '',
+          toBlock: a.toBlock || '',
+          mode: a.villaNumber ? 'villa' : (a.fromVilla || a.fromBlock ? 'range' : 'block'),
+          rangeType: a.fromBlock ? 'block' : 'villa',
         })));
       } else {
         setAssignments([newRow()]);
@@ -120,9 +126,11 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
       .map(a => ({
         projectId: a.projectId,
         villaNumber: a.mode === 'villa' ? a.villaNumber || null : null,
-        blockNumber: a.blockNumber || null,
-        fromVilla: a.mode === 'range' ? a.fromVilla || null : null,
-        toVilla: a.mode === 'range' ? a.toVilla || null : null,
+        blockNumber: (a.mode === 'block' || (a.mode === 'range' && a.rangeType === 'villa')) ? a.blockNumber || null : null,
+        fromVilla: a.mode === 'range' && a.rangeType === 'villa' ? a.fromVilla || null : null,
+        toVilla: a.mode === 'range' && a.rangeType === 'villa' ? a.toVilla || null : null,
+        fromBlock: a.mode === 'range' && a.rangeType === 'block' ? a.fromBlock || null : null,
+        toBlock: a.mode === 'range' && a.rangeType === 'block' ? a.toBlock || null : null,
       }));
 
     setSaving(true);
@@ -278,20 +286,47 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
                   <div className="flex gap-2">
                     {row.mode === 'villa' && (
                       <Input value={row.villaNumber} onChange={e => updateRow(row.id, 'villaNumber', e.target.value)}
-                        placeholder="رقم الفيلا" className="h-8 text-xs rounded-xl bg-background flex-1" />
+                        placeholder="رقم الفيلا (مثال: 1,2,3)" className="h-8 text-xs rounded-xl bg-background flex-1" />
                     )}
-                    {(row.mode === 'block' || row.mode === 'range') && (
+                    {row.mode === 'block' && (
                       <Input value={row.blockNumber} onChange={e => updateRow(row.id, 'blockNumber', e.target.value)}
-                        placeholder="رقم البلوك" className="h-8 text-xs rounded-xl bg-background flex-1" />
+                        placeholder="رقم البلوك (مثال: 1,2,3)" className="h-8 text-xs rounded-xl bg-background flex-1" />
                     )}
                     {row.mode === 'range' && (
-                      <>
-                        <Input value={row.fromVilla} onChange={e => updateRow(row.id, 'fromVilla', e.target.value)}
-                          placeholder="من" className="h-8 text-xs rounded-xl bg-background w-16" />
-                        <span className="text-xs text-muted-foreground self-center">—</span>
-                        <Input value={row.toVilla} onChange={e => updateRow(row.id, 'toVilla', e.target.value)}
-                          placeholder="إلى" className="h-8 text-xs rounded-xl bg-background w-16" />
-                      </>
+                      <div className="flex gap-2 flex-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={
+                            <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs border-border/50 bg-background gap-1 px-2 shrink-0">
+                              {row.rangeType === 'block' ? 'نطاق بلوكات' : 'نطاق فلل'}
+                              <ChevronDown className="w-3 h-3 opacity-50" />
+                            </Button>
+                          } />
+                          <DropdownMenuContent className="bg-card border-border text-slate-200">
+                            <DropdownMenuItem className="hover:bg-white/5 text-start justify-start text-xs" onClick={() => updateRow(row.id, 'rangeType', 'villa')}>نطاق فلل</DropdownMenuItem>
+                            <DropdownMenuItem className="hover:bg-white/5 text-start justify-start text-xs" onClick={() => updateRow(row.id, 'rangeType', 'block')}>نطاق بلوكات</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        {row.rangeType === 'villa' ? (
+                          <>
+                            <Input value={row.blockNumber} onChange={e => updateRow(row.id, 'blockNumber', e.target.value)}
+                              placeholder="رقم البلوك (اختياري)" className="h-8 text-xs rounded-xl bg-background w-24" />
+                            <Input value={row.fromVilla} onChange={e => updateRow(row.id, 'fromVilla', e.target.value)}
+                              placeholder="من فيلا" className="h-8 text-xs rounded-xl bg-background flex-1 min-w-[60px]" />
+                            <span className="text-xs text-muted-foreground self-center">—</span>
+                            <Input value={row.toVilla} onChange={e => updateRow(row.id, 'toVilla', e.target.value)}
+                              placeholder="إلى فيلا" className="h-8 text-xs rounded-xl bg-background flex-1 min-w-[60px]" />
+                          </>
+                        ) : (
+                          <>
+                            <Input value={row.fromBlock} onChange={e => updateRow(row.id, 'fromBlock', e.target.value)}
+                              placeholder="من بلوك" className="h-8 text-xs rounded-xl bg-background flex-1 min-w-[60px]" />
+                            <span className="text-xs text-muted-foreground self-center">—</span>
+                            <Input value={row.toBlock} onChange={e => updateRow(row.id, 'toBlock', e.target.value)}
+                              placeholder="إلى بلوك" className="h-8 text-xs rounded-xl bg-background flex-1 min-w-[60px]" />
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

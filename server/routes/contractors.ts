@@ -11,9 +11,16 @@ function parseVillaNum(v: string | null | undefined): number | null {
   return isNaN(n) ? null : n;
 }
 
-function isVillaInRange(villa: string, assignment: { villaNumber?: string | null; blockNumber?: string | null; fromVilla?: string | null; toVilla?: string | null }): boolean {
-  if (assignment.villaNumber) {
-    return String(assignment.villaNumber).trim() === String(villa).trim();
+function matchesList(target: string, dbField: string | null | undefined): boolean {
+  if (!dbField) return false;
+  // split by spaces, commas, arabic commas, or dashes
+  const parts = String(dbField).split(/[\s,،-]+/);
+  return parts.includes(String(target).trim());
+}
+
+function isVillaInRange(villa: string, assignment: any): boolean {
+  if (assignment.villaNumber && matchesList(villa, assignment.villaNumber)) {
+    return true;
   }
   if (assignment.fromVilla && assignment.toVilla) {
     const v = parseVillaNum(villa);
@@ -21,6 +28,21 @@ function isVillaInRange(villa: string, assignment: { villaNumber?: string | null
     const to = parseVillaNum(assignment.toVilla);
     if (v !== null && from !== null && to !== null) {
       return v >= from && v <= to;
+    }
+  }
+  return false;
+}
+
+function isBlockInRange(block: string, assignment: any): boolean {
+  if (assignment.blockNumber && matchesList(block, assignment.blockNumber)) {
+    return true;
+  }
+  if (assignment.fromBlock && assignment.toBlock) {
+    const b = parseVillaNum(block);
+    const from = parseVillaNum(assignment.fromBlock);
+    const to = parseVillaNum(assignment.toBlock);
+    if (b !== null && from !== null && to !== null) {
+      return b >= from && b <= to;
     }
   }
   return false;
@@ -81,8 +103,26 @@ router.get("/suggest", requireAuth, async (req: AuthRequest, res) => {
       matched = withSpecialty.filter(c => {
         if (c.assignments.length === 0) return true;
         return c.assignments.some(a => {
-          if (block && a.blockNumber && a.blockNumber === block && !a.villaNumber && !a.fromVilla) return true;
-          if (isVillaInRange(villa, a)) return true;
+          // If block is provided, check if it matches the assignment's block logic
+          // Note: an assignment might be ONLY for a block (no villa specified).
+          // If the assignment has a block criteria but the ticket's block doesn't match, return false.
+          let blockMatches = true;
+          if (a.blockNumber || (a.fromBlock && a.toBlock)) {
+            if (!block || !isBlockInRange(block, a)) {
+              blockMatches = false;
+            }
+          }
+
+          // If the assignment is ONLY a block criteria, and it matched, return true
+          if (blockMatches && !a.villaNumber && !a.fromVilla) {
+            return true;
+          }
+
+          // Otherwise, if block matched (or there was no block criteria on assignment), check villa
+          if (blockMatches && isVillaInRange(villa, a)) {
+            return true;
+          }
+
           return false;
         });
       });
@@ -130,6 +170,8 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
             blockNumber: a.blockNumber || null,
             fromVilla: a.fromVilla || null,
             toVilla: a.toVilla || null,
+            fromBlock: a.fromBlock || null,
+            toBlock: a.toBlock || null,
           })),
         },
       },
@@ -177,6 +219,8 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
             blockNumber: a.blockNumber || null,
             fromVilla: a.fromVilla || null,
             toVilla: a.toVilla || null,
+            fromBlock: a.fromBlock || null,
+            toBlock: a.toBlock || null,
           })),
         });
       }
