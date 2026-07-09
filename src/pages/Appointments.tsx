@@ -383,21 +383,23 @@ export default function Appointments() {
           imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
         });
         const pdf = new jsPDF('p', 'pt', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const margin = 24; // 24pt margin (~8.5mm)
+        const pdfWidth = pdf.internal.pageSize.getWidth() - (margin * 2);
         const pdfHeight = (el.offsetHeight * pdfWidth) / el.offsetWidth;
         const pageHeight = pdf.internal.pageSize.getHeight();
+        const contentHeight = pageHeight - (margin * 2);
         
         let heightLeft = pdfHeight;
-        let position = 0;
+        let position = margin;
 
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight;
+        pdf.addImage(imgData, 'JPEG', margin, position, pdfWidth, pdfHeight);
+        heightLeft -= contentHeight;
 
         while (heightLeft > 0) {
-          position = heightLeft - pdfHeight;
+          position -= contentHeight;
           pdf.addPage();
-          pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-          heightLeft -= pageHeight;
+          pdf.addImage(imgData, 'JPEG', margin, position, pdfWidth, pdfHeight);
+          heightLeft -= contentHeight;
         }
 
         const langName = l === 'ar' ? 'Arabic' : l === 'ur' ? 'Urdu' : 'Hindi';
@@ -423,7 +425,7 @@ export default function Appointments() {
     });
 
     return (
-      <div id={idPrefix ? `${idPrefix}-${renderLang}` : undefined} className="w-full bg-white text-black p-8" dir="rtl">
+      <div id={idPrefix ? `${idPrefix}-${renderLang}` : undefined} className="w-full bg-white text-black p-2" dir="rtl">
         <h2 className="text-lg font-black text-center mb-4 border-b border-black pb-2">
           {tr.title} - {new Date(dateStr(refDate)).toLocaleDateString(renderLang === 'hi' ? 'hi-IN' : renderLang === 'ur' ? 'ur-PK' : 'ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </h2>

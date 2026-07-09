@@ -164,8 +164,8 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
       <DialogContent className="bg-card border-border text-foreground sm:max-w-[520px] max-h-[90vh] flex flex-col rounded-3xl p-0 overflow-hidden" dir="rtl">
         <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/50 shrink-0">
           <DialogTitle className="text-lg font-bold flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
-              <HardHat className="w-5 h-5 text-violet-400" />
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
+              <HardHat className="w-5 h-5 text-blue-400" />
             </div>
             {initial ? 'تعديل مقاول' : 'إضافة مقاول جديد'}
           </DialogTitle>
@@ -197,7 +197,7 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
                     type="button"
                     className={cn(
                       'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
-                      sel ? 'bg-violet-500/10 border-violet-500/30 text-violet-400' : 'bg-muted/20 border-border/50 text-muted-foreground hover:bg-muted/50'
+                      sel ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-muted/20 border-border/50 text-muted-foreground hover:bg-muted/50'
                     )}>
                     {sel && <Check className="w-3 h-3" />}
                     {v}
@@ -208,7 +208,7 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
               {selectedSpecialties.filter(s => !Object.values(CONTRACTOR_SPECIALTIES).includes(s)).map(s => (
                 <button key={s} onClick={() => toggleSpecialty(s)}
                   type="button"
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 bg-violet-500/10 border-violet-500/30 text-violet-400">
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 bg-blue-500/10 border-blue-500/30 text-blue-400">
                   <Check className="w-3 h-3" />
                   {s}
                 </button>
@@ -234,7 +234,7 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">الوحدات / المشاريع</Label>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-violet-400 hover:bg-violet-500/10"
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-blue-400 hover:bg-blue-500/10"
                 onClick={() => setAssignments(prev => [...prev, newRow()])}>
                 <Plus className="w-3 h-3" /> إضافة وحدة
               </Button>
@@ -337,7 +337,7 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
 
         <DialogFooter className="px-5 pb-5 pt-4 border-t border-border/50 shrink-0">
           <Button onClick={handleSave} disabled={saving || !name.trim()}
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white rounded-xl h-11 font-bold gap-2">
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 font-bold gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             {initial ? 'حفظ التعديلات' : 'إضافة المقاول'}
           </Button>
@@ -412,8 +412,8 @@ export default function Contractors() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-violet-500/10 flex items-center justify-center">
-                <HardHat className="w-5 h-5 text-violet-400" />
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center">
+                <HardHat className="w-5 h-5 text-blue-400" />
               </div>
               المقاولون
             </h1>
@@ -431,7 +431,7 @@ export default function Contractors() {
             {canEdit && (
               <Button
                 onClick={() => { setEditTarget(null); setFormOpen(true); }}
-                className="bg-violet-600 hover:bg-violet-700 text-white gap-2 rounded-xl h-10 px-4 font-bold shadow-sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white gap-2 rounded-xl h-10 px-4 font-bold shadow-sm"
               >
                 <Plus className="w-4 h-4" /> إضافة مقاول
               </Button>
@@ -442,7 +442,7 @@ export default function Contractors() {
         {/* ── Stats ───────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {[
-            { label: 'إجمالي المقاولين', value: contractors.length, color: 'text-violet-400', bg: 'bg-violet-500/10' },
+            { label: 'إجمالي المقاولين', value: contractors.length, color: 'text-blue-400', bg: 'bg-blue-500/10' },
             { label: 'المشاريع المغطّاة', value: projectsWithContractors.length, color: 'text-blue-400', bg: 'bg-blue-500/10' },
             { label: 'الوحدات المسجّلة', value: contractors.reduce((s, c) => s + c.assignments.length, 0), color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
           ].map(s => (
@@ -461,15 +461,15 @@ export default function Contractors() {
         {/* ── Loading ─────────────────────────────── */}
         {loading && (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-7 h-7 animate-spin text-violet-400" />
+            <Loader2 className="w-7 h-7 animate-spin text-blue-400" />
           </div>
         )}
 
         {/* ── Empty ───────────────────────────────── */}
         {!loading && contractors.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-violet-500/10 flex items-center justify-center">
-              <HardHat className="w-8 h-8 text-violet-400" />
+            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center">
+              <HardHat className="w-8 h-8 text-blue-400" />
             </div>
             <div>
               <p className="text-foreground font-bold text-lg">لا يوجد مقاولون</p>
@@ -552,11 +552,11 @@ function ContractorCard({
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3 hover:border-violet-500/30 transition-colors">
+    <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3 hover:border-blue-500/30 transition-colors">
       {/* Top row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0 text-sm font-black text-violet-300">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0 text-sm font-black text-blue-300">
             {contractor.name.charAt(0)}
           </div>
           <div className="min-w-0">
@@ -595,7 +595,7 @@ function ContractorCard({
       {contractor.specialties.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {contractor.specialties.map(s => (
-            <span key={s.id} className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/15">
+            <span key={s.id} className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/15">
               {s.specialtyKey}
             </span>
           ))}
