@@ -58,19 +58,16 @@ interface FormDialogProps {
   onSuccess: () => void;
 }
 
-const STATIC_SPECIALTIES: Record<string, string> = {
-  electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات',
-  ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية',
-  waterproofing: 'عزل مائي', pest_control: 'مكافحة حشرات', general: 'عام',
+const CONTRACTOR_SPECIALTIES: Record<string, string> = {
+  plumbing: 'سباكة', electricity: 'كهرباء', doors: 'أبواب',
+  aluminum: 'ألومنيوم', garage_door: 'باب كراج'
 };
 
 function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess }: FormDialogProps) {
-  const { typeTranslations } = useTicketTypes();
-  const allSpecialties = { ...STATIC_SPECIALTIES, ...typeTranslations };
-
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
+  const [customSpecialty, setCustomSpecialty] = useState('');
   const [assignments, setAssignments] = useState<AssignmentRow[]>([newRow()]);
   const [saving, setSaving] = useState(false);
 
@@ -97,6 +94,21 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
 
   const toggleSpecialty = (key: string) =>
     setSelectedSpecialties(prev => prev.includes(key) ? prev.filter(x => x !== key) : [...prev, key]);
+
+  const handleAddCustomSpecialty = () => {
+    const val = customSpecialty.trim();
+    if (val && !selectedSpecialties.includes(val) && !Object.values(CONTRACTOR_SPECIALTIES).includes(val)) {
+      setSelectedSpecialties(prev => [...prev, val]);
+    }
+    setCustomSpecialty('');
+  };
+
+  const handleCustomSpecialtyKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddCustomSpecialty();
+    }
+  };
 
   const updateRow = (id: string, field: keyof AssignmentRow, value: string) =>
     setAssignments(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
@@ -165,22 +177,48 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
           </div>
 
           {/* Specialties */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">التخصصات</Label>
+            
+            {/* Presets */}
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(allSpecialties).map(([k, v]) => {
-                const sel = selectedSpecialties.includes(k);
+              {Object.entries(CONTRACTOR_SPECIALTIES).map(([k, v]) => {
+                const sel = selectedSpecialties.includes(v);
                 return (
-                  <button key={k} onClick={() => toggleSpecialty(k)}
+                  <button key={k} onClick={() => toggleSpecialty(v)}
+                    type="button"
                     className={cn(
                       'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
                       sel ? 'bg-violet-500/10 border-violet-500/30 text-violet-400' : 'bg-muted/20 border-border/50 text-muted-foreground hover:bg-muted/50'
                     )}>
                     {sel && <Check className="w-3 h-3" />}
-                    {v as string}
+                    {v}
                   </button>
                 );
               })}
+              {/* Custom ones that aren't in presets */}
+              {selectedSpecialties.filter(s => !Object.values(CONTRACTOR_SPECIALTIES).includes(s)).map(s => (
+                <button key={s} onClick={() => toggleSpecialty(s)}
+                  type="button"
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 bg-violet-500/10 border-violet-500/30 text-violet-400">
+                  <Check className="w-3 h-3" />
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Input */}
+            <div className="flex items-center gap-2">
+              <Input 
+                value={customSpecialty} 
+                onChange={e => setCustomSpecialty(e.target.value)} 
+                onKeyDown={handleCustomSpecialtyKeyDown}
+                placeholder="إضافة تخصص آخر..." 
+                className="h-9 rounded-xl bg-background text-sm flex-1" 
+              />
+              <Button type="button" onClick={handleAddCustomSpecialty} variant="secondary" className="h-9 rounded-xl px-3 bg-muted/50 text-muted-foreground hover:text-foreground">
+                <Plus className="w-4 h-4" />
+              </Button>
             </div>
           </div>
 
