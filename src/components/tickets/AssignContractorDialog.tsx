@@ -129,8 +129,8 @@ export function AssignContractorDialog({
           {/* ── Header ─────────────────────────────────────────── */}
           <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/50 shrink-0">
             <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
-                <HardHat className="w-5 h-5 text-violet-400" />
+              <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                <HardHat className="w-5 h-5 text-blue-400" />
               </div>
               إسناد لمقاول
             </DialogTitle>
@@ -157,15 +157,15 @@ export function AssignContractorDialog({
 
             {loadingContractors ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-violet-400" />
+                <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
               </div>
             ) : (
               <>
                 {/* Suggested section */}
                 {suggested.length > 0 && !search && !showAllContractors && (
                   <div>
-                    <p className="text-[10px] font-bold text-violet-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
                       مقترح بناءً على الفيلا والتخصص
                     </p>
                     <div className="space-y-2">
@@ -228,9 +228,9 @@ export function AssignContractorDialog({
           {/* ── Footer ─────────────────────────────────────────── */}
           <DialogFooter className="px-5 pb-5 pt-4 border-t border-border/50 shrink-0 flex flex-col gap-2">
             {selectedContractor && (
-              <div className="flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-xl px-3 py-2">
-                <HardHat className="w-4 h-4 text-violet-400 shrink-0" />
-                <span className="text-sm font-bold text-violet-300">{selectedContractor.name}</span>
+              <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
+                <HardHat className="w-4 h-4 text-blue-400 shrink-0" />
+                <span className="text-sm font-bold text-blue-300">{selectedContractor.name}</span>
                 {selectedContractor.phone && (
                   <span className="text-xs text-muted-foreground mr-auto">{selectedContractor.phone}</span>
                 )}
@@ -239,7 +239,7 @@ export function AssignContractorDialog({
             <Button
               onClick={handleAssign}
               disabled={loading || !selectedContractor}
-              className="w-full bg-violet-600 hover:bg-violet-700 text-white rounded-xl h-11 font-bold flex items-center justify-center gap-2 shadow-md"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 font-bold flex items-center justify-center gap-2 shadow-md"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <HardHat className="w-5 h-5" />}
               تأكيد الإسناد
@@ -253,15 +253,15 @@ export function AssignContractorDialog({
         <Dialog open={showAppointment} onOpenChange={v => { if (!v) handleSkipAppointment(); }}>
           <DialogContent className="bg-card border-border text-foreground sm:max-w-[380px] rounded-3xl p-6" dir="rtl">
             <div className="flex flex-col items-center gap-4 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-violet-500/10 flex items-center justify-center">
-                <CalendarPlus className="w-8 h-8 text-violet-400" />
+              <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center">
+                <CalendarPlus className="w-8 h-8 text-blue-400" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-foreground">تم الإسناد بنجاح! 🎉</h3>
                 <p className="text-sm text-muted-foreground mt-1">
                   هل تريد تحديد موعد للمقاول الآن؟
                 </p>
-                <p className="text-xs text-violet-400 font-semibold mt-1">{selectedContractor?.name}</p>
+                <p className="text-xs text-blue-400 font-semibold mt-1">{selectedContractor?.name}</p>
               </div>
               <div className="flex gap-3 w-full">
                 <Button
@@ -272,7 +272,7 @@ export function AssignContractorDialog({
                   لاحقاً
                 </Button>
                 <Button
-                  className="flex-1 bg-violet-600 hover:bg-violet-700 text-white rounded-xl gap-2"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-2"
                   onClick={() => {
                     // Close this prompt and open appointment dialog
                     setShowAppointment(false);
@@ -320,16 +320,16 @@ function ContractorCard({
       className={cn(
         'w-full flex items-center gap-3 p-3 rounded-2xl border text-right transition-all',
         selected
-          ? 'bg-violet-500/10 border-violet-500/40 ring-1 ring-violet-500/20'
+          ? 'bg-blue-500/10 border-blue-500/40 ring-1 ring-blue-500/20'
           : highlighted
-            ? 'bg-violet-500/5 border-violet-500/20 hover:bg-violet-500/10'
+            ? 'bg-blue-500/5 border-blue-500/20 hover:bg-blue-500/10'
             : 'bg-muted/20 border-border/50 hover:bg-muted/40 hover:border-border'
       )}
     >
       {/* Avatar */}
       <div className={cn(
         'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-black',
-        selected ? 'bg-violet-500/20 text-violet-300' : 'bg-muted text-muted-foreground'
+        selected ? 'bg-blue-500/20 text-blue-300' : 'bg-muted text-muted-foreground'
       )}>
         {contractor.name.charAt(0)}
       </div>
@@ -339,7 +339,7 @@ function ContractorCard({
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm text-foreground truncate">{contractor.name}</span>
           {highlighted && (
-            <span className="text-[9px] font-black text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded-md border border-violet-500/20 shrink-0">
+            <span className="text-[9px] font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-md border border-blue-500/20 shrink-0">
               مقترح
             </span>
           )}
@@ -360,7 +360,7 @@ function ContractorCard({
 
       {/* Check */}
       {selected && (
-        <div className="w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center shrink-0">
+        <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
           <Check className="w-3 h-3 text-white" />
         </div>
       )}

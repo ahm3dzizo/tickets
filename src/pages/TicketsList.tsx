@@ -287,12 +287,12 @@ export default function TicketsList() {
               </TabsTrigger>
               <TabsTrigger
                 value="contractors"
-                className="rounded-xl text-sm font-bold px-3 data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-1.5 transition-all"
+                className="rounded-xl text-sm font-bold px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-1.5 transition-all"
               >
                 <HardHat className="w-3.5 h-3.5" />
                 المقاولين
                 {contractorTickets.length > 0 && (
-                  <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-violet-500 text-white border-0">
+                  <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-blue-500 text-white border-0">
                     {contractorTickets.length}
                   </Badge>
                 )}
@@ -365,8 +365,8 @@ export default function TicketsList() {
           </TabsContent>
 
           <TabsContent value="contractors" className="mt-0">
-            <div className="bg-card border border-violet-500/25 rounded-3xl overflow-hidden shadow-sm">
-              <div className="p-3 bg-violet-500/8 border-b border-violet-500/20 flex items-center gap-2 text-violet-400 text-sm font-semibold">
+            <div className="bg-card border border-blue-500/25 rounded-3xl overflow-hidden shadow-sm">
+              <div className="p-3 bg-blue-500/8 border-b border-blue-500/20 flex items-center gap-2 text-blue-400 text-sm font-semibold">
                 <HardHat className="w-4 h-4 shrink-0" />
                 <span>تذاكر المقاولين — يتم عرض التذاكر المسندة لمقاولين خارجيين</span>
               </div>
