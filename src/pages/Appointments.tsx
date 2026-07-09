@@ -423,8 +423,8 @@ export default function Appointments() {
     });
 
     return (
-      <div id={idPrefix ? `${idPrefix}-${renderLang}` : undefined} className="w-full bg-white text-black p-0" dir="rtl">
-        <h2 className="text-lg font-black text-center mb-2 border-b border-black pb-1">
+      <div id={idPrefix ? `${idPrefix}-${renderLang}` : undefined} className="w-full bg-white text-black p-8" dir="rtl">
+        <h2 className="text-lg font-black text-center mb-4 border-b border-black pb-2">
           {tr.title} - {new Date(dateStr(refDate)).toLocaleDateString(renderLang === 'hi' ? 'hi-IN' : renderLang === 'ur' ? 'ur-PK' : 'ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </h2>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
