@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { HardHat, Loader2, Search, Check, CalendarPlus, ChevronDown } from 'lucide-react';
 import { contractorsApi } from '@/lib/contractorsApi';
@@ -36,6 +37,7 @@ export function AssignContractorDialog({
   const [showAppointment, setShowAppointment] = useState(false);
   const [assignedTickets, setAssignedTickets] = useState<Ticket[]>([]);
   const [showAllContractors, setShowAllContractors] = useState(false);
+  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('all');
 
   // Get the common villa number and block for suggestion
   const villaNumber = tickets.length === 1 ? tickets[0].villaNumber : undefined;
@@ -48,6 +50,7 @@ export function AssignContractorDialog({
     setSelectedContractor(null);
     setSearch('');
     setShowAllContractors(false);
+    setSelectedSpecialty('all');
 
     Promise.all([
       contractorsApi.getAll(projectId),
@@ -65,14 +68,36 @@ export function AssignContractorDialog({
       .finally(() => setLoadingContractors(false));
   }, [open, projectId, villaNumber]);
 
-  const filteredContractors = contractors.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search)
-  );
+  const availableSpecialties = React.useMemo(() => {
+    const map = new Map<string, string>();
+    contractors.forEach(c => {
+      c.specialties?.forEach(s => {
+        // Here we just map the key to a readable name (fallback to key)
+        const name = s.specialtyKey === 'aluminum' ? 'ألمنيوم' :
+                     s.specialtyKey === 'doors' ? 'أبواب' :
+                     s.specialtyKey === 'plumbing' ? 'سباكة' :
+                     s.specialtyKey === 'electricity' ? 'كهرباء' : s.specialtyKey;
+        map.set(s.specialtyKey, name);
+      });
+    });
+    return Array.from(map.entries()).map(([key, name]) => ({ key, name }));
+  }, [contractors]);
+
+  const filteredContractors = contractors.filter(c => {
+    if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.phone?.includes(search)) return false;
+    if (selectedSpecialty !== 'all' && !c.specialties?.some(s => s.specialtyKey === selectedSpecialty)) return false;
+    return true;
+  });
+
+  const displaySuggested = suggested.filter(c => {
+    if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.phone?.includes(search)) return false;
+    if (selectedSpecialty !== 'all' && !c.specialties?.some(s => s.specialtyKey === selectedSpecialty)) return false;
+    return true;
+  });
 
   const displayContractors = showAllContractors
     ? filteredContractors
-    : (suggested.length > 0 ? suggested : filteredContractors);
+    : (displaySuggested.length > 0 ? displaySuggested : filteredContractors);
 
   const handleAssign = async () => {
     if (!selectedContractor) {
@@ -161,15 +186,32 @@ export function AssignContractorDialog({
               </div>
             ) : (
               <>
+                {/* Specialty Filter */}
+                <div className="mb-2">
+                  <Select value={selectedSpecialty} onValueChange={setSelectedSpecialty}>
+                    <SelectTrigger className="w-full bg-background border-border/50 rounded-xl h-10 text-right" dir="rtl">
+                      <SelectValue placeholder="اختر نوع المقاول (التخصص)..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border" dir="rtl">
+                      <SelectItem value="all" className="focus:bg-blue-500/10">الكل</SelectItem>
+                      {availableSpecialties.map(sp => (
+                        <SelectItem key={sp.key} value={sp.key} className="focus:bg-blue-500/10">
+                          {sp.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Suggested section */}
-                {suggested.length > 0 && !search && !showAllContractors && (
+                {displaySuggested.length > 0 && !search && !showAllContractors && (
                   <div>
                     <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
                       مقترح بناءً على الفيلا والتخصص
                     </p>
                     <div className="space-y-2">
-                      {suggested.map(c => (
+                      {displaySuggested.map(c => (
                         <ContractorCard
                           key={c.id}
                           contractor={c}
@@ -183,7 +225,7 @@ export function AssignContractorDialog({
                 )}
 
                 {/* All contractors toggle */}
-                {suggested.length > 0 && !search && (
+                {displaySuggested.length > 0 && !search && (
                   <button
                     className="w-full flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground py-2 border border-border/40 rounded-xl hover:bg-muted/30 transition-colors"
                     onClick={() => setShowAllContractors(v => !v)}
@@ -194,9 +236,9 @@ export function AssignContractorDialog({
                 )}
 
                 {/* Full list */}
-                {(showAllContractors || suggested.length === 0 || search) && (
+                {(showAllContractors || displaySuggested.length === 0 || search) && (
                   <div>
-                    {suggested.length > 0 && !search && (
+                    {displaySuggested.length > 0 && !search && (
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">
                         كل المقاولين
                       </p>

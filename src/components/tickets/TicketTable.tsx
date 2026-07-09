@@ -499,6 +499,9 @@ export function TicketTable({
   const inSelectionMode = hasSelection && !!selectedIds && selectedIds.length > 0;
 
   const getSupervisorNames = (ticket: Ticket): string[] => {
+    if (ticket.status === 'contractor' && ticket.contractorName) {
+      return [ticket.contractorName];
+    }
     const map = (ticket as any).supervisorByType as Record<string, { name: string }[]> | undefined;
     if (map) {
       const namesSet = new Set<string>();
