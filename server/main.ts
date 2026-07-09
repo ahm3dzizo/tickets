@@ -25,6 +25,7 @@ import settingsRoutes from "./routes/settings.js";
 import appointmentRoutes from "./routes/appointments.js";
 import ocrRoutes from "./routes/ocr.js";
 import importExcelRoutes from "./routes/import-excel.js";
+import contractorRoutes from "./routes/contractors.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
@@ -83,6 +84,7 @@ async function startServer() {
   app.use("/api/appointments", appointmentRoutes);
   app.use("/api/ocr", ocrRoutes);
   app.use("/api/import-excel", importExcelRoutes);
+  app.use("/api/contractors", contractorRoutes);
 
   // ── Legacy client routes under projects (for backward compat) ──────────
   app.get("/api/projects/:projectId/clients", requireAuth, async (req, res) => {

@@ -20,6 +20,7 @@ import Technicians from '@/pages/Technicians';
 import TeamMemberDetail from '@/pages/TeamMemberDetail';
 import Reports from '@/pages/Reports';
 import Appointments from '@/pages/Appointments';
+import Contractors from '@/pages/Contractors';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -126,6 +127,10 @@ function AppContent() {
           <Route
             path="/appointments"
             element={user && !requiresProfileCompletion ? <Appointments /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/contractors"
+            element={user && !requiresProfileCompletion ? <Contractors /> : <Navigate to="/login" />}
           />
           {/* ⛔️ تمت إزالة Route /register */}
         </Routes>

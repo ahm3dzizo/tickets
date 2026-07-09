@@ -77,7 +77,7 @@ export interface Ticket {
   issuedAt?: string;
   description: string;
   type: TicketType;
-  status: 'open' | 'in-progress' | 'in_progress' | 'pending' | 'completed' | 'closed' | 'waiting' | 'out-of-scope' | 'out_of_scope' | 'absent';
+  status: 'open' | 'in-progress' | 'in_progress' | 'pending' | 'completed' | 'closed' | 'waiting' | 'out-of-scope' | 'out_of_scope' | 'absent' | 'contractor';
   priority: 'low' | 'medium' | 'high' | 'urgent' | number;
   assigneeName?: string;
   assignedSupervisorId?: string;
@@ -93,6 +93,34 @@ export interface Ticket {
   closedAt?: any;
   closureNotes?: string;
   maintenanceItems?: { description: string; status: string }[];
+  contractorId?: string | null;
+  contractorName?: string | null;
+}
+
+// ─── Contractor Types ─────────────────────────────────────────────────────────
+export interface ContractorSpecialty {
+  id: string;
+  contractorId: string;
+  specialtyKey: string;
+}
+
+export interface ContractorVilla {
+  id: string;
+  contractorId: string;
+  projectId: string;
+  villaNumber?: string | null;
+  blockNumber?: string | null;
+  fromVilla?: string | null;
+  toVilla?: string | null;
+}
+
+export interface Contractor {
+  id: string;
+  name: string;
+  phone?: string | null;
+  createdAt: string;
+  specialties: ContractorSpecialty[];
+  assignments: ContractorVilla[];
 }
 
 export interface Technician {

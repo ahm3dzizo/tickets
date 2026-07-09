@@ -28,6 +28,7 @@ const allNavItems = [
   { icon: Briefcase,       label: 'المشاريع',    path: '/projects',      roles: ['admin', 'engineer', 'supervisor'] },
   { icon: UserCheck,       label: 'العملاء',     path: '/clients',       roles: ['admin', 'engineer', 'supervisor'] },
   { icon: Ticket,          label: 'التذاكر',     path: '/tickets',       roles: ['admin', 'engineer', 'supervisor'] },
+  { icon: HardHat,         label: 'المقاولون',   path: '/contractors',   roles: ['admin', 'engineer', 'supervisor'] },
   { icon: CalendarClock,   label: 'المواعيد',    path: '/appointments',  roles: ['admin', 'supervisor', 'engineer'] },
   { icon: BarChart3,       label: 'التقارير',    path: '/reports',       roles: ['admin', 'engineer'] },
   { icon: HardHat,         label: 'الفنيين',     path: '/technicians',   roles: ['admin', 'supervisor'] },

@@ -8,6 +8,7 @@ import { Layout } from '@/components/layout/Layout';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { TicketTable, statusTranslations, typeTranslations, BulkActionBar } from '@/components/tickets/TicketTable';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
+import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
 import { WhatsAppService } from '@/services/whatsappService';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ClientForm } from '@/components/clients/ClientForm';
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [contractorDialogOpen, setContractorDialogOpen] = useState(false);
   const [clients, setClients] = useState<Record<string, Client>>({});
 
   // ── Live KPI data ──
@@ -520,6 +522,7 @@ export default function Dashboard() {
           isMultiClient={uniqueClientIds.size > 1}
           onStatusChange={handleBulkStatusChange}
           onAppointment={handleSendAppointment}
+          onContractor={() => setContractorDialogOpen(true)}
           onClose={() => setCloseDialogOpen(true)}
           onClear={() => setSelectedTicketIds([])}
         />
@@ -532,6 +535,14 @@ export default function Dashboard() {
         clients={Object.values(clients)}
         projects={Object.fromEntries(userProjects.map(p => [p.id, p]))}
         onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadDashboard(); }}
+      />
+
+      <AssignContractorDialog
+        open={contractorDialogOpen}
+        onOpenChange={setContractorDialogOpen}
+        tickets={allTickets.filter(t => selectedTicketIds.includes(t.id))}
+        projectId={allTickets.find(t => selectedTicketIds.includes(t.id))?.projectId || ''}
+        onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadDashboard(); }}
       />
     </Layout>
   );

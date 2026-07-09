@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
-import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus } from 'lucide-react';
+import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
 import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
 import { SaveInternalAppointmentDialog } from '@/components/tickets/SaveInternalAppointmentDialog';
+import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { Ticket, Project, Client } from '@/types';
@@ -36,6 +37,7 @@ export default function TicketsList() {
   const [autoLinking, setAutoLinking] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
   const [internalApptOpen, setInternalApptOpen] = useState(false);
+  const [contractorDialogOpen, setContractorDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('ticketsListTab') || 'linked');
 
   const loadData = async () => {
@@ -158,7 +160,8 @@ export default function TicketsList() {
   };
 
   const unlinkedTickets      = tickets.filter(t => !t.clientId);
-  const linkedTickets        = tickets.filter(t => !!t.clientId);
+  const linkedTickets        = tickets.filter(t => !!t.clientId && t.status !== 'contractor');
+  const contractorTickets    = tickets.filter(t => t.status === 'contractor');
   // Unclassified = no type OR explicitly "unclassified" (new fallback)
   const unclassifiedTickets  = tickets.filter(t => !t.type || t.type === 'unclassified');
 
@@ -282,6 +285,18 @@ export default function TicketsList() {
               >
                 المربوطة ({linkedTickets.length})
               </TabsTrigger>
+              <TabsTrigger
+                value="contractors"
+                className="rounded-xl text-sm font-bold px-3 data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-1.5 transition-all"
+              >
+                <HardHat className="w-3.5 h-3.5" />
+                المقاولين
+                {contractorTickets.length > 0 && (
+                  <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-violet-500 text-white border-0">
+                    {contractorTickets.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
               {unlinkedTickets.length > 0 && (
                 <TabsTrigger
                   value="unlinked"
@@ -349,6 +364,25 @@ export default function TicketsList() {
             </div>
           </TabsContent>
 
+          <TabsContent value="contractors" className="mt-0">
+            <div className="bg-card border border-violet-500/25 rounded-3xl overflow-hidden shadow-sm">
+              <div className="p-3 bg-violet-500/8 border-b border-violet-500/20 flex items-center gap-2 text-violet-400 text-sm font-semibold">
+                <HardHat className="w-4 h-4 shrink-0" />
+                <span>تذاكر المقاولين — يتم عرض التذاكر المسندة لمقاولين خارجيين</span>
+              </div>
+              <TicketTable
+                tickets={contractorTickets}
+                selectedIds={selectedTicketIds}
+                onSelectionChange={setSelectedTicketIds}
+                hideProjectColumn={!showProjectColumn}
+                projects={projects}
+                showInlineFilters
+                onRefresh={loadData}
+                stateKey="tl_contractors"
+              />
+            </div>
+          </TabsContent>
+
           <TabsContent value="unlinked" className="mt-0">
             <div className="bg-card border border-red-500/25 rounded-3xl overflow-hidden shadow-sm">
               <div className="p-4 bg-red-500/8 border-b border-red-500/20 text-red-500 font-semibold flex items-center gap-2 text-sm">
@@ -408,6 +442,7 @@ export default function TicketsList() {
             onStatusChange={handleBulkStatusChange}
             onAppointment={handleSendAppointment}
             onInternalAppointment={handleInternalAppointment}
+            onContractor={() => setContractorDialogOpen(true)}
             onClose={() => setCloseDialogOpen(true)}
             onClear={() => setSelectedTicketIds([])}
             hidden={closeDialogOpen}
@@ -454,6 +489,13 @@ export default function TicketsList() {
           />
         )}
 
+        <AssignContractorDialog
+          open={contractorDialogOpen}
+          onOpenChange={setContractorDialogOpen}
+          tickets={selectedTickets}
+          projectId={selectedTickets[0]?.projectId || ''}
+          onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadData(); }}
+        />
 
       </div>
     </Layout>

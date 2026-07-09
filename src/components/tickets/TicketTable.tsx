@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays } from 'lucide-react';
+import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
@@ -93,6 +93,7 @@ export const statusTranslations: Record<string, string> = {
   'out-of-scope':  'خارج اختصاص',
   'out_of_scope':  'خارج الاختصاص',
   absent:          'عدم تواجد',
+  contractor:      'مقاول',
 };
 
 export const statusColors: Record<string, string> = {
@@ -105,6 +106,7 @@ export const statusColors: Record<string, string> = {
   'out-of-scope':  'bg-rose-500/10 text-rose-400 border-rose-500/20',
   'out_of_scope':  'bg-rose-500/10 text-rose-400 border-rose-500/20',
   absent:          'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  contractor:      'bg-violet-500/10 text-violet-400 border-violet-500/20',
 };
 
 const priorityBgMap: Record<number, string> = {
@@ -158,6 +160,7 @@ export interface BulkActionBarProps {
   onStatusChange: (status: string) => void;
   onAppointment?: () => void;
   onInternalAppointment?: () => void;
+  onContractor?: () => void;
   onClose: () => void;
   onClear: () => void;
   hidden?: boolean;
@@ -170,6 +173,7 @@ export function BulkActionBar({
   onStatusChange,
   onAppointment,
   onInternalAppointment,
+  onContractor,
   onClose,
   onClear,
   hidden = false,
@@ -217,6 +221,14 @@ export function BulkActionBar({
             onClick={onInternalAppointment}>
             <CalendarDays className="w-3.5 h-3.5" />
             إضافة موعد
+          </Button>
+        )}
+        {onContractor && (
+          <Button variant="outline" size="sm"
+            className="border-violet-500/30 bg-violet-500/10 text-violet-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0"
+            onClick={onContractor}>
+            <HardHat className="w-3.5 h-3.5" />
+            مقاول
           </Button>
         )}
         {onClose && !isMultiClient && (

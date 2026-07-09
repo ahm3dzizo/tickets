@@ -20,6 +20,7 @@ import { TicketTable, BulkActionBar } from '@/components/tickets/TicketTable';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
+import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -36,6 +37,7 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [contractorDialogOpen, setContractorDialogOpen] = useState(false);
 
   const loadData = async () => {
     if (!id) return;
@@ -189,6 +191,7 @@ export default function ProjectDetail() {
               isMultiClient={isMultiClient}
               onStatusChange={handleBulkStatusChange}
               onAppointment={handleSendWhatsApp}
+              onContractor={() => setContractorDialogOpen(true)}
               onClose={() => setIsCloseDialogOpen(true)}
               onClear={() => setSelectedTicketIds([])}
               statusOptions={[
@@ -292,6 +295,14 @@ export default function ProjectDetail() {
         selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))}
         clients={clients}
         onSuccess={() => { setSelectedTicketIds([]); loadData(); }}
+      />
+
+      <AssignContractorDialog
+        open={contractorDialogOpen}
+        onOpenChange={setContractorDialogOpen}
+        tickets={tickets.filter(t => selectedTicketIds.includes(t.id))}
+        projectId={project?.id || ''}
+        onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadData(); }}
       />
     </Layout>
   );

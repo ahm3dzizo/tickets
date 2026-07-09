@@ -43,7 +43,7 @@ model Project {
   clients      Client[]
   technicians  Technician[]
   tickets      Ticket[]
-  contractors  Contractor[]
+  villaAssignments ContractorVilla[]
   users        User[]       @relation("ProjectUsers")
 }
 
@@ -231,10 +231,8 @@ model Contractor {
   id           String                @id @default(cuid())
   name         String
   phone        String?
-  projectId    String
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
-  project      Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   specialties  ContractorSpecialty[]
   assignments  ContractorVilla[]
 }
@@ -251,11 +249,13 @@ model ContractorSpecialty {
 model ContractorVilla {
   id           String     @id @default(cuid())
   contractorId String
+  projectId    String
   villaNumber  String?
   blockNumber  String?
   fromVilla    String?
   toVilla      String?
   contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 enum TicketPriority {
