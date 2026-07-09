@@ -113,10 +113,46 @@ async function main() {
         { blockNumber: '27', villaNumber: '596, 597, 598, 599, 600, 601, 602, 603, 604' },
         { villaNumber: '611, 612, 613, 614, 615, 616, 617, 618, 619' }, // Second party
       ]
+    },
+    {
+      name: 'لقمان', // Luqman
+      specialties: ['aluminum'],
+      assignments: [
+        { blockNumber: '1' },
+        { blockNumber: '2' },
+        { blockNumber: '3' },
+        { blockNumber: '4' },
+        { blockNumber: '5' },
+        { blockNumber: '11' },
+        { blockNumber: '12' },
+        { blockNumber: '13' },
+        { blockNumber: '15' },
+        { blockNumber: '16' },
+        { blockNumber: '17' },
+        { blockNumber: '18' },
+        { blockNumber: '19' },
+        { blockNumber: '22' },
+        { blockNumber: '26' },
+        { blockNumber: '30' },
+        { blockNumber: '31' },
+        { blockNumber: '32' },
+        { blockNumber: '33' },
+        { blockNumber: '34' },
+        { blockNumber: '35' },
+      ]
     }
   ];
 
   for (const c of contractorsData) {
+    const existing = await prisma.contractor.findFirst({
+      where: { name: c.name }
+    });
+
+    if (existing) {
+      console.log(`Contractor already exists: ${c.name}, skipping...`);
+      continue;
+    }
+
     const contractor = await prisma.contractor.create({
       data: {
         name: c.name,
