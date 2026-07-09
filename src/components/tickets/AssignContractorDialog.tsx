@@ -36,8 +36,7 @@ export function AssignContractorDialog({
   const [loadingContractors, setLoadingContractors] = useState(false);
   const [showAppointment, setShowAppointment] = useState(false);
   const [assignedTickets, setAssignedTickets] = useState<Ticket[]>([]);
-  const [showAllContractors, setShowAllContractors] = useState(false);
-  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('all');
+  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
 
   // Get the common villa number and block for suggestion
   const villaNumber = tickets.length === 1 ? tickets[0].villaNumber : undefined;
@@ -48,9 +47,7 @@ export function AssignContractorDialog({
 
     setLoadingContractors(true);
     setSelectedContractor(null);
-    setSearch('');
-    setShowAllContractors(false);
-    setSelectedSpecialty('all');
+    setSelectedSpecialty('');
 
     Promise.all([
       contractorsApi.getAll(projectId),
@@ -61,8 +58,6 @@ export function AssignContractorDialog({
       .then(([all, sugg]) => {
         setContractors(all);
         setSuggested(sugg);
-        // Auto-select if only one suggestion
-        if (sugg.length === 1) setSelectedContractor(sugg[0]);
       })
       .catch(() => toast.error('فشل تحميل المقاولين'))
       .finally(() => setLoadingContractors(false));
@@ -72,7 +67,6 @@ export function AssignContractorDialog({
     const map = new Map<string, string>();
     contractors.forEach(c => {
       c.specialties?.forEach(s => {
-        // Here we just map the key to a readable name (fallback to key)
         const name = s.specialtyKey === 'aluminum' ? 'ألمنيوم' :
                      s.specialtyKey === 'doors' ? 'أبواب' :
                      s.specialtyKey === 'plumbing' ? 'سباكة' :
@@ -83,21 +77,18 @@ export function AssignContractorDialog({
     return Array.from(map.entries()).map(([key, name]) => ({ key, name }));
   }, [contractors]);
 
-  const filteredContractors = contractors.filter(c => {
-    if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.phone?.includes(search)) return false;
-    if (selectedSpecialty !== 'all' && !c.specialties?.some(s => s.specialtyKey === selectedSpecialty)) return false;
-    return true;
-  });
+  const displaySuggested = React.useMemo(() => {
+    if (!selectedSpecialty) return [];
+    return suggested.filter(c => c.specialties?.some(s => s.specialtyKey === selectedSpecialty));
+  }, [suggested, selectedSpecialty]);
 
-  const displaySuggested = suggested.filter(c => {
-    if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.phone?.includes(search)) return false;
-    if (selectedSpecialty !== 'all' && !c.specialties?.some(s => s.specialtyKey === selectedSpecialty)) return false;
-    return true;
-  });
-
-  const displayContractors = showAllContractors
-    ? filteredContractors
-    : (displaySuggested.length > 0 ? displaySuggested : filteredContractors);
+  useEffect(() => {
+    if (selectedSpecialty && displaySuggested.length > 0) {
+      setSelectedContractor(displaySuggested[0]);
+    } else {
+      setSelectedContractor(null);
+    }
+  }, [selectedSpecialty, displaySuggested]);
 
   const handleAssign = async () => {
     if (!selectedContractor) {
@@ -168,18 +159,6 @@ export function AssignContractorDialog({
 
           {/* ── Body ───────────────────────────────────────────── */}
           <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-4">
-
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="بحث في المقاولين..."
-                value={search}
-                onChange={e => { setSearch(e.target.value); setShowAllContractors(true); }}
-                className="pr-10 h-10 bg-background border-border/50 rounded-xl text-right"
-              />
-            </div>
-
             {loadingContractors ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
@@ -187,13 +166,13 @@ export function AssignContractorDialog({
             ) : (
               <>
                 {/* Specialty Filter */}
-                <div className="mb-2">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-muted-foreground ml-1">تخصص المقاول المطلوب</Label>
                   <Select value={selectedSpecialty} onValueChange={setSelectedSpecialty}>
-                    <SelectTrigger className="w-full bg-background border-border/50 rounded-xl h-10 text-right" dir="rtl">
-                      <SelectValue placeholder="اختر نوع المقاول (التخصص)..." />
+                    <SelectTrigger className="w-full bg-background border-border/50 rounded-xl h-11 text-right font-bold" dir="rtl">
+                      <SelectValue placeholder="اختر التخصص..." />
                     </SelectTrigger>
                     <SelectContent className="bg-card border-border" dir="rtl">
-                      <SelectItem value="all" className="focus:bg-blue-500/10">الكل</SelectItem>
                       {availableSpecialties.map(sp => (
                         <SelectItem key={sp.key} value={sp.key} className="focus:bg-blue-500/10">
                           {sp.name}
@@ -203,64 +182,9 @@ export function AssignContractorDialog({
                   </Select>
                 </div>
 
-                {/* Suggested section */}
-                {displaySuggested.length > 0 && !search && !showAllContractors && (
-                  <div>
-                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                      مقترح بناءً على الفيلا والتخصص
-                    </p>
-                    <div className="space-y-2">
-                      {displaySuggested.map(c => (
-                        <ContractorCard
-                          key={c.id}
-                          contractor={c}
-                          selected={selectedContractor?.id === c.id}
-                          onSelect={() => setSelectedContractor(c)}
-                          highlighted
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* All contractors toggle */}
-                {displaySuggested.length > 0 && !search && (
-                  <button
-                    className="w-full flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground py-2 border border-border/40 rounded-xl hover:bg-muted/30 transition-colors"
-                    onClick={() => setShowAllContractors(v => !v)}
-                  >
-                    <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', showAllContractors && 'rotate-180')} />
-                    {showAllContractors ? 'إخفاء الكل' : `عرض كل المقاولين (${contractors.length})`}
-                  </button>
-                )}
-
-                {/* Full list */}
-                {(showAllContractors || displaySuggested.length === 0 || search) && (
-                  <div>
-                    {displaySuggested.length > 0 && !search && (
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">
-                        كل المقاولين
-                      </p>
-                    )}
-                    <div className="space-y-2">
-                      {filteredContractors.length === 0 ? (
-                        <p className="text-center text-sm text-muted-foreground py-6">
-                          {contractors.length === 0
-                            ? 'لا يوجد مقاولون مسجلون في هذا المشروع'
-                            : 'لا توجد نتائج'}
-                        </p>
-                      ) : (
-                        filteredContractors.map(c => (
-                          <ContractorCard
-                            key={c.id}
-                            contractor={c}
-                            selected={selectedContractor?.id === c.id}
-                            onSelect={() => setSelectedContractor(c)}
-                          />
-                        ))
-                      )}
-                    </div>
+                {selectedSpecialty && displaySuggested.length === 0 && (
+                  <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 text-center">
+                    <p className="text-sm font-bold text-rose-400">لا يوجد مقاول مخصص لهذه الفيلا في هذا التخصص</p>
                   </div>
                 )}
               </>
