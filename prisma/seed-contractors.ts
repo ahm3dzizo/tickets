@@ -26,6 +26,9 @@ async function main() {
 
   console.log(`Using project: ${project.name} (${project.id})`);
 
+  // Delete Luqman so we can recreate him with the updated partial blocks
+  await prisma.contractor.deleteMany({ where: { name: 'لقمان' } });
+
   // Ensure specialties exist
   const doorsSpecialty = await prisma.specialty.upsert({
     where: { key: 'doors' },
@@ -139,6 +142,8 @@ async function main() {
         { blockNumber: '33' },
         { blockNumber: '34' },
         { blockNumber: '35' },
+        { blockNumber: '21', villaNumber: '485, 486, 487, 488, 489, 490, 491, 492, 493, 494' },
+        { blockNumber: '27', villaNumber: '605, 606, 607, 608, 609, 610' },
       ]
     }
   ];
