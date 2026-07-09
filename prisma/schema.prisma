@@ -43,6 +43,7 @@ model Project {
   clients      Client[]
   technicians  Technician[]
   tickets      Ticket[]
+  contractors  Contractor[]
   users        User[]       @relation("ProjectUsers")
 }
 
@@ -86,6 +87,8 @@ model Ticket {
   isDirectAppointment   Boolean @default(false)
   closureNotes          String?
   maintenanceItems      Json?
+  contractorId          String?
+  contractorName        String?
   createdAt             DateTime       @default(now())
   closedAt              DateTime?
   createdBy             String?
@@ -221,6 +224,38 @@ enum TicketStatus {
   waiting
   out_of_scope
   absent
+  contractor
+}
+
+model Contractor {
+  id           String                @id @default(cuid())
+  name         String
+  phone        String?
+  projectId    String
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  project      Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  specialties  ContractorSpecialty[]
+  assignments  ContractorVilla[]
+}
+
+model ContractorSpecialty {
+  id           String     @id @default(cuid())
+  contractorId String
+  specialtyKey String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  @@unique([contractorId, specialtyKey])
+}
+
+model ContractorVilla {
+  id           String     @id @default(cuid())
+  contractorId String
+  villaNumber  String?
+  blockNumber  String?
+  fromVilla    String?
+  toVilla      String?
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
 }
 
 enum TicketPriority {
