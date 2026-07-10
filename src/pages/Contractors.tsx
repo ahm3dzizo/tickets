@@ -26,9 +26,9 @@ import { useTicketTypes } from '@/contexts/TicketTypesContext';
 // ─── helpers ─────────────────────────────────────────────────────────────────
 function villaLabel(v: any, projectName?: string): string {
   const p = projectName ? `[${projectName}] ` : '';
-  if (v.unitId) return `${p}وحدة (ID: ${v.unitId})`;
-  if (v.blockId) return `${p}بلوك (ID: ${v.blockId})`;
-  return `${p}(وحدة غير محددة)`;
+  if (v.unit) return `${p}وحدة ${v.unit.unitNumber}`;
+  if (v.block) return `${p}بلوك ${v.block.blockNumber}`;
+  return `${p}(نطاق غير محدد)`;
 }
 
 // ─── Assignment Form Row ──────────────────────────────────────────────────────
@@ -36,9 +36,11 @@ interface AssignmentRow {
   id: string;
   projectId: string;
   specialtyKey: string;
-  level: 'block' | 'unit';
+  level: 'block' | 'unit' | 'block_range' | 'unit_range';
   blockId: string;
   unitId: string;
+  toBlockId?: string;
+  toUnitId?: string;
 }
 
 function newRow(): AssignmentRow {
@@ -123,14 +125,48 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error('الاسم مطلوب'); return; }
-    const validAssignments = assignments
-      .filter(a => a.projectId && a.specialtyKey && (a.level === 'block' ? a.blockId : a.unitId))
-      .map(a => ({
-        projectId: a.projectId,
-        specialtyKey: a.specialtyKey,
-        blockId: a.level === 'block' ? a.blockId : null,
-        unitId: a.level === 'unit' ? a.unitId : null,
-      }));
+    
+    const validAssignments: any[] = [];
+    
+    for (const a of assignments) {
+      if (!a.projectId || !a.specialtyKey) continue;
+      
+      if (a.level === 'block' && a.blockId) {
+        validAssignments.push({ projectId: a.projectId, specialtyKey: a.specialtyKey, blockId: a.blockId, unitId: null });
+      } else if (a.level === 'unit' && a.unitId) {
+        validAssignments.push({ projectId: a.projectId, specialtyKey: a.specialtyKey, blockId: null, unitId: a.unitId });
+      } else if (a.level === 'block_range' && a.blockId && a.toBlockId) {
+        const blocks = projectBlocks[a.projectId] || [];
+        const i1 = blocks.findIndex(b => b.id === a.blockId);
+        const i2 = blocks.findIndex(b => b.id === a.toBlockId);
+        if (i1 !== -1 && i2 !== -1) {
+          const min = Math.min(i1, i2);
+          const max = Math.max(i1, i2);
+          for (let i = min; i <= max; i++) {
+            validAssignments.push({ projectId: a.projectId, specialtyKey: a.specialtyKey, blockId: blocks[i].id, unitId: null });
+          }
+        }
+      } else if (a.level === 'unit_range' && a.unitId && a.toUnitId) {
+        const units = projectUnits[a.projectId] || [];
+        const i1 = units.findIndex(u => u.id === a.unitId);
+        const i2 = units.findIndex(u => u.id === a.toUnitId);
+        if (i1 !== -1 && i2 !== -1) {
+          const min = Math.min(i1, i2);
+          const max = Math.max(i1, i2);
+          for (let i = min; i <= max; i++) {
+            validAssignments.push({ projectId: a.projectId, specialtyKey: a.specialtyKey, blockId: null, unitId: units[i].id });
+          }
+        }
+      }
+    }
+
+    // Deduplicate validAssignments based on keys
+    const uniqueMap = new Map();
+    for (const va of validAssignments) {
+      const key = `${va.projectId}-${va.specialtyKey}-${va.blockId}-${va.unitId}`;
+      uniqueMap.set(key, va);
+    }
+    const finalAssignments = Array.from(uniqueMap.values());
 
     setSaving(true);
     try {
@@ -138,14 +174,14 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
         await contractorsApi.update(initial.id, {
           name: name.trim(), phone: phone.trim() || null,
           specialties: selectedSpecialties,
-          assignments: validAssignments as any,
+          assignments: finalAssignments as any,
         });
         toast.success('تم تحديث المقاول');
       } else {
         await contractorsApi.create({
           name: name.trim(), phone: phone.trim() || undefined,
           specialties: selectedSpecialties,
-          assignments: validAssignments as any,
+          assignments: finalAssignments as any,
         });
         toast.success('تم إضافة المقاول');
       }
@@ -289,40 +325,74 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
                     <DropdownMenu>
                       <DropdownMenuTrigger render={
                         <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs border-border/50 bg-background gap-1 shrink-0">
-                          {row.level === 'block' ? 'بلوك' : 'وحدة'}
+                          {row.level === 'block' ? 'بلوك' : row.level === 'unit' ? 'وحدة' : row.level === 'block_range' ? 'نطاق بلوكات' : 'نطاق وحدات'}
                           <ChevronDown className="w-3 h-3 opacity-50" />
                         </Button>
                       } />
                       <DropdownMenuContent className="bg-card border-border text-slate-200">
                         <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => updateRow(row.id, 'level', 'block')}>بلوك</DropdownMenuItem>
                         <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => updateRow(row.id, 'level', 'unit')}>وحدة</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => updateRow(row.id, 'level', 'block_range')}>نطاق بلوكات</DropdownMenuItem>
+                        <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => updateRow(row.id, 'level', 'unit_range')}>نطاق وحدات</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger render={
-                        <Button variant="outline" size="sm" className="flex-1 h-8 justify-between rounded-xl text-xs border-border/50 bg-background" disabled={!row.projectId}>
-                          {row.level === 'block' 
-                            ? (projectBlocks[row.projectId]?.find(b => b.id === row.blockId)?.blockNumber ?? 'اختر بلوك')
-                            : (projectUnits[row.projectId]?.find(u => u.id === row.unitId)?.unitNumber ?? 'اختر وحدة')}
-                          <ChevronDown className="w-3 h-3 opacity-50" />
-                        </Button>
-                      } />
-                      <DropdownMenuContent className="bg-card border-border text-slate-200 max-h-48 overflow-y-auto">
-                        {row.level === 'block' && projectBlocks[row.projectId]?.map(b => (
-                          <DropdownMenuItem key={b.id} className="hover:bg-white/5 text-start justify-start"
-                            onClick={() => updateRow(row.id, 'blockId', b.id)}>
-                            {b.blockNumber}
-                          </DropdownMenuItem>
-                        ))}
-                        {row.level === 'unit' && projectUnits[row.projectId]?.map(u => (
-                          <DropdownMenuItem key={u.id} className="hover:bg-white/5 text-start justify-start"
-                            onClick={() => updateRow(row.id, 'unitId', u.id)}>
-                            {u.unitNumber}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-1 flex-1">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger render={
+                          <Button variant="outline" size="sm" className="flex-1 h-8 justify-between rounded-xl text-xs border-border/50 bg-background" disabled={!row.projectId}>
+                            {row.level.startsWith('block')
+                              ? (projectBlocks[row.projectId]?.find(b => b.id === row.blockId)?.blockNumber ?? 'من بلوك')
+                              : (projectUnits[row.projectId]?.find(u => u.id === row.unitId)?.unitNumber ?? 'من وحدة')}
+                            <ChevronDown className="w-3 h-3 opacity-50" />
+                          </Button>
+                        } />
+                        <DropdownMenuContent className="bg-card border-border text-slate-200 max-h-48 overflow-y-auto">
+                          {row.level.startsWith('block') && projectBlocks[row.projectId]?.map(b => (
+                            <DropdownMenuItem key={b.id} className="hover:bg-white/5 text-start justify-start"
+                              onClick={() => updateRow(row.id, 'blockId', b.id)}>
+                              {b.blockNumber}
+                            </DropdownMenuItem>
+                          ))}
+                          {row.level.startsWith('unit') && projectUnits[row.projectId]?.map(u => (
+                            <DropdownMenuItem key={u.id} className="hover:bg-white/5 text-start justify-start"
+                              onClick={() => updateRow(row.id, 'unitId', u.id)}>
+                              {u.unitNumber}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      {row.level.includes('range') && (
+                        <>
+                          <span className="text-muted-foreground text-xs px-1 shrink-0">إلى</span>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={
+                              <Button variant="outline" size="sm" className="flex-1 h-8 justify-between rounded-xl text-xs border-border/50 bg-background" disabled={!row.projectId}>
+                                {row.level === 'block_range'
+                                  ? (projectBlocks[row.projectId]?.find(b => b.id === row.toBlockId)?.blockNumber ?? 'إلى بلوك')
+                                  : (projectUnits[row.projectId]?.find(u => u.id === row.toUnitId)?.unitNumber ?? 'إلى وحدة')}
+                                <ChevronDown className="w-3 h-3 opacity-50" />
+                              </Button>
+                            } />
+                            <DropdownMenuContent className="bg-card border-border text-slate-200 max-h-48 overflow-y-auto">
+                              {row.level === 'block_range' && projectBlocks[row.projectId]?.map(b => (
+                                <DropdownMenuItem key={b.id} className="hover:bg-white/5 text-start justify-start"
+                                  onClick={() => updateRow(row.id, 'toBlockId', b.id)}>
+                                  {b.blockNumber}
+                                </DropdownMenuItem>
+                              ))}
+                              {row.level === 'unit_range' && projectUnits[row.projectId]?.map(u => (
+                                <DropdownMenuItem key={u.id} className="hover:bg-white/5 text-start justify-start"
+                                  onClick={() => updateRow(row.id, 'toUnitId', u.id)}>
+                                  {u.unitNumber}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
