@@ -112,7 +112,7 @@ export default function UnitDetail() {
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
             <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <User className="w-4 h-4" /> المُلاّك ({unit.clients?.length || 0})
+              <User className="w-4 h-4" /> المالك
             </h2>
             {unit.clients?.length > 0 ? (
               <div className="space-y-2">
