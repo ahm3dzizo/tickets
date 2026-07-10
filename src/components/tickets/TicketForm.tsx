@@ -436,7 +436,7 @@ export function TicketForm({
                     </DropdownMenuItem>
                   ) : (
                     formClients
-                      .filter(c => c.name.includes(clientSearch) || c.villaNumber.includes(clientSearch))
+                      .filter(c => c.name?.includes(clientSearch) || c.villaNumber?.includes(clientSearch))
                       .map(c => (
                       <DropdownMenuItem
                         key={c.id}

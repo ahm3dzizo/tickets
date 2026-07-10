@@ -259,7 +259,7 @@ export function DirectAppointmentDialog({
                   <div className="p-4 text-sm text-muted-foreground text-center">جارٍ التحميل...</div>
                 ) : (
                   (() => {
-                    const filtered = clients.filter(c => c.name.includes(clientSearch) || c.villaNumber.includes(clientSearch)).slice(0, 50);
+                    const filtered = clients.filter(c => c.name?.includes(clientSearch) || c.villaNumber?.includes(clientSearch)).slice(0, 50);
                     if (filtered.length === 0) return <div className="p-4 text-sm text-muted-foreground text-center">لا يوجد نتائج</div>;
                     return filtered.map(c => (
                       <div

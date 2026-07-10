@@ -136,15 +136,15 @@ export default function TicketsList() {
     } catch { toast.error('فشل تحديث الحالة'); }
   };
 
-  const handleSendAppointment = () => {
-    const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
+  const handleAppointment = () => {
+    const selected = tickets.filter(t => selectedTicketIds?.includes(t.id));
     if (selected.length === 0) return;
     setApptTicket(selected);
     setApptOpen(true);
   };
 
   const handleInternalAppointment = () => {
-    const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
+    const selected = tickets.filter(t => selectedTicketIds?.includes(t.id));
     if (selected.length === 0) return;
     setApptTicket(selected);
     setInternalApptOpen(true);
@@ -202,7 +202,7 @@ export default function TicketsList() {
   const distinctProjectIds = new Set(tickets.map(t => t.projectId).filter(Boolean));
   const showProjectColumn = user?.role === 'admin' || distinctProjectIds.size > 1;
 
-  const selectedTickets = tickets.filter(t => selectedTicketIds.includes(t.id));
+  const selectedTickets = tickets.filter(t => selectedTicketIds?.includes(t.id));
   const uniqueClientIds = new Set(selectedTickets.map(t => t.clientId || t.villaNumber || 'unknown'));
 
   return (
@@ -274,8 +274,8 @@ export default function TicketsList() {
           className="w-full"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div className="overflow-x-auto no-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
-              <TabsList className="bg-transparent h-auto p-0 flex items-center gap-2 w-max">
+            <div className="w-full">
+              <TabsList className="bg-transparent h-auto p-0 flex flex-wrap items-center gap-2 w-full">
                 <TabsTrigger
                   value="linked"
                   className="rounded-xl h-9 text-sm font-bold px-4 border border-border bg-card data-[state=active]:bg-primary data-[state=active]:border-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
@@ -438,7 +438,7 @@ export default function TicketsList() {
             count={selectedTicketIds.length}
             isMultiClient={uniqueClientIds.size > 1}
             onStatusChange={handleBulkStatusChange}
-            onAppointment={handleSendAppointment}
+            onAppointment={handleAppointment}
             onInternalAppointment={handleInternalAppointment}
             onContractor={() => setContractorDialogOpen(true)}
             onClose={() => setCloseDialogOpen(true)}
@@ -450,7 +450,7 @@ export default function TicketsList() {
         <CloseTicketDialog
           open={closeDialogOpen}
           onOpenChange={setCloseDialogOpen}
-          selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))}
+          selectedTickets={tickets.filter(t => selectedTicketIds?.includes(t.id))}
           clients={Object.values(clients)}
           projects={projects}
           onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }}

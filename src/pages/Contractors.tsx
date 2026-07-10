@@ -442,7 +442,7 @@ export default function Contractors() {
         if (a.unit?.unitNumber && a.unit.unitNumber.includes(s)) return true;
         if (a.block?.blockNumber && a.block.blockNumber.includes(s)) return true;
         if (a.blockId && !a.unitId && projectUnits[a.projectId]) {
-          const unitsInThisBlock = projectUnits[a.projectId].filter((u: any) => u.blockId === a.blockId);
+          const unitsInThisBlock = projectUnits[a.projectId].filter((u: any) => String(u.blockId) === String(a.blockId));
           if (unitsInThisBlock.some((u: any) => u.unitNumber.includes(s))) return true;
         }
         return false;
@@ -463,7 +463,7 @@ export default function Contractors() {
       c.assignments.forEach((a: any) => {
         if (a.unitId) unitSet.add(a.unitId);
         if (a.blockId && !a.unitId && projectUnits[a.projectId]) {
-          projectUnits[a.projectId].filter((u: any) => u.blockId === a.blockId).forEach((u: any) => unitSet.add(u.id));
+          projectUnits[a.projectId].filter((u: any) => String(u.blockId) === String(a.blockId)).forEach((u: any) => unitSet.add(u.id));
         }
       });
     });
@@ -663,7 +663,7 @@ function ContractorCard({
     const unitSet = new Set(contractor.assignments.filter((a: any) => a.unitId).map((a: any) => a.unitId));
     contractor.assignments.filter((a: any) => a.blockId && !a.unitId).forEach((a: any) => {
       if (projectUnits[a.projectId]) {
-        projectUnits[a.projectId].filter((u: any) => u.blockId === a.blockId).forEach((u: any) => unitSet.add(u.id));
+        projectUnits[a.projectId].filter((u: any) => String(u.blockId) === String(a.blockId)).forEach((u: any) => unitSet.add(u.id));
       }
     });
     return { blockCount: blockSet.size, unitCount: unitSet.size };

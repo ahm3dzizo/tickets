@@ -406,7 +406,7 @@ export function TicketTable({
 
   const focalClientKey = useMemo(() => {
     if (!selectedIds || selectedIds.length === 0) return null;
-    const sel = baseTickets.filter(t => selectedIds.includes(t.id));
+    const sel = baseTickets.filter(t => selectedIds?.includes(t.id));
     if (sel.length === 0) return null;
     const keys = new Set(sel.map(t => t.clientId || t.villaNumber || t.id));
     return keys.size === 1 ? [...keys][0] : null;
@@ -500,7 +500,7 @@ export function TicketTable({
   const toggleOne = (id: string) => {
     if (!onSelectionChange || !selectedIds) return;
     onSelectionChange(
-      selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]
+      selectedIds?.includes(id) ? selectedIds.filter(x => x !== id) : [...(selectedIds || []), id]
     );
   };
 
