@@ -275,7 +275,15 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
               </Button>
             </div>
             <div className="space-y-2">
-              {assignments.map(row => (
+              {[...assignments].sort((rowA, rowB) => {
+                if (rowA.projectId !== rowB.projectId) return (rowA.projectId || '').localeCompare(rowB.projectId || '');
+                const bA = parseInt(rowA.blockId ? projectBlocks[rowA.projectId]?.find((b: any) => b.id === rowA.blockId)?.blockNumber : '0') || 0;
+                const bB = parseInt(rowB.blockId ? projectBlocks[rowB.projectId]?.find((b: any) => b.id === rowB.blockId)?.blockNumber : '0') || 0;
+                if (bA !== bB) return bA - bB;
+                const uA = parseInt(rowA.unitId ? projectUnits[rowA.projectId]?.find((u: any) => u.id === rowA.unitId)?.unitNumber : '0') || 0;
+                const uB = parseInt(rowB.unitId ? projectUnits[rowB.projectId]?.find((u: any) => u.id === rowB.unitId)?.unitNumber : '0') || 0;
+                return uA - uB;
+              }).map(row => (
                 <div key={row.id} className="flex flex-col gap-2 p-3 border border-border/50 rounded-2xl bg-muted/20">
                   <div className="flex items-center gap-2">
                     {/* Project picker */}
@@ -423,6 +431,7 @@ export default function Contractors() {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Contractor | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [projectUnits, setProjectUnits] = useState<Record<string, any[]>>({});
 
   const canEdit = user?.role === 'admin' || user?.role === 'engineer';
 
@@ -438,6 +447,12 @@ export default function Contractors() {
       const pm: Record<string, Project> = {};
       allProjects.forEach((p: any) => { pm[p.id] = p; });
       setProjectMap(pm);
+      
+      const unitsMap: Record<string, any[]> = {};
+      await Promise.all(allProjects.map(async (p: any) => {
+        try { unitsMap[p.id] = await projectsApi.getUnits(p.id); } catch(e) {}
+      }));
+      setProjectUnits(unitsMap);
     } catch { toast.error('فشل تحميل البيانات'); }
     finally { setLoading(false); }
   };
@@ -570,6 +585,7 @@ export default function Contractors() {
                   key={c.id}
                   contractor={c}
                   projectMap={projectMap}
+                  projectUnits={projectUnits}
                   canEdit={canEdit}
                   deleting={deletingId === c.id}
                   onEdit={() => { setEditTarget(c); setFormOpen(true); }}
@@ -593,6 +609,7 @@ export default function Contractors() {
                   key={c.id}
                   contractor={c}
                   projectMap={projectMap}
+                  projectUnits={projectUnits}
                   canEdit={canEdit}
                   deleting={deletingId === c.id}
                   onEdit={() => { setEditTarget(c); setFormOpen(true); }}
@@ -618,10 +635,11 @@ export default function Contractors() {
 
 // ─── Contractor Card ──────────────────────────────────────────────────────────
 function ContractorCard({
-  contractor, projectMap, canEdit, deleting, onEdit, onDelete,
+  contractor, projectMap, projectUnits, canEdit, deleting, onEdit, onDelete,
 }: {
   contractor: Contractor;
   projectMap: Record<string, Project>;
+  projectUnits: Record<string, any[]>;
   canEdit: boolean;
   deleting: boolean;
   onEdit: () => void;
@@ -683,15 +701,26 @@ function ContractorCard({
       {/* Assignments Summary */}
       {contractor.assignments.length > 0 && (
         <div className="flex gap-2 text-xs pt-1 border-t border-white/5">
-          {contractor.assignments.filter((a: any) => a.blockId && !a.unitId).length > 0 && (
-             <span className="text-slate-400">بلوكات: {contractor.assignments.filter((a: any) => a.blockId && !a.unitId).length}</span>
-          )}
-          {contractor.assignments.filter((a: any) => a.unitId).length > 0 && (
-             <span className="text-slate-400">وحدات: {contractor.assignments.filter((a: any) => a.unitId).length}</span>
-          )}
-          {contractor.assignments.filter((a: any) => !a.blockId && !a.unitId).length > 0 && (
-             <span className="text-slate-400">مشاريع: {contractor.assignments.filter((a: any) => !a.blockId && !a.unitId).length}</span>
-          )}
+          {(() => {
+            const blockSet = new Set(contractor.assignments.filter((a: any) => a.blockId && !a.unitId).map((a: any) => a.blockId));
+            const unitSet = new Set(contractor.assignments.filter((a: any) => a.unitId).map((a: any) => a.unitId));
+            const projSet = new Set(contractor.assignments.filter((a: any) => !a.blockId && !a.unitId).map((a: any) => a.projectId));
+            
+            // إضافة الوحدات التي تقع ضمن البلوكات المخصصة للمقاول
+            contractor.assignments.filter((a: any) => a.blockId && !a.unitId).forEach((a: any) => {
+              if (projectUnits[a.projectId]) {
+                 projectUnits[a.projectId].filter((u: any) => u.blockId === a.blockId).forEach((u: any) => unitSet.add(u.id));
+              }
+            });
+
+            return (
+              <>
+                {blockSet.size > 0 && <span className="text-slate-400">بلوكات: {blockSet.size}</span>}
+                {unitSet.size > 0 && <span className="text-slate-400">وحدات: {unitSet.size}</span>}
+                {projSet.size > 0 && <span className="text-slate-400">مشاريع: {projSet.size}</span>}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>
