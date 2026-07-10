@@ -487,7 +487,13 @@ export default function TicketDetail() {
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 text-xs">الاسم</span>
-                    <span className="text-white font-bold">{client?.name || '---'}</span>
+                    {client?.id ? (
+                      <Link to={`/clients/${client.id}`} className="text-blue-400 font-bold hover:underline transition-colors block truncate max-w-[150px]">
+                        {client.name}
+                      </Link>
+                    ) : (
+                      <span className="text-white font-bold">{client?.name || '---'}</span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex flex-col items-start">
@@ -518,9 +524,13 @@ export default function TicketDetail() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 text-xs">رقم الفيلا</span>
-                    <Link to={`/clients?search=${ticket.villaNumber}`} className="text-blue-400 font-bold hover:underline hover:text-blue-300 transition-colors">
-                      {ticket.villaNumber}
-                    </Link>
+                    {ticket.unitId ? (
+                      <Link to={`/units/${ticket.unitId}`} className="text-blue-400 font-bold hover:underline hover:text-blue-300 transition-colors">
+                        {ticket.villaNumber}
+                      </Link>
+                    ) : (
+                      <span className="text-blue-400 font-bold">{ticket.villaNumber}</span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 text-xs">رقم البلوك</span>
@@ -610,7 +620,17 @@ export default function TicketDetail() {
                       <User className="w-3.5 h-3.5" />
                       المشرف المسؤول
                     </div>
-                    <span className="text-xs text-slate-300 font-bold">{ticket.assigneeName || '---'}</span>
+                    {ticket.status === 'contractor' && ticket.contractorId ? (
+                      <Link to={`/contractors/${ticket.contractorId}`} className="text-xs text-emerald-400 font-bold hover:underline transition-colors block truncate max-w-[150px]">
+                        {ticket.assigneeName || '---'}
+                      </Link>
+                    ) : ticket.assignedSupervisorId ? (
+                      <Link to={`/team/${ticket.assignedSupervisorId}`} className="text-xs text-blue-400 font-bold hover:underline transition-colors block truncate max-w-[150px]">
+                        {ticket.assigneeName || '---'}
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-slate-300 font-bold">{ticket.assigneeName || '---'}</span>
+                    )}
                   </div>
                   {ticket.assignedSupervisors && (ticket.assignedSupervisors as any[]).length > 0 && (
                     <div className="flex items-start justify-between">
@@ -620,7 +640,9 @@ export default function TicketDetail() {
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         {(ticket.assignedSupervisors as any[]).map((s: any, i: number) => (
-                          <span key={i} className="text-[10px] text-slate-400 font-medium">{s.name}</span>
+                          <Link key={i} to={`/team/${s.id || s.uid}`} className="text-[10px] text-blue-400 font-medium hover:underline transition-colors">
+                            {s.name}
+                          </Link>
                         ))}
                       </div>
                     </div>

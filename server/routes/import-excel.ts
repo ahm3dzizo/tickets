@@ -345,14 +345,14 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     }
 
     // ── 4. Load reference data + keywords cache (مرة واحدة للكل) ─────────────
-    const [existingRows, clientRows, ticketTypes, keywordsCache, typeToSpecialty, projectSups] = await Promise.all([
+    const [existingRows, unitRows, ticketTypes, keywordsCache, typeToSpecialty, projectSups] = await Promise.all([
       prisma.ticket.findMany({
         where: { projectId },
-        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentAwaitingReply: true, appointmentNotes: true, clientId: true, villaNumber: true, description: true },
+        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentAwaitingReply: true, appointmentNotes: true, clientId: true, unitId: true, villaNumber: true, description: true },
       }),
-      prisma.client.findMany({
+      prisma.unit.findMany({
         where: { projectId },
-        select: { id: true, villaNumber: true, name: true },
+        include: { clients: { include: { client: true } } },
       }),
       prisma.ticketType.findMany({ select: { id: true, key: true, nameAr: true } }),
       loadKeywordsFromDB(),
@@ -375,7 +375,10 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     };
 
     const existingMap = new Map(existingRows.map((t) => [normalizeTicketId(String(t.ticketId).trim()), t]));
-    const clientMap = new Map(clientRows.map((c) => [normalizeVillaNumber(String(c.villaNumber)), c]));
+    const clientMap = new Map(unitRows.map((u) => {
+      const primaryClient = u.clients.find(c => c.isPrimary)?.client || u.clients[0]?.client;
+      return [normalizeVillaNumber(String(u.unitNumber)), { unitId: u.id, clientId: primaryClient?.id || null, name: primaryClient?.name || "" }];
+    }));
 
     // ── Build appointments map to inherit for new tickets ──────────────────
     // القاعدة: الموعد ينتقل للتذاكر الجديدة فقط لو كان في المستقبل (غداً فصاعداً)
@@ -499,9 +502,10 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         if (!finalType) finalType = "unclassified";
         const finalTypeId = typeIdMap.get(finalType) || null;
 
-        const client = clientMap.get(cleanVilla);
-        const clientId = client?.id || null;
-        const clientName = client?.name || "";
+        const unitData = clientMap.get(cleanVilla);
+        const clientId = unitData?.clientId || null;
+        const unitId = unitData?.unitId || null;
+        const clientName = unitData?.name || "";
 
         // ── Assign Supervisors based on Final Types ──────────────────────────
         const requiredSpecialties = [...new Set(finalTypes.map((t: string) => typeToSpecialty[t] || "general"))];
@@ -559,6 +563,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           refNumber,
           projectAbbr,
           projectId,
+          unitId,
           clientId,
           clientName,
           villaNumber: cleanVilla || rawVilla,

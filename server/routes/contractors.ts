@@ -4,52 +4,8 @@ import { AuthRequest, requireAuth } from "../auth.js";
 
 const router = Router();
 
-// ─── Helper: parse villa number to int for range comparison ──────────────────
-function parseVillaNum(v: string | null | undefined): number | null {
-  if (!v) return null;
-  const n = parseInt(String(v).replace(/\D/g, ""), 10);
-  return isNaN(n) ? null : n;
-}
-
-function matchesList(target: string, dbField: string | null | undefined): boolean {
-  if (!dbField) return false;
-  // split by spaces, commas, arabic commas, or dashes
-  const parts = String(dbField).split(/[\s,،-]+/);
-  return parts.includes(String(target).trim());
-}
-
-function isVillaInRange(villa: string, assignment: any): boolean {
-  if (assignment.villaNumber && matchesList(villa, assignment.villaNumber)) {
-    return true;
-  }
-  if (assignment.fromVilla && assignment.toVilla) {
-    const v = parseVillaNum(villa);
-    const from = parseVillaNum(assignment.fromVilla);
-    const to = parseVillaNum(assignment.toVilla);
-    if (v !== null && from !== null && to !== null) {
-      return v >= from && v <= to;
-    }
-  }
-  return false;
-}
-
-function isBlockInRange(block: string, assignment: any): boolean {
-  if (assignment.blockNumber && matchesList(block, assignment.blockNumber)) {
-    return true;
-  }
-  if (assignment.fromBlock && assignment.toBlock) {
-    const b = parseVillaNum(block);
-    const from = parseVillaNum(assignment.fromBlock);
-    const to = parseVillaNum(assignment.toBlock);
-    if (b !== null && from !== null && to !== null) {
-      return b >= from && b <= to;
-    }
-  }
-  return false;
-}
-
 // GET /api/contractors?projectId=X
-// Returns contractors that have at least one villa assignment in the given project
+// Returns contractors that have at least one assignment in the given project
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { projectId } = req.query;
@@ -60,7 +16,10 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
         : undefined,
       include: {
         specialties: true,
-        assignments: true,
+        assignments: {
+          where: projectId ? { projectId: String(projectId) } : undefined,
+          include: { block: true, unit: true }
+        },
       },
       orderBy: { name: "asc" },
     });
@@ -71,64 +30,63 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// GET /api/contractors/suggest?villaNumber=X&specialtyKey=Y&projectId=Z&blockNumber=W
+// GET /api/contractors/suggest?villaNumber=X&specialtyKey=Y&projectId=Z
 router.get("/suggest", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { villaNumber, specialtyKey, projectId, blockNumber } = req.query;
+    const { villaNumber, specialtyKey, projectId } = req.query;
     if (!projectId) return res.status(400).json({ error: "projectId required" });
 
-    // Load contractors that have assignments in this project
-    const contractors = await prisma.contractor.findMany({
-      where: { assignments: { some: { projectId: String(projectId) } } },
-      include: {
-        specialties: true,
-        assignments: { where: { projectId: String(projectId) } },
-      },
-    });
+    let matchedContractors = new Map();
 
-    // Filter by specialty if provided
-    const withSpecialty = specialtyKey
-      ? contractors.filter(c =>
-          c.specialties.length === 0 ||
-          c.specialties.some(s => s.specialtyKey === String(specialtyKey))
-        )
-      : contractors;
-
-    // Filter by villa/block
-    let matched = withSpecialty;
     if (villaNumber) {
-      const villa = String(villaNumber);
-      const block = blockNumber ? String(blockNumber) : null;
-
-      matched = withSpecialty.filter(c => {
-        if (c.assignments.length === 0) return true;
-        return c.assignments.some(a => {
-          // If block is provided, check if it matches the assignment's block logic
-          // Note: an assignment might be ONLY for a block (no villa specified).
-          // If the assignment has a block criteria but the ticket's block doesn't match, return false.
-          let blockMatches = true;
-          if (a.blockNumber || (a.fromBlock && a.toBlock)) {
-            if (!block || !isBlockInRange(block, a)) {
-              blockMatches = false;
-            }
-          }
-
-          // If the assignment is ONLY a block criteria, and it matched, return true
-          if (blockMatches && !a.villaNumber && !a.fromVilla) {
-            return true;
-          }
-
-          // Otherwise, if block matched (or there was no block criteria on assignment), check villa
-          if (blockMatches && isVillaInRange(villa, a)) {
-            return true;
-          }
-
-          return false;
-        });
+      const unit = await prisma.unit.findUnique({
+        where: { projectId_unitNumber: { projectId: String(projectId), unitNumber: String(villaNumber) } }
       });
+
+      if (unit) {
+        // ابحث عن التعيينات الخاصة بهذه الوحدة أو بلوك الوحدة
+        const assignments = await prisma.contractorAssignment.findMany({
+          where: {
+            projectId: String(projectId),
+            OR: [
+              { unitId: unit.id },
+              { blockId: unit.blockId, unitId: null }
+            ],
+            ...(specialtyKey && specialtyKey !== 'all' ? { specialtyKey: String(specialtyKey) } : {})
+          },
+          include: {
+            contractor: { include: { specialties: true, assignments: { include: { block: true, unit: true } } } }
+          }
+        });
+
+        // ترتيب الأولوية: الوحدة أولاً، ثم البلوك
+        assignments.sort((a, b) => {
+          if (a.unitId && !b.unitId) return -1;
+          if (!a.unitId && b.unitId) return 1;
+          return 0;
+        });
+
+        for (const a of assignments) {
+          if (!matchedContractors.has(a.contractorId)) {
+            matchedContractors.set(a.contractorId, a.contractor);
+          }
+        }
+      }
+    } else {
+      // إذا لم يحدد فيلا، نرجع كل المقاولين في المشروع (اختياريًا حسب التخصص)
+      const contractors = await prisma.contractor.findMany({
+        where: {
+          assignments: { some: { projectId: String(projectId) } },
+          ...(specialtyKey && specialtyKey !== 'all' ? { specialties: { some: { specialtyKey: String(specialtyKey) } } } : {})
+        },
+        include: { specialties: true, assignments: { include: { block: true, unit: true } } }
+      });
+      for (const c of contractors) {
+        matchedContractors.set(c.id, c);
+      }
     }
 
-    res.json(matched);
+    res.json(Array.from(matchedContractors.values()));
   } catch (err: any) {
     console.error("[contractors] suggest error:", err);
     res.status(500).json({ error: err.message });
@@ -140,7 +98,7 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
     const contractor = await prisma.contractor.findUnique({
       where: { id: req.params.id },
-      include: { specialties: true, assignments: true },
+      include: { specialties: true, assignments: { include: { block: true, unit: true } } },
     });
     if (!contractor) return res.status(404).json({ error: "Not found" });
     res.json(contractor);
@@ -150,7 +108,6 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // POST /api/contractors
-// body: { name, phone?, specialties?: string[], assignments?: { projectId, villaNumber?, blockNumber?, fromVilla?, toVilla? }[] }
 router.post("/", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { name, phone, specialties = [], assignments = [] } = req.body;
@@ -166,16 +123,13 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
         assignments: {
           create: (assignments as any[]).map((a: any) => ({
             projectId: a.projectId,
-            villaNumber: a.villaNumber || null,
-            blockNumber: a.blockNumber || null,
-            fromVilla: a.fromVilla || null,
-            toVilla: a.toVilla || null,
-            fromBlock: a.fromBlock || null,
-            toBlock: a.toBlock || null,
+            specialtyKey: a.specialtyKey || specialties[0] || 'general',
+            blockId: a.blockId || null,
+            unitId: a.unitId || null,
           })),
         },
       },
-      include: { specialties: true, assignments: true },
+      include: { specialties: true, assignments: { include: { block: true, unit: true } } },
     });
     res.status(201).json(contractor);
   } catch (err: any) {
@@ -209,18 +163,15 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     }
 
     if (Array.isArray(assignments)) {
-      await prisma.contractorVilla.deleteMany({ where: { contractorId: id } });
+      await prisma.contractorAssignment.deleteMany({ where: { contractorId: id } });
       if (assignments.length > 0) {
-        await prisma.contractorVilla.createMany({
+        await prisma.contractorAssignment.createMany({
           data: (assignments as any[]).map((a: any) => ({
             contractorId: id,
             projectId: a.projectId,
-            villaNumber: a.villaNumber || null,
-            blockNumber: a.blockNumber || null,
-            fromVilla: a.fromVilla || null,
-            toVilla: a.toVilla || null,
-            fromBlock: a.fromBlock || null,
-            toBlock: a.toBlock || null,
+            specialtyKey: a.specialtyKey || (specialties && specialties[0]) || 'general',
+            blockId: a.blockId || null,
+            unitId: a.unitId || null,
           })),
         });
       }
@@ -228,7 +179,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     const updated = await prisma.contractor.findUnique({
       where: { id },
-      include: { specialties: true, assignments: true },
+      include: { specialties: true, assignments: { include: { block: true, unit: true } } },
     });
     res.json(updated);
   } catch (err: any) {

@@ -69,7 +69,7 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
 
   const project = await prisma.project.findFirst({
     where,
-    include: { clients: true, users: true },
+    include: { users: true },
   });
   if (!project) { res.status(404).json({ error: "Not found" }); return; }
   const mapped = {
@@ -148,6 +148,51 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
 router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
   await prisma.project.delete({ where: { id: req.params.id } });
   res.json({ success: true });
+});
+
+// GET /api/projects/:id/blocks
+router.get("/:id/blocks", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const blocks = await prisma.block.findMany({
+      where: { projectId: req.params.id },
+      orderBy: { blockNumber: 'asc' }
+    });
+    res.json(blocks);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/projects/:id/units
+router.get("/:id/units", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const units = await prisma.unit.findMany({
+      where: { projectId: req.params.id },
+      orderBy: { unitNumber: 'asc' }
+    });
+    res.json(units);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/projects/unit-details/:id
+router.get("/unit-details/:id", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const unit = await prisma.unit.findUnique({
+      where: { id: req.params.id },
+      include: {
+        block: true,
+        project: true,
+        clients: { include: { client: true } },
+        contractorAssignments: { include: { contractor: true } }
+      }
+    });
+    if (!unit) { res.status(404).json({ error: "Unit not found" }); return; }
+    res.json(unit);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 export default router;

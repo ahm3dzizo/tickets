@@ -26,10 +26,31 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { projectId, from, to } = req.query as Record<string, string>;
 
+    const user = await prisma.user.findUnique({ 
+      where: { uid: req.uid },
+      include: { projects: { select: { id: true } } } 
+    });
+    if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+    
+    const userProjectIds = user.projects.map(p => p.id);
+
     const where: any = {
       NOT: { description: { startsWith: 'موعد صيانة مجدول يدوياً للمشرف' } }
     };
-    if (projectId) where.projectId = projectId;
+    if (projectId) {
+      // Ensure the user has access to this project
+      if (user.role !== 'admin' && !userProjectIds.includes(projectId)) {
+        res.status(403).json({ error: "Forbidden: No access to this project" });
+        return;
+      }
+      where.projectId = projectId;
+    } else if (user.role !== 'admin' && userProjectIds.length > 0) {
+      where.projectId = { in: userProjectIds };
+    }
+
+    if (user.role === 'supervisor') {
+      where.assignedSupervisorIds = { has: user.uid };
+    }
 
     // Date filter applies to issuedAt (string) handled in JS, use createdAt only as fallback for DB filter
     // We fetch all and filter by issuedAt in JS for accurate results

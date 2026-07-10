@@ -32,13 +32,14 @@ export interface Project {
 
 export interface Client {
   id: string;
-  projectId: string;
+  projectId?: string;
   name: string;
   phone: string;
-  villaNumber: string;
+  villaNumber?: string;
   blockNumber?: string;
   handoverDate?: string;
   warrantyExpiryDate?: string;
+  units?: any[];
 }
 
 // ✅ الأنواع القديمة + الجديدة (تمديد دون إزالة أي شيء)
@@ -71,6 +72,7 @@ export interface Ticket {
   refNumber: string;
   projectAbbr?: string;
   projectId: string;
+  unitId?: string | null;
   clientId: string;
   clientName: string;
   villaNumber: string;
@@ -107,13 +109,13 @@ export interface ContractorSpecialty {
 export interface ContractorVilla {
   id: string;
   contractorId: string;
+  specialtyKey: string;
   projectId: string;
-  villaNumber?: string | null;
-  blockNumber?: string | null;
-  fromVilla?: string | null;
-  toVilla?: string | null;
-  fromBlock?: string | null;
-  toBlock?: string | null;
+  blockId?: string | null;
+  unitId?: string | null;
+  // Included relations for UI mapping
+  block?: { blockNumber: string } | null;
+  unit?: { unitNumber: string } | null;
 }
 
 export interface Contractor {

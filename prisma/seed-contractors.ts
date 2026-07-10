@@ -167,10 +167,7 @@ async function main() {
         assignments: {
           create: c.assignments.map(a => ({
             projectId: project!.id,
-            blockNumber: a.blockNumber || null,
-            villaNumber: a.villaNumber || null,
-            fromVilla: a.fromVilla || null,
-            toVilla: a.toVilla || null,
+            specialtyKey: c.specialties[0] || 'general',
           }))
         }
       }

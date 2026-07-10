@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
@@ -499,8 +499,8 @@ export function TicketTable({
   const inSelectionMode = hasSelection && !!selectedIds && selectedIds.length > 0;
 
   const getSupervisorNames = (ticket: Ticket): string[] => {
-    if (ticket.status === 'contractor' && ticket.contractorName) {
-      return [ticket.contractorName];
+    if (ticket.status === 'contractor') {
+      return [ticket.assigneeName || 'مقاول غير محدد'];
     }
     const map = (ticket as any).supervisorByType as Record<string, { name: string }[]> | undefined;
     if (map) {
@@ -955,6 +955,7 @@ export function TicketTable({
                       )}
                       onClick={e => {
                         if ((e.target as HTMLElement).closest('button')) return;
+                        if ((e.target as HTMLElement).closest('a')) return;
                         sessionStorage.setItem('ticketsListScrollY', window.scrollY.toString());
                         navigate(`/tickets/${ticket.id}`);
                       }}
@@ -973,7 +974,13 @@ export function TicketTable({
                         {ticket.refNumber || '---'}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-300 truncate w-28 max-w-[100px]" title={ticket.clientName}>
-                        {(ticket.clientName || '---').split(' ')[0]}
+                        {ticket.clientId ? (
+                          <Link to={`/clients/${ticket.clientId}`} className="hover:text-blue-400 hover:underline transition-colors block truncate" onClick={e => e.stopPropagation()}>
+                            {(ticket.clientName || '---').split(' ')[0]}
+                          </Link>
+                        ) : (
+                          (ticket.clientName || '---').split(' ')[0]
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-400 whitespace-nowrap w-20">
                         {format(openDate, 'd/M/yyyy')}
@@ -1003,12 +1010,22 @@ export function TicketTable({
                         <td className="px-4 py-3 text-center w-24">
                           {supervisorNames.length > 0 ? (
                             <div className="flex flex-col gap-1 items-center">
-                              {supervisorNames.map((name, i) => (
-                                <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap',
-                                  i === 0 ? 'bg-green-350/20 text-red-500' : 'bg-blue-200/15 text-blue-500')}>
-                                  {name}
-                                </span>
-                              ))}
+                              {supervisorNames.map((name, i) => {
+                                const isContractor = ticket.status === 'contractor' && ticket.contractorId;
+                                const linkId = isContractor ? ticket.contractorId : (ticket.assignedSupervisorIds?.[i] || ticket.assignedSupervisorId);
+                                const path = isContractor ? `/contractors/${linkId}` : `/team/${linkId}`;
+                                return linkId ? (
+                                  <Link key={i} to={path} onClick={e => e.stopPropagation()} className={cn('hover:underline text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap',
+                                    i === 0 ? 'bg-green-350/20 text-red-500 hover:text-red-400' : 'bg-blue-200/15 text-blue-500 hover:text-blue-400')}>
+                                    {name}
+                                  </Link>
+                                ) : (
+                                  <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap',
+                                    i === 0 ? 'bg-green-350/20 text-red-500' : 'bg-blue-200/15 text-blue-500')}>
+                                    {name}
+                                  </span>
+                                );
+                              })}
                             </div>
                           ) : (
                             <span className="text-[10px] text-slate-600">---</span>

@@ -103,11 +103,15 @@ export const projectsApi = {
   create: (data: any)                => post<any>('/projects', data),
   update: (id: string, data: any)    => put<any>(`/projects/${id}`, data),
   delete: (id: string)               => del<any>(`/projects/${id}`),
+  getBlocks: (projectId: string) => get<any[]>(`/projects/${projectId}/blocks`),
+  getUnits: (projectId: string) => get<any[]>(`/projects/${projectId}/units`),
+  getUnitDetails: (unitId: string) => get<any>(`/projects/unit-details/${unitId}`),
 };
 
 // ── Clients ───────────────────────────────────────────────────────────────────
 export const clientsApi = {
   getAll:          ()                              => get<any[]>('/clients'),
+  get:             (id: string)                    => get<any>(`/clients/${id}`),
   getByProject:    (projectId: string)             => get<any[]>(`/projects/${projectId}/clients`),
   create:          (projectId: string, data: any)  => post<any>(`/projects/${projectId}/clients`, data),
   update:          (id: string, data: any)         => put<any>(`/clients/${id}`, data),
@@ -121,6 +125,9 @@ export const ticketsApi = {
     projectIds?: string[];
     supervisorId?: string;
     status?: string;
+    clientId?: string;
+    unitId?: string;
+    contractorId?: string;
     includeDirectAppts?: boolean;
   }) => {
     const q = new URLSearchParams();
@@ -128,6 +135,9 @@ export const ticketsApi = {
     if (params?.projectIds?.length) q.set('projectIds', params.projectIds.join(','));
     if (params?.supervisorId) q.set('supervisorId', params.supervisorId);
     if (params?.status)       q.set('status', params.status);
+    if (params?.clientId)     q.set('clientId', params.clientId);
+    if (params?.unitId)       q.set('unitId', params.unitId);
+    if (params?.contractorId) q.set('contractorId', params.contractorId);
     if (params?.includeDirectAppts) q.set('includeDirectAppts', 'true');
     const qs = q.toString();
     return get<any[]>(`/tickets${qs ? `?${qs}` : ''}`);

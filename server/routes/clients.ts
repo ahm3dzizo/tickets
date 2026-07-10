@@ -10,10 +10,22 @@ router.get("/", requireAuth, async (_req, res) => {
   res.json(clients);
 });
 
+// GET /api/clients/:id
+router.get("/:id", requireAuth, async (req, res) => {
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    include: {
+      units: { include: { unit: { include: { block: true, project: true } } } },
+    }
+  });
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+  res.json(client);
+});
+
 // GET /api/projects/:projectId/clients
 router.get("/by-project/:projectId", requireAuth, async (req, res) => {
   const clients = await prisma.client.findMany({
-    where: { projectId: req.params.projectId },
+    where: { units: { some: { unit: { projectId: req.params.projectId } } } },
     orderBy: { name: "asc" },
   });
   res.json(clients);
@@ -21,16 +33,13 @@ router.get("/by-project/:projectId", requireAuth, async (req, res) => {
 
 // POST /api/projects/:projectId/clients
 router.post("/by-project/:projectId", requireAuth, async (req, res) => {
+  // In new schema, creating a client directly tied to a project via this endpoint 
+  // might just create the client. To link to a unit, use the units API.
   const data = req.body;
   const client = await prisma.client.create({
     data: {
-      projectId: req.params.projectId,
       name: data.name,
       phone: data.phone,
-      villaNumber: data.villaNumber,
-      blockNumber: data.blockNumber || null,
-      handoverDate: data.handoverDate || null,
-      warrantyExpiryDate: data.warrantyExpiryDate || null,
     },
   });
   res.status(201).json(client);
@@ -44,10 +53,6 @@ router.put("/:id", requireAuth, async (req, res) => {
     data: {
       name: data.name ?? undefined,
       phone: data.phone ?? undefined,
-      villaNumber: data.villaNumber ?? undefined,
-      blockNumber: data.blockNumber ?? undefined,
-      handoverDate: data.handoverDate ?? undefined,
-      warrantyExpiryDate: data.warrantyExpiryDate ?? undefined,
     },
   });
   res.json(client);

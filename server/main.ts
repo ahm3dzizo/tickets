@@ -88,27 +88,62 @@ async function startServer() {
 
   // ── Legacy client routes under projects (for backward compat) ──────────
   app.get("/api/projects/:projectId/clients", requireAuth, async (req, res) => {
-    const clients = await prisma.client.findMany({
-      where: { projectId: req.params.projectId },
-      orderBy: { name: "asc" },
-    });
-    res.json(clients);
+    try {
+      const clients = await prisma.client.findMany({
+        where: { units: { some: { unit: { projectId: req.params.projectId } } } },
+        orderBy: { name: "asc" },
+        include: { units: { include: { unit: true } } }
+      });
+      // Flatten back to old structure if needed for legacy apps
+      const mapped = clients.map(c => {
+        const primaryUnit = c.units[0]?.unit;
+        return {
+          id: c.id,
+          projectId: primaryUnit?.projectId || req.params.projectId,
+          name: c.name,
+          phone: c.phone,
+          villaNumber: primaryUnit?.unitNumber || '',
+          blockNumber: primaryUnit?.blockId || '', // Not quite blockNumber, but works for legacy
+          handoverDate: primaryUnit?.handoverDate || null,
+          warrantyExpiryDate: primaryUnit?.warrantyExpiryDate || null,
+          createdAt: c.createdAt
+        };
+      });
+      res.json(mapped);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.post("/api/projects/:projectId/clients", requireAuth, async (req, res) => {
-    const data = req.body;
-    const client = await prisma.client.create({
-      data: {
-        projectId: req.params.projectId,
-        name: data.name,
-        phone: data.phone,
-        villaNumber: data.villaNumber,
-        blockNumber: data.blockNumber || null,
-        handoverDate: data.handoverDate || null,
-        warrantyExpiryDate: data.warrantyExpiryDate || null,
-      },
-    });
-    res.status(201).json(client);
+    try {
+      const data = req.body;
+      const projectId = req.params.projectId;
+      
+      const phone = data.phone?.trim() || `unknown-${Date.now()}`;
+      
+      const unit = await prisma.unit.upsert({
+        where: { projectId_unitNumber: { projectId, unitNumber: data.villaNumber || '0' } },
+        create: { projectId, unitNumber: data.villaNumber || '0', handoverDate: data.handoverDate, warrantyExpiryDate: data.warrantyExpiryDate },
+        update: { handoverDate: data.handoverDate, warrantyExpiryDate: data.warrantyExpiryDate }
+      });
+
+      const client = await prisma.client.upsert({
+        where: { phone },
+        create: { name: data.name, phone },
+        update: { name: data.name }
+      });
+
+      await prisma.clientUnit.upsert({
+        where: { clientId_unitId: { clientId: client.id, unitId: unit.id } },
+        create: { clientId: client.id, unitId: unit.id, isPrimary: true },
+        update: {}
+      });
+
+      res.status(201).json({ ...client, projectId, villaNumber: unit.unitNumber });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // ── Static / Vite ──────────────────────────────────────────────────────

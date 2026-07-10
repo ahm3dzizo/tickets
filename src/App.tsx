@@ -21,6 +21,9 @@ import TeamMemberDetail from '@/pages/TeamMemberDetail';
 import Reports from '@/pages/Reports';
 import Appointments from '@/pages/Appointments';
 import Contractors from '@/pages/Contractors';
+import ClientDetail from '@/pages/ClientDetail';
+import ContractorDetail from '@/pages/ContractorDetail';
+import UnitDetail from '@/pages/UnitDetail';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -131,6 +134,18 @@ function AppContent() {
           <Route
             path="/contractors"
             element={user && !requiresProfileCompletion ? <Contractors /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/contractors/:id"
+            element={user && !requiresProfileCompletion ? <ContractorDetail /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/clients/:id"
+            element={user && !requiresProfileCompletion ? <ClientDetail /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/units/:id"
+            element={user && !requiresProfileCompletion ? <UnitDetail /> : <Navigate to="/login" />}
           />
           {/* ⛔️ تمت إزالة Route /register */}
         </Routes>

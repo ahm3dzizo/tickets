@@ -251,12 +251,15 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   });
   const userProjectIds = currentUser?.projects.map(p => p.id) || [];
 
-  const { projectId, projectIds, supervisorId, status } = req.query as Record<string, string>;
+  const { projectId, projectIds, supervisorId, status, clientId, unitId, contractorId } = req.query as Record<string, string>;
   const where: any = {};
   if (projectId) where.projectId = projectId;
   if (projectIds) where.projectId = { in: projectIds.split(",") };
   if (supervisorId) where.assignedSupervisorIds = { has: supervisorId };
   if (status) where.status = status;
+  if (clientId) where.clientId = clientId;
+  if (unitId) where.unitId = unitId;
+  if (contractorId) where.contractorId = contractorId;
 
   if (req.query.includeDirectAppts !== 'true') {
     where.NOT = { description: { startsWith: 'موعد صيانة مجدول يدوياً للمشرف' } };
@@ -414,14 +417,26 @@ router.post("/", requireAuth, async (req, res) => {
       return;
     }
 
+    let resolvedUnitId: string | undefined = data.unitId;
+
     if (clientId) {
-      const client = await prisma.client.findUnique({
-        where: { id: clientId },
-        select: { id: true, projectId: true },
+      const clientHasUnitInProject = await prisma.clientUnit.findFirst({
+        where: { clientId, unit: { projectId } },
+        select: { unitId: true }
       });
-      if (!client || client.projectId !== projectId) {
-        res.status(400).json({ error: "العميل المحدد غير موجود أو لا ينتمي لهذا المشروع" });
+      if (!clientHasUnitInProject) {
+        res.status(400).json({ error: "العميل المحدد غير موجود أو لا يملك وحدة في هذا المشروع" });
         return;
+      }
+      resolvedUnitId = clientHasUnitInProject.unitId;
+    }
+
+    if (!resolvedUnitId && data.villaNumber) {
+      const unit = await prisma.unit.findUnique({
+        where: { projectId_unitNumber: { projectId, unitNumber: String(data.villaNumber).trim() } }
+      });
+      if (unit) {
+        resolvedUnitId = unit.id;
       }
     }
 
@@ -456,7 +471,7 @@ router.post("/", requireAuth, async (req, res) => {
         ticketId: ticketIdToUse,
         refNumber: data.refNumber,
         projectAbbr: data.projectAbbr || null,
-        projectId, clientId: clientId || null,
+        projectId, unitId: resolvedUnitId || null, clientId: clientId || null,
         clientName: data.clientName, villaNumber: data.villaNumber,
         issuedAt: data.issuedAt || null,
         description: data.description,
@@ -549,11 +564,11 @@ router.post("/bulk", requireAuth, async (req, res) => {
         const cacheKey = `${t.projectId}:${t.clientId}`;
         let valid = clientCache.get(cacheKey);
         if (valid === undefined) {
-          const client = await prisma.client.findFirst({
-            where: { id: t.clientId, projectId: t.projectId },
+          const clientLink = await prisma.clientUnit.findFirst({
+            where: { clientId: t.clientId, unit: { projectId: t.projectId } },
             select: { id: true }
           });
-          valid = !!client;
+          valid = !!clientLink;
           clientCache.set(cacheKey, valid);
         }
         if (!valid) invalidClientRefs.push(t);
@@ -824,7 +839,7 @@ router.post("/auto-link", requireAuth, async (req, res) => {
 
     const unlinkedTickets = await prisma.ticket.findMany({
       where,
-      select: { id: true, villaNumber: true, projectId: true }
+      select: { id: true, villaNumber: true, projectId: true, clientName: true }
     });
 
     if (unlinkedTickets.length === 0) {
@@ -832,29 +847,31 @@ router.post("/auto-link", requireAuth, async (req, res) => {
     }
 
     const projectsToFetch = projectId ? [projectId] : [...new Set(unlinkedTickets.map(t => t.projectId))];
-    const clients = await prisma.client.findMany({
+    const units = await prisma.unit.findMany({
       where: { projectId: { in: projectsToFetch } },
-      select: { id: true, projectId: true, villaNumber: true, name: true }
+      include: { clients: { include: { client: true } } }
     });
 
-    const clientMap = new Map();
-    for (const c of clients) {
-      const key = `${c.projectId}:${(c.villaNumber || "").trim()}`;
-      clientMap.set(key, c);
+    const unitMap = new Map();
+    for (const u of units) {
+      const key = `${u.projectId}:${(u.unitNumber || "").trim()}`;
+      unitMap.set(key, u);
     }
 
     let linkedCount = 0;
     for (const ticket of unlinkedTickets) {
       const villa = (ticket.villaNumber || "").trim();
       const key = `${ticket.projectId}:${villa}`;
-      const matchedClient = clientMap.get(key);
+      const matchedUnit = unitMap.get(key);
 
-      if (matchedClient) {
+      if (matchedUnit) {
+        const primaryClient = matchedUnit.clients.find((c: any) => c.isPrimary)?.client || matchedUnit.clients[0]?.client;
         await prisma.ticket.update({
           where: { id: ticket.id },
           data: {
-            clientId: matchedClient.id,
-            clientName: matchedClient.name,
+            unitId: matchedUnit.id,
+            clientId: primaryClient ? primaryClient.id : null,
+            clientName: primaryClient ? primaryClient.name : ticket.clientName,
           }
         });
         linkedCount++;

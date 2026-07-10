@@ -361,11 +361,17 @@ router.post("/import", requireAuth, async (req, res) => {
       return;
     }
 
-    const projectClients = await prisma.client.findMany({
+    const projectUnits = await prisma.unit.findMany({
       where: { projectId },
-      select: { id: true, villaNumber: true, name: true, phone: true },
+      include: { clients: { include: { client: true } } },
     });
-    const clientByVilla = Object.fromEntries(projectClients.map((c: any) => [c.villaNumber, c]));
+    const clientByVilla: Record<string, any> = {};
+    for (const u of projectUnits) {
+      const c = u.clients.find((c: any) => c.isPrimary)?.client || u.clients[0]?.client;
+      if (c) {
+        clientByVilla[u.unitNumber] = { id: c.id, villaNumber: u.unitNumber, name: c.name, phone: c.phone, unitId: u.id };
+      }
+    }
 
     const projectSups = await prisma.user.findMany({
       where: { role: "supervisor", projects: { some: { id: projectId } } },
@@ -413,6 +419,7 @@ router.post("/import", requireAuth, async (req, res) => {
         ticketId: raw.ticketId || String(Date.now() + i).slice(-6),
         refNumber: raw.refNumber || "", projectAbbr: null,
         projectId, clientId: matchedClientId || null,
+        unitId: clientByVilla[villaNumber]?.unitId || null,
         clientName: clientByVilla[villaNumber]?.name || raw.clientName || "",
         villaNumber, issuedAt: raw.issuedAt || null,
         description, type, status: "open",
