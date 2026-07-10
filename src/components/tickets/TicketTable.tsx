@@ -801,35 +801,45 @@ export function TicketTable({
                         {statusTranslations[ticket.status] ?? ticket.status}
                       </span>
                       <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', daysBg)}>{daysOpen}ي</span>
-                      <span className={cn('text-[10px] font-black px-1.5 py-0.5 rounded-md min-w-[20px] text-center', priorityCls)}>{priorityNum}</span>
                     </div>
                   </div>
                   <div className="px-3 pb-2">
                     <p className="text-muted-foreground text-[13px] leading-relaxed line-clamp-2">{renderTableDescription(ticket.description)}</p>
                   </div>
-                  <div className="flex items-end justify-between gap-2 px-3 pb-3 pt-2 border-t border-border/30">
-                    <div className="flex flex-col gap-0.5 min-w-0">
+                  <div className="flex items-center justify-between gap-2 px-3 pb-2.5 pt-2 border-t border-border/30">
+                    {/* Left: meta info in one line */}
+                    <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                       {ticket.clientName && (
-                        <span className="text-[11px] text-muted-foreground font-medium truncate flex items-center gap-1">
-                          <User className="w-3 h-3 opacity-70" />
-                          {ticket.clientName.split(' ')[0]}{ticket.villaNumber ? ` · فيلا ${ticket.villaNumber}` : ''}
+                        <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1 shrink-0">
+                          <User className="w-3 h-3 opacity-60" />
+                          {ticket.clientName.split(' ')[0]}{ticket.villaNumber ? ` ${ticket.villaNumber}` : ''}
                         </span>
                       )}
                       {supervisorNames.length > 0 && (
-                        <span className="text-[11px] text-amber-500 dark:text-amber-400 font-medium truncate flex items-center gap-1 mt-0.5">
-                          <HardHat className="w-3 h-3 opacity-70" />
-                          {supervisorNames.join('، ')}
-                        </span>
+                        <>
+                          <span className="text-muted-foreground/30 text-xs shrink-0">·</span>
+                          <span className="text-[11px] text-amber-500 dark:text-amber-400 font-medium truncate flex items-center gap-1">
+                            <HardHat className="w-3 h-3 opacity-70 shrink-0" />
+                            {supervisorNames[0]}
+                          </span>
+                        </>
                       )}
                       {ticket.appointmentAwaitingReply && ticket.status === 'waiting' ? (
-                        <span className="text-[11px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded flex items-center gap-1 w-max">
-                          <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد العميل
-                        </span>
-                      ) : ticket.appointmentTime && (
-                        <span className="text-[11px] text-emerald-400 font-bold">{ticket.appointmentTime}</span>
-                      )}
+                        <>
+                          <span className="text-muted-foreground/30 text-xs shrink-0">·</span>
+                          <span className="text-[11px] text-orange-400 font-bold flex items-center gap-0.5 shrink-0">
+                            <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد
+                          </span>
+                        </>
+                      ) : ticket.appointmentTime ? (
+                        <>
+                          <span className="text-muted-foreground/30 text-xs shrink-0">·</span>
+                          <span className="text-[11px] text-emerald-500 font-bold shrink-0">{ticket.appointmentTime}</span>
+                        </>
+                      ) : null}
                     </div>
-                    <div className="flex items-center gap-1 flex-wrap justify-end shrink-0">
+                    {/* Right: type tags */}
+                    <div className="flex items-center gap-1 shrink-0">
                       {typeList.length === 0 ? (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-orange-500/10 text-orange-400 border-orange-500/20">
                           غير مصنف
@@ -839,11 +849,6 @@ export function TicketTable({
                           {mergedTranslations[t] ?? t}
                         </span>
                       ))}
-                      {(ticket as any).subTypeName && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-md border bg-slate-600/20 text-slate-400 border-slate-600/20">
-                          {(ticket as any).subTypeName}
-                        </span>
-                      )}
                       {!hideProjectColumn && ticket.projectId && projects?.[ticket.projectId] && (
                         <span className="text-[10px] text-muted-foreground font-medium">
                           {projects[ticket.projectId].abbreviation || projects[ticket.projectId].name}
@@ -853,6 +858,7 @@ export function TicketTable({
                   </div>
                 </div>
               </React.Fragment>
+
             );
           })}
           {visibleCount < displayTickets.length && (

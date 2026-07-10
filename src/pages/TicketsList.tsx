@@ -209,67 +209,62 @@ export default function TicketsList() {
     <Layout>
       <div className="space-y-5 page-in">
 
-        {/* ── Header ────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="text-right">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">تذاكر الصيانة</h1>
-            <p className="text-muted-foreground mt-1 text-sm">إدارة ومتابعة طلبات الصيانة لجميع المشاريع</p>
-          </div>
+        {/* ── Header (compact single row) ──────────────────────── */}
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight text-right">تذاكر الصيانة</h1>
 
-          <div className="flex items-center gap-2 justify-end">
-            {(user?.role === 'admin' || user?.role === 'engineer') && (
-              <TicketForm 
-                onSuccess={loadData} 
-                trigger={
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 rounded-xl h-10 px-4 font-bold shadow-sm transition-all text-sm">
-                    <Plus className="w-4 h-4" /> تذكرة جديدة
-                  </Button>
-                }
-              />
-            )}
-
-            {(user?.role === 'admin' || user?.role === 'engineer') && (
-              <DropdownMenu>
-                <DropdownMenuTrigger render={
-                  <Button variant="outline" className="w-10 h-10 p-0 rounded-xl border-border bg-card hover:bg-muted/50 shadow-sm transition-all shrink-0">
-                    <MoreHorizontal className="w-5 h-5 text-slate-500" />
-                  </Button>
-                } />
-                <DropdownMenuContent align="end" className="w-52 bg-card border-border rounded-xl p-1">
-                  <UnifiedImportModal
-                    trigger={
-                      <DropdownMenuItem onSelect={e => e.preventDefault()} className="gap-2.5 cursor-pointer rounded-lg py-2.5">
-                        <FileUp className="w-4 h-4 text-blue-500" /> استيراد التذاكر
-                      </DropdownMenuItem>
-                    }
-                    projects={Object.values(projects)}
-                    clients={Object.values(clients)}
-                    onImportSuccess={loadData}
-                    currentUserId={user?.uid}
-                  />
-
-                  <DropdownMenuItem
-                    onClick={handleReassignSupervisors}
-                    disabled={reassigning}
-                    className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-amber-500 focus:text-amber-500 focus:bg-amber-500/10"
-                  >
-                    {reassigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
-                    تعيين المشرفين
-                  </DropdownMenuItem>
-
-                  {import.meta.env.DEV && user?.role === 'admin' && (
-                    <DropdownMenuItem
-                      onClick={handleDeleteAll}
-                      className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-red-500 focus:text-red-500 focus:bg-red-500/10 mt-1 border-t border-border/50"
-                    >
-                      <AlertTriangle className="w-4 h-4" />
-                      {deleteConfirm ? 'تأكيد الحذف' : 'حذف الكل (للتطوير)'}
+          {(user?.role === 'admin' || user?.role === 'engineer') && (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 p-0 rounded-xl shadow-sm transition-all shrink-0">
+                  <Plus className="w-5 h-5" />
+                </Button>
+              } />
+              <DropdownMenuContent align="end" className="w-56 bg-card border-border rounded-xl p-1">
+                <TicketForm
+                  onSuccess={loadData}
+                  trigger={
+                    <DropdownMenuItem onSelect={e => e.preventDefault()} className="gap-2.5 cursor-pointer rounded-lg py-2.5 font-bold">
+                      <Plus className="w-4 h-4 text-blue-500" /> تذكرة جديدة
                     </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
+                  }
+                />
+
+                <div className="my-1 border-t border-border/50" />
+
+                <UnifiedImportModal
+                  trigger={
+                    <DropdownMenuItem onSelect={e => e.preventDefault()} className="gap-2.5 cursor-pointer rounded-lg py-2.5">
+                      <FileUp className="w-4 h-4 text-blue-500" /> استيراد التذاكر
+                    </DropdownMenuItem>
+                  }
+                  projects={Object.values(projects)}
+                  clients={Object.values(clients)}
+                  onImportSuccess={loadData}
+                  currentUserId={user?.uid}
+                />
+
+                <DropdownMenuItem
+                  onClick={handleReassignSupervisors}
+                  disabled={reassigning}
+                  className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-amber-500 focus:text-amber-500 focus:bg-amber-500/10"
+                >
+                  {reassigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
+                  تعيين المشرفين
+                </DropdownMenuItem>
+
+                {import.meta.env.DEV && user?.role === 'admin' && (
+                  <DropdownMenuItem
+                    onClick={handleDeleteAll}
+                    className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-red-500 focus:text-red-500 focus:bg-red-500/10 mt-1 border-t border-border/50"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    {deleteConfirm ? 'تأكيد الحذف' : 'حذف الكل (للتطوير)'}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* ── Tabs ──────────────────────────────────────────────── */}
