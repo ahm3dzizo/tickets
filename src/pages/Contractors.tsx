@@ -537,7 +537,18 @@ export default function Contractors() {
           {[
             { label: 'إجمالي المقاولين', value: contractors.length, color: 'text-blue-400', bg: 'bg-blue-500/10' },
             { label: 'المشاريع المغطّاة', value: projectsWithContractors.length, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-            { label: 'الوحدات المسجّلة', value: contractors.reduce((s, c) => s + c.assignments.length, 0), color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+            { label: 'الوحدات المسجّلة', value: (() => {
+              const unitSet = new Set<string>();
+              contractors.forEach(c => {
+                c.assignments.forEach((a: any) => {
+                  if (a.unitId) unitSet.add(a.unitId);
+                  if (a.blockId && !a.unitId && projectUnits[a.projectId]) {
+                    projectUnits[a.projectId].filter((u: any) => u.blockId === a.blockId).forEach((u: any) => unitSet.add(u.id));
+                  }
+                });
+              });
+              return unitSet.size;
+            })(), color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
           ].map(s => (
             <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
               <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', s.bg)}>
