@@ -167,6 +167,8 @@ export default function TicketsList() {
   const unclassifiedTickets  = tickets.filter(t => !t.type || t.type === 'unclassified');
 
   const [bulkClassifying, setBulkClassifying] = useState(false);
+  const [ticketFormOpen, setTicketFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const handleBulkReclassify = async () => {
     if (unclassifiedTickets.length === 0) return;
@@ -216,33 +218,21 @@ export default function TicketsList() {
           {(user?.role === 'admin' || user?.role === 'engineer') && (
             <DropdownMenu>
               <DropdownMenuTrigger render={
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 p-0 rounded-xl shadow-sm transition-all shrink-0">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-10 p-0 rounded-xl shadow-sm transition-all shrink-0 font-bold gap-2">
                   <Plus className="w-5 h-5" />
+                  <span className="hidden sm:inline">إضافة تذاكر</span>
                 </Button>
               } />
               <DropdownMenuContent align="end" className="w-56 bg-card border-border rounded-xl p-1">
-                <TicketForm
-                  onSuccess={loadData}
-                  trigger={
-                    <DropdownMenuItem onSelect={e => e.preventDefault()} className="gap-2.5 cursor-pointer rounded-lg py-2.5 font-bold">
-                      <Plus className="w-4 h-4 text-blue-500" /> تذكرة جديدة
-                    </DropdownMenuItem>
-                  }
-                />
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setTicketFormOpen(true); }} className="gap-2.5 cursor-pointer rounded-lg py-2.5 font-bold">
+                  <Plus className="w-4 h-4 text-blue-500" /> تذكرة جديدة
+                </DropdownMenuItem>
 
                 <div className="my-1 border-t border-border/50" />
 
-                <UnifiedImportModal
-                  trigger={
-                    <DropdownMenuItem onSelect={e => e.preventDefault()} className="gap-2.5 cursor-pointer rounded-lg py-2.5">
-                      <FileUp className="w-4 h-4 text-blue-500" /> استيراد التذاكر
-                    </DropdownMenuItem>
-                  }
-                  projects={Object.values(projects)}
-                  clients={Object.values(clients)}
-                  onImportSuccess={loadData}
-                  currentUserId={user?.uid}
-                />
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setImportOpen(true); }} className="gap-2.5 cursor-pointer rounded-lg py-2.5">
+                  <FileUp className="w-4 h-4 text-blue-500" /> استيراد التذاكر
+                </DropdownMenuItem>
 
                 <DropdownMenuItem
                   onClick={handleReassignSupervisors}
@@ -450,10 +440,26 @@ export default function TicketsList() {
         <CloseTicketDialog
           open={closeDialogOpen}
           onOpenChange={setCloseDialogOpen}
-          selectedTickets={tickets.filter(t => selectedTicketIds?.includes(t.id))}
+          selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))}
           clients={Object.values(clients)}
           projects={projects}
-          onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }}
+          onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); }}
+        />
+
+        <TicketForm
+          open={ticketFormOpen}
+          onOpenChange={setTicketFormOpen}
+          onSuccess={() => { loadData(); setTicketFormOpen(false); }}
+        />
+
+        <UnifiedImportModal
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          trigger={<span className="hidden" />}
+          projects={Object.values(projects)}
+          clients={Object.values(clients)}
+          onImportSuccess={() => { loadData(); setImportOpen(false); }}
+          currentUserId={user?.uid}
         />
 
         {apptTicket && apptTicket.length > 0 && (

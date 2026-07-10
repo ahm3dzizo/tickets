@@ -69,6 +69,8 @@ interface TicketFormProps {
   nativeButton?: boolean;
   projectId?: string;
   onSuccess?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -79,9 +81,22 @@ export function TicketForm({
   nativeButton,
   projectId: defaultProjectId,
   onSuccess,
+  open: controlledOpen,
+  onOpenChange,
 }: TicketFormProps) {
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  
+  const setOpen = (newOpen: boolean) => {
+    if (isControlled && onOpenChange) {
+      onOpenChange(newOpen);
+    } else {
+      setInternalOpen(newOpen);
+    }
+  };
 
   /* ── Form fields ──────────────────────────────────────────── */
   const [ticketId,     setTicketId]     = useState('');

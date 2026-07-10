@@ -13,12 +13,33 @@ interface UnifiedImportModalProps {
   trigger: React.ReactElement;
   projects: Project[];
   clients: Client[];
-  onImportSuccess: () => void;
+  onImportSuccess?: () => void;
   currentUserId?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function UnifiedImportModal({ trigger, projects, clients, onImportSuccess, currentUserId }: UnifiedImportModalProps) {
-  const [open, setOpen] = useState(false);
+export function UnifiedImportModal({ 
+  trigger, 
+  projects, 
+  clients, 
+  onImportSuccess, 
+  currentUserId,
+  open: controlledOpen,
+  onOpenChange
+}: UnifiedImportModalProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  
+  const setOpen = (newOpen: boolean) => {
+    if (isControlled && onOpenChange) {
+      onOpenChange(newOpen);
+    } else {
+      setInternalOpen(newOpen);
+    }
+  };
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);

@@ -227,27 +227,22 @@ export function BulkActionBar({
         </Button>
       )}
 
-      {/* Secondary actions in a More menu */}
-      {(!isMultiClient && (onInternalAppointment || onClose)) && (
-        <DropdownMenu>
-          <DropdownMenuTrigger render={
-            <Button variant="outline" size="sm" className="border-white/10 bg-white/5 text-slate-300 font-bold rounded-xl h-9 w-9 p-0 shrink-0">
-              <MoreHorizontal className="w-4 h-4" />
-            </Button>
-          } />
-          <DropdownMenuContent align="end" className="bg-card border-border text-slate-200">
-            {onInternalAppointment && (
-              <DropdownMenuItem onClick={onInternalAppointment} className="gap-2 hover:bg-white/5 cursor-pointer">
-                <CalendarDays className="w-3.5 h-3.5 text-sky-400" /> إضافة موعد
-              </DropdownMenuItem>
-            )}
-            {onClose && (
-              <DropdownMenuItem onClick={onClose} className="gap-2 hover:bg-white/5 cursor-pointer">
-                <CheckSquare className="w-3.5 h-3.5 text-yellow-400" /> إغلاق
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {/* Secondary actions */}
+      {(!isMultiClient && onInternalAppointment) && (
+        <Button variant="outline" size="sm"
+          className="border-sky-500/30 bg-sky-500/10 text-sky-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0 hidden sm:flex"
+          onClick={onInternalAppointment}>
+          <CalendarDays className="w-3.5 h-3.5" />
+          <span>إضافة موعد</span>
+        </Button>
+      )}
+      {(!isMultiClient && onClose) && (
+        <Button variant="outline" size="sm"
+          className="border-yellow-500/30 bg-yellow-500/10 text-yellow-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0 flex"
+          onClick={onClose}>
+          <CheckSquare className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">إغلاق</span>
+        </Button>
       )}
 
       {/* Clear */}
