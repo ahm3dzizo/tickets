@@ -138,7 +138,7 @@ export function AssignContractorDialog({
 
   return (
     <>
-      <Dialog open={open && !showAppointment} onOpenChange={onOpenChange}>
+      <Dialog open={open && !showAppointment && !showAppointmentDialog} onOpenChange={onOpenChange}>
         <DialogContent
           className="bg-card border-border text-foreground sm:max-w-[460px] max-h-[90vh] flex flex-col rounded-3xl p-0 overflow-hidden"
           dir="rtl"
@@ -259,7 +259,13 @@ export function AssignContractorDialog({
       {/* ── Actual Appointment Dialog ───────────────────────── */}
       <SaveInternalAppointmentDialog
         open={showAppointmentDialog}
-        onOpenChange={setShowAppointmentDialog}
+        onOpenChange={(v) => {
+          setShowAppointmentDialog(v);
+          if (!v) {
+            onOpenChange(false);
+            onSuccess();
+          }
+        }}
         tickets={assignedTickets}
         onSuccess={handleAppointmentSuccess}
       />
