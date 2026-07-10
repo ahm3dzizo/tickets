@@ -182,70 +182,83 @@ export function BulkActionBar({
 }: BulkActionBarProps) {
   if (hidden) return null;
   const content = (
-    <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-2.5 bg-slate-900/95 backdrop-blur-md border border-blue-500/30 rounded-2xl shadow-2xl shadow-black/60 px-2.5 sm:px-4 py-2 sm:py-2.5 w-[calc(100vw-1rem)] sm:w-fit sm:max-w-2xl" dir="rtl">
-      <div className="flex items-center gap-1.5 pl-2.5 sm:pl-3 border-l border-white/10 shrink-0">
+    <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md border border-blue-500/30 rounded-2xl shadow-2xl shadow-black/60 px-2 py-2 w-[calc(100vw-1rem)] sm:w-fit sm:max-w-2xl sm:gap-2.5 sm:px-4 sm:py-2.5" dir="rtl">
+      {/* Count */}
+      <div className="flex items-center gap-1 pl-2 sm:pl-3 border-l border-white/10 shrink-0">
         <span className="text-base sm:text-lg font-black text-blue-400">{count}</span>
         <span className="text-[10px] font-bold text-slate-500 hidden sm:block">مختارة</span>
       </div>
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 -mb-1">
+
+      {/* Status change */}
+      <DropdownMenu>
+        <DropdownMenuTrigger render={
+          <Button variant="outline" size="sm" className="border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0">
+            <Edit className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">لحالة</span>
+            <ChevronDown className="w-3 h-3" />
+          </Button>
+        } />
+        <DropdownMenuContent className="bg-card border-border text-slate-200">
+          {statusOptions.map(opt => (
+            <DropdownMenuItem
+              key={opt.key}
+              className={cn('text-start justify-start hover:bg-white/5', opt.danger && 'hover:bg-rose-500/10 text-rose-400')}
+              onClick={() => {
+                if (opt.key === 'contractor' && onContractor) {
+                  onContractor();
+                } else {
+                  onStatusChange(opt.key);
+                }
+              }}
+            >
+              {opt.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Primary: Schedule appointment (most common) */}
+      {onAppointment && !isMultiClient && (
+        <Button variant="outline" size="sm"
+          className="border-green-500/30 bg-green-500/10 text-green-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0"
+          onClick={onAppointment}>
+          <MessageCircle className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">ترتيب موعد</span>
+        </Button>
+      )}
+
+      {/* Secondary actions in a More menu */}
+      {(!isMultiClient && (onInternalAppointment || onClose)) && (
         <DropdownMenu>
           <DropdownMenuTrigger render={
-            <Button variant="outline" size="sm" className="border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0">
-              <Edit className="w-3.5 h-3.5" />
-              الحالة
-              <ChevronDown className="w-3 h-3" />
+            <Button variant="outline" size="sm" className="border-white/10 bg-white/5 text-slate-300 font-bold rounded-xl h-9 w-9 p-0 shrink-0">
+              <MoreHorizontal className="w-4 h-4" />
             </Button>
           } />
-          <DropdownMenuContent className="bg-card border-border text-slate-200">
-            {statusOptions.map(opt => (
-              <DropdownMenuItem
-                key={opt.key}
-                className={cn('text-start justify-start hover:bg-white/5', opt.danger && 'hover:bg-rose-500/10 text-rose-400')}
-                onClick={() => {
-                  if (opt.key === 'contractor' && onContractor) {
-                    onContractor();
-                  } else {
-                    onStatusChange(opt.key);
-                  }
-                }}
-              >
-                {opt.label}
+          <DropdownMenuContent align="end" className="bg-card border-border text-slate-200">
+            {onInternalAppointment && (
+              <DropdownMenuItem onClick={onInternalAppointment} className="gap-2 hover:bg-white/5 cursor-pointer">
+                <CalendarDays className="w-3.5 h-3.5 text-sky-400" /> إضافة موعد
               </DropdownMenuItem>
-            ))}
+            )}
+            {onClose && (
+              <DropdownMenuItem onClick={onClose} className="gap-2 hover:bg-white/5 cursor-pointer">
+                <CheckSquare className="w-3.5 h-3.5 text-yellow-400" /> إغلاق
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
-        {onAppointment && !isMultiClient && (
-          <Button variant="outline" size="sm"
-            className="border-green-500/30 bg-green-500/10 text-green-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0"
-            onClick={onAppointment}>
-            <MessageCircle className="w-3.5 h-3.5" />
-            ترتيب موعد
-          </Button>
-        )}
-        {onInternalAppointment && !isMultiClient && (
-          <Button variant="outline" size="sm"
-            className="border-sky-500/30 bg-sky-500/10 text-sky-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0"
-            onClick={onInternalAppointment}>
-            <CalendarDays className="w-3.5 h-3.5" />
-            إضافة موعد
-          </Button>
-        )}
-        {onClose && !isMultiClient && (
-          <Button variant="outline" size="sm"
-            className="border-yellow-500/30 bg-yellow-500/10 text-yellow-400 font-bold rounded-xl gap-1 sm:gap-1.5 h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm shrink-0"
-            onClick={onClose}>
-            <CheckSquare className="w-3.5 h-3.5" />
-            إغلاق
-          </Button>
-        )}
-      </div>
+      )}
+
+      {/* Clear */}
       <Button variant="ghost" size="icon"
-        className="shrink-0 text-slate-500 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
+        className="shrink-0 text-slate-500 hover:text-white h-9 w-9 mr-auto sm:mr-0"
         onClick={onClear}>
         <X className="w-4 h-4" />
       </Button>
     </div>
   );
+
 
   if (typeof document === 'undefined') return null;
   return createPortal(content, document.body);
