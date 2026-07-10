@@ -7,25 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS & AUTH
+// ─────────────────────────────────────────────────────────────────────────────
+
 model User {
-  uid                   String       @id
-  email                 String       @unique
-  passwordHash          String?
-  displayName           String
-  role                  String       @default("engineer")
-  employeeId            String?
-  phoneNumber           String?
-  specialty             String?
-  photoURL              String?
-  profileCompleted      Boolean      @default(false)
-  disabled              Boolean      @default(false)
-  notifPrefs            Json?
-  onLeave               Boolean      @default(false)
-  substituteUid         String?
-  resetCode             String?
-  resetCodeExpiresAt    DateTime?
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
+  uid                String    @id
+  email              String    @unique
+  passwordHash       String?
+  displayName        String
+  role               String    @default("engineer")
+  employeeId         String?
+  phoneNumber        String?
+  specialty          String?
+  photoURL           String?
+  profileCompleted   Boolean   @default(false)
+  disabled           Boolean   @default(false)
+  notifPrefs         Json?
+  onLeave            Boolean   @default(false)
+  substituteUid      String?
+  resetCode          String?
+  resetCodeExpiresAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
   supervisedTechnicians Technician[] @relation("SupervisorTechnicians")
   assignedTickets       Ticket[]     @relation("TicketAssignedSupervisor")
   projects              Project[]    @relation("ProjectUsers")
@@ -34,79 +39,192 @@ model User {
   substituteFor         User[]       @relation("UserSubstitute")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJECT STRUCTURE: Project → Block → Unit → Client
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Project {
-  id           String       @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String
   location     String
   abbreviation String
-  createdAt    DateTime     @default(now())
-  clients      Client[]
-  technicians  Technician[]
-  tickets      Ticket[]
-  villaAssignments ContractorVilla[]
-  users        User[]       @relation("ProjectUsers")
+  createdAt    DateTime @default(now())
+
+  blocks                Block[]
+  technicians           Technician[]
+  tickets               Ticket[]
+  users                 User[]                 @relation("ProjectUsers")
+  contractorAssignments ContractorAssignment[]
+  Unit                  Unit[]
 }
 
-model Client {
+/// بلوك داخل مشروع — يضم مجموعة وحدات
+model Block {
+  id          String   @id @default(cuid())
+  projectId   String
+  blockNumber String // "1", "2", "14A" … فريد داخل المشروع
+  label       String? // اسم وصفي اختياري
+  createdAt   DateTime @default(now())
+
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  units                 Unit[]
+  contractorAssignments ContractorAssignment[]
+
+  @@unique([projectId, blockNumber])
+  @@index([projectId])
+}
+
+/// وحدة/فيلا داخل مشروع (تنتمي لبلوك اختياري) — تحمل بيانات التسليم والضمان
+model Unit {
   id                 String   @id @default(cuid())
   projectId          String
-  name               String
-  phone              String
-  villaNumber        String
-  blockNumber        String?
+  blockId            String?
+  unitNumber         String // رقم الوحدة/الفيلا — فريد داخل المشروع
   handoverDate       String?
   warrantyExpiryDate String?
   createdAt          DateTime @default(now())
-  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tickets            Ticket[]
+
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  block                 Block?                 @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  clients               ClientUnit[] // عميل واحد أو أكثر (مشاركة)
+  tickets               Ticket[]
+  contractorAssignments ContractorAssignment[]
+
+  @@unique([projectId, unitNumber])
+  @@index([projectId])
+  @@index([blockId])
 }
 
-model Ticket {
-  id                    String         @id @default(cuid())
-  ticketId              String         @unique
-  refNumber             String
-  projectAbbr           String?
-  projectId             String
-  clientId              String?
-  clientName            String
-  villaNumber           String
-  issuedAt              String?
-  description           String
-  type                  String
-  typeId                String?
-  status                TicketStatus   @default(open)
-  priority              Int            @default(4)
-  assigneeName          String?
-  assignedSupervisorId  String?
-  assignedSupervisorIds String[]       @default([])
-  assignedSupervisors   Json?
-  detectedTypes         String[]       @default([])
-  appointmentTime       String?
-  appointmentNotes      String?
-  appointmentAwaitingReply Boolean @default(false)
-  isDirectAppointment   Boolean @default(false)
-  closureNotes          String?
-  maintenanceItems      Json?
-  contractorId          String?
-  contractorName        String?
-  createdAt             DateTime       @default(now())
-  closedAt              DateTime?
-  createdBy             String?
-  geminiClassifiedAt    DateTime?
-  approvalSentAt        DateTime?
-  approvalState         String?
-  approvalUserId        String?
-  clientApproved        Boolean?
-  clientApprovedAt      DateTime?
-  clientRating          Int?
-  subTypeId             String?
-  assignedSupervisor    User?          @relation("TicketAssignedSupervisor", fields: [assignedSupervisorId], references: [uid])
-  client                Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  project               Project        @relation(fields: [projectId], references: [id])
-  ticketSubType         TicketSubType? @relation(fields: [subTypeId], references: [id])
-  ticketType            TicketType?    @relation(fields: [typeId], references: [id])
-  audits                TicketAudit[]
+/// عميل — مستقل عن المشروع، يمكنه امتلاك وحدات في مشاريع متعددة
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  createdAt DateTime @default(now())
+
+  units   ClientUnit[]
+  tickets Ticket[]
 }
+
+/// جدول وصل بين Client و Unit (many-to-many)
+model ClientUnit {
+  id        String  @id @default(cuid())
+  clientId  String
+  unitId    String
+  isPrimary Boolean @default(true) // العميل الرئيسي للوحدة
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, unitId])
+  @@index([unitId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TICKETS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Ticket {
+  id                       String       @id @default(cuid())
+  ticketId                 String       @unique
+  refNumber                String
+  projectAbbr              String?
+  projectId                String
+  unitId                   String? // FK → Unit (الوحدة الحقيقية)
+  clientId                 String? // FK → Client
+  clientName               String // مخزون للسرعة (denormalized)
+  villaNumber              String // مخزون للسرعة + التوافق مع الاستيراد
+  issuedAt                 String?
+  description              String
+  type                     String
+  typeId                   String?
+  subTypeId                String?
+  status                   TicketStatus @default(open)
+  priority                 Int          @default(4)
+  assigneeName             String?
+  assignedSupervisorId     String?
+  assignedSupervisorIds    String[]     @default([])
+  assignedSupervisors      Json?
+  detectedTypes            String[]     @default([])
+  appointmentTime          String?
+  appointmentNotes         String?
+  appointmentAwaitingReply Boolean      @default(false)
+  isDirectAppointment      Boolean      @default(false)
+  closureNotes             String?
+  maintenanceItems         Json?
+  contractorId             String?
+  contractorName           String?
+  createdAt                DateTime     @default(now())
+  closedAt                 DateTime?
+  createdBy                String?
+  geminiClassifiedAt       DateTime?
+  approvalSentAt           DateTime?
+  approvalState            String?
+  approvalUserId           String?
+  clientApproved           Boolean?
+  clientApprovedAt         DateTime?
+  clientRating             Int?
+
+  project            Project        @relation(fields: [projectId], references: [id])
+  unit               Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  client             Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  assignedSupervisor User?          @relation("TicketAssignedSupervisor", fields: [assignedSupervisorId], references: [uid])
+  ticketType         TicketType?    @relation(fields: [typeId], references: [id])
+  ticketSubType      TicketSubType? @relation(fields: [subTypeId], references: [id])
+  audits             TicketAudit[]
+
+  @@index([projectId, status])
+  @@index([unitId])
+  @@index([clientId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTRACTORS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Contractor {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  specialties ContractorSpecialty[]
+  assignments ContractorAssignment[]
+}
+
+model ContractorSpecialty {
+  id           String @id @default(cuid())
+  contractorId String
+  specialtyKey String
+
+  contractor Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  @@unique([contractorId, specialtyKey])
+}
+
+/// تعيين مقاول لبلوك كامل أو وحدة محددة (الوحدة تتغلب على البلوك)
+model ContractorAssignment {
+  id           String  @id @default(cuid())
+  contractorId String
+  specialtyKey String
+  projectId    String
+  blockId      String? // مسؤول عن كل وحدات البلوك
+  unitId       String? // مسؤول عن وحدة بعينها (أعلى أولوية)
+
+  contractor Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  block      Block?     @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  unit       Unit?      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, specialtyKey])
+  @@index([blockId, specialtyKey])
+  @@index([unitId, specialtyKey])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEAM
+// ─────────────────────────────────────────────────────────────────────────────
 
 model Technician {
   id              String   @id @default(cuid())
@@ -124,69 +242,78 @@ model Technician {
   shoeSize        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  project         Project? @relation(fields: [projectId], references: [id])
-  supervisor      User?    @relation("SupervisorTechnicians", fields: [supervisorId], references: [uid])
+
+  project    Project? @relation(fields: [projectId], references: [id])
+  supervisor User?    @relation("SupervisorTechnicians", fields: [supervisorId], references: [uid])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TICKET CLASSIFICATION
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Specialty {
-  id             String          @id @default(cuid())
-  key            String          @unique
-  nameAr         String
-  isActive       Boolean         @default(true)
-  sortOrder      Int             @default(0)
-  createdAt      DateTime        @default(now())
+  id        String   @id @default(cuid())
+  key       String   @unique
+  nameAr    String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
   ticketSubTypes TicketSubType[]
   ticketTypes    TicketType[]
   users          User[]          @relation("UserSpecialties")
 }
 
 model TicketType {
-  id          String              @id @default(cuid())
-  key         String              @unique
+  id          String   @id @default(cuid())
+  key         String   @unique
   nameAr      String
   description String?
   specialtyId String?
-  isActive    Boolean             @default(true)
-  sortOrder   Int                 @default(0)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  tickets     Ticket[]
-  subTypes    TicketSubType[]
-  specialty   Specialty?          @relation(fields: [specialtyId], references: [id])
-  keywords    TicketTypeKeyword[]
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tickets   Ticket[]
+  subTypes  TicketSubType[]
+  specialty Specialty?          @relation(fields: [specialtyId], references: [id])
+  keywords  TicketTypeKeyword[]
 }
 
 model TicketSubType {
-  id           String              @id @default(cuid())
+  id           String   @id @default(cuid())
   nameAr       String
   description  String?
   parentTypeId String
   specialtyId  String?
-  isActive     Boolean             @default(true)
-  sortOrder    Int                 @default(0)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  tickets      Ticket[]
-  parentType   TicketType          @relation(fields: [parentTypeId], references: [id], onDelete: Cascade)
-  specialty    Specialty?          @relation(fields: [specialtyId], references: [id])
-  keywords     TicketTypeKeyword[]
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tickets    Ticket[]
+  parentType TicketType          @relation(fields: [parentTypeId], references: [id], onDelete: Cascade)
+  specialty  Specialty?          @relation(fields: [specialtyId], references: [id])
+  keywords   TicketTypeKeyword[]
 }
 
 model TicketTypeKeyword {
-  id                String         @id @default(cuid())
+  id                String   @id @default(cuid())
   keyword           String
   typeId            String?
   subTypeId         String?
-  weight            Float          @default(1.0)
-  isLearned         Boolean        @default(false)
-  usageCount        Int            @default(0)
-  confidence        Float          @default(1.0)
-  source            String         @default("seed")
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  pendingReclassify Boolean        @default(false)
-  subType           TicketSubType? @relation(fields: [subTypeId], references: [id], onDelete: Cascade)
-  ticketType        TicketType?    @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  weight            Float    @default(1.0)
+  isLearned         Boolean  @default(false)
+  usageCount        Int      @default(0)
+  confidence        Float    @default(1.0)
+  source            String   @default("seed")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  pendingReclassify Boolean  @default(false)
+
+  subType    TicketSubType? @relation(fields: [subTypeId], references: [id], onDelete: Cascade)
+  ticketType TicketType?    @relation(fields: [typeId], references: [id], onDelete: Cascade)
 
   @@unique([keyword, typeId])
   @@unique([keyword, subTypeId])
@@ -194,6 +321,10 @@ model TicketTypeKeyword {
   @@index([typeId])
   @@index([subTypeId])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT & SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
 
 model TicketAudit {
   id        String   @id @default(cuid())
@@ -203,7 +334,8 @@ model TicketAudit {
   newValue  String?
   changedBy String
   changedAt DateTime @default(now())
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
   @@index([changedAt])
@@ -215,6 +347,10 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
 enum TicketStatus {
   open
   in_progress
@@ -225,45 +361,4 @@ enum TicketStatus {
   out_of_scope
   absent
   contractor
-}
-
-model Contractor {
-  id           String                @id @default(cuid())
-  name         String
-  phone        String?
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
-  specialties  ContractorSpecialty[]
-  assignments  ContractorVilla[]
-}
-
-model ContractorSpecialty {
-  id           String     @id @default(cuid())
-  contractorId String
-  specialtyKey String
-  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
-
-  @@unique([contractorId, specialtyKey])
-}
-
-model ContractorVilla {
-  id           String     @id @default(cuid())
-  contractorId String
-  projectId    String
-  villaNumber  String?
-  blockNumber  String?
-  fromVilla    String?
-  toVilla      String?
-  fromBlock    String?
-  toBlock      String?
-  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
-  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-}
-
-enum TicketPriority {
-  low
-  medium
-  medium_high
-  high
-  urgent
 }
