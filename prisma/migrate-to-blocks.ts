@@ -89,36 +89,45 @@ async function main() {
       });
       if (unit.createdAt.getTime() > Date.now() - 5000) unitsCreated++;
 
-      // أنشئ أو احصل على Client (مستقل بالهاتف)
+      // أنشئ أو احصل على Client (مستقل بالهاتف) — يستخدم raw SQL لأن projectId لا يزال موجوداً في DB القديمة
       const phone = old.phone?.trim() || `unknown-${old.id}`;
-      const client = await prisma.client.upsert({
-        where: { phone },
-        create: { name: old.name, phone },
-        update: { name: old.name },
-      });
-      if (client.createdAt.getTime() > Date.now() - 5000) clientsCreated++;
+      const existingClients: any[] = await prisma.$queryRawUnsafe(
+        `SELECT id, name FROM "Client" WHERE phone = $1 LIMIT 1`,
+        phone
+      );
+      
+      let clientId: string;
+      if (existingClients.length > 0) {
+        clientId = existingClients[0].id;
+        clientsCreated; // already exists
+      } else {
+        // إنشاء Client جديد مع projectId (لا يزال مطلوباً في الـ schema الحالي على السيرفر)
+        const newClients: any[] = await prisma.$queryRawUnsafe(
+          `INSERT INTO "Client" (id, "projectId", name, phone, "villaNumber", "blockNumber", "createdAt")
+           VALUES (gen_random_uuid()::text, $1, $2, $3, '', '', NOW())
+           ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name
+           RETURNING id`,
+          project.id, old.name, phone
+        );
+        clientId = newClients[0].id;
+        clientsCreated++;
+      }
 
       // اربط العميل بالوحدة
-      await prisma.clientUnit.upsert({
-        where: { clientId_unitId: { clientId: client.id, unitId: unit.id } },
-        create: { clientId: client.id, unitId: unit.id, isPrimary: true },
-        update: {},
-      });
+      await prisma.$queryRawUnsafe(
+        `INSERT INTO "ClientUnit" (id, "clientId", "unitId", "isPrimary")
+         VALUES (gen_random_uuid()::text, $1, $2, true)
+         ON CONFLICT ("clientId", "unitId") DO NOTHING`,
+        clientId, unit.id
+      );
       clientUnitsCreated++;
 
       // حدّث التذاكر المرتبطة بهذه الفيلا لتشير إلى unitId
-      await prisma.ticket.updateMany({
-        where: {
-          projectId: project.id,
-          villaNumber: unitNumber,
-          unitId: null,
-        },
-        data: {
-          unitId: unit.id,
-          clientId: client.id,
-          clientName: old.name,
-        },
-      });
+      await prisma.$queryRawUnsafe(
+        `UPDATE "Ticket" SET "unitId" = $1, "clientId" = $2, "clientName" = $3
+         WHERE "projectId" = $4 AND "villaNumber" = $5 AND "unitId" IS NULL`,
+        unit.id, clientId, old.name, project.id, unitNumber
+      );
     }
 
     console.log(`  وحدات جديدة: ${unitsCreated}`);
