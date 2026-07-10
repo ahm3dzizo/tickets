@@ -459,7 +459,17 @@ export default function Contractors() {
     return c.name.toLowerCase().includes(s) ||
            c.phone?.includes(s) ||
            c.specialties?.some((sp: any) => sp.specialtyKey.toLowerCase().includes(s) || (CONTRACTOR_SPECIALTIES[sp.specialtyKey] && CONTRACTOR_SPECIALTIES[sp.specialtyKey].includes(s))) ||
-           c.assignments.some((a: any) => (a.unit?.unitNumber && a.unit.unitNumber.includes(s)) || (a.block?.blockNumber && a.block.blockNumber.includes(s)));
+           c.assignments.some((a: any) => {
+             if (a.unit?.unitNumber && a.unit.unitNumber.includes(s)) return true;
+             if (a.block?.blockNumber && a.block.blockNumber.includes(s)) return true;
+             
+             // إذا كان المقاول مخصص للبلوك بأكمله، نبحث هل الفيلا المطلوبة تقع داخل هذا البلوك
+             if (a.blockId && !a.unitId && projectUnits[a.projectId]) {
+               const unitsInThisBlock = projectUnits[a.projectId].filter((u: any) => u.blockId === a.blockId);
+               if (unitsInThisBlock.some((u: any) => u.unitNumber.includes(s))) return true;
+             }
+             return false;
+           });
   });
 
   // Group by project for display
