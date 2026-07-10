@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat } from 'lucide-react';
+import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, SlidersHorizontal, ArrowUpDown, User } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
@@ -285,6 +285,8 @@ export function TicketTable({
   stateKey,
 }: TicketTableProps) {
   const navigate = useNavigate();
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showMobileSort, setShowMobileSort] = useState(false);
 
   // ── جلب الأنواع من DB (live) ──────────────────────────────────────────────
   const {
@@ -545,161 +547,170 @@ export function TicketTable({
   return (
     <>
       {showInlineFilters && (
-        <div className="flex items-center gap-2 p-3 border-b border-border/50 flex-wrap" dir="rtl">
-          <div className="relative flex-1 min-w-[140px]">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-            <Input
-              placeholder="بحث..."
-              value={localSearch}
-              onChange={e => setLocalSearch(e.target.value)}
-              className="pr-9 h-9 bg-transparent border-border/50 rounded-xl text-sm text-white text-right"
-            />
+        <div className="flex flex-col border-b border-border/50 p-2 sm:p-3" dir="rtl">
+          {/* ── Search & Mobile Actions ── */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Input
+                placeholder="بحث برقم التذكرة أو الفيلا أو التفاصيل..."
+                value={localSearch}
+                onChange={e => setLocalSearch(e.target.value)}
+                className="pr-9 h-10 bg-card border-border/50 rounded-xl text-sm text-foreground text-right"
+              />
+            </div>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger render={
+                <Button variant="outline" className={cn("h-10 px-3 rounded-xl gap-2 md:hidden transition-all", showMobileSort ? "bg-blue-500/10 border-blue-500/30 text-blue-400" : "bg-card border-border/50 text-slate-400")}>
+                  <ArrowUpDown className="w-4 h-4" />
+                </Button>
+              } />
+              <DropdownMenuContent className="bg-card border-border text-foreground min-w-[140px]" align="end">
+                <div className="px-2 py-1.5 text-xs font-bold text-slate-500">ترتيب حسب:</div>
+                {([
+                  { key: 'date' as SortKey,     label: 'التاريخ'   },
+                  { key: 'days' as SortKey,     label: 'الأيام'    },
+                  { key: 'priority' as SortKey, label: 'الأولوية'  },
+                  { key: 'status' as SortKey,   label: 'الحالة'    },
+                  { key: 'client' as SortKey,   label: 'العميل'    },
+                  { key: 'ref' as SortKey,      label: 'المرجع'    },
+                ]).map(({ key, label }) => (
+                  <DropdownMenuItem 
+                    key={key} 
+                    onClick={() => handleSort(key)}
+                    className={cn("flex items-center justify-between cursor-pointer", sortKey === key && "text-blue-400 font-bold bg-blue-500/10")}
+                  >
+                    {label}
+                    {sortKey === key && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button 
+              variant="outline" 
+              onClick={() => setShowMobileFilters(!showMobileFilters)}
+              className={cn("h-10 px-3 rounded-xl gap-2 md:hidden transition-all shrink-0", showMobileFilters ? "bg-blue-500/10 border-blue-500/30 text-blue-400" : "bg-card border-border/50 text-slate-400")}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span className="text-xs font-bold hidden sm:inline">تصفية</span>
+            </Button>
           </div>
 
-          {/* فلتر الحالة */}
-          <DropdownMenu>
-            <DropdownMenuTrigger render={
-              <Button variant="outline" size="sm" className={cn(
-                'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                localStatus ? 'border-blue-500/50 bg-blue-500/10 text-blue-300' : 'bg-transparent text-slate-400',
-              )}>
-                <ChevronDown className="w-3 h-3 opacity-60" />
-                {localStatus ? statusTranslations[localStatus] : 'الحالة'}
-              </Button>
-            } />
-            <DropdownMenuContent className="bg-card border-border text-slate-200">
-              <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalStatus('')}>كل الحالات</DropdownMenuItem>
-              {Object.entries(statusTranslations).map(([k, v]) => (
-                <DropdownMenuItem key={k} className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalStatus(k)}>{v}</DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* فلتر التخصص — يعرض الأنواع من DB تلقائياً */}
-          <DropdownMenu>
-            <DropdownMenuTrigger render={
-              <Button variant="outline" size="sm" className={cn(
-                'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                localType ? 'border-blue-500/50 bg-blue-500/10 text-blue-300' : 'bg-transparent text-slate-400',
-              )}>
-                <ChevronDown className="w-3 h-3 opacity-60" />
-                {localType ? (mergedTranslations[localType] ?? localType) : 'التخصص'}
-              </Button>
-            } />
-            <DropdownMenuContent className="bg-card border-border text-slate-200 max-h-72 overflow-y-auto">
-              <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalType('')}>كل التخصصات</DropdownMenuItem>
-              {Object.entries(mergedTranslations).map(([k, v]) => (
-                <DropdownMenuItem key={k} className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalType(k)}>{v}</DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* فلتر المشروع */}
-          {!hideProjectColumn && projects && Object.keys(projects).length > 1 && (
+          {/* ── Filters (Hidden on mobile unless toggled) ── */}
+          <div className={cn(
+            "flex-wrap items-center gap-2 mt-3 w-full",
+            showMobileFilters ? "flex" : "hidden md:flex"
+          )}>
+            {/* فلتر الحالة */}
             <DropdownMenu>
               <DropdownMenuTrigger render={
                 <Button variant="outline" size="sm" className={cn(
                   'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                  localProject ? 'border-blue-500/50 bg-blue-500/10 text-blue-300' : 'bg-transparent text-slate-400',
+                  localStatus ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
                 )}>
                   <ChevronDown className="w-3 h-3 opacity-60" />
-                  {localProject ? (projects[localProject]?.name ?? 'المشروع') : 'المشروع'}
+                  {localStatus ? statusTranslations[localStatus] : 'الحالة'}
                 </Button>
               } />
-              <DropdownMenuContent className="bg-card border-border text-slate-200">
-                <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalProject('')}>كل المشاريع</DropdownMenuItem>
-                {Object.entries(projects).map(([id, p]) => (
-                  <DropdownMenuItem key={id} className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalProject(id)}>{p.name}</DropdownMenuItem>
+              <DropdownMenuContent className="bg-card border-border text-foreground">
+                <DropdownMenuItem className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalStatus('')}>كل الحالات</DropdownMenuItem>
+                {Object.entries(statusTranslations).map(([k, v]) => (
+                  <DropdownMenuItem key={k} className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalStatus(k)}>{v}</DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
 
-          {/* فلتر المشرف */}
-          {!hideSupervisorColumn && uniqueSupervisors.length > 0 && (
+            {/* فلتر التخصص */}
             <DropdownMenu>
               <DropdownMenuTrigger render={
                 <Button variant="outline" size="sm" className={cn(
                   'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                  localSupervisor ? 'border-blue-500/50 bg-blue-500/10 text-blue-300' : 'bg-transparent text-slate-400',
+                  localType ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
                 )}>
                   <ChevronDown className="w-3 h-3 opacity-60" />
-                  {localSupervisor ? (uniqueSupervisors.find(s => s.id === localSupervisor)?.name ?? 'المشرف') : 'المشرف'}
+                  {localType ? (mergedTranslations[localType] ?? localType) : 'التخصص'}
                 </Button>
               } />
-              <DropdownMenuContent className="bg-card border-border text-slate-200 max-h-72 overflow-y-auto">
-                <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalSupervisor('')}>كل المشرفين</DropdownMenuItem>
-                {uniqueSupervisors.map((s) => (
-                  <DropdownMenuItem key={s.id} className="hover:bg-white/5 text-start justify-start" onClick={() => setLocalSupervisor(s.id)}>{s.name}</DropdownMenuItem>
+              <DropdownMenuContent className="bg-card border-border text-foreground max-h-72 overflow-y-auto">
+                <DropdownMenuItem className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalType('')}>كل التخصصات</DropdownMenuItem>
+                {Object.entries(mergedTranslations).map(([k, v]) => (
+                  <DropdownMenuItem key={k} className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalType(k)}>{v}</DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
 
-          <Button variant="outline" size="sm"
-            onClick={() => setShowClosed(prev => !prev)}
-            className={cn(
-              'h-9 rounded-xl gap-1.5 text-xs font-medium',
-              showClosed ? 'border-slate-500/50 bg-slate-500/10 text-slate-300' : 'border-border/50 bg-transparent text-slate-500',
-            )}>
-            <span className="text-[11px]">{showClosed ? '🟢' : '⚪'}</span>
-            المغلقة
-          </Button>
+            {/* فلتر المشروع */}
+            {!hideProjectColumn && projects && Object.keys(projects).length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger render={
+                  <Button variant="outline" size="sm" className={cn(
+                    'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
+                    localProject ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
+                  )}>
+                    <ChevronDown className="w-3 h-3 opacity-60" />
+                    {localProject ? (projects[localProject]?.name ?? 'المشروع') : 'المشروع'}
+                  </Button>
+                } />
+                <DropdownMenuContent className="bg-card border-border text-foreground">
+                  <DropdownMenuItem className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalProject('')}>كل المشاريع</DropdownMenuItem>
+                  {Object.entries(projects).map(([id, p]) => (
+                    <DropdownMenuItem key={id} className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalProject(id)}>{p.name}</DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
-          {(localSearch || localStatus || localType || localProject) && (
-            <Button variant="ghost" size="sm" className="h-9 rounded-xl text-slate-500 hover:text-white text-xs gap-1 px-2"
-              onClick={() => { setLocalSearch(''); setLocalStatus(''); setLocalType(''); setLocalProject(''); }}>
-              <X className="w-3 h-3" /> مسح
-            </Button>
-          )}
+            {/* فلتر المشرف */}
+            {!hideSupervisorColumn && uniqueSupervisors.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger render={
+                  <Button variant="outline" size="sm" className={cn(
+                    'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
+                    localSupervisor ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
+                  )}>
+                    <ChevronDown className="w-3 h-3 opacity-60" />
+                    {localSupervisor ? (uniqueSupervisors.find(s => s.id === localSupervisor)?.name ?? 'المشرف') : 'المشرف'}
+                  </Button>
+                } />
+                <DropdownMenuContent className="bg-card border-border text-foreground max-h-72 overflow-y-auto">
+                  <DropdownMenuItem className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalSupervisor('')}>كل المشرفين</DropdownMenuItem>
+                  {uniqueSupervisors.map((s) => (
+                    <DropdownMenuItem key={s.id} className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalSupervisor(s.id)}>{s.name}</DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
-          <Button variant="outline" size="sm"
-            onClick={() => setExportModalOpen(true)}
-            className="h-9 rounded-xl gap-1.5 text-xs font-medium border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10">
-            <Download className="w-3.5 h-3.5" />
-            تصدير
-          </Button>
-
-          <span className="text-[10px] text-slate-600 font-medium mr-auto">
-            {baseTickets.length} / {tickets.length}
-          </span>
-        </div>
-      )}
-
-      {displayTickets.length === 0 && (
-        <div className="py-16 text-center text-slate-500 text-sm font-medium">{emptyMessage}</div>
-      )}
-
-      {/* ── MOBILE SORT BAR ──────────────────────────────────────────────── */}
-      {displayTickets.length > 0 && (
-        <div className="flex items-center gap-1.5 px-2 py-2 overflow-x-auto no-scrollbar border-b border-border/30 md:hidden" dir="rtl">
-          <span className="text-[10px] text-slate-500 font-bold shrink-0">ترتيب:</span>
-          {([
-            { key: 'date' as SortKey,     label: 'التاريخ'   },
-            { key: 'days' as SortKey,     label: 'الأيام'    },
-            { key: 'priority' as SortKey, label: 'الأولوية'  },
-            { key: 'status' as SortKey,   label: 'الحالة'    },
-            { key: 'client' as SortKey,   label: 'العميل'    },
-            { key: 'ref' as SortKey,      label: 'المرجع'    },
-          ]).map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => handleSort(key)}
+            <Button variant="outline" size="sm"
+              onClick={() => setShowClosed(prev => !prev)}
               className={cn(
-                'shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors',
-                sortKey === key
-                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                  : 'bg-transparent text-slate-500 border-border/30 hover:text-slate-300',
-              )}
-            >
-              {label}
-              {sortKey === key && (
-                sortDir === 'asc'
-                  ? <ChevronUp className="w-2.5 h-2.5" />
-                  : <ChevronDown className="w-2.5 h-2.5" />
-              )}
-            </button>
-          ))}
+                'h-9 rounded-xl gap-1.5 text-xs font-medium',
+                showClosed ? 'border-slate-500/50 bg-slate-500/10 text-slate-700 dark:text-slate-300' : 'border-border/50 bg-transparent text-slate-500',
+              )}>
+              <span className="text-[11px]">{showClosed ? '🟢' : '⚪'}</span>
+              المغلقة
+            </Button>
+
+            {(localSearch || localStatus || localType || localProject) && (
+              <Button variant="ghost" size="sm" className="h-9 rounded-xl text-slate-500 hover:text-foreground text-xs gap-1 px-2"
+                onClick={() => { setLocalSearch(''); setLocalStatus(''); setLocalType(''); setLocalProject(''); }}>
+                <X className="w-3 h-3" /> مسح
+              </Button>
+            )}
+
+            <Button variant="outline" size="sm"
+              onClick={() => setExportModalOpen(true)}
+              className="h-9 rounded-xl gap-1.5 text-xs font-medium border-blue-500/30 bg-blue-500/5 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 mr-auto">
+              <Download className="w-3.5 h-3.5" />
+              تصدير
+            </Button>
+            
+            <span className="text-[10px] text-slate-500 font-bold px-2 hidden sm:block">
+              {baseTickets.length} / {tickets.length}
+            </span>
+          </div>
         </div>
       )}
 
@@ -768,20 +779,20 @@ export function TicketTable({
                   onClick={handleCardClick}
                 >
                   {isOverdue && !isSelected && <div className="absolute top-0 right-0 h-full w-0.5 bg-red-500/50" />}
-                  <div className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-2">
+                  <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
                     <div className="flex items-center gap-2 leading-tight min-w-0">
                       {canSelect && (
-                        <button className="text-slate-600 hover:text-blue-400 transition-colors shrink-0 p-0.5"
+                        <button className="text-muted-foreground hover:text-blue-500 transition-colors shrink-0 p-0.5"
                           onClick={e => { e.stopPropagation(); toggleOne(ticket.id); }}>
                           {isSelected
-                            ? <CheckSquare className="w-4 h-4 text-blue-500" />
-                            : <Square className="w-4 h-4" />}
+                            ? <CheckSquare className="w-5 h-5 text-blue-500" />
+                            : <Square className="w-5 h-5 opacity-50" />}
                         </button>
                       )}
                       <div className="flex flex-col leading-tight min-w-0">
-                        <span className="font-black text-white text-[15px] truncate">{ticket.refNumber || '---'}</span>
+                        <span className="font-black text-foreground text-[15px] truncate">{ticket.refNumber || '---'}</span>
                         {ticket.ticketId && (
-                          <span className="text-[10px] text-slate-600 font-mono tracking-wide">#{ticket.ticketId}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono tracking-wide">#{ticket.ticketId}</span>
                         )}
                       </div>
                     </div>
@@ -794,17 +805,21 @@ export function TicketTable({
                     </div>
                   </div>
                   <div className="px-3 pb-2">
-                    <p className="text-slate-300 text-[13px] leading-relaxed line-clamp-2">{renderTableDescription(ticket.description)}</p>
+                    <p className="text-muted-foreground text-[13px] leading-relaxed line-clamp-2">{renderTableDescription(ticket.description)}</p>
                   </div>
-                  <div className="flex items-end justify-between gap-2 px-3 pb-2.5 pt-1 border-t border-border/30">
+                  <div className="flex items-end justify-between gap-2 px-3 pb-3 pt-2 border-t border-border/30">
                     <div className="flex flex-col gap-0.5 min-w-0">
                       {ticket.clientName && (
-                        <span className="text-[11px] text-slate-400 font-medium truncate">
+                        <span className="text-[11px] text-muted-foreground font-medium truncate flex items-center gap-1">
+                          <User className="w-3 h-3 opacity-70" />
                           {ticket.clientName.split(' ')[0]}{ticket.villaNumber ? ` · فيلا ${ticket.villaNumber}` : ''}
                         </span>
                       )}
                       {supervisorNames.length > 0 && (
-                        <span className="text-[11px] text-amber-400/80 font-medium truncate">{supervisorNames.join('، ')}</span>
+                        <span className="text-[11px] text-amber-500 dark:text-amber-400 font-medium truncate flex items-center gap-1 mt-0.5">
+                          <HardHat className="w-3 h-3 opacity-70" />
+                          {supervisorNames.join('، ')}
+                        </span>
                       )}
                       {ticket.appointmentAwaitingReply && ticket.status === 'waiting' ? (
                         <span className="text-[11px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded flex items-center gap-1 w-max">
@@ -830,7 +845,7 @@ export function TicketTable({
                         </span>
                       )}
                       {!hideProjectColumn && ticket.projectId && projects?.[ticket.projectId] && (
-                        <span className="text-[10px] text-slate-600 font-medium">
+                        <span className="text-[10px] text-muted-foreground font-medium">
                           {projects[ticket.projectId].abbreviation || projects[ticket.projectId].name}
                         </span>
                       )}

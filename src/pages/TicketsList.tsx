@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
-import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat } from 'lucide-react';
+import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, MoreHorizontal, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { TicketForm } from '@/components/tickets/TicketForm';
@@ -215,21 +216,7 @@ export default function TicketsList() {
             <p className="text-muted-foreground mt-1 text-sm">إدارة ومتابعة طلبات الصيانة لجميع المشاريع</p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
-            {(user?.role === 'admin' || user?.role === 'engineer') && (
-              <UnifiedImportModal
-                trigger={
-                  <Button variant="outline" className="gap-2 rounded-xl h-10 font-bold border-border bg-card hover:bg-muted/50 shadow-sm transition-all text-sm px-4">
-                    <FileUp className="w-4 h-4 text-blue-500" /> استيراد
-                  </Button>
-                }
-                projects={Object.values(projects)}
-                clients={Object.values(clients)}
-                onImportSuccess={loadData}
-                currentUserId={user?.uid}
-              />
-            )}
-
+          <div className="flex items-center gap-2 justify-end">
             {(user?.role === 'admin' || user?.role === 'engineer') && (
               <TicketForm 
                 onSuccess={loadData} 
@@ -242,31 +229,45 @@ export default function TicketsList() {
             )}
 
             {(user?.role === 'admin' || user?.role === 'engineer') && (
-              <Button
-                onClick={handleReassignSupervisors}
-                disabled={reassigning}
-                variant="outline"
-                className="gap-2 rounded-xl h-10 border-amber-500/30 bg-amber-500/5 text-amber-500 hover:border-amber-500/60 hover:bg-amber-500/10 font-bold shadow-sm text-sm px-4"
-              >
-                {reassigning
-                  ? <><span className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" /> جارٍ التعيين...</>
-                  : '⚡ تعيين المشرفين'}
-              </Button>
-            )}
+              <DropdownMenu>
+                <DropdownMenuTrigger render={
+                  <Button variant="outline" className="w-10 h-10 p-0 rounded-xl border-border bg-card hover:bg-muted/50 shadow-sm transition-all shrink-0">
+                    <MoreHorizontal className="w-5 h-5 text-slate-500" />
+                  </Button>
+                } />
+                <DropdownMenuContent align="end" className="w-52 bg-card border-border rounded-xl p-1">
+                  <UnifiedImportModal
+                    trigger={
+                      <DropdownMenuItem onSelect={e => e.preventDefault()} className="gap-2.5 cursor-pointer rounded-lg py-2.5">
+                        <FileUp className="w-4 h-4 text-blue-500" /> استيراد التذاكر
+                      </DropdownMenuItem>
+                    }
+                    projects={Object.values(projects)}
+                    clients={Object.values(clients)}
+                    onImportSuccess={loadData}
+                    currentUserId={user?.uid}
+                  />
 
-            {import.meta.env.DEV && user?.role === 'admin' && (
-              <Button
-                onClick={handleDeleteAll}
-                variant="outline"
-                className={cn('gap-2 rounded-xl h-10 border font-bold transition-all shadow-sm text-sm px-4',
-                  deleteConfirm
-                    ? 'border-red-500 bg-red-500/20 text-red-400 animate-pulse'
-                    : 'border-red-500/30 bg-red-500/5 text-red-500 hover:bg-red-500/10 hover:border-red-500/50'
-                )}
-              >
-                <AlertTriangle className="w-4 h-4" />
-                {deleteConfirm ? 'تأكيد الحذف' : 'حذف الكل'}
-              </Button>
+                  <DropdownMenuItem
+                    onClick={handleReassignSupervisors}
+                    disabled={reassigning}
+                    className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-amber-500 focus:text-amber-500 focus:bg-amber-500/10"
+                  >
+                    {reassigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
+                    تعيين المشرفين
+                  </DropdownMenuItem>
+
+                  {import.meta.env.DEV && user?.role === 'admin' && (
+                    <DropdownMenuItem
+                      onClick={handleDeleteAll}
+                      className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-red-500 focus:text-red-500 focus:bg-red-500/10 mt-1 border-t border-border/50"
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                      {deleteConfirm ? 'تأكيد الحذف' : 'حذف الكل (للتطوير)'}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </div>
@@ -278,48 +279,50 @@ export default function TicketsList() {
           className="w-full"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <TabsList className="bg-muted/50 border border-border h-10 p-1 rounded-2xl w-full sm:w-auto">
-              <TabsTrigger
-                value="linked"
-                className="rounded-xl text-sm font-bold px-4 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-md transition-all"
-              >
-                المربوطة ({linkedTickets.length})
-              </TabsTrigger>
-              <TabsTrigger
-                value="contractors"
-                className="rounded-xl text-sm font-bold px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-1.5 transition-all"
-              >
-                <HardHat className="w-3.5 h-3.5" />
-                المقاولين
-                {contractorTickets.length > 0 && (
-                  <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-blue-500 text-white border-0">
-                    {contractorTickets.length}
-                  </Badge>
+            <div className="overflow-x-auto no-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
+              <TabsList className="bg-transparent h-auto p-0 flex items-center gap-2 w-max">
+                <TabsTrigger
+                  value="linked"
+                  className="rounded-xl h-9 text-sm font-bold px-4 border border-border bg-card data-[state=active]:bg-primary data-[state=active]:border-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+                >
+                  المربوطة ({linkedTickets.length})
+                </TabsTrigger>
+                <TabsTrigger
+                  value="contractors"
+                  className="rounded-xl h-9 text-sm font-bold px-3 border border-border bg-card data-[state=active]:bg-blue-600 data-[state=active]:border-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-1.5 transition-all"
+                >
+                  <HardHat className="w-3.5 h-3.5" />
+                  المقاولين
+                  {contractorTickets.length > 0 && (
+                    <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-blue-500 text-white border-0">
+                      {contractorTickets.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                {unlinkedTickets.length > 0 && (
+                  <TabsTrigger
+                    value="unlinked"
+                    className="rounded-xl h-9 text-sm font-bold px-4 border border-red-500/20 bg-red-500/5 text-red-500 data-[state=active]:bg-red-500 data-[state=active]:border-red-500 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-2 transition-all"
+                  >
+                    غير مربوطة
+                    <Badge variant="destructive" className="h-4.5 px-1.5 min-w-5 text-[9px] font-black">
+                      {unlinkedTickets.length}
+                    </Badge>
+                  </TabsTrigger>
                 )}
-              </TabsTrigger>
-              {unlinkedTickets.length > 0 && (
-                <TabsTrigger
-                  value="unlinked"
-                  className="rounded-xl text-sm font-bold px-4 data-[state=active]:bg-red-500 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-2 transition-all"
-                >
-                  غير مربوطة
-                  <Badge variant="destructive" className="h-4.5 px-1.5 min-w-5 text-[9px] font-black">
-                    {unlinkedTickets.length}
-                  </Badge>
-                </TabsTrigger>
-              )}
-              {unclassifiedTickets.length > 0 && (
-                <TabsTrigger
-                  value="unclassified"
-                  className="rounded-xl text-sm font-bold px-4 data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-2 transition-all"
-                >
-                  غير مصنفة
-                  <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-orange-500 text-white border-0">
-                    {unclassifiedTickets.length}
-                  </Badge>
-                </TabsTrigger>
-              )}
-            </TabsList>
+                {unclassifiedTickets.length > 0 && (
+                  <TabsTrigger
+                    value="unclassified"
+                    className="rounded-xl h-9 text-sm font-bold px-4 border border-orange-500/20 bg-orange-500/5 text-orange-500 data-[state=active]:bg-orange-500 data-[state=active]:border-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-2 transition-all"
+                  >
+                    غير مصنفة
+                    <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-orange-500 text-white border-0">
+                      {unclassifiedTickets.length}
+                    </Badge>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
 
             <TabsContent value="unlinked" className="mt-0">
               <div className="flex flex-wrap items-center gap-2">
