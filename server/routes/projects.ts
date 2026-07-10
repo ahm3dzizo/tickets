@@ -189,6 +189,22 @@ router.get("/unit-details/:id", requireAuth, async (req: AuthRequest, res) => {
       }
     });
     if (!unit) { res.status(404).json({ error: "Unit not found" }); return; }
+    
+    // اجلب المقاولين المخصصين للبلوك بالكامل (غير مخصصين لوحدة بعينها)
+    if (unit.blockId) {
+      const blockAssignments = await prisma.contractorAssignment.findMany({
+        where: { blockId: unit.blockId, unitId: null },
+        include: { contractor: true }
+      });
+      // دمج المقاولين وتجنب التكرار بنفس التخصص والمقاول (إن وجد)
+      const existing = new Set(unit.contractorAssignments.map((a: any) => `${a.contractorId}-${a.specialtyKey}`));
+      for (const a of blockAssignments) {
+        if (!existing.has(`${a.contractorId}-${a.specialtyKey}`)) {
+          unit.contractorAssignments.push(a as any);
+        }
+      }
+    }
+
     res.json(unit);
   } catch (e: any) {
     res.status(500).json({ error: e.message });

@@ -90,15 +90,33 @@ export default function UnitDetail() {
           </div>
         </div>
 
+        {/* Warranty Info */}
+        {(unit.handoverDate || unit.warrantyExpiryDate) && (
+          <div className="flex flex-wrap gap-6 bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 px-6 text-sm">
+            {unit.handoverDate && (
+              <div>
+                <span className="text-slate-400 block text-xs mb-1">تاريخ الاستلام (بداية الضمان)</span>
+                <span className="text-slate-200 font-bold">{unit.handoverDate}</span>
+              </div>
+            )}
+            {unit.warrantyExpiryDate && (
+              <div>
+                <span className="text-slate-400 block text-xs mb-1">تاريخ نهاية الضمان</span>
+                <span className="text-slate-200 font-bold">{unit.warrantyExpiryDate}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Info Grid */}
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
             <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <User className="w-4 h-4" /> المُلاّك ({unit.clientUnits?.length || 0})
+              <User className="w-4 h-4" /> المُلاّك ({unit.clients?.length || 0})
             </h2>
-            {unit.clientUnits?.length > 0 ? (
+            {unit.clients?.length > 0 ? (
               <div className="space-y-2">
-                {unit.clientUnits.map((cu: any) => (
+                {unit.clients.map((cu: any) => (
                   <Link
                     key={cu.id}
                     to={`/clients/${cu.client.id}`}
@@ -157,6 +175,7 @@ export default function UnitDetail() {
             projects={unit.project ? { [unit.project.id]: { name: unit.project.name } } : {}}
             hideSupervisorColumn={false}
             showInlineFilters={tickets.length > 5}
+            defaultShowClosed={true}
             maxHeight="600px"
             emptyMessage="لا توجد تذاكر مرتبطة بهذه الوحدة"
           />

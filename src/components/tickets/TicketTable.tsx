@@ -266,6 +266,7 @@ interface TicketTableProps {
   showInlineFilters?: boolean;
   onRefresh?: () => void;
   stateKey?: string; // Add stateKey for persisting filters
+  defaultShowClosed?: boolean;
 }
 
 export function TicketTable({
@@ -279,6 +280,7 @@ export function TicketTable({
   hideProjectColumn = false,
   projects,
   showInlineFilters = false,
+  defaultShowClosed = false,
   onRefresh,
   stateKey,
 }: TicketTableProps) {
@@ -299,7 +301,7 @@ export function TicketTable({
   const [localStatus,  setLocalStatus]  = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_status`) || '' : '');
   const [localType,    setLocalType]    = useState<string>(() => stateKey ? sessionStorage.getItem(`${stateKey}_type`) || '' : '');
   const [localProject, setLocalProject] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_project`) || '' : '');
-  const [showClosed,   setShowClosed]   = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_closed`) === 'true' : false);
+  const [showClosed,   setShowClosed]   = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_closed`) === 'true' : defaultShowClosed);
   const [localSupervisor, setLocalSupervisor] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_supervisor`) || '' : '');
   const [exportModalOpen, setExportModalOpen] = useState(false);
 

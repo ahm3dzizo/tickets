@@ -96,8 +96,8 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
     const pIds = [...new Set(assignments.map(a => a.projectId).filter(Boolean))];
     for (const pId of pIds) {
       if (!projectBlocks[pId]) {
-        projectsApi.getBlocks(pId).then(data => setProjectBlocks(p => ({ ...p, [pId]: data } as Record<string, any[]>))).catch(() => {});
-        projectsApi.getUnits(pId).then(data => setProjectUnits(p => ({ ...p, [pId]: data } as Record<string, any[]>))).catch(() => {});
+        projectsApi.getBlocks(pId).then(data => setProjectBlocks(p => ({ ...p, [pId]: data.sort((a: any, b: any) => String(a.blockNumber).localeCompare(String(b.blockNumber), undefined, { numeric: true })) }))).catch(() => {});
+        projectsApi.getUnits(pId).then(data => setProjectUnits(p => ({ ...p, [pId]: data.sort((a: any, b: any) => String(a.unitNumber).localeCompare(String(b.unitNumber), undefined, { numeric: true })) }))).catch(() => {});
       }
     }
   }, [assignments, projectBlocks, projectUnits]);
@@ -454,10 +454,13 @@ export default function Contractors() {
     finally { setDeletingId(null); }
   };
 
-  const filtered = contractors.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search)
-  );
+  const filtered = contractors.filter(c => {
+    const s = search.toLowerCase();
+    return c.name.toLowerCase().includes(s) ||
+           c.phone?.includes(s) ||
+           c.specialties?.some((sp: any) => sp.specialtyKey.toLowerCase().includes(s) || (CONTRACTOR_SPECIALTIES[sp.specialtyKey] && CONTRACTOR_SPECIALTIES[sp.specialtyKey].includes(s))) ||
+           c.assignments.some((a: any) => (a.unit?.unitNumber && a.unit.unitNumber.includes(s)) || (a.block?.blockNumber && a.block.blockNumber.includes(s)));
+  });
 
   // Group by project for display
   const projectsWithContractors = projects
@@ -667,15 +670,18 @@ function ContractorCard({
         </div>
       )}
 
-      {/* Assignments */}
+      {/* Assignments Summary */}
       {contractor.assignments.length > 0 && (
-        <div className="space-y-1">
-          {contractor.assignments.map(a => (
-            <div key={a.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <MapPin className="w-3 h-3 shrink-0 text-blue-400" />
-              <span className="truncate">{villaLabel(a, projectMap[a.projectId]?.abbreviation || projectMap[a.projectId]?.name)}</span>
-            </div>
-          ))}
+        <div className="flex gap-2 text-xs pt-1 border-t border-white/5">
+          {contractor.assignments.filter((a: any) => a.blockId && !a.unitId).length > 0 && (
+             <span className="text-slate-400">بلوكات: {contractor.assignments.filter((a: any) => a.blockId && !a.unitId).length}</span>
+          )}
+          {contractor.assignments.filter((a: any) => a.unitId).length > 0 && (
+             <span className="text-slate-400">وحدات: {contractor.assignments.filter((a: any) => a.unitId).length}</span>
+          )}
+          {contractor.assignments.filter((a: any) => !a.blockId && !a.unitId).length > 0 && (
+             <span className="text-slate-400">مشاريع: {contractor.assignments.filter((a: any) => !a.blockId && !a.unitId).length}</span>
+          )}
         </div>
       )}
     </div>

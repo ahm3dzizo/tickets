@@ -35,6 +35,7 @@ export function AssignContractorDialog({
   const [search, setSearch] = useState('');
   const [loadingContractors, setLoadingContractors] = useState(false);
   const [showAppointment, setShowAppointment] = useState(false);
+  const [showAppointmentDialog, setShowAppointmentDialog] = useState(false);
   const [assignedTickets, setAssignedTickets] = useState<Ticket[]>([]);
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
 
@@ -243,7 +244,7 @@ export function AssignContractorDialog({
                     // Close this prompt and open appointment dialog
                     setShowAppointment(false);
                     // Re-open appointment only
-                    setTimeout(() => setShowAppointment(true), 100);
+                    setTimeout(() => setShowAppointmentDialog(true), 100);
                   }}
                 >
                   <CalendarPlus className="w-4 h-4" />
@@ -257,8 +258,8 @@ export function AssignContractorDialog({
 
       {/* ── Actual Appointment Dialog ───────────────────────── */}
       <SaveInternalAppointmentDialog
-        open={false} // controlled separately when user clicks "تحديد موعد"
-        onOpenChange={() => {}}
+        open={showAppointmentDialog}
+        onOpenChange={setShowAppointmentDialog}
         tickets={assignedTickets}
         onSuccess={handleAppointmentSuccess}
       />
