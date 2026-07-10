@@ -89,7 +89,7 @@ export function DirectAppointmentDialog({
     // Fetch all tickets for this project and filter
     ticketsApi.getAll({ projectId, includeDirectAppts: true })
       .then(res => {
-         const tks = res.filter((t: any) => t.villaNumber === selectedVilla && !['closed', 'out-of-scope', 'completed'].includes(t.status));
+         const tks = res.filter((t: any) => String(t.villaNumber) === String(selectedVilla) && !['closed', 'out-of-scope', 'completed'].includes(t.status));
          setOpenTickets(tks);
          
          // Pre-select existing types
@@ -259,7 +259,8 @@ export function DirectAppointmentDialog({
                   <div className="p-4 text-sm text-muted-foreground text-center">جارٍ التحميل...</div>
                 ) : (
                   (() => {
-                    const filtered = clients.filter(c => c.name?.includes(clientSearch) || c.villaNumber?.includes(clientSearch)).slice(0, 50);
+                    const s = clientSearch.toLowerCase();
+                    const filtered = clients.filter(c => (c.name && String(c.name).toLowerCase().includes(s)) || (c.villaNumber != null && String(c.villaNumber).toLowerCase().includes(s))).slice(0, 50);
                     if (filtered.length === 0) return <div className="p-4 text-sm text-muted-foreground text-center">لا يوجد نتائج</div>;
                     return filtered.map(c => (
                       <div

@@ -436,7 +436,7 @@ export function TicketForm({
                     </DropdownMenuItem>
                   ) : (
                     formClients
-                      .filter(c => c.name?.includes(clientSearch) || c.villaNumber?.includes(clientSearch))
+                      .filter(c => { const s = clientSearch.toLowerCase(); return (c.name && String(c.name).toLowerCase().includes(s)) || (c.villaNumber != null && String(c.villaNumber).toLowerCase().includes(s)); })
                       .map(c => (
                       <DropdownMenuItem
                         key={c.id}

@@ -112,7 +112,7 @@ export default function ProjectDetail() {
     const client = clients.find(c => c.id === firstTicket.clientId || c.phone === firstTicket.clientId); // Fallback handle
     
     // We might need to find client by villa if ID is missing or mismatched
-    const targetClient = client || clients.find(c => c.villaNumber === targetVilla);
+    const targetClient = client || clients.find(c => String(c.villaNumber) === String(targetVilla));
 
     if (!targetClient?.phone) {
       toast.error('لم يتم العثور على رقم هاتف لهذا العميل');

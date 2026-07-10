@@ -143,7 +143,7 @@ setOutOfScopeMsgTemplate(t.outOfScopeMsg || '');
 }, [open]);
 
 const currentVilla = selectedTickets[0]?.villaNumber;
-const targetClient = clients.find(c => c.villaNumber === currentVilla);
+const targetClient = clients.find(c => String(c.villaNumber) === String(currentVilla));
 const mainTicket = selectedTickets[0];
 const waIds = selectedTickets.map(t => t.ticketId || t.refNumber).join('، ');
 

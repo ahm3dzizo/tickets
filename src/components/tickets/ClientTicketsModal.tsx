@@ -35,7 +35,7 @@ export function ClientTicketsModal({
       setFetching(true);
       ticketsApi.getAll({ projectId, status: 'open', includeDirectAppts: true })
         .then(res => {
-          const tks = res.filter((t: any) => t.villaNumber === villaNumber && !['closed', 'out-of-scope', 'completed'].includes(t.status));
+          const tks = res.filter((t: any) => String(t.villaNumber) === String(villaNumber) && !['closed', 'out-of-scope', 'completed'].includes(t.status));
           setTickets(tks);
           // Auto-fill notes if not provided but exists in tickets
           if (!initialNotes && tks.length > 0 && tks[0].appointmentNotes) {

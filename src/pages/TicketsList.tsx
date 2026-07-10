@@ -472,7 +472,7 @@ export default function TicketsList() {
             }))}
             clientPhone={
               clients[apptTicket[0].clientId || '']?.phone || 
-              Object.values(clients).find(c => c.villaNumber === apptTicket[0].villaNumber)?.phone
+              Object.values(clients).find(c => String(c.villaNumber) === String(apptTicket[0].villaNumber))?.phone
             }
             onSuccess={() => { setApptOpen(false); setSelectedTicketIds([]); loadData(); }}
           />

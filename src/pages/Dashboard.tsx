@@ -66,7 +66,7 @@ export default function Dashboard() {
     byClient.forEach(clientTickets => {
       const first = clientTickets[0];
       const phone = clients[first?.clientId]?.phone ??
-        Object.values(clients).find(c => c.villaNumber === first?.villaNumber)?.phone ?? '';
+        Object.values(clients).find(c => String(c.villaNumber) === String(first?.villaNumber))?.phone ?? '';
       const ids = clientTickets.map(t => t.ticketId || t.refNumber || t.id).join('، ');
       WhatsAppService.sendUpdate(phone,
         `السلام عليكم، بخصوص بلاغ الصيانة رقم ${ids}، نرجو إفادتنا بمواعيد تواجدكم في الفيلا لتنسيق موعد الصيانة. شكراً لتعاونكم.`

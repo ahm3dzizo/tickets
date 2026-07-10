@@ -76,7 +76,7 @@ export default function Clients() {
     if (!selectedClient) { setClientTickets([]); return; }
     setTicketsLoading(true);
     ticketsApi.getAll({ projectId: selectedClient.projectId })
-      .then((all: any[]) => setClientTickets(all.filter((t: any) => t.villaNumber === selectedClient.villaNumber) as ClientTicket[]))
+      .then((all: any[]) => setClientTickets(all.filter((t: any) => String(t.villaNumber) === String(selectedClient.villaNumber)) as ClientTicket[]))
       .catch(() => {})
       .finally(() => setTicketsLoading(false));
   }, [selectedClient]);
@@ -130,7 +130,7 @@ export default function Clients() {
   const filtered = clients.filter(c => {
     if (accessibleProjectIds && !accessibleProjectIds.includes(c.projectId)) return false;
     if (filterProject && c.projectId !== filterProject) return false;
-    if (filterBlock && c.blockNumber !== filterBlock) return false;
+    if (filterBlock && String(c.blockNumber) !== String(filterBlock)) return false;
     if (search) {
       const s = search.toLowerCase();
       return (c.name || '').toLowerCase().includes(s) || String(c.villaNumber || '').includes(s) || String(c.phone || '').includes(s);

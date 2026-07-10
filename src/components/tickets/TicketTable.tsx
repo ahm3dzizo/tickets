@@ -803,7 +803,16 @@ export function TicketTable({
                         </button>
                       )}
                       <div className="flex flex-col leading-tight min-w-0">
-                        <span className="font-black text-foreground text-[15px] truncate">{ticket.refNumber || '---'}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-black text-foreground text-[15px] truncate">
+                            {ticket.villaNumber || ticket.refNumber || '---'}
+                          </span>
+                          {ticket.clientName && (
+                            <span className="text-[12px] text-muted-foreground truncate font-medium">
+                              - {ticket.clientName.split(' ')[0]}
+                            </span>
+                          )}
+                        </div>
                         {ticket.ticketId && (
                           <span className="text-[10px] text-muted-foreground font-mono tracking-wide">#{ticket.ticketId}</span>
                         )}
@@ -839,14 +848,14 @@ export function TicketTable({
                       )}
                       {ticket.appointmentAwaitingReply && ticket.status === 'waiting' ? (
                         <>
-                          <span className="text-muted-foreground/30 text-xs shrink-0">·</span>
+                          {supervisorNames.length > 0 && <span className="text-muted-foreground/30 text-xs shrink-0">·</span>}
                           <span className="text-[11px] text-orange-400 font-bold flex items-center gap-0.5 shrink-0">
                             <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد
                           </span>
                         </>
                       ) : ticket.appointmentTime ? (
                         <>
-                          <span className="text-muted-foreground/30 text-xs shrink-0">·</span>
+                          {supervisorNames.length > 0 && <span className="text-muted-foreground/30 text-xs shrink-0">·</span>}
                           <span className="text-[11px] text-emerald-500 font-bold shrink-0">{ticket.appointmentTime}</span>
                         </>
                       ) : null}
@@ -862,11 +871,6 @@ export function TicketTable({
                           {mergedTranslations[t] ?? t}
                         </span>
                       ))}
-                      {!hideProjectColumn && ticket.projectId && projects?.[ticket.projectId] && (
-                        <span className="text-[10px] text-muted-foreground font-medium">
-                          {projects[ticket.projectId].abbreviation || projects[ticket.projectId].name}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
