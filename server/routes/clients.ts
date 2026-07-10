@@ -18,7 +18,7 @@ router.get("/", requireAuth, async (_req, res) => {
     return {
       ...c,
       projectId: primaryUnit?.projectId || null,
-      villaNumber: primaryUnit?.villaNumber || null,
+      villaNumber: primaryUnit?.unitNumber || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
     };
   });
@@ -53,7 +53,7 @@ router.get("/by-project/:projectId", requireAuth, async (req, res) => {
     return {
       ...c,
       projectId: primaryUnit?.projectId || null,
-      villaNumber: primaryUnit?.villaNumber || null,
+      villaNumber: primaryUnit?.unitNumber || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
     };
   });
