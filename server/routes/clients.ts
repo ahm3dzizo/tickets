@@ -6,8 +6,24 @@ const router = Router();
 
 // GET /api/clients
 router.get("/", requireAuth, async (_req, res) => {
-  const clients = await prisma.client.findMany({ orderBy: { createdAt: "asc" } });
-  res.json(clients);
+  const clients = await prisma.client.findMany({ 
+    orderBy: { createdAt: "asc" },
+    include: {
+      units: { include: { unit: { include: { block: true } } } }
+    }
+  });
+  
+  const formatted = clients.map(c => {
+    const primaryUnit = c.units.find(u => u.isPrimary)?.unit || c.units[0]?.unit;
+    return {
+      ...c,
+      projectId: primaryUnit?.projectId || null,
+      villaNumber: primaryUnit?.villaNumber || null,
+      blockNumber: primaryUnit?.block?.blockNumber || null,
+    };
+  });
+  
+  res.json(formatted);
 });
 
 // GET /api/clients/:id
@@ -27,8 +43,22 @@ router.get("/by-project/:projectId", requireAuth, async (req, res) => {
   const clients = await prisma.client.findMany({
     where: { units: { some: { unit: { projectId: req.params.projectId } } } },
     orderBy: { name: "asc" },
+    include: {
+      units: { include: { unit: { include: { block: true } } } }
+    }
   });
-  res.json(clients);
+
+  const formatted = clients.map(c => {
+    const primaryUnit = c.units.find(u => u.isPrimary)?.unit || c.units[0]?.unit;
+    return {
+      ...c,
+      projectId: primaryUnit?.projectId || null,
+      villaNumber: primaryUnit?.villaNumber || null,
+      blockNumber: primaryUnit?.block?.blockNumber || null,
+    };
+  });
+  
+  res.json(formatted);
 });
 
 // POST /api/projects/:projectId/clients
