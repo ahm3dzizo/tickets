@@ -189,9 +189,15 @@ export function Navbar() {
     <>
       {/* ═══════════════ MOBILE TOP BAR ═══════════════ */}
       <header className="print:hidden lg:hidden fixed top-0 inset-x-0 z-50 h-14 bg-card/90 backdrop-blur-xl border-b border-border px-3 flex items-center justify-between">
+        {/* Right: Logo */}
+        <Link to="/" className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center p-1 shrink-0">
+            <img src="/logo.jpg" alt="Retal" className="w-full h-full object-contain rounded-md" />
+          </div>
+          <span className="font-extrabold text-sm text-foreground tracking-tight">Retal Maintenance</span>
+        </Link>
         {/* Left: Actions */}
         <div className="flex items-center gap-0.5">
-          <NotifBell side="bottom" />
           <Button
             variant="ghost"
             size="icon"
@@ -200,14 +206,8 @@ export function Navbar() {
           >
             {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </Button>
+          <NotifBell side="bottom" />
         </div>
-        {/* Right: Logo */}
-        <Link to="/" className="flex items-center gap-2">
-          <span className="font-extrabold text-sm text-foreground tracking-tight">Retal Maintenance</span>
-          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center p-1 shrink-0">
-            <img src="/logo.jpg" alt="Retal" className="w-full h-full object-contain rounded-md" />
-          </div>
-        </Link>
       </header>
 
       {/* ═══════════════ MOBILE BOTTOM NAV ═══════════════ */}
