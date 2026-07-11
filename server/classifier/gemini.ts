@@ -48,6 +48,10 @@ export interface GeminiClassifyResult {
   source:       "gemini";
 }
 
+function stripJsonComments(str: string): string {
+  return str.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
 export async function classifyWithGemini(
   description: string
 ): Promise<GeminiClassifyResult | null> {
@@ -113,7 +117,7 @@ ${typesList}
     // Parse JSON response — extract first {...} block regardless of surrounding text
     let parsed: { types?: string[]; subType?: string | null; confidence?: number; reason?: string };
     try {
-      const stripped = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+      const stripped = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
       const jsonMatch = stripped.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error("No JSON object found");
       parsed = JSON.parse(jsonMatch[0]);
@@ -219,8 +223,8 @@ ${typesList}
 
     const text = data.choices?.[0]?.message?.content?.trim() || "";
 
-    // Extract JSON array from response
-    const stripped  = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+    // Extract JSON array from response — strip // and /* */ comments Bynara sometimes injects
+    const stripped  = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
     const arrMatch  = stripped.match(/\[[\s\S]*\]/);
     if (!arrMatch) {
       console.error("[NaraRouter batch] No JSON array in response:", text.slice(0, 120));
