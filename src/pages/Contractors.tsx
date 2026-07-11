@@ -13,7 +13,7 @@ import {
 import { toast } from 'sonner';
 import {
   HardHat, Plus, Trash2, Edit, Loader2, Phone, Search,
-  ChevronDown, X, Building2, MapPin, Check, Wrench, Hash, Users, Download, FileSpreadsheet
+  ChevronDown, X, Building2, MapPin, Check, Wrench, Hash, Users, Download, FileSpreadsheet, Printer
 } from 'lucide-react';
 import { contractorsApi } from '@/lib/contractorsApi';
 import { projectsApi } from '@/lib/api';
@@ -353,6 +353,8 @@ export default function Contractors() {
   const [selectedProject, setSelectedProject] = useState<string>('all');
   const [exportOpen, setExportOpen] = useState(false);
   const [exportProject, setExportProject] = useState<string>('');
+  const [exportSpecialties, setExportSpecialties] = useState<Set<string>>(new Set());
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'xlsx'>('pdf');
   const [exporting, setExporting] = useState(false);
 
   const canEdit = user?.role === 'admin' || user?.role === 'engineer';
@@ -440,12 +442,27 @@ export default function Contractors() {
       ...[...allKeys].filter(k => !knownOrder.includes(k)).sort(),
     ];
 
-    return sorted.map(key => ({
-      key,
-      label: CONTRACTOR_SPECIALTIES[key] || key,
-      contractors: filtered.filter(c => c.specialties?.some((s: any) => s.specialtyKey === key)),
-    }));
-  }, [filtered]);
+    return sorted.map(key => {
+      const groupContractors = filtered.filter(c => c.specialties?.some((s: any) => s.specialtyKey === key));
+      const unitSet = new Set<string>();
+      groupContractors.forEach(c => {
+        c.assignments.filter((a: any) => a.specialtyKey === key).forEach((a: any) => {
+          if (a.unitId) { unitSet.add(a.unitId); }
+          else if (a.blockId && projectUnits[a.projectId]) {
+            projectUnits[a.projectId]
+              .filter((u: any) => String(u.blockId) === String(a.blockId))
+              .forEach((u: any) => unitSet.add(u.id));
+          }
+        });
+      });
+      return {
+        key,
+        label: CONTRACTOR_SPECIALTIES[key] || key,
+        contractors: groupContractors,
+        unitCount: unitSet.size,
+      };
+    });
+  }, [filtered, projectUnits]);
 
   const unassigned = filtered.filter(c => c.assignments.length === 0);
 
@@ -462,23 +479,36 @@ export default function Contractors() {
     return unitSet.size;
   }, [contractors, projectUnits]);
 
-  // ── Export to XLSX ────────────────────────────────────────────────────────
-  const handleExport = async () => {
+  // ── Export project specialties ────────────────────────────────────────────
+  const exportProjectSpecialties = useMemo(() => {
+    if (!exportProject) return [];
+    const pContractors = contractors.filter(c => c.assignments.some((a: any) => a.projectId === exportProject));
+    const keys = [...new Set(pContractors.flatMap(c => c.specialties?.map((s: any) => s.specialtyKey) || []))];
+    const knownOrder = Object.keys(CONTRACTOR_SPECIALTIES);
+    return [
+      ...knownOrder.filter(k => keys.includes(k)),
+      ...keys.filter(k => !knownOrder.includes(k)).sort(),
+    ];
+  }, [exportProject, contractors]);
+
+  useEffect(() => {
+    setExportSpecialties(new Set(exportProjectSpecialties));
+  }, [exportProject]);
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  const handleExport = () => {
     if (!exportProject) { toast.error('اختر مشروعاً للتصدير'); return; }
+    if (exportSpecialties.size === 0) { toast.error('اختر تخصصاً واحداً على الأقل'); return; }
+    const units = projectUnits[exportProject] || [];
+    if (units.length === 0) { toast.error('لا توجد وحدات في هذا المشروع'); return; }
+
     setExporting(true);
     try {
-      const units = projectUnits[exportProject] || [];
-      if (units.length === 0) { toast.error('لا توجد وحدات في هذا المشروع'); setExporting(false); return; }
-
-      // Collect all specialties for this project's contractors
       const projectContractors = contractors.filter(c => c.assignments.some((a: any) => a.projectId === exportProject));
-      const specialtyKeys = [...new Set(
-        projectContractors.flatMap(c => c.specialties?.map((s: any) => s.specialtyKey) || [])
-      )];
       const knownOrder = Object.keys(CONTRACTOR_SPECIALTIES);
       const sortedSpecialties = [
-        ...knownOrder.filter(k => specialtyKeys.includes(k)),
-        ...specialtyKeys.filter(k => !knownOrder.includes(k)).sort(),
+        ...knownOrder.filter(k => exportSpecialties.has(k)),
+        ...exportProjectSpecialties.filter(k => !knownOrder.includes(k) && exportSpecialties.has(k)).sort(),
       ];
 
       // Build lookup: unitId → { specialtyKey → contractorName }
@@ -488,9 +518,8 @@ export default function Contractors() {
         for (const c of projectContractors) {
           for (const a of c.assignments) {
             if (a.projectId !== exportProject) continue;
-            const coversUnit = a.unitId === u.id ||
-              (a.blockId && !a.unitId && String(u.blockId) === String(a.blockId));
-            if (coversUnit && a.specialtyKey) {
+            const coversUnit = a.unitId === u.id || (a.blockId && !a.unitId && String(u.blockId) === String(a.blockId));
+            if (coversUnit && a.specialtyKey && exportSpecialties.has(a.specialtyKey)) {
               map[a.specialtyKey] = c.name;
             }
           }
@@ -500,11 +529,7 @@ export default function Contractors() {
 
       const project = projectMap[exportProject];
       const specialtyLabels = sortedSpecialties.map(k => CONTRACTOR_SPECIALTIES[k] || k);
-
-      // Build headers
       const headers = ['رقم الفيلا', ...specialtyLabels];
-
-      // Build rows sorted by unit number
       const sortedUnits = [...units].sort((a, b) =>
         String(a.unitNumber).localeCompare(String(b.unitNumber), undefined, { numeric: true })
       );
@@ -513,66 +538,69 @@ export default function Contractors() {
         return [u.unitNumber, ...sortedSpecialties.map(k => map[k] || '-')];
       });
 
-      const ExcelJS = await import('exceljs');
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'نظام إدارة الصيانة';
+      const tableHTML = `
+        <table border="1" cellpadding="6" cellspacing="0" dir="rtl"
+          style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:12px;border-color:#e5e7eb">
+          <thead>
+            <tr style="background:#1e40af;color:#fff">
+              ${headers.map(h => `<th style="padding:8px;font-weight:bold;white-space:nowrap;text-align:center">${h}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row, idx) =>
+              `<tr style="background:${idx % 2 === 0 ? '#f9fafb' : '#ffffff'}">
+                ${row.map(cell => `<td style="text-align:center;padding:6px 8px;border-color:#e5e7eb">${cell}</td>`).join('')}
+              </tr>`
+            ).join('')}
+          </tbody>
+        </table>`;
 
-      const sheet = workbook.addWorksheet(project?.name || 'مقاولون', {
-        views: [{ rightToLeft: true, state: 'frozen', ySplit: 2 }]
-      });
-
-      // Row 1: Project info (merged)
-      const infoRow = sheet.addRow([`المشروع: ${project?.name || ''}`, `إجمالي الوحدات: ${units.length}`, ...new Array(headers.length - 2).fill('')]);
-      infoRow.height = 22;
-      sheet.mergeCells(1, 1, 1, 2);
-      infoRow.eachCell(cell => {
-        cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF1E3A5F' } };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F0FE' } };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      });
-
-      // Row 2: Column headers
-      const headerRow = sheet.addRow(headers);
-      headerRow.height = 28;
-      headerRow.eachCell(cell => {
-        cell.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-      });
-
-      // Data rows
-      rows.forEach((rowData, idx) => {
-        const row = sheet.addRow(rowData);
-        row.eachCell(cell => {
-          cell.font = { name: 'Arial', size: 11 };
-          cell.numFmt = '@';
-          cell.alignment = { horizontal: 'center', vertical: 'middle' };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: idx % 2 === 0 ? 'FFFAFAFA' : 'FFFFFFFF' } };
-          cell.border = {
-            top: { style: 'thin', color: { argb: 'FFEEEEEE' } },
-            left: { style: 'thin', color: { argb: 'FFEEEEEE' } },
-            bottom: { style: 'thin', color: { argb: 'FFEEEEEE' } },
-            right: { style: 'thin', color: { argb: 'FFEEEEEE' } },
-          };
-        });
-      });
-
-      // Auto column widths
-      sheet.columns.forEach((col, i) => {
-        let max = headers[i].length;
-        rows.forEach(r => { const l = String(r[i] || '').length; if (l > max) max = l; });
-        col.width = Math.min(Math.max(max + 4, 12), 40);
-      });
-
-      const buf = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      Object.assign(document.createElement('a'), { href: url, download: `مقاولون_${project?.name || ''}.xlsx` }).click();
-      URL.revokeObjectURL(url);
-
-      toast.success('تم تصدير الملف');
-      setExportOpen(false);
+      if (exportFormat === 'pdf') {
+        const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <title>مقاولون - ${project?.name || ''}</title>
+  <style>
+    body { font-family: Arial, sans-serif; direction: rtl; margin: 20px; color: #111; }
+    h2 { font-size: 15px; margin: 0 0 4px; }
+    p  { font-size: 11px; color: #666; margin: 0 0 14px; }
+    @media print { @page { size: landscape; margin: 10mm; } body { margin: 0; } }
+  </style>
+</head>
+<body>
+  <h2>مقاولو مشروع: ${project?.name || ''}</h2>
+  <p>إجمالي الوحدات: ${units.length} · التخصصات: ${specialtyLabels.join('، ')}</p>
+  ${tableHTML}
+  <script>window.onload = function(){ window.print(); }<\/script>
+</body>
+</html>`;
+        const win = window.open('', '_blank', 'width=1000,height=700');
+        if (!win) { toast.error('يرجى السماح بفتح النوافذ المنبثقة'); setExporting(false); return; }
+        win.document.write(html);
+        win.document.close();
+        toast.success('فُتحت نافذة الطباعة — اختر «حفظ كـ PDF»');
+        setExportOpen(false);
+      } else {
+        const xlsHTML = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+<head><meta charset="utf-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+<x:Name>${project?.name || 'مقاولون'}</x:Name>
+<x:WorksheetOptions><x:DisplayRightToLeft/></x:WorksheetOptions>
+</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head>
+<body>${tableHTML}</body>
+</html>`;
+        const blob = new Blob(['﻿' + xlsHTML], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `مقاولون_${project?.name || ''}.xls`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('تم تصدير الملف');
+        setExportOpen(false);
+      }
     } catch (e: any) {
       toast.error('فشل التصدير: ' + (e.message || ''));
     } finally {
@@ -711,6 +739,11 @@ export default function Contractors() {
                   <span className="text-xs text-muted-foreground bg-background/60 px-2 py-0.5 rounded-full font-bold">
                     {group.contractors.length} مقاول
                   </span>
+                  {group.unitCount > 0 && (
+                    <span className="text-xs text-muted-foreground bg-background/60 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <Hash className="w-3 h-3" />{group.unitCount} فيلا
+                    </span>
+                  )}
                 </div>
 
                 {/* Contractor grid */}
@@ -777,6 +810,36 @@ export default function Contractors() {
               </DialogTitle>
             </DialogHeader>
             <div className="p-5 space-y-4">
+              {/* Format selector */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExportFormat('pdf')}
+                  className={cn(
+                    'flex items-center justify-center gap-2 rounded-xl border p-2.5 transition-all text-sm font-semibold',
+                    exportFormat === 'pdf'
+                      ? 'border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                      : 'border-border bg-muted/30 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <Printer className="w-4 h-4" />
+                  PDF / طباعة
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExportFormat('xlsx')}
+                  className={cn(
+                    'flex items-center justify-center gap-2 rounded-xl border p-2.5 transition-all text-sm font-semibold',
+                    exportFormat === 'xlsx'
+                      ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : 'border-border bg-muted/30 text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Excel
+                </button>
+              </div>
+
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-muted-foreground">اختر المشروع</Label>
                 <div className="space-y-1.5">
@@ -805,23 +868,75 @@ export default function Contractors() {
                 </div>
               </div>
 
-              {exportProject && (
-                <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 text-xs text-muted-foreground text-right space-y-1">
-                  <p className="font-bold text-blue-400">محتوى الملف:</p>
-                  <p>• رقم الفيلا — عمود لكل تخصص</p>
-                  <p>• اسم المقاول المخصص لكل فيلا في كل تخصص</p>
-                  <p>• إجمالي الوحدات: <span className="font-bold text-foreground">{(projectUnits[exportProject] || []).length}</span></p>
+              {exportProject && exportProjectSpecialties.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-muted-foreground">التخصصات</Label>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setExportSpecialties(new Set(exportProjectSpecialties))}
+                        className="text-xs text-primary hover:opacity-80 transition-opacity"
+                      >
+                        تحديد الكل
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExportSpecialties(new Set())}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        مسح الكل
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {exportProjectSpecialties.map(key => {
+                      const selected = exportSpecialties.has(key);
+                      const colors = getSpecialtyColors(key);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setExportSpecialties(prev => {
+                            const next = new Set(prev);
+                            selected ? next.delete(key) : next.add(key);
+                            return next;
+                          })}
+                          className={cn(
+                            'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
+                            selected ? colors.badge : 'bg-muted/20 border-border/50 text-muted-foreground hover:bg-muted/40'
+                          )}
+                        >
+                          {selected && <Check className="w-3 h-3 shrink-0" />}
+                          {CONTRACTOR_SPECIALTIES[key] || key}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground text-right">
+                    إجمالي الوحدات: <span className="font-bold text-foreground">{(projectUnits[exportProject] || []).length}</span>
+                    {' · '}
+                    <span className="font-bold text-foreground">{exportSpecialties.size}</span> تخصص مختار
+                  </p>
                 </div>
               )}
             </div>
             <DialogFooter className="px-5 pb-5 pt-0">
               <Button
                 onClick={handleExport}
-                disabled={!exportProject || exporting}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 font-bold gap-2"
+                disabled={!exportProject || exportSpecialties.size === 0 || exporting}
+                className={cn(
+                  'w-full text-white rounded-xl h-10 font-bold gap-2',
+                  exportFormat === 'pdf'
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                )}
               >
-                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                {exporting ? 'جاري التصدير...' : 'تحميل Excel'}
+                {exporting
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : exportFormat === 'pdf' ? <Printer className="w-4 h-4" /> : <Download className="w-4 h-4" />
+                }
+                {exporting ? 'جاري التصدير...' : exportFormat === 'pdf' ? 'طباعة / PDF' : 'تحميل Excel'}
               </Button>
             </DialogFooter>
           </DialogContent>
