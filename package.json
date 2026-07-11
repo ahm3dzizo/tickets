@@ -17,6 +17,8 @@
   "dependencies": {
     "@base-ui/react": "^1.4.0",
     "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/tajawal": "^5.2.7",
     "@google/generative-ai": "^0.24.1",
     "@prisma/adapter-pg": "^5.22.0",
     "@prisma/client": "^5.22.0",
