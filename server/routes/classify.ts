@@ -227,17 +227,20 @@ router.post("/manual-keyword", requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ── POST /api/classify/retry-failed ──────────────────────────────────────
-router.post("/retry-failed", requireAuth, requireAdmin, async (_req, res) => {
+router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
   try {
+    const forceAll = req.query.all === 'true';
     const failedTickets = await prisma.ticket.findMany({
-      where: {
-        status: { not: "closed" },
-        OR: [
-          { detectedTypes: { equals: [] } },
-          { type: "unclassified" },
-        ],
-      },
-      take: 100,
+      where: forceAll
+        ? { status: { not: "closed" } }
+        : {
+            status: { not: "closed" },
+            OR: [
+              { detectedTypes: { equals: [] } },
+              { type: "unclassified" },
+            ],
+          },
+      take: forceAll ? 500 : 100,
       orderBy: { createdAt: "desc" },
       select: { id: true, description: true, projectId: true },
     });
