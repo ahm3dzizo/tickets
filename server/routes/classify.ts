@@ -4,7 +4,7 @@ import { AuthRequest, requireAuth, requireAdmin } from "../auth.js";
 import { classifyTicket } from "../classifier/classify.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
 import { loadKeywordsFromDB, invalidateKeywordCache, classifyFromKeywordsDB, normalizeArabic } from "../classifier/keywords.js";
-import { geminiEnabled } from "../classifier/gemini.js";
+import { geminiEnabled, classifyBatchWithGemini } from "../classifier/gemini.js";
 import { nudgeReclassifyWorker } from "../classifier/reclassify-worker.js";
 
 const router = Router();
@@ -254,53 +254,97 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
     res.json({ message: `Started background reclassification of ${failedTickets.length} tickets`, processed: failedTickets.length });
 
     // Fire-and-forget background processing
+    // Strategy: send each batch of 10 as ONE Bynara request (not 10 individual calls).
+    // 10 req/min limit → 7 s pause between batches → ~8 batches/min → ~80 tickets/min.
     (async () => {
       let reclassified = 0;
       let stillFailed = 0;
       const typeToSpecialty = await buildTypeToSpecialtyMap();
 
-      for (const ticket of failedTickets) {
-        if (!ticket.description || ticket.description.length < 5) continue;
-        try {
-          const classification = await classifyTicket(ticket.description, ticket.projectId || undefined, { forceReclassify: true });
+      const BATCH_SIZE = 10;
+      const BATCH_PAUSE_MS = 7_000; // 7 s gap keeps us safely under 10 req/min
 
-          if (classification.primaryType !== "unclassified") {
-            const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
+      const validTickets = failedTickets.filter(t => t.description && t.description.length >= 5);
+      const totalBatches = Math.ceil(validTickets.length / BATCH_SIZE);
 
-            await prisma.ticket.update({
-              where: { id: ticket.id },
-              data: {
-                type: classification.primaryType,
-                detectedTypes: classification.allTypes.filter((t: string) => t !== "unclassified"),
-              },
-            });
+      for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+        const batch = validTickets.slice(batchIdx * BATCH_SIZE, (batchIdx + 1) * BATCH_SIZE);
+        console.log(`[retry-failed] Batch ${batchIdx + 1}/${totalBatches} — ${batch.length} tickets`);
 
-            if (ticket.projectId) {
-              const supervisors = await findSupervisorsDB(ticket.projectId, requiredSpecialties);
-              if (supervisors.length > 0) {
-                await prisma.ticket.update({
-                  where: { id: ticket.id },
-                  data: {
-                    assignedSupervisorId: supervisors[0].id,
-                    assignedSupervisorIds: supervisors.map(s => s.id),
-                    assignedSupervisors: supervisors.map(s => ({ id: s.id, name: s.name, specialty: s.specialties[0] || "general" })),
-                  },
-                });
-              }
+        // One Bynara request for the whole batch
+        const batchResultMap = new Map<string, { primaryType: string; allTypes: string[] }>();
+        if (geminiEnabled()) {
+          try {
+            const results = await classifyBatchWithGemini(
+              batch.map(t => ({ id: t.id, description: t.description! }))
+            );
+            for (const r of results) {
+              if (r.primaryType !== "unclassified") batchResultMap.set(r.id, r);
             }
-            reclassified++;
-          } else {
+          } catch (batchErr: any) {
+            console.error(`[retry-failed] Bynara batch error:`, batchErr.message);
+          }
+        }
+
+        for (const ticket of batch) {
+          try {
+            let primaryType: string;
+            let allTypes: string[];
+
+            const bResult = batchResultMap.get(ticket.id);
+            if (bResult) {
+              primaryType = bResult.primaryType;
+              allTypes    = bResult.allTypes;
+            } else {
+              // Bynara missed this ticket — fall back to ML/keywords (no extra Bynara call)
+              const fallback = await classifyTicket(ticket.description!, ticket.projectId || undefined, { forceReclassify: true, skipGemini: true });
+              primaryType = fallback.primaryType;
+              allTypes    = fallback.allTypes;
+            }
+
+            if (primaryType !== "unclassified") {
+              const requiredSpecialties = [...new Set(allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
+
+              await prisma.ticket.update({
+                where: { id: ticket.id },
+                data: {
+                  type: primaryType,
+                  detectedTypes: allTypes.filter((t: string) => t !== "unclassified"),
+                },
+              });
+
+              if (ticket.projectId) {
+                const supervisors = await findSupervisorsDB(ticket.projectId, requiredSpecialties);
+                if (supervisors.length > 0) {
+                  await prisma.ticket.update({
+                    where: { id: ticket.id },
+                    data: {
+                      assignedSupervisorId:  supervisors[0].id,
+                      assignedSupervisorIds: supervisors.map(s => s.id),
+                      assignedSupervisors:   supervisors.map(s => ({ id: s.id, name: s.name, specialty: s.specialties[0] || "general" })),
+                    },
+                  });
+                }
+              }
+              reclassified++;
+            } else {
+              stillFailed++;
+            }
+          } catch (ticketErr: any) {
+            console.error(`[retry-failed] ticket ${ticket.id}:`, ticketErr.message);
             stillFailed++;
           }
-        } catch (ticketErr: any) {
-          console.error(`[retry-failed] ticket ${ticket.id}:`, ticketErr.message);
-          stillFailed++;
+        }
+
+        if (batchIdx < totalBatches - 1) {
+          console.log(`[retry-failed] Batch ${batchIdx + 1} done — waiting ${BATCH_PAUSE_MS / 1000}s...`);
+          await new Promise(r => setTimeout(r, BATCH_PAUSE_MS));
         }
       }
 
       invalidateReferenceCache();
       invalidateKeywordCache();
-      console.log(`[retry-failed] Done: ${reclassified} reclassified, ${stillFailed} failed out of ${failedTickets.length}`);
+      console.log(`[retry-failed] Done: ${reclassified} reclassified, ${stillFailed} failed out of ${validTickets.length}`);
     })().catch(err => console.error("[retry-failed] background error:", err.message));
 
   } catch (err: any) {
