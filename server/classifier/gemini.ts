@@ -65,19 +65,25 @@ export async function classifyWithGemini(
       })
       .join("\n");
 
-    const prompt = `Maintenance ticket classifier for Arabic residential projects. Reply with ONLY valid JSON.
+    const prompt = `أنت متخصص في تصنيف بلاغات صيانة المساكن العربية. ردّك يجب أن يكون JSON فقط بدون أي نص إضافي.
 
-Available main types with their sub-types:
+أنواع الصيانة المتاحة:
 ${typesList}
 
-Rules:
-1. Choose 1-2 main types max (3 only if truly composite)
-2. Focus on root cause — e.g. "water leak caused tile damage" → types:[plumbing,ceramics], subType:"تسريبات مياه"
-3. subType must be one of the listed sub-type names for the primary type
-4. If description is vague → empty types array, null subType
-5. JSON only, no other text
+طريقة التصنيف:
+اقرأ البلاغ كاملاً وافهم السياق. كثير من البلاغات تحتوي على مشاكل متعددة ومختلفة في نفس الوقت. مهمتك هي تحديد كل مشكلة مذكورة وتصنيفها بشكل مستقل.
 
-Format: {"types":["key1"],"subType":"اسم النوع الفرعي أو null","confidence":0.9}`;
+مثال: "انارة خارجية لا تعمل - بلاطة تالفة - صيانة باب الكراج - كرسي حمام مكسور"
+هذا البلاغ يحتوي على 4 مشاكل مختلفة: كهرباء + بلاط + باب كراج + سباكة → types: ["electricity","ceramics","garage_door","plumbing"]
+
+قواعد:
+1. حدد كل مشكلة مذكورة في البلاغ وأضف نوعها — حتى لو وصلت إلى 5 أنواع.
+2. لا تدمج المشاكل المختلفة في نوع واحد إلا إذا كانت سببها واحد (مثل: تسريب مياه سبّب تلف بلاط → plumbing + ceramics).
+3. subType يكون من الأنواع الفرعية المذكورة للنوع الأول (primaryType) فقط، أو null.
+4. إذا كان البلاغ مبهماً أو غير واضح → types: [], subType: null.
+5. JSON فقط بدون أي نص آخر.
+
+الصيغة: {"types":["key1","key2"],"subType":"اسم فرعي أو null","confidence":0.9}`;
 
     const response = await fetch(NARA_URL, {
       method: "POST",
@@ -174,15 +180,19 @@ export async function classifyBatchWithGemini(
     .map((item, i) => `${i + 1}. "${item.description.replace(/"/g, "'")}"`)
     .join("\n");
 
-  const prompt = `Maintenance classifier for Arabic residential projects.
+  const prompt = `أنت متخصص في تصنيف بلاغات صيانة المساكن العربية. ردّك يجب أن يكون JSON array فقط.
 
-Types with sub-types:
+أنواع الصيانة المتاحة:
 ${typesList}
 
-Rules: 1-2 main types max, subType = one sub-type name from the primary type (or null).
+طريقة التصنيف:
+اقرأ كل بلاغ كاملاً وحدد جميع المشاكل المذكورة فيه. البلاغ الواحد قد يحتوي على مشاكل متعددة ومختلفة تماماً.
+- حدد نوع كل مشكلة بشكل مستقل وأضفها في المصفوفة.
+- لا تكتفِ بنوع واحد إذا كان البلاغ يصف مشاكل متعددة.
+- subType من الأنواع الفرعية للنوع الأول فقط، أو null.
 
-Return ONLY a JSON array. Format:
-[{"i":1,"types":["key1"],"subType":"اسم فرعي أو null","confidence":0.9}]`;
+أعد JSON array فقط. الصيغة:
+[{"i":1,"types":["key1","key2"],"subType":"اسم فرعي أو null","confidence":0.9}]`;
 
   try {
     const response = await fetch(NARA_URL, {
