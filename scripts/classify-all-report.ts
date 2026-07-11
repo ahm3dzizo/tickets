@@ -30,9 +30,8 @@ async function main() {
 
   const typeToSpecialty = await buildTypeToSpecialtyMap();
 
-  console.log("📋 جلب كل التذاكر غير المغلقة...");
+  console.log("📋 جلب كل التذاكر (بما فيها المغلقة)...");
   const tickets = await prisma.ticket.findMany({
-    where: { status: { not: "closed" } },
     select: { id: true, description: true, projectId: true },
     orderBy: { createdAt: "desc" },
   });
