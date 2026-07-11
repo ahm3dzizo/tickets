@@ -235,13 +235,11 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (_req, res) => {
         OR: [
           { detectedTypes: { equals: [] } },
           { type: "unclassified" },
-          { type: null },
-          { AND: [{ type: { in: ["plumbing", "general"] } }, { detectedTypes: { equals: ["plumbing"] } }] },
         ],
       },
       take: 100,
       orderBy: { createdAt: "desc" },
-      select: { id: true, description: true, projectId: true, type: true },
+      select: { id: true, description: true, projectId: true },
     });
 
     if (failedTickets.length === 0) {
