@@ -250,55 +250,59 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
       return;
     }
 
-    let reclassified = 0;
-    let stillFailed = 0;
-    const typeToSpecialty = await buildTypeToSpecialtyMap();
+    // Return immediately — process in background to avoid Nginx 504 timeout
+    res.json({ message: `Started background reclassification of ${failedTickets.length} tickets`, processed: failedTickets.length });
 
-    for (const ticket of failedTickets) {
-      if (!ticket.description || ticket.description.length < 5) continue;
+    // Fire-and-forget background processing
+    (async () => {
+      let reclassified = 0;
+      let stillFailed = 0;
+      const typeToSpecialty = await buildTypeToSpecialtyMap();
 
-      const classification = await classifyTicket(ticket.description, ticket.projectId || undefined, { forceReclassify: true });
+      for (const ticket of failedTickets) {
+        if (!ticket.description || ticket.description.length < 5) continue;
+        try {
+          const classification = await classifyTicket(ticket.description, ticket.projectId || undefined, { forceReclassify: true });
 
-      // classifyTicket already filters out low-confidence results — just check primaryType
-      if (classification.primaryType !== "unclassified") {
-        const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
-        
-        await prisma.ticket.update({
-          where: { id: ticket.id },
-          data: {
-            type: classification.primaryType,
-            detectedTypes: classification.allTypes.filter((t: string) => t !== "unclassified"),
-          },
-        });
+          if (classification.primaryType !== "unclassified") {
+            const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
 
-        if (ticket.projectId) {
-          const supervisors = await findSupervisorsDB(ticket.projectId, requiredSpecialties);
-          if (supervisors.length > 0) {
             await prisma.ticket.update({
               where: { id: ticket.id },
               data: {
-                assignedSupervisorId: supervisors[0].id,
-                assignedSupervisorIds: supervisors.map(s => s.id),
-                assignedSupervisors: supervisors.map(s => ({ id: s.id, name: s.name, specialty: s.specialties[0] || "general" })),
+                type: classification.primaryType,
+                detectedTypes: classification.allTypes.filter((t: string) => t !== "unclassified"),
               },
             });
+
+            if (ticket.projectId) {
+              const supervisors = await findSupervisorsDB(ticket.projectId, requiredSpecialties);
+              if (supervisors.length > 0) {
+                await prisma.ticket.update({
+                  where: { id: ticket.id },
+                  data: {
+                    assignedSupervisorId: supervisors[0].id,
+                    assignedSupervisorIds: supervisors.map(s => s.id),
+                    assignedSupervisors: supervisors.map(s => ({ id: s.id, name: s.name, specialty: s.specialties[0] || "general" })),
+                  },
+                });
+              }
+            }
+            reclassified++;
+          } else {
+            stillFailed++;
           }
+        } catch (ticketErr: any) {
+          console.error(`[retry-failed] ticket ${ticket.id}:`, ticketErr.message);
+          stillFailed++;
         }
-        reclassified++;
-      } else {
-        stillFailed++;
       }
-    }
 
-    invalidateReferenceCache();
-    invalidateKeywordCache();
+      invalidateReferenceCache();
+      invalidateKeywordCache();
+      console.log(`[retry-failed] Done: ${reclassified} reclassified, ${stillFailed} failed out of ${failedTickets.length}`);
+    })().catch(err => console.error("[retry-failed] background error:", err.message));
 
-    res.json({
-      message: `Reclassified ${reclassified} tickets, ${stillFailed} still failed`,
-      processed: failedTickets.length,
-      reclassified,
-      stillFailed,
-    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
