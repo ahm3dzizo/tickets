@@ -706,13 +706,6 @@ export function TicketTable({
               المغلقة
             </Button>
 
-            {(localSearch || localStatus || localType || localProject) && (
-              <Button variant="ghost" size="sm" className="h-9 rounded-xl text-slate-500 hover:text-foreground text-xs gap-1 px-2"
-                onClick={() => { setLocalSearch(''); setLocalStatus(''); setLocalType(''); setLocalProject(''); }}>
-                <X className="w-3 h-3" /> مسح
-              </Button>
-            )}
-
             <span className="text-[10px] text-slate-500 font-bold px-2 mr-auto hidden sm:block">
               {baseTickets.length} / {tickets.length}
             </span>
