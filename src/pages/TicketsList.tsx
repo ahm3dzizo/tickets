@@ -218,7 +218,7 @@ export default function TicketsList() {
           {(user?.role === 'admin' || user?.role === 'engineer') && (
             <DropdownMenu>
               <DropdownMenuTrigger render={
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-10 p-0 rounded-xl shadow-sm transition-all shrink-0 font-bold gap-2">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 h-10 rounded-xl shadow-sm transition-all shrink-0 font-bold gap-2">
                   <Plus className="w-5 h-5" />
                   <span className="hidden sm:inline">إضافة تذاكر</span>
                 </Button>
