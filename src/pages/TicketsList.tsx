@@ -463,7 +463,7 @@ export default function TicketsList() {
           selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))}
           clients={Object.values(clients)}
           projects={projects}
-          onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); }}
+          onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }}
         />
 
         <TicketForm
