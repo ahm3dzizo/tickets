@@ -140,7 +140,7 @@ export function AssignContractorDialog({
     <>
       <Dialog open={open && !showAppointment && !showAppointmentDialog} onOpenChange={onOpenChange}>
         <DialogContent
-          className="bg-card border-border text-foreground sm:max-w-[460px] max-h-[90vh] flex flex-col rounded-3xl p-0 overflow-hidden"
+          className="bg-card border-border text-foreground sm:max-w-[460px] flex flex-col rounded-3xl p-0 overflow-hidden"
           dir="rtl"
         >
           {/* ── Header ─────────────────────────────────────────── */}
@@ -159,7 +159,7 @@ export function AssignContractorDialog({
           </DialogHeader>
 
           {/* ── Body ───────────────────────────────────────────── */}
-          <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-4">
+          <div className="overflow-y-auto max-h-[60vh] no-scrollbar p-5 space-y-4">
             {loadingContractors ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
@@ -183,9 +183,83 @@ export function AssignContractorDialog({
                   </Select>
                 </div>
 
-                {selectedSpecialty && displaySuggested.length === 0 && (
-                  <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 text-center">
-                    <p className="text-sm font-bold text-rose-400">لا يوجد مقاول مخصص لهذه الفيلا في هذا التخصص</p>
+                {/* Contractor result */}
+                {selectedSpecialty && (
+                  <div className="space-y-2">
+                    {displaySuggested.length > 0 ? (
+                      displaySuggested.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => setSelectedContractor(c)}
+                          className={cn(
+                            'w-full flex items-center gap-3 p-3 rounded-2xl border text-right transition-all',
+                            selectedContractor?.id === c.id
+                              ? 'bg-blue-500/10 border-blue-500/40 ring-1 ring-blue-500/20'
+                              : 'bg-muted/20 border-border/50 hover:bg-muted/40'
+                          )}
+                        >
+                          <div className={cn(
+                            'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-black',
+                            selectedContractor?.id === c.id ? 'bg-blue-500/20 text-blue-300' : 'bg-muted text-muted-foreground'
+                          )}>
+                            {c.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0 text-right">
+                            <div className="flex items-center gap-2 justify-end">
+                              <span className="text-[9px] font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-md border border-blue-500/20">مقترح</span>
+                              <span className="font-bold text-sm text-foreground truncate">{c.name}</span>
+                            </div>
+                            {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                          </div>
+                          {selectedContractor?.id === c.id && (
+                            <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
+                              <HardHat className="w-3 h-3 text-white" />
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <>
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-right">
+                          <p className="text-xs font-bold text-amber-400">لا يوجد مقاول مخصص لهذه الفيلا — اختر من القائمة:</p>
+                        </div>
+                        {contractors
+                          .filter(c => c.specialties?.some(s => s.specialtyKey === selectedSpecialty))
+                          .map(c => (
+                            <button
+                              key={c.id}
+                              onClick={() => setSelectedContractor(c)}
+                              className={cn(
+                                'w-full flex items-center gap-3 p-3 rounded-2xl border text-right transition-all',
+                                selectedContractor?.id === c.id
+                                  ? 'bg-blue-500/10 border-blue-500/40 ring-1 ring-blue-500/20'
+                                  : 'bg-muted/20 border-border/50 hover:bg-muted/40'
+                              )}
+                            >
+                              <div className={cn(
+                                'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-black',
+                                selectedContractor?.id === c.id ? 'bg-blue-500/20 text-blue-300' : 'bg-muted text-muted-foreground'
+                              )}>
+                                {c.name.charAt(0)}
+                              </div>
+                              <div className="flex-1 min-w-0 text-right">
+                                <span className="font-bold text-sm text-foreground block truncate">{c.name}</span>
+                                {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                              </div>
+                              {selectedContractor?.id === c.id && (
+                                <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
+                                  <HardHat className="w-3 h-3 text-white" />
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        {contractors.filter(c => c.specialties?.some(s => s.specialtyKey === selectedSpecialty)).length === 0 && (
+                          <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 text-center">
+                            <p className="text-sm font-bold text-rose-400">لا يوجد مقاولون بهذا التخصص</p>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
               </>
@@ -193,23 +267,14 @@ export function AssignContractorDialog({
           </div>
 
           {/* ── Footer ─────────────────────────────────────────── */}
-          <DialogFooter className="px-5 pb-5 pt-4 border-t border-border/50 shrink-0 flex flex-col gap-2">
-            {selectedContractor && (
-              <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
-                <HardHat className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="text-sm font-bold text-blue-300">{selectedContractor.name}</span>
-                {selectedContractor.phone && (
-                  <span className="text-xs text-muted-foreground mr-auto">{selectedContractor.phone}</span>
-                )}
-              </div>
-            )}
+          <DialogFooter className="px-5 pb-5 pt-4 border-t border-border/50 shrink-0">
             <Button
               onClick={handleAssign}
               disabled={loading || !selectedContractor}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 font-bold flex items-center justify-center gap-2 shadow-md"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <HardHat className="w-5 h-5" />}
-              تأكيد الإسناد
+              {selectedContractor ? `إسناد لـ ${selectedContractor.name}` : 'تأكيد الإسناد'}
             </Button>
           </DialogFooter>
         </DialogContent>

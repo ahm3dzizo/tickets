@@ -13,7 +13,7 @@ import {
 import { toast } from 'sonner';
 import {
   HardHat, Plus, Trash2, Edit, Loader2, Phone, Search,
-  ChevronDown, X, Building2, MapPin, Check, Wrench, Hash, Users
+  ChevronDown, X, Building2, MapPin, Check, Wrench, Hash, Users, Download, FileSpreadsheet
 } from 'lucide-react';
 import { contractorsApi } from '@/lib/contractorsApi';
 import { projectsApi } from '@/lib/api';
@@ -22,69 +22,38 @@ import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-function villaLabel(v: any, projectName?: string): string {
-  const p = projectName ? `[${projectName}] ` : '';
-  if (v.unit) return `${p}وحدة ${v.unit.unitNumber}`;
-  if (v.block) return `${p}بلوك ${v.block.blockNumber}`;
-  return `${p}(نطاق غير محدد)`;
-}
-
-// ─── Assignment Form Row ──────────────────────────────────────────────────────
-interface AssignmentRow {
-  id: string;
-  projectId: string;
-  specialtyKey: string;
-  level: 'block' | 'unit' | 'block_range' | 'unit_range';
-  blockId: string;
-  unitId: string;
-  toBlockId?: string;
-  toUnitId?: string;
-}
-
-function newRow(): AssignmentRow {
-  return { id: Math.random().toString(36).slice(2), projectId: '', specialtyKey: '', level: 'block', blockId: '', unitId: '' };
-}
-
-// ─── Contractor Form Dialog ───────────────────────────────────────────────────
-interface FormDialogProps {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  initial?: Contractor | null;
-  projects: Project[];
-  onSuccess: () => void;
-}
-
 const CONTRACTOR_SPECIALTIES: Record<string, string> = {
   plumbing: 'سباكة', electricity: 'كهرباء', doors: 'أبواب',
   aluminum: 'ألومنيوم', garage_door: 'باب كراج'
 };
 
-const SPECIALTY_COLORS: Record<string, string> = {
-  plumbing: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  electricity: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-  doors: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  aluminum: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  garage_door: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+const SPECIALTY_COLORS: Record<string, { badge: string; section: string; icon: string }> = {
+  plumbing:     { badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20',     section: 'border-blue-500/30 bg-blue-500/5',     icon: 'text-blue-400' },
+  electricity:  { badge: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20', section: 'border-yellow-500/30 bg-yellow-500/5', icon: 'text-yellow-400' },
+  doors:        { badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', section: 'border-emerald-500/30 bg-emerald-500/5', icon: 'text-emerald-400' },
+  aluminum:     { badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20', section: 'border-purple-500/30 bg-purple-500/5', icon: 'text-purple-400' },
+  garage_door:  { badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20', section: 'border-orange-500/30 bg-orange-500/5', icon: 'text-orange-400' },
 };
+const DEFAULT_COLORS = { badge: 'bg-slate-500/10 text-slate-400 border-slate-500/20', section: 'border-slate-500/30 bg-slate-500/5', icon: 'text-slate-400' };
 
-function getSpecialtyColor(key: string) {
-  return SPECIALTY_COLORS[key] || 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-}
-
+function getSpecialtyColors(key: string) { return SPECIALTY_COLORS[key] || DEFAULT_COLORS; }
 function getAvatarColor(name: string) {
-  const colors = [
-    'from-blue-500 to-blue-700',
-    'from-emerald-500 to-emerald-700',
-    'from-purple-500 to-purple-700',
-    'from-orange-500 to-orange-700',
-    'from-rose-500 to-rose-700',
-    'from-cyan-500 to-cyan-700',
-    'from-amber-500 to-amber-700',
-    'from-indigo-500 to-indigo-700',
-  ];
-  const idx = name.charCodeAt(0) % colors.length;
-  return colors[idx];
+  const colors = ['from-blue-500 to-blue-700','from-emerald-500 to-emerald-700','from-purple-500 to-purple-700','from-orange-500 to-orange-700','from-rose-500 to-rose-700','from-cyan-500 to-cyan-700','from-amber-500 to-amber-700','from-indigo-500 to-indigo-700'];
+  return colors[name.charCodeAt(0) % colors.length];
 }
+
+// ─── Assignment Form Row ──────────────────────────────────────────────────────
+interface AssignmentRow {
+  id: string; projectId: string; specialtyKey: string;
+  level: 'block' | 'unit' | 'block_range' | 'unit_range';
+  blockId: string; unitId: string; toBlockId?: string; toUnitId?: string;
+}
+function newRow(): AssignmentRow {
+  return { id: Math.random().toString(36).slice(2), projectId: '', specialtyKey: '', level: 'block', blockId: '', unitId: '' };
+}
+
+// ─── Contractor Form Dialog ───────────────────────────────────────────────────
+interface FormDialogProps { open: boolean; onOpenChange: (v: boolean) => void; initial?: Contractor | null; projects: Project[]; onSuccess: () => void; }
 
 function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess }: FormDialogProps) {
   const [name, setName] = useState('');
@@ -103,16 +72,10 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
       setSelectedSpecialties(initial?.specialties?.map(s => s.specialtyKey) || []);
       if (initial?.assignments?.length) {
         setAssignments(initial.assignments.map(a => ({
-          id: a.id,
-          projectId: a.projectId,
-          specialtyKey: a.specialtyKey || '',
-          level: a.unitId ? 'unit' : 'block',
-          blockId: a.blockId || '',
-          unitId: a.unitId || '',
+          id: a.id, projectId: a.projectId, specialtyKey: a.specialtyKey || '',
+          level: a.unitId ? 'unit' : 'block', blockId: a.blockId || '', unitId: a.unitId || '',
         })));
-      } else {
-        setAssignments([newRow()]);
-      }
+      } else { setAssignments([newRow()]); }
     }
   }, [open, initial]);
 
@@ -124,7 +87,7 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
         projectsApi.getUnits(pId).then(data => setProjectUnits(p => ({ ...p, [pId]: data.sort((a: any, b: any) => String(a.unitNumber).localeCompare(String(b.unitNumber), undefined, { numeric: true })) }))).catch(() => {});
       }
     }
-  }, [assignments, projectBlocks, projectUnits]);
+  }, [assignments]);
 
   const toggleSpecialty = (key: string) =>
     setSelectedSpecialties(prev => prev.includes(key) ? prev.filter(x => x !== key) : [...prev, key]);
@@ -135,10 +98,6 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
       setSelectedSpecialties(prev => [...prev, val]);
     }
     setCustomSpecialty('');
-  };
-
-  const handleCustomSpecialtyKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); handleAddCustomSpecialty(); }
   };
 
   const updateRow = (id: string, field: keyof AssignmentRow, value: string) =>
@@ -172,9 +131,7 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
       }
     }
     const uniqueMap = new Map();
-    for (const va of validAssignments) {
-      uniqueMap.set(`${va.projectId}-${va.specialtyKey}-${va.blockId}-${va.unitId}`, va);
-    }
+    for (const va of validAssignments) uniqueMap.set(`${va.projectId}-${va.specialtyKey}-${va.blockId}-${va.unitId}`, va);
     const finalAssignments = Array.from(uniqueMap.values());
     setSaving(true);
     try {
@@ -185,13 +142,9 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
         await contractorsApi.create({ name: name.trim(), phone: phone.trim() || undefined, specialties: selectedSpecialties, assignments: finalAssignments as any });
         toast.success('تم إضافة المقاول');
       }
-      onSuccess();
-      onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e.message || 'فشل الحفظ');
-    } finally {
-      setSaving(false);
-    }
+      onSuccess(); onOpenChange(false);
+    } catch (e: any) { toast.error(e.message || 'فشل الحفظ'); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -239,9 +192,10 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <Input value={customSpecialty} onChange={e => setCustomSpecialty(e.target.value)} onKeyDown={handleCustomSpecialtyKeyDown}
+              <Input value={customSpecialty} onChange={e => setCustomSpecialty(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomSpecialty(); } }}
                 placeholder="إضافة تخصص آخر..." className="h-9 rounded-xl bg-background text-sm flex-1" />
-              <Button type="button" onClick={handleAddCustomSpecialty} variant="secondary" className="h-9 rounded-xl px-3 bg-muted/50 text-muted-foreground hover:text-foreground">
+              <Button type="button" onClick={handleAddCustomSpecialty} variant="secondary" className="h-9 rounded-xl px-3">
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
@@ -256,13 +210,13 @@ function ContractorFormDialog({ open, onOpenChange, initial, projects, onSuccess
               </Button>
             </div>
             <div className="space-y-2">
-              {[...assignments].sort((rowA, rowB) => {
-                if (rowA.projectId !== rowB.projectId) return (rowA.projectId || '').localeCompare(rowB.projectId || '');
-                const bA = parseInt(rowA.blockId ? projectBlocks[rowA.projectId]?.find((b: any) => b.id === rowA.blockId)?.blockNumber : '0') || 0;
-                const bB = parseInt(rowB.blockId ? projectBlocks[rowB.projectId]?.find((b: any) => b.id === rowB.blockId)?.blockNumber : '0') || 0;
+              {[...assignments].sort((a, b) => {
+                if (a.projectId !== b.projectId) return (a.projectId || '').localeCompare(b.projectId || '');
+                const bA = parseInt(a.blockId ? projectBlocks[a.projectId]?.find((bl: any) => bl.id === a.blockId)?.blockNumber : '0') || 0;
+                const bB = parseInt(b.blockId ? projectBlocks[b.projectId]?.find((bl: any) => bl.id === b.blockId)?.blockNumber : '0') || 0;
                 if (bA !== bB) return bA - bB;
-                const uA = parseInt(rowA.unitId ? projectUnits[rowA.projectId]?.find((u: any) => u.id === rowA.unitId)?.unitNumber : '0') || 0;
-                const uB = parseInt(rowB.unitId ? projectUnits[rowB.projectId]?.find((u: any) => u.id === rowB.unitId)?.unitNumber : '0') || 0;
+                const uA = parseInt(a.unitId ? projectUnits[a.projectId]?.find((u: any) => u.id === a.unitId)?.unitNumber : '0') || 0;
+                const uB = parseInt(b.unitId ? projectUnits[b.projectId]?.find((u: any) => u.id === b.unitId)?.unitNumber : '0') || 0;
                 return uA - uB;
               }).map(row => (
                 <div key={row.id} className="flex flex-col gap-2 p-3 border border-border/50 rounded-2xl bg-muted/20">
@@ -397,8 +351,17 @@ export default function Contractors() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [projectUnits, setProjectUnits] = useState<Record<string, any[]>>({});
   const [selectedProject, setSelectedProject] = useState<string>('all');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportProject, setExportProject] = useState<string>('');
+  const [exporting, setExporting] = useState(false);
 
   const canEdit = user?.role === 'admin' || user?.role === 'engineer';
+
+  // Projects accessible to this user
+  const accessibleProjectIds = useMemo(() => {
+    if (user?.role === 'admin') return null; // null = all
+    return user?.projectIds || [];
+  }, [user]);
 
   const loadData = async () => {
     setLoading(true);
@@ -407,14 +370,29 @@ export default function Contractors() {
         contractorsApi.getAll(),
         projectsApi.getAll(),
       ]);
-      setContractors(allContractors);
-      setProjects(allProjects);
+
+      // Filter projects to accessible ones
+      const accessProjects: Project[] = accessibleProjectIds === null
+        ? allProjects
+        : allProjects.filter((p: any) => accessibleProjectIds.includes(p.id));
+
+      setProjects(accessProjects);
       const pm: Record<string, Project> = {};
-      allProjects.forEach((p: any) => { pm[p.id] = p; });
+      accessProjects.forEach((p: any) => { pm[p.id] = p; });
       setProjectMap(pm);
+
+      // Filter contractors to those serving accessible projects
+      const accessiblePIds = new Set(accessProjects.map((p: any) => p.id));
+      const filteredContractors = accessibleProjectIds === null
+        ? allContractors
+        : allContractors.filter((c: any) => c.assignments.some((a: any) => accessiblePIds.has(a.projectId)));
+
+      setContractors(filteredContractors);
+
+      // Load units for all accessible projects
       const unitsMap: Record<string, any[]> = {};
-      await Promise.all(allProjects.map(async (p: any) => {
-        try { unitsMap[p.id] = await projectsApi.getUnits(p.id); } catch(e) {}
+      await Promise.all(accessProjects.map(async (p: any) => {
+        try { unitsMap[p.id] = await projectsApi.getUnits(p.id); } catch {}
       }));
       setProjectUnits(unitsMap);
     } catch { toast.error('فشل تحميل البيانات'); }
@@ -433,17 +411,17 @@ export default function Contractors() {
     finally { setDeletingId(null); }
   };
 
+  // ── Filtered contractors ──────────────────────────────────────────────────
   const filtered = useMemo(() => contractors.filter(c => {
     const s = search.toLowerCase();
     const matchSearch = !s || c.name.toLowerCase().includes(s) ||
       c.phone?.includes(s) ||
-      c.specialties?.some((sp: any) => sp.specialtyKey.toLowerCase().includes(s) || (CONTRACTOR_SPECIALTIES[sp.specialtyKey] && CONTRACTOR_SPECIALTIES[sp.specialtyKey].includes(s))) ||
+      c.specialties?.some((sp: any) => sp.specialtyKey.toLowerCase().includes(s) || (CONTRACTOR_SPECIALTIES[sp.specialtyKey] || '').includes(s)) ||
       c.assignments.some((a: any) => {
         if (a.unit?.unitNumber && a.unit.unitNumber.includes(s)) return true;
         if (a.block?.blockNumber && a.block.blockNumber.includes(s)) return true;
         if (a.blockId && !a.unitId && projectUnits[a.projectId]) {
-          const unitsInThisBlock = projectUnits[a.projectId].filter((u: any) => String(u.blockId) === String(a.blockId));
-          if (unitsInThisBlock.some((u: any) => u.unitNumber.includes(s))) return true;
+          return projectUnits[a.projectId].filter((u: any) => String(u.blockId) === String(a.blockId)).some((u: any) => u.unitNumber.includes(s));
         }
         return false;
       });
@@ -451,9 +429,23 @@ export default function Contractors() {
     return matchSearch && matchProject;
   }), [contractors, search, selectedProject, projectUnits]);
 
-  const projectsWithContractors = useMemo(() => projects
-    .map(p => ({ project: p, contractors: filtered.filter(c => c.assignments.some(a => a.projectId === p.id)) }))
-    .filter(g => g.contractors.length > 0), [projects, filtered]);
+  // ── Group by specialty ────────────────────────────────────────────────────
+  const specialtyGroups = useMemo(() => {
+    const allKeys = new Set<string>();
+    filtered.forEach(c => c.specialties?.forEach((s: any) => allKeys.add(s.specialtyKey)));
+
+    const knownOrder = Object.keys(CONTRACTOR_SPECIALTIES);
+    const sorted = [
+      ...knownOrder.filter(k => allKeys.has(k)),
+      ...[...allKeys].filter(k => !knownOrder.includes(k)).sort(),
+    ];
+
+    return sorted.map(key => ({
+      key,
+      label: CONTRACTOR_SPECIALTIES[key] || key,
+      contractors: filtered.filter(c => c.specialties?.some((s: any) => s.specialtyKey === key)),
+    }));
+  }, [filtered]);
 
   const unassigned = filtered.filter(c => c.assignments.length === 0);
 
@@ -462,7 +454,7 @@ export default function Contractors() {
     contractors.forEach(c => {
       c.assignments.forEach((a: any) => {
         if (a.unitId) unitSet.add(a.unitId);
-        if (a.blockId && !a.unitId && projectUnits[a.projectId]) {
+        else if (a.blockId && projectUnits[a.projectId]) {
           projectUnits[a.projectId].filter((u: any) => String(u.blockId) === String(a.blockId)).forEach((u: any) => unitSet.add(u.id));
         }
       });
@@ -470,13 +462,131 @@ export default function Contractors() {
     return unitSet.size;
   }, [contractors, projectUnits]);
 
+  // ── Export to XLSX ────────────────────────────────────────────────────────
+  const handleExport = async () => {
+    if (!exportProject) { toast.error('اختر مشروعاً للتصدير'); return; }
+    setExporting(true);
+    try {
+      const units = projectUnits[exportProject] || [];
+      if (units.length === 0) { toast.error('لا توجد وحدات في هذا المشروع'); setExporting(false); return; }
+
+      // Collect all specialties for this project's contractors
+      const projectContractors = contractors.filter(c => c.assignments.some((a: any) => a.projectId === exportProject));
+      const specialtyKeys = [...new Set(
+        projectContractors.flatMap(c => c.specialties?.map((s: any) => s.specialtyKey) || [])
+      )];
+      const knownOrder = Object.keys(CONTRACTOR_SPECIALTIES);
+      const sortedSpecialties = [
+        ...knownOrder.filter(k => specialtyKeys.includes(k)),
+        ...specialtyKeys.filter(k => !knownOrder.includes(k)).sort(),
+      ];
+
+      // Build lookup: unitId → { specialtyKey → contractorName }
+      const unitContractorMap = new Map<string, Record<string, string>>();
+      for (const u of units) {
+        const map: Record<string, string> = {};
+        for (const c of projectContractors) {
+          for (const a of c.assignments) {
+            if (a.projectId !== exportProject) continue;
+            const coversUnit = a.unitId === u.id ||
+              (a.blockId && !a.unitId && String(u.blockId) === String(a.blockId));
+            if (coversUnit && a.specialtyKey) {
+              map[a.specialtyKey] = c.name;
+            }
+          }
+        }
+        unitContractorMap.set(u.id, map);
+      }
+
+      const project = projectMap[exportProject];
+      const specialtyLabels = sortedSpecialties.map(k => CONTRACTOR_SPECIALTIES[k] || k);
+
+      // Build headers
+      const headers = ['رقم الفيلا', ...specialtyLabels];
+
+      // Build rows sorted by unit number
+      const sortedUnits = [...units].sort((a, b) =>
+        String(a.unitNumber).localeCompare(String(b.unitNumber), undefined, { numeric: true })
+      );
+      const rows = sortedUnits.map(u => {
+        const map = unitContractorMap.get(u.id) || {};
+        return [u.unitNumber, ...sortedSpecialties.map(k => map[k] || '-')];
+      });
+
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'نظام إدارة الصيانة';
+
+      const sheet = workbook.addWorksheet(project?.name || 'مقاولون', {
+        views: [{ rightToLeft: true, state: 'frozen', ySplit: 2 }]
+      });
+
+      // Row 1: Project info (merged)
+      const infoRow = sheet.addRow([`المشروع: ${project?.name || ''}`, `إجمالي الوحدات: ${units.length}`, ...new Array(headers.length - 2).fill('')]);
+      infoRow.height = 22;
+      sheet.mergeCells(1, 1, 1, 2);
+      infoRow.eachCell(cell => {
+        cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF1E3A5F' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F0FE' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      // Row 2: Column headers
+      const headerRow = sheet.addRow(headers);
+      headerRow.height = 28;
+      headerRow.eachCell(cell => {
+        cell.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+
+      // Data rows
+      rows.forEach((rowData, idx) => {
+        const row = sheet.addRow(rowData);
+        row.eachCell(cell => {
+          cell.font = { name: 'Arial', size: 11 };
+          cell.numFmt = '@';
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: idx % 2 === 0 ? 'FFFAFAFA' : 'FFFFFFFF' } };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+            left: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+            bottom: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+            right: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+          };
+        });
+      });
+
+      // Auto column widths
+      sheet.columns.forEach((col, i) => {
+        let max = headers[i].length;
+        rows.forEach(r => { const l = String(r[i] || '').length; if (l > max) max = l; });
+        col.width = Math.min(Math.max(max + 4, 12), 40);
+      });
+
+      const buf = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      Object.assign(document.createElement('a'), { href: url, download: `مقاولون_${project?.name || ''}.xlsx` }).click();
+      URL.revokeObjectURL(url);
+
+      toast.success('تم تصدير الملف');
+      setExportOpen(false);
+    } catch (e: any) {
+      toast.error('فشل التصدير: ' + (e.message || ''));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="flex flex-col h-full page-in" dir="rtl">
 
         {/* ── Sticky Top Bar ───────────────────────────────── */}
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border/40 px-4 pt-4 pb-3 space-y-3">
-          {/* Title + Add Button */}
+          {/* Title + Buttons */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
@@ -489,14 +599,25 @@ export default function Contractors() {
                 </p>
               </div>
             </div>
-            {canEdit && (
+            <div className="flex items-center gap-2 shrink-0">
               <Button
-                onClick={() => { setEditTarget(null); setFormOpen(true); }}
-                className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 rounded-2xl h-9 px-4 font-bold shadow-sm shrink-0 text-sm"
+                variant="outline"
+                size="sm"
+                onClick={() => { setExportProject(selectedProject !== 'all' ? selectedProject : (projects[0]?.id || '')); setExportOpen(true); }}
+                className="h-9 rounded-xl border-blue-500/30 bg-blue-500/5 text-blue-500 hover:bg-blue-500/10 gap-1.5 text-xs font-bold px-3"
               >
-                <Plus className="w-4 h-4" /> إضافة
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">تصدير</span>
               </Button>
-            )}
+              {canEdit && (
+                <Button
+                  onClick={() => { setEditTarget(null); setFormOpen(true); }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 rounded-2xl h-9 px-4 font-bold shadow-sm text-sm"
+                >
+                  <Plus className="w-4 h-4" /> إضافة
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Search + Project Filter */}
@@ -515,11 +636,11 @@ export default function Contractors() {
               <DropdownMenuTrigger render={
                 <Button variant="outline" size="sm" className="h-9 rounded-xl border-border/50 bg-card gap-1.5 text-xs font-bold shrink-0 px-3">
                   <Building2 className="w-3.5 h-3.5 text-blue-400" />
-                  {selectedProject === 'all' ? 'كل المشاريع' : (projectMap[selectedProject]?.name?.slice(0, 8) || 'مشروع')}
+                  {selectedProject === 'all' ? 'كل المشاريع' : (projectMap[selectedProject]?.name?.slice(0, 10) || 'مشروع')}
                   <ChevronDown className="w-3 h-3 opacity-40" />
                 </Button>
               } />
-              <DropdownMenuContent className="bg-card border-border text-slate-200 z-20">
+              <DropdownMenuContent className="bg-card border-border text-slate-200 z-[200]">
                 <DropdownMenuItem className="hover:bg-white/5 text-start justify-start" onClick={() => setSelectedProject('all')}>كل المشاريع</DropdownMenuItem>
                 {projects.map(p => (
                   <DropdownMenuItem key={p.id} className="hover:bg-white/5 text-start justify-start" onClick={() => setSelectedProject(p.id)}>
@@ -530,16 +651,15 @@ export default function Contractors() {
             </DropdownMenu>
           </div>
 
-          {/* Quick Stats Strip */}
+          {/* Quick Stats */}
           {!loading && (
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-0.5">
               {[
-                { label: 'مقاول', value: contractors.length, icon: HardHat, color: 'text-blue-400' },
-                { label: 'وحدة مغطّاة', value: totalUnits, icon: Hash, color: 'text-emerald-400' },
-                { label: 'مشروع', value: projectsWithContractors.length, icon: Building2, color: 'text-purple-400' },
+                { label: 'مقاول', value: contractors.length, color: 'text-blue-400' },
+                { label: 'وحدة مغطّاة', value: totalUnits, color: 'text-emerald-400' },
+                { label: 'تخصص', value: specialtyGroups.length, color: 'text-purple-400' },
               ].map(s => (
                 <div key={s.label} className="flex items-center gap-1.5 bg-card border border-border/50 rounded-xl px-3 py-1.5 shrink-0">
-                  <s.icon className={cn('w-3.5 h-3.5', s.color)} />
                   <span className={cn('text-sm font-black', s.color)}>{s.value}</span>
                   <span className="text-[11px] text-muted-foreground">{s.label}</span>
                 </div>
@@ -574,38 +694,47 @@ export default function Contractors() {
               <div className="w-12 h-12 rounded-2xl bg-muted/30 flex items-center justify-center">
                 <Search className="w-6 h-6 text-muted-foreground" />
               </div>
-              <p className="text-muted-foreground text-sm">لا توجد نتائج لـ "<span className="text-foreground font-bold">{search}</span>"</p>
+              <p className="text-muted-foreground text-sm">لا توجد نتائج</p>
               <button onClick={() => { setSearch(''); setSelectedProject('all'); }} className="text-blue-400 text-xs hover:underline">إلغاء الفلتر</button>
             </div>
           )}
 
-          {!loading && projectsWithContractors.map(({ project, contractors: pContractors }) => (
-            <div key={project.id} className="space-y-2">
-              {/* Project header */}
-              <div className="flex items-center gap-2 px-1">
-                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-blue-400 to-blue-600" />
-                <span className="text-sm font-bold text-foreground">{project.name}</span>
-                <span className="text-xs text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-full">{pContractors.length}</span>
-              </div>
+          {/* ── Specialty Sections ── */}
+          {!loading && specialtyGroups.map(group => {
+            const colors = getSpecialtyColors(group.key);
+            return (
+              <div key={group.key} className="space-y-2">
+                {/* Section header */}
+                <div className={cn('flex items-center gap-2.5 px-3 py-2 rounded-2xl border', colors.section)}>
+                  <Wrench className={cn('w-4 h-4 shrink-0', colors.icon)} />
+                  <span className={cn('text-sm font-black', colors.icon)}>{group.label}</span>
+                  <span className="text-xs text-muted-foreground bg-background/60 px-2 py-0.5 rounded-full font-bold">
+                    {group.contractors.length} مقاول
+                  </span>
+                </div>
 
-              {/* Contractor list — single column on mobile, 2 cols on tablet+ */}
-              <div className="space-y-2 sm:grid sm:grid-cols-2 sm:gap-2 sm:space-y-0 lg:grid-cols-3">
-                {pContractors.map(c => (
-                  <ContractorCard
-                    key={c.id}
-                    contractor={c}
-                    projectMap={projectMap}
-                    projectUnits={projectUnits}
-                    canEdit={canEdit}
-                    deleting={deletingId === c.id}
-                    onEdit={() => { setEditTarget(c); setFormOpen(true); }}
-                    onDelete={() => handleDelete(c.id)}
-                  />
-                ))}
+                {/* Contractor grid */}
+                <div className="space-y-2 sm:grid sm:grid-cols-2 sm:gap-2 sm:space-y-0 lg:grid-cols-3">
+                  {group.contractors.map(c => (
+                    <ContractorCard
+                      key={c.id}
+                      contractor={c}
+                      specialtyKey={group.key}
+                      projectMap={projectMap}
+                      projectUnits={projectUnits}
+                      selectedProject={selectedProject}
+                      canEdit={canEdit}
+                      deleting={deletingId === c.id}
+                      onEdit={() => { setEditTarget(c); setFormOpen(true); }}
+                      onDelete={() => handleDelete(c.id)}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
+          {/* ── Unassigned ── */}
           {!loading && unassigned.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 px-1">
@@ -618,8 +747,10 @@ export default function Contractors() {
                   <ContractorCard
                     key={c.id}
                     contractor={c}
+                    specialtyKey=""
                     projectMap={projectMap}
                     projectUnits={projectUnits}
+                    selectedProject={selectedProject}
                     canEdit={canEdit}
                     deleting={deletingId === c.id}
                     onEdit={() => { setEditTarget(c); setFormOpen(true); }}
@@ -632,13 +763,69 @@ export default function Contractors() {
         </div>
 
         {/* ── Form Dialog ─────────────────────────── */}
-        <ContractorFormDialog
-          open={formOpen}
-          onOpenChange={setFormOpen}
-          initial={editTarget}
-          projects={projects}
-          onSuccess={loadData}
-        />
+        <ContractorFormDialog open={formOpen} onOpenChange={setFormOpen} initial={editTarget} projects={projects} onSuccess={loadData} />
+
+        {/* ── Export Dialog ────────────────────────── */}
+        <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+          <DialogContent className="bg-card border-border text-foreground sm:max-w-[400px] rounded-3xl p-0 overflow-hidden" dir="rtl">
+            <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/50">
+              <DialogTitle className="text-base font-bold flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                  <FileSpreadsheet className="w-4 h-4 text-blue-400" />
+                </div>
+                تصدير المقاولين
+              </DialogTitle>
+            </DialogHeader>
+            <div className="p-5 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-muted-foreground">اختر المشروع</Label>
+                <div className="space-y-1.5">
+                  {projects.map(p => {
+                    const unitCount = (projectUnits[p.id] || []).length;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setExportProject(p.id)}
+                        className={cn(
+                          'w-full flex items-center gap-3 p-3 rounded-xl border text-right transition-all',
+                          exportProject === p.id
+                            ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
+                            : 'bg-muted/10 border-border/50 hover:bg-muted/30 text-foreground'
+                        )}
+                      >
+                        <Building2 className={cn('w-4 h-4 shrink-0', exportProject === p.id ? 'text-blue-400' : 'text-muted-foreground')} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold truncate">{p.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{unitCount} وحدة</p>
+                        </div>
+                        {exportProject === p.id && <Check className="w-4 h-4 text-blue-400 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {exportProject && (
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 text-xs text-muted-foreground text-right space-y-1">
+                  <p className="font-bold text-blue-400">محتوى الملف:</p>
+                  <p>• رقم الفيلا — عمود لكل تخصص</p>
+                  <p>• اسم المقاول المخصص لكل فيلا في كل تخصص</p>
+                  <p>• إجمالي الوحدات: <span className="font-bold text-foreground">{(projectUnits[exportProject] || []).length}</span></p>
+                </div>
+              )}
+            </div>
+            <DialogFooter className="px-5 pb-5 pt-0">
+              <Button
+                onClick={handleExport}
+                disabled={!exportProject || exporting}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 font-bold gap-2"
+              >
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                {exporting ? 'جاري التصدير...' : 'تحميل Excel'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
@@ -646,30 +833,47 @@ export default function Contractors() {
 
 // ─── Contractor Card ──────────────────────────────────────────────────────────
 function ContractorCard({
-  contractor, projectMap, projectUnits, canEdit, deleting, onEdit, onDelete,
+  contractor, specialtyKey, projectMap, projectUnits, selectedProject, canEdit, deleting, onEdit, onDelete,
 }: {
   contractor: Contractor;
+  specialtyKey: string;
   projectMap: Record<string, Project>;
   projectUnits: Record<string, any[]>;
+  selectedProject: string;
   canEdit: boolean;
   deleting: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const avatarGradient = getAvatarColor(contractor.name);
 
-  const { blockCount, unitCount } = useMemo(() => {
-    const blockSet = new Set(contractor.assignments.filter((a: any) => a.blockId && !a.unitId).map((a: any) => a.blockId));
-    const unitSet = new Set(contractor.assignments.filter((a: any) => a.unitId).map((a: any) => a.unitId));
-    contractor.assignments.filter((a: any) => a.blockId && !a.unitId).forEach((a: any) => {
-      if (projectUnits[a.projectId]) {
+  // Assignments for this specialty (filtered by selected project)
+  const relevantAssignments = useMemo(() => {
+    return contractor.assignments.filter((a: any) => {
+      const matchSpec = !specialtyKey || a.specialtyKey === specialtyKey;
+      const matchProj = selectedProject === 'all' || a.projectId === selectedProject;
+      return matchSpec && matchProj;
+    });
+  }, [contractor.assignments, specialtyKey, selectedProject]);
+
+  // Count covered units for this specialty
+  const coveredUnitCount = useMemo(() => {
+    const unitSet = new Set<string>();
+    relevantAssignments.forEach((a: any) => {
+      if (a.unitId) { unitSet.add(a.unitId); }
+      else if (a.blockId && projectUnits[a.projectId]) {
         projectUnits[a.projectId].filter((u: any) => String(u.blockId) === String(a.blockId)).forEach((u: any) => unitSet.add(u.id));
       }
     });
-    return { blockCount: blockSet.size, unitCount: unitSet.size };
-  }, [contractor.assignments, projectUnits]);
+    return unitSet.size;
+  }, [relevantAssignments, projectUnits]);
 
-  const avatarGradient = getAvatarColor(contractor.name);
+  // Projects for this specialty
+  const projectsForSpecialty = useMemo(() => {
+    const pIds = new Set(relevantAssignments.map((a: any) => a.projectId));
+    return [...pIds].map(id => projectMap[id]).filter(Boolean);
+  }, [relevantAssignments, projectMap]);
 
   return (
     <div className="bg-card border border-border/60 rounded-2xl p-3.5 flex items-center gap-3 hover:border-blue-500/30 hover:bg-card/80 active:scale-[0.99] transition-all group">
@@ -682,31 +886,32 @@ function ContractorCard({
       <div className="flex-1 min-w-0">
         <p className="font-bold text-foreground text-sm truncate leading-tight">{contractor.name}</p>
 
-        {/* Specialties */}
-        {contractor.specialties.length > 0 && (
+        {/* Projects for this specialty */}
+        {projectsForSpecialty.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">
-            {contractor.specialties.slice(0, 3).map((s: any) => (
-              <span key={s.id} className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-md border', getSpecialtyColor(s.specialtyKey))}>
-                {s.specialtyKey}
+            {projectsForSpecialty.map(p => (
+              <span key={p.id} className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-muted/20 border-border/50 text-muted-foreground">
+                {p.name}
               </span>
             ))}
-            {contractor.specialties.length > 3 && (
-              <span className="text-[10px] text-muted-foreground px-1">+{contractor.specialties.length - 3}</span>
-            )}
           </div>
         )}
 
-        {/* Coverage stats + phone */}
+        {/* Stats */}
         <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
           {contractor.phone && (
             <a href={`tel:${contractor.phone}`} className="flex items-center gap-0.5 hover:text-blue-400 transition-colors" onClick={e => e.stopPropagation()}>
               <Phone className="w-3 h-3" />{contractor.phone}
             </a>
           )}
-          {(blockCount > 0 || unitCount > 0) && contractor.phone && <span className="text-border">·</span>}
-          {blockCount > 0 && <span className="flex items-center gap-0.5"><Building2 className="w-3 h-3" />{blockCount} بلوك</span>}
-          {blockCount > 0 && unitCount > 0 && <span className="text-border">·</span>}
-          {unitCount > 0 && <span className="flex items-center gap-0.5"><Hash className="w-3 h-3" />{unitCount} وحدة</span>}
+          {coveredUnitCount > 0 && (
+            <>
+              {contractor.phone && <span className="text-border">·</span>}
+              <span className="flex items-center gap-0.5">
+                <Hash className="w-3 h-3" />{coveredUnitCount} وحدة
+              </span>
+            </>
+          )}
         </div>
       </div>
 

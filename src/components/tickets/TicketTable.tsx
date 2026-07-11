@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, SlidersHorizontal, ArrowUpDown, User } from 'lucide-react';
+import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, ArrowUpDown, User } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
@@ -273,8 +273,10 @@ interface TicketTableProps {
   projects?: Record<string, { name: string; abbreviation?: string }>;
   showInlineFilters?: boolean;
   onRefresh?: () => void;
-  stateKey?: string; // Add stateKey for persisting filters
+  stateKey?: string;
   defaultShowClosed?: boolean;
+  exportOpen?: boolean;
+  onExportOpenChange?: (open: boolean) => void;
 }
 
 export function TicketTable({
@@ -291,9 +293,10 @@ export function TicketTable({
   defaultShowClosed = false,
   onRefresh,
   stateKey,
+  exportOpen: controlledExportOpen,
+  onExportOpenChange,
 }: TicketTableProps) {
   const navigate = useNavigate();
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showMobileSort, setShowMobileSort] = useState(false);
 
   // ── جلب الأنواع من DB (live) ──────────────────────────────────────────────
@@ -313,7 +316,12 @@ export function TicketTable({
   const [localProject, setLocalProject] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_project`) || '' : '');
   const [showClosed,   setShowClosed]   = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_closed`) === 'true' : defaultShowClosed);
   const [localSupervisor, setLocalSupervisor] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_supervisor`) || '' : '');
-  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [internalExportOpen, setInternalExportOpen] = useState(false);
+  const exportModalOpen = controlledExportOpen !== undefined ? controlledExportOpen : internalExportOpen;
+  const setExportModalOpen = (v: boolean) => {
+    if (onExportOpenChange) onExportOpenChange(v);
+    else setInternalExportOpen(v);
+  };
 
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_search`, localSearch); }, [localSearch, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_status`, localStatus); }, [localStatus, stateKey]);
@@ -566,6 +574,14 @@ export function TicketTable({
                 onChange={e => setLocalSearch(e.target.value)}
                 className="pr-9 h-10 bg-card border-border/50 rounded-xl text-sm text-foreground text-right"
               />
+              {localSearch && (
+                <button
+                  onClick={() => setLocalSearch('')}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-foreground transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
             
             <DropdownMenu>
@@ -596,21 +612,10 @@ export function TicketTable({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button 
-              variant="outline" 
-              onClick={() => setShowMobileFilters(!showMobileFilters)}
-              className={cn("h-10 px-3 rounded-xl gap-2 md:hidden transition-all shrink-0", showMobileFilters ? "bg-blue-500/10 border-blue-500/30 text-blue-400" : "bg-card border-border/50 text-slate-400")}
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              <span className="text-xs font-bold hidden sm:inline">تصفية</span>
-            </Button>
           </div>
 
-          {/* ── Filters (Hidden on mobile unless toggled) ── */}
-          <div className={cn(
-            "flex-wrap items-center gap-2 mt-3 w-full",
-            showMobileFilters ? "flex" : "hidden md:flex"
-          )}>
+          {/* ── Filters ── */}
+          <div className="flex flex-wrap items-center gap-2 mt-3 w-full">
             {/* فلتر الحالة */}
             <DropdownMenu>
               <DropdownMenuTrigger render={
@@ -708,14 +713,7 @@ export function TicketTable({
               </Button>
             )}
 
-            <Button variant="outline" size="sm"
-              onClick={() => setExportModalOpen(true)}
-              className="h-9 rounded-xl gap-1.5 text-xs font-medium border-blue-500/30 bg-blue-500/5 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 mr-auto">
-              <Download className="w-3.5 h-3.5" />
-              تصدير
-            </Button>
-            
-            <span className="text-[10px] text-slate-500 font-bold px-2 hidden sm:block">
+            <span className="text-[10px] text-slate-500 font-bold px-2 mr-auto hidden sm:block">
               {baseTickets.length} / {tickets.length}
             </span>
           </div>

@@ -43,7 +43,6 @@ export function UnifiedImportModal({
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [closeMissingTickets, setCloseMissingTickets] = useState(false);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
   const hasClientsInProject = selectedProjectId && clients.some(c => c.projectId === selectedProjectId);
@@ -75,18 +74,6 @@ export function UnifiedImportModal({
               </DropdownMenuContent>
             </DropdownMenu>
             
-            <div className="flex items-center gap-3 mt-3 bg-red-500/10 border border-red-500/30 p-3 rounded-xl justify-end">
-              <Label htmlFor="closeMissing" className="text-red-400 font-bold text-xs cursor-pointer text-right flex-1">
-                إغلاق التذاكر غير الموجودة في هذا الملف (اعتبار هذا الملف هو الحالة النهائية للنظام)
-              </Label>
-              <input 
-                type="checkbox" 
-                id="closeMissing" 
-                checked={closeMissingTickets}
-                onChange={e => setCloseMissingTickets(e.target.checked)}
-                className="w-5 h-5 rounded border-red-500/50 bg-transparent text-red-500 focus:ring-red-500/20 shrink-0 cursor-pointer"
-              />
-            </div>
           </div>
 
           <div>
@@ -118,7 +105,7 @@ export function UnifiedImportModal({
                       setLoading(true);
                       setProgress(0.1);
                       try {
-                        const result = await ticketsApi.importExcel(file, selectedProjectId, closeMissingTickets, (p) => setProgress(p));
+                        const result = await ticketsApi.importExcel(file, selectedProjectId, true, (p) => setProgress(p));
                         setProgress(1);
                         const parts = [];
                         if (result.skippedByDateFilter > 0) parts.push(`⏳ تم تجاهل ${result.skippedByDateFilter} تذكرة قديمة (مغلقة مسبقاً)`);

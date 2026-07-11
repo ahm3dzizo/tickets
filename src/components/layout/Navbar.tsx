@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Ticket, Users, Settings, LogOut, Bell,
   Briefcase, UserCheck, HardHat, CalendarClock, ClipboardList,
-  CheckCheck, Moon, Sun, Settings2, BarChart3,
+  CheckCheck, Moon, Sun, Settings2, BarChart3, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -71,11 +71,13 @@ export function Navbar() {
     push('/tickets');
     if (user?.role === 'engineer') push('/clients');
     else push('/projects');
-    push('/settings');
+    push('/appointments');
     return picks.slice(0, 4);
   })();
 
   const secondaryItems = filteredNav.filter(i => !bottomItems.some(b => b.path === i.path));
+
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const initials = user?.displayName
     ?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '??';
@@ -239,55 +241,83 @@ export function Navbar() {
           })}
 
           {/* More / Profile */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <button className="flex-1 flex flex-col items-center justify-center h-full gap-0.5 outline-none" />
-              }
-            >
-              <div className="w-12 h-9 rounded-2xl flex items-center justify-center hover:bg-muted/60 transition-colors">
-                <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold ring-1 ring-border shrink-0">
-                  {initials}
-                </div>
+          <button
+            onClick={() => setMoreOpen(true)}
+            className="flex-1 flex flex-col items-center justify-center h-full gap-0.5 outline-none"
+          >
+            <div className="w-12 h-9 rounded-2xl flex items-center justify-center hover:bg-muted/60 transition-colors">
+              <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold ring-1 ring-border shrink-0">
+                {initials}
               </div>
-              <span className="text-[9px] font-bold text-muted-foreground leading-none">المزيد</span>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              align="end"
-              side="top"
-              sideOffset={8}
-              className="w-56 mb-1 bg-card border-border rounded-2xl shadow-2xl shadow-black/20"
-            >
-              <div className="px-3 py-2 text-right">
-                <p className="text-sm font-semibold text-foreground truncate">{user?.displayName}</p>
-                <p className="text-[10px] text-muted-foreground">{roleLabel[user?.role ?? ''] ?? user?.role}</p>
-              </div>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuGroup>
-                {secondaryItems.map(item => (
-                  <DropdownMenuItem
-                    key={item.path}
-                    className="text-right justify-end gap-2.5 cursor-pointer hover:bg-muted rounded-xl mx-1 my-0.5"
-                    onClick={() => navigate(item.path)}
-                  >
-                    <item.icon className="w-4 h-4 text-muted-foreground" />
-                    <span>{item.label}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem
-                className="text-right justify-end gap-2.5 text-red-500 hover:bg-red-500/10 cursor-pointer rounded-xl mx-1 my-0.5"
-                onClick={() => logout()}
-              >
-                <LogOut className="w-4 h-4" />
-                تسجيل الخروج
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </div>
+            <span className="text-[9px] font-bold text-muted-foreground leading-none">المزيد</span>
+          </button>
         </div>
       </nav>
+
+      {/* ═══════════════ MOBILE MORE SHEET ═══════════════ */}
+      {moreOpen && (
+        <div className="print:hidden lg:hidden fixed inset-0 z-[200] flex flex-col justify-end" dir="rtl">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setMoreOpen(false)}
+          />
+          {/* Sheet */}
+          <div className="relative bg-card rounded-t-3xl border-t border-border pb-safe max-h-[80vh] flex flex-col overflow-hidden">
+            {/* Handle + Header */}
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border shrink-0">
+              <button
+                onClick={() => setMoreOpen(false)}
+                className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted text-muted-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="text-right">
+                <p className="text-sm font-bold text-foreground">{user?.displayName}</p>
+                <p className="text-[10px] text-muted-foreground">{roleLabel[user?.role ?? ''] ?? user?.role}</p>
+              </div>
+              <Avatar className="w-9 h-9 shrink-0 ring-1 ring-border">
+                <AvatarImage src={user?.photoURL} />
+                <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">{initials}</AvatarFallback>
+              </Avatar>
+            </div>
+
+            {/* Nav items */}
+            <div className="overflow-y-auto flex-1 p-3 space-y-0.5">
+              {secondaryItems.map(item => {
+                const active = isActive(item.path);
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => { navigate(item.path); setMoreOpen(false); }}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-all text-right',
+                      active
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    <item.icon className={cn('w-5 h-5 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Logout */}
+            <div className="p-3 border-t border-border shrink-0">
+              <button
+                onClick={() => { logout(); setMoreOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-red-500 hover:bg-red-500/10 transition-all text-right"
+              >
+                <LogOut className="w-5 h-5 shrink-0" />
+                تسجيل الخروج
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══════════════ DESKTOP SIDEBAR ═══════════════ */}
       <aside className="print:hidden hidden lg:flex fixed right-0 top-0 h-full w-60 bg-card border-l border-border flex-col z-40">

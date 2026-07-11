@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
-import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, MoreHorizontal, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, MoreHorizontal, ShieldAlert, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -169,6 +169,7 @@ export default function TicketsList() {
   const [bulkClassifying, setBulkClassifying] = useState(false);
   const [ticketFormOpen, setTicketFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const handleBulkReclassify = async () => {
     if (unclassifiedTickets.length === 0) return;
@@ -215,6 +216,16 @@ export default function TicketsList() {
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight text-right">تذاكر الصيانة</h1>
 
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setExportOpen(true)}
+              className="h-10 px-3 rounded-xl gap-2 border-blue-500/30 bg-blue-500/5 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 shrink-0"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs font-bold">تصدير</span>
+            </Button>
+
           {(user?.role === 'admin' || user?.role === 'engineer') && (
             <DropdownMenu>
               <DropdownMenuTrigger render={
@@ -255,6 +266,7 @@ export default function TicketsList() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          </div>
         </div>
 
         {/* ── Tabs ──────────────────────────────────────────────── */}
@@ -348,6 +360,8 @@ export default function TicketsList() {
                 projects={projects}
                 showInlineFilters
                 stateKey="tl_linked"
+                exportOpen={activeTab === 'linked' ? exportOpen : false}
+                onExportOpenChange={setExportOpen}
               />
             </div>
           </TabsContent>
@@ -367,6 +381,8 @@ export default function TicketsList() {
                 showInlineFilters
                 onRefresh={loadData}
                 stateKey="tl_contractors"
+                exportOpen={activeTab === 'contractors' ? exportOpen : false}
+                onExportOpenChange={setExportOpen}
               />
             </div>
           </TabsContent>
@@ -386,6 +402,8 @@ export default function TicketsList() {
                 showInlineFilters
                 onRefresh={loadData}
                 stateKey="tl_unlinked"
+                exportOpen={activeTab === 'unlinked' ? exportOpen : false}
+                onExportOpenChange={setExportOpen}
               />
             </div>
           </TabsContent>
@@ -417,6 +435,8 @@ export default function TicketsList() {
                 showInlineFilters
                 onRefresh={loadData}
                 stateKey="tl_unclassified"
+                exportOpen={activeTab === 'unclassified' ? exportOpen : false}
+                onExportOpenChange={setExportOpen}
               />
             </div>
           </TabsContent>
