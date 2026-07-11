@@ -449,6 +449,7 @@ export default function TicketsList() {
         <TicketForm
           open={ticketFormOpen}
           onOpenChange={setTicketFormOpen}
+          trigger={<span className="hidden" />}
           onSuccess={() => { loadData(); setTicketFormOpen(false); }}
         />
 

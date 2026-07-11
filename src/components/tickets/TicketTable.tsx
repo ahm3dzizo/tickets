@@ -230,7 +230,7 @@ export function BulkActionBar({
       {/* Secondary actions */}
       {(!isMultiClient && onInternalAppointment) && (
         <Button variant="outline" size="sm"
-          className="border-sky-500/30 bg-sky-500/10 text-sky-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0 hidden sm:flex"
+          className="border-sky-500/30 bg-sky-500/10 text-sky-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0 flex"
           onClick={onInternalAppointment}>
           <CalendarDays className="w-3.5 h-3.5" />
           <span>إضافة موعد</span>
@@ -241,7 +241,7 @@ export function BulkActionBar({
           className="border-yellow-500/30 bg-yellow-500/10 text-yellow-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0 flex"
           onClick={onClose}>
           <CheckSquare className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">إغلاق</span>
+          <span>إغلاق</span>
         </Button>
       )}
 
