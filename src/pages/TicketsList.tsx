@@ -224,13 +224,13 @@ export default function TicketsList() {
                 </Button>
               } />
               <DropdownMenuContent align="end" className="w-56 bg-card border-border rounded-xl p-1">
-                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setTicketFormOpen(true); }} className="gap-2.5 cursor-pointer rounded-lg py-2.5 font-bold">
+                <DropdownMenuItem onSelect={() => setTicketFormOpen(true)} className="gap-2.5 cursor-pointer rounded-lg py-2.5 font-bold">
                   <Plus className="w-4 h-4 text-blue-500" /> تذكرة جديدة
                 </DropdownMenuItem>
 
                 <div className="my-1 border-t border-border/50" />
 
-                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setImportOpen(true); }} className="gap-2.5 cursor-pointer rounded-lg py-2.5">
+                <DropdownMenuItem onSelect={() => setImportOpen(true)} className="gap-2.5 cursor-pointer rounded-lg py-2.5">
                   <FileUp className="w-4 h-4 text-blue-500" /> استيراد التذاكر
                 </DropdownMenuItem>
 
