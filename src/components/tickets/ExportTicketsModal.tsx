@@ -539,62 +539,58 @@ tbody tr:last-child td { border-bottom: 2px solid #1e3a5f; }
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0c1220] border border-white/10 text-slate-200 sm:max-w-[620px] rounded-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[580px] max-h-[90vh] overflow-y-auto">
 
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-white text-right flex items-center gap-2">
-            <Download className="w-5 h-5 text-blue-400 shrink-0" />
+          <DialogTitle className="text-right flex items-center gap-2">
+            <Download className="w-5 h-5 text-primary shrink-0" />
             تصدير التذاكر
-            <span className="text-sm font-normal text-slate-500">({tickets.length})</span>
+            <span className="text-sm font-normal text-muted-foreground">({tickets.length})</span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 py-2">
+        <div className="space-y-4 py-1">
 
           {/* ── Format selector ─────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Excel */}
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => setExportFormat('xlsx')}
               className={cn(
-                'flex flex-col items-center gap-2 rounded-2xl border p-4 transition-all text-left',
+                'flex flex-col items-center gap-2 rounded-xl border p-3 transition-all text-center',
                 exportFormat === 'xlsx'
-                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
-                  : 'border-white/8 bg-white/[0.03] text-slate-500 hover:border-white/20 hover:text-slate-300'
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'border-border bg-muted/30 text-muted-foreground hover:text-foreground'
               )}
             >
-              <FileSpreadsheet className="w-6 h-6" />
-              <div className="text-center">
-                <div className="font-bold text-sm">Excel</div>
-                <div className="text-[10px] opacity-60 mt-0.5">ملف .xlsx حقيقي مع RTL</div>
+              <FileSpreadsheet className="w-5 h-5" />
+              <div>
+                <div className="font-semibold text-sm">Excel</div>
+                <div className="text-[10px] opacity-70 mt-0.5">ملف .xlsx مع RTL</div>
               </div>
             </button>
 
-            {/* PDF */}
             <button
               type="button"
               onClick={() => setExportFormat('pdf')}
               className={cn(
-                'flex flex-col items-center gap-2 rounded-2xl border p-4 transition-all text-left',
+                'flex flex-col items-center gap-2 rounded-xl border p-3 transition-all text-center',
                 exportFormat === 'pdf'
-                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-300'
-                  : 'border-white/8 bg-white/[0.03] text-slate-500 hover:border-white/20 hover:text-slate-300'
+                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                  : 'border-border bg-muted/30 text-muted-foreground hover:text-foreground'
               )}
             >
-              <Printer className="w-6 h-6" />
-              <div className="text-center">
-                <div className="font-bold text-sm">PDF / طباعة</div>
-                <div className="text-[10px] opacity-60 mt-0.5">عبر نافذة الطباعة</div>
+              <Printer className="w-5 h-5" />
+              <div>
+                <div className="font-semibold text-sm">PDF / طباعة</div>
+                <div className="text-[10px] opacity-70 mt-0.5">عبر نافذة الطباعة</div>
               </div>
             </button>
           </div>
 
           {/* ── Quick presets ────────────────────────────────────────────── */}
           <div>
-            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2 text-right">
-              قوالب سريعة
-            </p>
+            <p className="text-xs font-medium text-muted-foreground mb-2 text-right">قوالب سريعة</p>
             <div className="flex gap-2">
               {Object.entries(PRESETS).map(([key, preset]) => {
                 const active =
@@ -606,10 +602,10 @@ tbody tr:last-child td { border-bottom: 2px solid #1e3a5f; }
                     type="button"
                     onClick={() => setSelectedColumns(new Set(preset.keys))}
                     className={cn(
-                      'flex-1 py-1.5 rounded-lg text-[11px] font-bold border transition-all',
+                      'flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all',
                       active
-                        ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                        : 'bg-white/[0.03] border-white/8 text-slate-600 hover:border-white/20 hover:text-slate-300'
+                        ? 'bg-primary/10 border-primary/40 text-primary'
+                        : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
                     )}
                   >
                     {preset.label}
@@ -621,22 +617,20 @@ tbody tr:last-child td { border-bottom: 2px solid #1e3a5f; }
 
           {/* ── Column groups ────────────────────────────────────────────── */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest text-right">
-                الأعمدة
-              </p>
-              <div className="flex gap-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-muted-foreground text-right">الأعمدة</p>
+              <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setSelectedColumns(new Set(ALL_COLUMNS.map(c => c.key)))}
-                  className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-xs text-primary hover:opacity-80 transition-opacity"
                 >
                   تحديد الكل
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedColumns(new Set())}
-                  className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   مسح الكل
                 </button>
@@ -650,33 +644,31 @@ tbody tr:last-child td { border-bottom: 2px solid #1e3a5f; }
                 const allSel = isGroupAllSelected(group);
 
                 return (
-                  <div key={group} className="bg-white/[0.025] border border-white/5 rounded-xl p-3">
-                    {/* Group header */}
+                  <div key={group} className="bg-muted/20 border border-border rounded-lg p-3">
                     <button
                       type="button"
                       onClick={() => toggleGroup(group)}
-                      className="w-full flex items-center justify-between mb-2.5 group"
+                      className="w-full flex items-center justify-between mb-2 group"
                     >
-                      <div className="flex items-center gap-2 text-[11px] font-bold">
+                      <div className="flex items-center gap-2 text-xs font-semibold">
                         {allSel
-                          ? <CheckSquare className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                          : <Square     className="w-3.5 h-3.5 text-slate-700 shrink-0" />}
-                        <span className="text-slate-500 group-hover:text-slate-400 transition-colors flex items-center gap-1.5">
+                          ? <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0" />
+                          : <Square     className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                        <span className="text-foreground/80 group-hover:text-foreground transition-colors flex items-center gap-1.5">
                           {GROUP_ICONS[group]}
                           {groupLabel}
                         </span>
                       </div>
                       <span className={cn(
-                        'text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors',
+                        'text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors',
                         count > 0
-                          ? 'bg-blue-500/15 text-blue-300'
-                          : 'bg-white/5 text-slate-700'
+                          ? 'bg-primary/10 text-primary'
+                          : 'bg-muted text-muted-foreground'
                       )}>
                         {count}/{cols.length}
                       </span>
                     </button>
 
-                    {/* Column chips */}
                     <div className="flex flex-wrap gap-1.5 pr-5">
                       {cols.map(col => (
                         <button
@@ -684,10 +676,10 @@ tbody tr:last-child td { border-bottom: 2px solid #1e3a5f; }
                           type="button"
                           onClick={() => toggleColumn(col.key)}
                           className={cn(
-                            'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all',
+                            'px-2.5 py-1 rounded-md text-xs font-medium border transition-all',
                             selectedColumns.has(col.key)
-                              ? 'bg-blue-500/20 border-blue-500/40 text-blue-200'
-                              : 'bg-white/[0.03] border-white/8 text-slate-600 hover:border-white/20 hover:text-slate-400'
+                              ? 'bg-primary/10 border-primary/40 text-primary'
+                              : 'bg-background border-border text-muted-foreground hover:text-foreground'
                           )}
                         >
                           {col.label}
@@ -701,13 +693,13 @@ tbody tr:last-child td { border-bottom: 2px solid #1e3a5f; }
           </div>
 
           {/* ── Summary bar ──────────────────────────────────────────────── */}
-          <div className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3">
-            <span className="text-xs text-slate-500">
-              <span className="text-slate-200 font-bold">{selectedColumns.size}</span>
+          <div className="flex items-center justify-between bg-muted/20 border border-border rounded-lg px-4 py-2.5 text-sm">
+            <span className="text-muted-foreground">
+              <span className="text-foreground font-semibold">{selectedColumns.size}</span>
               {' '}عمود مختار من {ALL_COLUMNS.length}
             </span>
-            <span className="text-xs text-slate-500">
-              <span className="text-slate-200 font-bold">{tickets.length}</span>
+            <span className="text-muted-foreground">
+              <span className="text-foreground font-semibold">{tickets.length}</span>
               {' '}تذكرة للتصدير
             </span>
           </div>
@@ -715,15 +707,15 @@ tbody tr:last-child td { border-bottom: 2px solid #1e3a5f; }
         </div>
 
         {/* ── Footer buttons ────────────────────────────────────────────── */}
-        <DialogFooter className="gap-3 pt-4 border-t border-white/5">
+        <DialogFooter className="gap-2 pt-3 border-t border-border">
           <Button
             onClick={handleExport}
             disabled={exporting || selectedColumns.size === 0}
             className={cn(
-              'flex-1 h-12 rounded-2xl font-bold text-white shadow-lg gap-2 transition-all',
+              'flex-1 gap-2 font-semibold text-white',
               exportFormat === 'xlsx'
-                ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/40 disabled:bg-emerald-900'
-                : 'bg-blue-600   hover:bg-blue-500   shadow-blue-900/40   disabled:bg-blue-900'
+                ? 'bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800'
+                : 'bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800'
             )}
           >
             {exporting ? (
@@ -742,9 +734,8 @@ tbody tr:last-child td { border-bottom: 2px solid #1e3a5f; }
           </Button>
 
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={() => onOpenChange(false)}
-            className="h-12 rounded-2xl text-slate-600 hover:text-white hover:bg-white/5"
           >
             إلغاء
           </Button>
