@@ -4,144 +4,119 @@ import { CloudLightning, BookMarked, CheckCircle2, XCircle, SkipForward, Info, R
 import { cn } from '@/lib/utils';
 
 // ── Bookmarklet builder ────────────────────────────────────────────────────────
-// Runs inside the Salesforce page (same-origin) → no SF credentials needed.
-// Parses the Analytics API response, sends rows to our server.
+// Scrapes the report TABLE from the DOM — avoids all Salesforce auth issues.
+// The report renders inside a same-origin iframe (lightningReportApp.app).
 function buildBookmarklet(appOrigin: string, token: string): string {
   const fn = `async function(O,T){
-  /* ── popup helper (max z-index so it floats above SF UI) ── */
   var el=null;
   var upd=function(html,bg){
     if(el){el.innerHTML=html;if(bg)el.style.background=bg;}
-    else{alert(html.replace(/<[^>]+>/g,''));}
+    else alert(html.replace(/<[^>]+>/g,''));
   };
   try{
     el=document.createElement('div');
     el.setAttribute('style','all:initial;position:fixed!important;top:20px!important;right:20px!important;z-index:2147483647!important;background:#1e293b;color:#e2e8f0;padding:16px 22px;border-radius:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.8;box-shadow:0 8px 32px rgba(0,0,0,.55);direction:rtl;min-width:260px;max-width:360px');
-    el.innerHTML='⏳ مزامنة رتال — جاري التهيئة...';
+    el.innerHTML='\\u23F3 \\u0645\\u0632\\u0627\\u0645\\u0646\\u0629 \\u0631\\u062A\\u0627\\u0644 \\u2014 \\u062C\\u0627\\u0631\\u064A \\u0627\\u0644\\u0642\\u0631\\u0627\\u0621\\u0629...';
     (document.body||document.documentElement).appendChild(el);
-  }catch(initErr){
-    console.error('[رتال]',initErr);
-    el=null;
-  }
-
-  /* ── extract report ID from URL ── */
-  var href=window.location.href;
-  console.log('[رتال] URL:',href);
-  var m=href.match(/Report\\/([A-Za-z0-9]+)\\//);
-  if(!m){
-    upd('❌ افتح صفحة تقرير Salesforce أولاً<br><small style="opacity:.7">'+href.slice(0,70)+'</small>','#7f1d1d');
-    setTimeout(function(){if(el)el.remove();},8000);
-    return;
-  }
-  var rid=m[1];
-  console.log('[رتال] report ID:',rid);
-  /* ── try to grab SF session token for Authorization header ── */
-  var sfTok='';
-  try{
-    if(window.sforce&&window.sforce.connection&&window.sforce.connection.sessionId)
-      sfTok=window.sforce.connection.sessionId;
-  }catch(e){}
-  /* scan inline scripts for a session id pattern (00D…!…) */
-  if(!sfTok){
-    var sc=document.querySelectorAll('script');
-    for(var si=0;si<sc.length;si++){
-      var st=sc[si].textContent||'';
-      var sm=st.match(/["']?(00D[A-Za-z0-9]{12,18}![A-Za-z0-9._]+)["']?/);
-      if(sm){sfTok=sm[1];break;}
-    }
-  }
-  console.log('[رتال] sfTok found:',!!sfTok, sfTok?sfTok.slice(0,20)+'…':'');
-  upd('⏳ جاري جلب البيانات من Salesforce...');
+  }catch(e){el=null;}
 
   try{
-    /* ── 1. Fetch report via SF Analytics API ── */
-    /* lightning.force.com rejects UI session for REST — use my.salesforce.com instead */
-    var sfApiBase='';
-    var hn=window.location.hostname;
-    if(hn.indexOf('.lightning.force.com')>=0)
-      sfApiBase='https://'+hn.replace('.lightning.force.com','.my.salesforce.com');
-    else if(hn.indexOf('.force.com')>=0)
-      sfApiBase='https://'+hn.replace('.force.com','.salesforce.com');
-    var apiUrl=sfApiBase+'/services/data/v59.0/analytics/reports/'+rid+'?includeDetails=true';
-    console.log('[رتال] API URL:',apiUrl);
-    var hdrs={'Accept':'application/json'};
-    if(sfTok)hdrs['Authorization']='Bearer '+sfTok;
-    var resp=await fetch(apiUrl,{credentials:'include',headers:hdrs});
-    if(!resp.ok){
-      var errBody='';try{errBody=await resp.text();}catch(e){}
-      throw new Error('Salesforce API: HTTP '+resp.status+' — '+errBody.slice(0,150));
-    }
-    var data=await resp.json();
-    console.log('[رتال] SF response keys:',Object.keys(data));
-
-    /* ── 2. Map column labels to indices ── */
-    var cols=(data.reportMetadata||{}).detailColumns||[];
-    var info=((data.reportExtendedMetadata||{}).detailColumnInfo)||{};
-    var lbls=cols.map(function(c){return((info[c]||{}).label||c).toLowerCase();});
-    console.log('[رتال] columns:',lbls);
-    var fi=function(){
-      var keys=Array.prototype.slice.call(arguments);
-      for(var a=0;a<keys.length;a++){
-        var kw=keys[a];
-        for(var j=0;j<lbls.length;j++){if(lbls[j].indexOf(kw)>=0)return j;}
+    /* find the report iframe (lightningReportApp) — data lives there */
+    var searchDoc=document;
+    try{
+      var iframes=document.querySelectorAll('iframe');
+      for(var ii=0;ii<iframes.length;ii++){
+        var isrc=iframes[ii].src||'';
+        if(isrc.indexOf('lightningReport')>=0||isrc.indexOf('reportId')>=0){
+          var fd=iframes[ii].contentDocument||(iframes[ii].contentWindow&&iframes[ii].contentWindow.document);
+          if(fd){searchDoc=fd;break;}
+        }
       }
+    }catch(e){}
+    console.log('[retal] doc='+(searchDoc===document?'main':'iframe'));
+
+    /* pick the biggest table */
+    var allTables=Array.from(searchDoc.querySelectorAll('table'));
+    if(!allTables.length)allTables=Array.from(document.querySelectorAll('table'));
+    console.log('[retal] tables:',allTables.length);
+    var dataTable=null,maxR=0;
+    allTables.forEach(function(t){var n=t.querySelectorAll('tr').length;if(n>maxR){maxR=n;dataTable=t;}});
+
+    if(!dataTable||maxR<2){
+      upd('\\u274C \\u0644\\u0645 \\u064A\\u062A\\u0645 \\u0627\\u0644\\u0639\\u062B\\u0648\\u0631 \\u0639\\u0644\\u0649 \\u062C\\u062F\\u0648\\u0644 (tables:'+allTables.length+' rows:'+maxR+')','#7f1d1d');
+      setTimeout(function(){if(el)el.remove();},8000);
+      return;
+    }
+    console.log('[retal] rows in table:',maxR);
+
+    /* extract column headers */
+    var headers=[];
+    var hcells=dataTable.querySelectorAll('thead th,thead td');
+    if(!hcells.length)hcells=dataTable.querySelectorAll('tr:first-child th,tr:first-child td');
+    hcells.forEach(function(c){headers.push((c.textContent||'').trim().toLowerCase());});
+    console.log('[retal] headers:',headers);
+
+    var col=function(){
+      var keys=Array.prototype.slice.call(arguments);
+      for(var i=0;i<headers.length;i++)
+        for(var j=0;j<keys.length;j++)
+          if(headers[i].indexOf(keys[j])>=0)return i;
       return -1;
     };
-    var iCase  =fi('case number','case no','number');
-    var iUnit  =fi('unit','وحدة');
-    var iAcc   =fi('account name','account','اسم الحساب','اسم');
-    var iDate  =fi('opened date','open date','created date','تاريخ');
-    var iDesc  =fi('description','وصف');
-    var iStatus=fi('status','case status','حالة');
-    console.log('[رتال] col idx case='+iCase+' unit='+iUnit+' acc='+iAcc+' date='+iDate+' desc='+iDesc+' status='+iStatus);
+    var iCase  =col('case number','case no','number','raqm','\\u0631\\u0642\\u0645');
+    var iUnit  =col('unit','\\u0648\\u062D\\u062F\\u0629','villa');
+    var iAcc   =col('account','client','\\u0627\\u0633\\u0645');
+    var iDate  =col('opened','open date','created','\\u062A\\u0627\\u0631\\u064A\\u062E');
+    var iDesc  =col('description','subject','\\u0648\\u0635\\u0641');
+    var iStatus=col('status','\\u062D\\u0627\\u0644\\u0629');
+    console.log('[retal] case='+iCase+' unit='+iUnit+' acc='+iAcc+' status='+iStatus);
 
-    /* ── 3. Collect rows from factMap ── */
+    /* extract rows */
     var rows=[];
-    var fm=data.factMap||{};
-    Object.keys(fm).forEach(function(k){
-      var g=fm[k];
-      if(!g||!g.rows)return;
-      g.rows.forEach(function(r){
-        var c=r.dataCells||[];
-        var get=function(i){return(i>=0&&c[i])?(c[i].label||''):'';};
-        var cn=get(iCase);
-        if(!cn)return;
-        rows.push({caseNumber:cn,unit:get(iUnit),accountName:get(iAcc),openedDate:get(iDate),description:get(iDesc),status:get(iStatus)});
-      });
+    dataTable.querySelectorAll('tbody tr').forEach(function(tr){
+      var cells=tr.querySelectorAll('td');
+      if(!cells.length)return;
+      var get=function(i){
+        if(i<0||i>=cells.length)return'';
+        return(cells[i].textContent||cells[i].innerText||'').trim().replace(/\\s+/g,' ');
+      };
+      var cn=get(iCase);
+      if(!cn||cn==='-'||cn==='\\u2014'||cn==='')return;
+      rows.push({caseNumber:cn,unit:get(iUnit),accountName:get(iAcc),openedDate:get(iDate),description:get(iDesc),status:get(iStatus)});
     });
-    console.log('[رتال] rows collected:',rows.length);
+    console.log('[retal] rows:',rows.length,rows[0]);
 
     if(!rows.length){
-      upd('⚠️ لم يتم العثور على بيانات في التقرير');
-      setTimeout(function(){if(el)el.remove();},5000);
+      upd('\\u26A0\\uFE0F \\u0627\\u0644\\u062C\\u062F\\u0648\\u0644 \\u0641\\u0627\\u0631\\u063A \\u2014 headers: '+headers.slice(0,5).join(' | '));
+      setTimeout(function(){if(el)el.remove();},8000);
       return;
     }
 
-    upd('⏳ تم جلب <b>'+rows.length+'</b> سجل...<br>جاري المزامنة مع النظام');
+    upd('\\u23F3 \\u062A\\u0645 \\u0642\\u0631\\u0627\\u0621\\u0629 <b>'+rows.length+'</b> \\u0633\\u062C\\u0644...<br>\\u062C\\u0627\\u0631\\u064A \\u0627\\u0644\\u0625\\u0631\\u0633\\u0627\\u0644 \\u0644\\u0644\\u0646\\u0638\\u0627\\u0645');
 
-    /* ── 4. POST to our server ── */
+    /* POST to our server */
     var sr=await fetch(O+'/api/salesforce/import',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+T},
       body:JSON.stringify({rows:rows})
     });
-    if(!sr.ok)throw new Error('Server: HTTP '+sr.status);
+    if(!sr.ok){var eb='';try{eb=await sr.text();}catch(e){}throw new Error('Server '+sr.status+': '+eb.slice(0,80));}
     var res=await sr.json();
-    console.log('[رتال] server response:',res);
+    console.log('[retal] result:',res);
 
     var bg=res.added>0?'#14532d':(res.updated>0?'#1e3a5f':'#1e293b');
-    var html='✅ اكتملت المزامنة!<br>';
-    html+='<span style="color:#86efac">➕ جديدة: <b>'+res.added+'</b></span><br>';
-    html+='<span style="color:#93c5fd">🔄 مُحدَّثة: <b>'+res.updated+'</b></span><br>';
-    html+='<span style="color:#94a3b8">⏭️ مطابقة: <b>'+res.skipped+'</b></span>';
-    if(res.errors&&res.errors.length){html+='<br><span style="color:#fca5a5">⚠️ أخطاء: '+res.errors.length+'</span>';}
+    var html='\\u2705 \\u0627\\u0643\\u062A\\u0645\\u0644\\u062A \\u0627\\u0644\\u0645\\u0632\\u0627\\u0645\\u0646\\u0629!<br>';
+    html+='<span style="color:#86efac">\\u2795 \\u062C\\u062F\\u064A\\u062F\\u0629: <b>'+res.added+'</b></span><br>';
+    html+='<span style="color:#93c5fd">\\uD83D\\uDD04 \\u0645\\u064F\\u062D\\u062F\\u064E\\u062B\\u064E\\u0629: <b>'+res.updated+'</b></span><br>';
+    html+='<span style="color:#94a3b8">\\u23ED\\uFE0F \\u0645\\u0637\\u0627\\u0628\\u0642\\u0629: <b>'+res.skipped+'</b></span>';
+    if(res.errors&&res.errors.length)html+='<br><span style="color:#fca5a5">\\u26A0\\uFE0F \\u0623\\u062E\\u0637\\u0627\\u0621: '+res.errors.length+'</span>';
     upd(html,bg);
-    setTimeout(function(){if(el)el.remove();},10000);
+    setTimeout(function(){if(el)el.remove();},12000);
 
   }catch(e){
-    console.error('[رتال]',e);
-    upd('❌ خطأ: '+e.message,'#7f1d1d');
-    setTimeout(function(){if(el)el.remove();},7000);
+    console.error('[retal]',e);
+    upd('\\u274C \\u062E\\u0637\\u0623: '+e.message,'#7f1d1d');
+    setTimeout(function(){if(el)el.remove();},8000);
   }
 }`;
 
