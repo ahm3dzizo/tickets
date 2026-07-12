@@ -161,15 +161,15 @@ export default function Clients() {
 
   return (
     <Layout>
-      <div className="space-y-6 page-in">
+      <div className="space-y-4 page-in">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-3">
           <div className="text-right">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">العملاء</h1>
-            <p className="text-muted-foreground mt-1 text-sm">إدارة بيانات أصحاب الفلل والتواصل معهم</p>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">العملاء</h1>
+            <p className="text-muted-foreground text-xs hidden sm:block">إدارة بيانات أصحاب الفلل والتواصل معهم</p>
           </div>
-          <div className="flex gap-2 self-end sm:self-auto">
+          <div className="flex gap-2">
             {canWrite && (
               <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportProjectId(''); }}>
                 {/* @ts-expect-error type mismatch with Radix UI */}
@@ -235,60 +235,56 @@ export default function Clients() {
         <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
 
           {/* Search + Filters */}
-          <div className="p-4 border-b border-border flex flex-col gap-3">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1 sm:max-w-xs">
-                <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="البحث باسم أو فيلا أو جوال..."
-                  className="bg-muted/50 border-transparent focus:border-primary/30 pr-10 text-right rounded-xl h-10 text-sm"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                />
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <DropdownMenu>
-                  {/* @ts-expect-error type mismatch with Radix UI */}
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="border-border rounded-xl h-10 px-3 gap-2 text-sm font-medium min-w-[130px] justify-between">
-                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span>{filterProject ? projectName(filterProject) : 'كل المشاريع'}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="bg-card border-border w-52">
-                    <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start text-muted-foreground" onClick={() => setFilterProject('')}>كل المشاريع</DropdownMenuItem>
-                    {projects.map(p => (
-                      <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-start justify-start" onClick={() => setFilterProject(p.id)}>{p.name}</DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {blockNumbers.length > 0 && (
-                  <DropdownMenu>
-                    {/* @ts-expect-error type mismatch with Radix UI */}
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="border-border rounded-xl h-10 px-3 gap-2 text-sm font-medium min-w-[120px] justify-between">
-                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span>{filterBlock ? `بلوك ${filterBlock}` : 'كل البلوكات'}</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="bg-card border-border w-40 max-h-56 overflow-y-auto">
-                      <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start text-muted-foreground" onClick={() => setFilterBlock('')}>كل البلوكات</DropdownMenuItem>
-                      {blockNumbers.map(b => (
-                        <DropdownMenuItem key={b} className="hover:bg-muted cursor-pointer text-start justify-start" onClick={() => setFilterBlock(b)}>بلوك {b}</DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-
-                {(filterProject || filterBlock) && (
-                  <Button variant="ghost" size="sm" className="h-10 px-3 text-muted-foreground hover:text-foreground gap-1 text-xs" onClick={() => { setFilterProject(''); setFilterBlock(''); }}>
-                    <X className="w-3.5 h-3.5" /> مسح
-                  </Button>
-                )}
-                <span className="text-muted-foreground text-xs font-bold mr-auto">{filtered.length} عميل</span>
-              </div>
+          <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[160px] sm:max-w-xs">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                placeholder="البحث باسم أو فيلا أو جوال..."
+                className="bg-muted/50 border-transparent focus:border-primary/30 pr-9 text-right rounded-xl h-9 text-sm"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
+            <DropdownMenu>
+              {/* @ts-expect-error type mismatch with Radix UI */}
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="border-border rounded-xl h-9 px-3 gap-1.5 text-xs font-medium min-w-[110px] justify-between">
+                  <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                  <span className="truncate max-w-[90px]">{filterProject ? projectName(filterProject) : 'كل المشاريع'}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-card border-border w-52">
+                <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start text-muted-foreground text-xs" onClick={() => setFilterProject('')}>كل المشاريع</DropdownMenuItem>
+                {projects.map(p => (
+                  <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-start justify-start text-xs" onClick={() => setFilterProject(p.id)}>{p.name}</DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {blockNumbers.length > 0 && (
+              <DropdownMenu>
+                {/* @ts-expect-error type mismatch with Radix UI */}
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="border-border rounded-xl h-9 px-3 gap-1.5 text-xs font-medium min-w-[100px] justify-between">
+                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                    <span>{filterBlock ? `بلوك ${filterBlock}` : 'كل البلوكات'}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-card border-border w-36 max-h-52 overflow-y-auto">
+                  <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start text-muted-foreground text-xs" onClick={() => setFilterBlock('')}>كل البلوكات</DropdownMenuItem>
+                  {blockNumbers.map(b => (
+                    <DropdownMenuItem key={b} className="hover:bg-muted cursor-pointer text-start justify-start text-xs" onClick={() => setFilterBlock(b)}>بلوك {b}</DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {(filterProject || filterBlock) && (
+              <Button variant="ghost" size="sm" className="h-9 px-2 text-muted-foreground hover:text-foreground gap-1 text-xs" onClick={() => { setFilterProject(''); setFilterBlock(''); }}>
+                <X className="w-3 h-3" />
+              </Button>
+            )}
+            <span className="text-muted-foreground text-xs font-bold mr-auto">{filtered.length} عميل</span>
           </div>
 
           {/* Table */}
@@ -296,29 +292,29 @@ export default function Clients() {
             <table className="w-full text-right border-collapse">
               <thead>
                 <tr className="bg-muted/50 text-muted-foreground text-[10px] font-black uppercase tracking-widest border-b border-border">
-                  <th className="px-5 py-3.5">العميل</th>
-                  <th className="px-5 py-3.5">رقم الفيلا</th>
-                  <th className="px-5 py-3.5 hidden sm:table-cell">رقم البلوك</th>
-                  <th className="px-5 py-3.5 hidden md:table-cell">رقم الهاتف</th>
-                  <th className="px-5 py-3.5 hidden lg:table-cell">المشروع</th>
-                  <th className="px-5 py-3.5 text-center w-16">...</th>
+                  <th className="px-4 py-2.5">العميل</th>
+                  <th className="px-4 py-2.5 hidden sm:table-cell">رقم الفيلا</th>
+                  <th className="px-4 py-2.5 hidden md:table-cell">رقم البلوك</th>
+                  <th className="px-4 py-2.5 hidden lg:table-cell">رقم الهاتف</th>
+                  <th className="px-4 py-2.5 hidden xl:table-cell">المشروع</th>
+                  <th className="px-4 py-2.5 text-center w-12">...</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
                 {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
+                  Array.from({ length: 6 }).map((_, i) => (
                     <tr key={i}>
-                      <td className="px-5 py-4"><div className="flex items-center gap-3 justify-end"><div className="h-4 shimmer rounded w-24" /><div className="w-8 h-8 shimmer rounded-full shrink-0" /></div></td>
-                      <td className="px-5 py-4"><div className="h-4 shimmer rounded w-16 ml-auto" /></td>
-                      <td className="px-5 py-4 hidden sm:table-cell"><div className="h-4 shimmer rounded w-12 ml-auto" /></td>
-                      <td className="px-5 py-4 hidden md:table-cell"><div className="h-4 shimmer rounded w-28 ml-auto" /></td>
-                      <td className="px-5 py-4 hidden lg:table-cell"><div className="h-4 shimmer rounded w-20 ml-auto" /></td>
-                      <td className="px-5 py-4"><div className="w-6 h-6 shimmer rounded mx-auto" /></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-2.5"><div className="w-7 h-7 shimmer rounded-full shrink-0" /><div className="space-y-1.5"><div className="h-3.5 shimmer rounded w-28" /><div className="h-2.5 shimmer rounded w-16" /></div></div></td>
+                      <td className="px-4 py-3 hidden sm:table-cell"><div className="h-3.5 shimmer rounded w-16 ml-auto" /></td>
+                      <td className="px-4 py-3 hidden md:table-cell"><div className="h-3.5 shimmer rounded w-10 ml-auto" /></td>
+                      <td className="px-4 py-3 hidden lg:table-cell"><div className="h-3.5 shimmer rounded w-24 ml-auto" /></td>
+                      <td className="px-4 py-3 hidden xl:table-cell"><div className="h-3.5 shimmer rounded w-20 ml-auto" /></td>
+                      <td className="px-4 py-3"><div className="w-5 h-5 shimmer rounded mx-auto" /></td>
                     </tr>
                   ))
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">لا يوجد عملاء مطابقين</td>
+                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">لا يوجد عملاء مطابقين</td>
                   </tr>
                 ) : filtered.map(c => (
                   <tr
@@ -326,44 +322,48 @@ export default function Clients() {
                     className="group hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => setSelectedClient(c)}
                   >
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3 justify-start">
-                        <div className="text-right">
-                          <div className="font-semibold text-foreground text-sm">{c.name}</div>
+                    {/* Mobile: name + villa + block stacked; Desktop: just name */}
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
+                          <UserCheck className="w-3.5 h-3.5" />
                         </div>
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
-                          <UserCheck className="w-4 h-4" />
+                        <div className="text-right min-w-0">
+                          <div className="font-semibold text-foreground text-sm leading-tight truncate">{c.name || '—'}</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5 sm:hidden">
+                            فيلا {c.villaNumber}{c.blockNumber ? ` · بلوك ${c.blockNumber}` : ''}
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-4 py-2.5 hidden sm:table-cell">
                       <span className="text-sm font-bold text-foreground">فيلا {c.villaNumber}</span>
                     </td>
-                    <td className="px-5 py-3.5 hidden sm:table-cell">
+                    <td className="px-4 py-2.5 hidden md:table-cell">
                       <span className="text-sm text-muted-foreground">{c.blockNumber || '---'}</span>
                     </td>
-                    <td className="px-5 py-3.5 hidden md:table-cell">
+                    <td className="px-4 py-2.5 hidden lg:table-cell">
                       <span className="text-sm font-mono text-muted-foreground dir-ltr">{c.phone || '---'}</span>
                     </td>
-                    <td className="px-5 py-3.5 hidden lg:table-cell">
+                    <td className="px-4 py-2.5 hidden xl:table-cell">
                       <span className="text-sm text-muted-foreground">{projectName(c.projectId)}</span>
                     </td>
-                    <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
+                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-center">
                         <DropdownMenu>
                           {/* @ts-expect-error type mismatch with Radix UI */}
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg">
-                              <MoreHorizontal className="w-4 h-4" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg">
+                              <MoreHorizontal className="w-3.5 h-3.5" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-card border-border w-44 rounded-2xl">
+                          <DropdownMenuContent align="end" className="bg-card border-border w-40 rounded-2xl">
                             {canWrite && (
-                              <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start gap-2 rounded-xl mx-1 my-0.5" onClick={e => openEdit(c, e)}>
-                                <Pencil className="w-3.5 h-3.5" /> تعديل البيانات
+                              <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start gap-2 rounded-xl mx-1 my-0.5 text-sm" onClick={e => openEdit(c, e)}>
+                                <Pencil className="w-3.5 h-3.5" /> تعديل
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem className="hover:bg-muted cursor-pointer text-emerald-500 text-start justify-start gap-2 rounded-xl mx-1 my-0.5" onClick={e => openWhatsApp(c, e)}>
+                            <DropdownMenuItem className="hover:bg-muted cursor-pointer text-emerald-500 text-start justify-start gap-2 rounded-xl mx-1 my-0.5 text-sm" onClick={e => openWhatsApp(c, e)}>
                               <Phone className="w-3.5 h-3.5" /> واتساب
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -380,83 +380,99 @@ export default function Clients() {
 
       {/* ── Client Detail Dialog ────────────────────────────────────── */}
       <Dialog open={!!selectedClient} onOpenChange={v => { if (!v) setSelectedClient(null); }}>
-        <DialogContent className="bg-card border-border sm:max-w-[600px] rounded-3xl shadow-2xl max-h-[90dvh] overflow-y-auto">
+        <DialogContent
+          className="bg-card border-border p-0 flex flex-col gap-0 overflow-hidden shadow-2xl
+            !fixed !bottom-0 !top-auto !left-0 !right-0 !translate-x-0 !translate-y-0
+            !max-w-full !w-full !rounded-b-none rounded-t-2xl max-h-[88dvh]
+            sm:!top-1/2 sm:!bottom-auto sm:!left-1/2 sm:!right-auto
+            sm:!-translate-x-1/2 sm:!-translate-y-1/2
+            sm:!max-w-[520px] sm:!w-[calc(100%-2rem)] sm:!rounded-2xl sm:max-h-[90dvh]"
+          dir="rtl"
+        >
           {selectedClient && (<>
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-foreground text-start flex items-center gap-3 justify-start">
-                <span>{selectedClient.name}</span>
-                <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                  <UserCheck className="w-5 h-5" />
+            {/* ── Fixed header with action buttons ── */}
+            <div className="shrink-0 px-4 pt-4 pb-3 border-b border-border/60">
+              {/* drag handle on mobile */}
+              <div className="w-10 h-1 bg-border rounded-full mx-auto mb-3 sm:hidden" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                  <UserCheck className="w-4.5 h-4.5" />
                 </div>
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              {[
-                { label: 'رقم الفيلا',   value: `فيلا ${selectedClient.villaNumber}` },
-                { label: 'رقم البلوك',   value: selectedClient.blockNumber || '---' },
-                { label: 'المشروع',      value: projectName(selectedClient.projectId) },
-                { label: 'تاريخ التسليم', value: selectedClient.handoverDate || '---', hidden: !selectedClient.handoverDate },
-                { label: 'انتهاء الضمان', value: selectedClient.warrantyExpiryDate || '---', hidden: !selectedClient.warrantyExpiryDate },
-              ].filter(f => !f.hidden).map(field => (
-                <div key={field.label} className="bg-muted/50 rounded-2xl p-3.5 text-right">
-                  <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mb-1">{field.label}</p>
-                  <p className="text-foreground font-bold">{field.value}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-foreground text-sm leading-tight truncate">{selectedClient.name || '—'}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">فيلا {selectedClient.villaNumber}{selectedClient.blockNumber ? ` · بلوك ${selectedClient.blockNumber}` : ''}</div>
                 </div>
-              ))}
-              <div className="bg-muted/50 rounded-2xl p-3.5 text-right">
-                <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mb-1">رقم الجوال</p>
-                <div className="flex items-center gap-2 justify-start">
-                  <button onClick={e => openWhatsApp(selectedClient, e)} className="text-emerald-500 hover:text-emerald-400 transition-colors">
-                    <Phone className="w-4 h-4" />
-                  </button>
-                  <p className="text-foreground font-mono font-bold">{selectedClient.phone || '---'}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-muted-foreground text-xs font-bold">{clientTickets.length} تذكرة</span>
-                <h3 className="text-foreground font-bold text-sm flex items-center gap-2">
-                  <TicketCheck className="w-4 h-4 text-primary" /> تذاكر الصيانة
-                </h3>
-              </div>
-              {ticketsLoading ? (
-                <div className="flex justify-center py-5"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
-              ) : clientTickets.length === 0 ? (
-                <div className="bg-muted/50 rounded-2xl p-6 text-center text-muted-foreground text-sm">لا توجد تذاكر لهذا العميل</div>
-              ) : (
-                <div className="space-y-2">
-                  {clientTickets.map(t => (
-                    <div
-                      key={t.id}
-                      className="bg-muted/50 rounded-xl p-3.5 flex items-center justify-between gap-3 hover:bg-muted cursor-pointer transition-colors"
-                      onClick={() => { setSelectedClient(null); navigate(`/tickets/${t.id}`); }}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {canWrite && (
+                    <button
+                      onClick={e => { setSelectedClient(null); openEdit(selectedClient, e); }}
+                      className="flex items-center gap-1 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1.5 rounded-lg transition-colors"
                     >
-                      <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <div className="flex-1 text-right min-w-0">
-                        <div className="text-sm text-foreground font-medium line-clamp-1">{t.description}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{t.refNumber || t.ticketId}</div>
-                      </div>
-                      <Badge className={`text-[10px] font-bold border shrink-0 ${statusColors[t.status] || statusColors.open}`}>
-                        {statusLabels[t.status] || t.status}
-                      </Badge>
-                    </div>
-                  ))}
+                      <Pencil className="w-3 h-3" /> تعديل
+                    </button>
+                  )}
+                  <button
+                    onClick={e => openWhatsApp(selectedClient, e)}
+                    className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Phone className="w-3 h-3" /> واتساب
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
 
-            <div className="flex gap-2 mt-4 pt-4 border-t border-border">
-              {canWrite && (
-                <Button variant="ghost" className="gap-2 rounded-xl mr-auto" onClick={e => { setSelectedClient(null); openEdit(selectedClient, e); }}>
-                  <Pencil className="w-4 h-4" /> تعديل
-                </Button>
-              )}
-              <Button className="bg-emerald-500 hover:bg-emerald-600 text-white gap-2 rounded-xl" onClick={e => openWhatsApp(selectedClient, e)}>
-                <Phone className="w-4 h-4" /> واتساب
-              </Button>
+            {/* ── Scrollable body ── */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+              {/* Info grid */}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'رقم الفيلا',  value: `فيلا ${selectedClient.villaNumber}` },
+                  { label: 'رقم البلوك',  value: selectedClient.blockNumber || '---' },
+                  { label: 'رقم الجوال',  value: selectedClient.phone || '---' },
+                  { label: 'المشروع',     value: projectName(selectedClient.projectId) },
+                  ...(selectedClient.handoverDate        ? [{ label: 'تسليم',         value: selectedClient.handoverDate }]        : []),
+                  ...(selectedClient.warrantyExpiryDate  ? [{ label: 'انتهاء الضمان', value: selectedClient.warrantyExpiryDate }]  : []),
+                ].map(field => (
+                  <div key={field.label} className="bg-muted/50 rounded-xl p-2.5 text-right">
+                    <p className="text-muted-foreground text-[10px] font-black uppercase tracking-wider mb-0.5">{field.label}</p>
+                    <p className="text-foreground font-bold text-sm truncate">{field.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tickets */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-muted-foreground text-[11px] font-bold bg-muted/60 px-2 py-0.5 rounded-full">{clientTickets.length} تذكرة</span>
+                  <h3 className="text-foreground font-bold text-xs flex items-center gap-1.5">
+                    <TicketCheck className="w-3.5 h-3.5 text-primary" /> تذاكر الصيانة
+                  </h3>
+                </div>
+                {ticketsLoading ? (
+                  <div className="flex justify-center py-6"><div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+                ) : clientTickets.length === 0 ? (
+                  <div className="bg-muted/50 rounded-xl p-5 text-center text-muted-foreground text-sm">لا توجد تذاكر لهذا العميل</div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {clientTickets.map(t => (
+                      <div
+                        key={t.id}
+                        className="bg-muted/50 rounded-xl px-3 py-2.5 flex items-center gap-2.5 hover:bg-muted cursor-pointer transition-colors"
+                        onClick={() => { setSelectedClient(null); navigate(`/tickets/${t.id}`); }}
+                      >
+                        <div className="flex-1 text-right min-w-0">
+                          <div className="text-sm text-foreground font-medium line-clamp-1 leading-tight">{t.description}</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">{t.refNumber || t.ticketId}</div>
+                        </div>
+                        <Badge className={`text-[10px] font-bold border shrink-0 ${statusColors[t.status] || statusColors.open}`}>
+                          {statusLabels[t.status] || t.status}
+                        </Badge>
+                        <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </>)}
         </DialogContent>
