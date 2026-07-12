@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { CloudLightning, BookMarked, CheckCircle2, XCircle, SkipForward, Info, RefreshCw, ArrowRightLeft } from 'lucide-react';
+import { CloudLightning, BookMarked, CheckCircle2, XCircle, SkipForward, Info, RefreshCw, ArrowRightLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── Bookmarklet builder ────────────────────────────────────────────────────────
@@ -92,26 +92,13 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       return;
     }
 
-    upd('\\u23F3 \\u062A\\u0645 \\u0642\\u0631\\u0627\\u0621\\u0629 <b>'+rows.length+'</b> \\u0633\\u062C\\u0644...<br>\\u062C\\u0627\\u0631\\u064A \\u0627\\u0644\\u0625\\u0631\\u0633\\u0627\\u0644 \\u0644\\u0644\\u0646\\u0638\\u0627\\u0645');
-
-    /* POST to our server */
-    var sr=await fetch(O+'/api/salesforce/import',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+T},
-      body:JSON.stringify({rows:rows})
-    });
-    if(!sr.ok){var eb='';try{eb=await sr.text();}catch(e){}throw new Error('Server '+sr.status+': '+eb.slice(0,80));}
-    var res=await sr.json();
-    console.log('[retal] result:',res);
-
-    var bg=res.added>0?'#14532d':(res.updated>0?'#1e3a5f':'#1e293b');
-    var html='\\u2705 \\u0627\\u0643\\u062A\\u0645\\u0644\\u062A \\u0627\\u0644\\u0645\\u0632\\u0627\\u0645\\u0646\\u0629!<br>';
-    html+='<span style="color:#86efac">\\u2795 \\u062C\\u062F\\u064A\\u062F\\u0629: <b>'+res.added+'</b></span><br>';
-    html+='<span style="color:#93c5fd">\\uD83D\\uDD04 \\u0645\\u064F\\u062D\\u062F\\u064E\\u062B\\u064E\\u0629: <b>'+res.updated+'</b></span><br>';
-    html+='<span style="color:#94a3b8">\\u23ED\\uFE0F \\u0645\\u0637\\u0627\\u0628\\u0642\\u0629: <b>'+res.skipped+'</b></span>';
-    if(res.errors&&res.errors.length)html+='<br><span style="color:#fca5a5">\\u26A0\\uFE0F \\u0623\\u062E\\u0637\\u0627\\u0621: '+res.errors.length+'</span>';
-    upd(html,bg);
-    setTimeout(function(){if(el)el.remove();},12000);
+    /* SF CSP blocks direct fetch to our server — relay via URL hash in a new tab */
+    var encoded;
+    try{encoded=btoa(unescape(encodeURIComponent(JSON.stringify(rows))));}
+    catch(e){encoded=btoa(JSON.stringify(rows).replace(/[\\u0080-\\uFFFF]/g,'?'));}
+    upd('\\u23F3 \\u062A\\u0645 \\u0642\\u0631\\u0627\\u0621\\u0629 <b>'+rows.length+'</b> \\u0633\\u062C\\u0644...<br>\\u062C\\u0627\\u0631\\u064A \\u0641\\u062A\\u062D \\u0627\\u0644\\u062A\\u0637\\u0628\\u064A\\u0642...');
+    window.open(O+'/salesforce-import#sf'+encoded,'_blank');
+    setTimeout(function(){if(el)el.remove();},4000);
 
   }catch(e){
     console.error('[retal]',e);
@@ -123,10 +110,14 @@ function buildBookmarklet(appOrigin: string, token: string): string {
   return `javascript:void (${fn})('${appOrigin}','${token}')`;
 }
 
+type ImportResult = { added: number; updated: number; skipped: number; errors: string[]; total: number };
+
 // ── Page component ─────────────────────────────────────────────────────────────
 export default function SalesforceImport() {
   const [bookmarkletCode, setBookmarkletCode] = useState('');
   const linkRef = useRef<HTMLAnchorElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   const generateHref = () => {
     const token =
@@ -145,6 +136,38 @@ export default function SalesforceImport() {
     }
   }, [bookmarkletCode]);
 
+  // Handle bookmarklet relay: data arrives in URL hash (#sf<base64>)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#sf')) return;
+
+    // Clear hash immediately so it's not stored in history
+    window.history.replaceState(null, '', window.location.pathname);
+
+    let rows: any[];
+    try {
+      rows = JSON.parse(decodeURIComponent(escape(atob(hash.slice(3)))));
+    } catch {
+      return;
+    }
+    if (!Array.isArray(rows) || rows.length === 0) return;
+
+    const token =
+      localStorage.getItem('retal_auth_token') ||
+      localStorage.getItem('token') ||
+      '';
+
+    setImporting(true);
+    fetch('/api/salesforce/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ rows }),
+    })
+      .then(r => r.json())
+      .then((res: ImportResult) => { setImportResult(res); setImporting(false); })
+      .catch(() => setImporting(false));
+  }, []);
+
   return (
     <Layout>
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-8" dir="rtl">
@@ -161,6 +184,47 @@ export default function SalesforceImport() {
             </p>
           </div>
         </div>
+
+        {/* Import result banner (shown after bookmarklet relay) */}
+        {importing && (
+          <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 text-sm text-blue-300">
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+            جاري استيراد التذاكر من Salesforce...
+          </div>
+        )}
+        {importResult && !importing && (
+          <div className={cn(
+            'rounded-2xl p-5 border text-sm space-y-2',
+            importResult.added > 0 ? 'bg-emerald-500/10 border-emerald-500/30' :
+            importResult.updated > 0 ? 'bg-blue-500/10 border-blue-500/30' :
+            'bg-muted/30 border-border/50',
+          )}>
+            <p className="font-bold text-foreground mb-3">✅ اكتملت المزامنة</p>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-emerald-500/10 rounded-xl p-3">
+                <p className="text-2xl font-bold text-emerald-400">{importResult.added}</p>
+                <p className="text-xs text-muted-foreground mt-1">جديدة</p>
+              </div>
+              <div className="bg-blue-500/10 rounded-xl p-3">
+                <p className="text-2xl font-bold text-blue-400">{importResult.updated}</p>
+                <p className="text-xs text-muted-foreground mt-1">مُحدَّثة</p>
+              </div>
+              <div className="bg-muted/30 rounded-xl p-3">
+                <p className="text-2xl font-bold text-muted-foreground">{importResult.skipped}</p>
+                <p className="text-xs text-muted-foreground mt-1">مطابقة</p>
+              </div>
+            </div>
+            {importResult.errors?.length > 0 && (
+              <p className="text-xs text-red-400 mt-2">⚠️ أخطاء: {importResult.errors.length}</p>
+            )}
+            <button
+              onClick={() => setImportResult(null)}
+              className="text-xs text-muted-foreground/60 hover:text-muted-foreground mt-2"
+            >
+              إخفاء
+            </button>
+          </div>
+        )}
 
         {/* How it works */}
         <div className="bg-muted/30 border border-border/50 rounded-2xl p-5 space-y-3">
