@@ -54,22 +54,30 @@ function buildBookmarklet(appOrigin: string, token: string): string {
     var hcells=dataTable.querySelectorAll('thead th,thead td');
     if(!hcells.length)hcells=dataTable.querySelectorAll('tr:first-child th,tr:first-child td');
     hcells.forEach(function(c){headers.push((c.textContent||'').trim().toLowerCase());});
-    console.log('[retal] headers:',headers);
+    console.log('[retal] headers:',headers.join(' | '));
+    upd('\\u23F3 Headers: '+headers.join(' | '));
 
     var col=function(){
       var keys=Array.prototype.slice.call(arguments);
-      for(var i=0;i<headers.length;i++)
-        for(var j=0;j<keys.length;j++)
+      /* exact match first */
+      for(var j=0;j<keys.length;j++)
+        for(var i=0;i<headers.length;i++)
+          if(headers[i]===keys[j])return i;
+      /* then partial */
+      for(var j=0;j<keys.length;j++)
+        for(var i=0;i<headers.length;i++)
           if(headers[i].indexOf(keys[j])>=0)return i;
       return -1;
     };
-    var iCase  =col('case number','case no','number','raqm','\\u0631\\u0642\\u0645');
-    var iUnit  =col('unit','\\u0648\\u062D\\u062F\\u0629','villa');
-    var iAcc   =col('account','client','\\u0627\\u0633\\u0645');
-    var iDate  =col('opened','open date','created','\\u062A\\u0627\\u0631\\u064A\\u062E');
+    /* case number: look for 'case number' or 'case no' first — avoid matching 'unit number' etc */
+    var iCase  =col('case number','case no','case#','\\u0631\\u0642\\u0645 \\u0627\\u0644\\u062D\\u0627\\u0644\\u0629');
+    /* unit: villa/unit/property — NOT generic 'number' */
+    var iUnit  =col('unit number','unit no','unit','villa','property','\\u0648\\u062D\\u062F\\u0629','\\u0641\\u064A\\u0644\\u0627');
+    var iAcc   =col('account name','account','client name','client','\\u0627\\u0633\\u0645 \\u0627\\u0644\\u0639\\u0645\\u064A\\u0644','\\u0627\\u0633\\u0645');
+    var iDate  =col('date/time opened','opened','open date','created','date','\\u062A\\u0627\\u0631\\u064A\\u062E');
     var iDesc  =col('description','subject','\\u0648\\u0635\\u0641');
     var iStatus=col('status','\\u062D\\u0627\\u0644\\u0629');
-    console.log('[retal] case='+iCase+' unit='+iUnit+' acc='+iAcc+' status='+iStatus);
+    console.log('[retal] case='+iCase+' unit='+iUnit+' acc='+iAcc+' status='+iStatus+' date='+iDate+' desc='+iDesc);
 
     /* extract rows */
     var rows=[];
