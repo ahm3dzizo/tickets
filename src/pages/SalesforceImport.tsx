@@ -28,9 +28,10 @@ function buildBookmarklet(appOrigin: string, token: string): string {
     var info=((data.reportExtendedMetadata||{}).detailColumnInfo)||{};
     var lbls=cols.map(function(c){return((info[c]||{}).label||c).toLowerCase();});
     var fi=function(){
-      for(var a=0;a<arguments.length;a++){
-        var idx=lbls.findIndex(function(l){return l.indexOf(arguments[a])>=0;});
-        if(idx>=0)return idx;
+      var keys=Array.prototype.slice.call(arguments);
+      for(var a=0;a<keys.length;a++){
+        var kw=keys[a];
+        for(var j=0;j<lbls.length;j++){if(lbls[j].indexOf(kw)>=0)return j;}
       }
       return -1;
     };
