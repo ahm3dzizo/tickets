@@ -272,7 +272,7 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
         console.log(`[retry-failed] Batch ${batchIdx + 1}/${totalBatches} — ${batch.length} tickets`);
 
         // One Bynara request for the whole batch
-        const batchResultMap = new Map<string, { primaryType: string; allTypes: string[] }>();
+        const batchResultMap = new Map<string, { primaryType: string; allTypes: string[]; subTypeId?: string; allSubTypeIds: string[] }>();
         if (geminiEnabled()) {
           try {
             const results = await classifyBatchWithGemini(
@@ -290,16 +290,22 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
           try {
             let primaryType: string;
             let allTypes: string[];
+            let subTypeId: string | undefined;
+            let allSubTypeIds: string[] = [];
 
             const bResult = batchResultMap.get(ticket.id);
             if (bResult) {
-              primaryType = bResult.primaryType;
-              allTypes    = bResult.allTypes;
+              primaryType   = bResult.primaryType;
+              allTypes      = bResult.allTypes;
+              subTypeId     = bResult.subTypeId;
+              allSubTypeIds = bResult.allSubTypeIds;
             } else {
               // Bynara missed this ticket — fall back to ML/keywords (no extra Bynara call)
               const fallback = await classifyTicket(ticket.description!, ticket.projectId || undefined, { forceReclassify: true, skipGemini: true });
-              primaryType = fallback.primaryType;
-              allTypes    = fallback.allTypes;
+              primaryType   = fallback.primaryType;
+              allTypes      = fallback.allTypes;
+              subTypeId     = fallback.subTypeId ?? undefined;
+              allSubTypeIds = fallback.allSubTypeIds ?? [];
             }
 
             if (primaryType !== "unclassified") {
@@ -310,6 +316,8 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
                 data: {
                   type: primaryType,
                   detectedTypes: allTypes.filter((t: string) => t !== "unclassified"),
+                  subTypeId: subTypeId ?? null,
+                  detectedSubTypeIds: allSubTypeIds,
                 },
               });
 

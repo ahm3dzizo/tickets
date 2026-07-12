@@ -146,6 +146,7 @@ model Ticket {
   assignedSupervisorIds    String[]     @default([])
   assignedSupervisors      Json?
   detectedTypes            String[]     @default([])
+  detectedSubTypeIds       String[]     @default([])
   appointmentTime          String?
   appointmentNotes         String?
   appointmentAwaitingReply Boolean      @default(false)

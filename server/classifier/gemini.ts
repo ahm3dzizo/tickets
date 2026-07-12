@@ -39,13 +39,14 @@ async function getActiveSubTypes(): Promise<SubTypeInfo[]> {
 
 // ── Main classification function ───────────────────────────────────────────
 export interface GeminiClassifyResult {
-  primaryType:  string;
-  allTypes:     string[];
-  subTypeId?:   string;
+  primaryType:    string;
+  allTypes:       string[];
+  subTypeId?:     string;
   subTypeNameAr?: string;
-  confidence:   number;
-  reason:       string;
-  source:       "gemini";
+  allSubTypeIds:  string[];   // resolved sub-type IDs for every detected type
+  confidence:     number;
+  reason:         string;
+  source:         "gemini";
 }
 
 function stripJsonComments(str: string): string {
@@ -64,7 +65,7 @@ export async function classifyWithGemini(
 
     const typesList = types
       .map((t) => {
-        const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join("، ");
+        const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join(" | ");
         const desc = t.description ? ` — ${t.description}` : "";
         return `- ${t.key}: ${t.nameAr}${desc}${subs ? ` (أنواع فرعية: ${subs})` : ""}`;
       })
@@ -72,23 +73,25 @@ export async function classifyWithGemini(
 
     const prompt = `أنت متخصص في تصنيف بلاغات صيانة المساكن العربية. ردّك يجب أن يكون JSON فقط بدون أي نص إضافي.
 
-أنواع الصيانة المتاحة (مع وصف نطاق كل نوع):
+أنواع الصيانة المتاحة (مع وصف نطاق كل نوع وأنواعه الفرعية):
 ${typesList}
 
 طريقة التصنيف:
-اقرأ البلاغ كاملاً وافهم معناه الحقيقي في ضوء وصف كل نوع أعلاه. ابحث عن النوع الذي يتطابق وصفه مع المشكلة الموجودة، لا مجرد تطابق كلمة واحدة.
+اقرأ البلاغ كاملاً وافهم كل مشكلة فيه. لكل مشكلة:
+1. حدد النوع الأنسب (type) من القائمة أعلاه — بناءً على وصف النوع وفهم السياق الكامل
+2. حدد النوع الفرعي الأدق (subType) من الأنواع الفرعية لذلك النوع — أو null إن لم يتطابق
 
-مثال: "انارة خارجية لا تعمل - بلاطة تالفة - صيانة باب الكراج - كرسي حمام مكسور"
-→ types: ["electricity","ceramics","garage_door","plumbing"]
+مثال: "روائح صرف صحي + كسر سيراميك + مشكلة أفياش"
+→ [{"type":"drainage","subType":"روائح كريهة"},{"type":"ceramics","subType":"تبليط أرضيات"},{"type":"electricity","subType":"أفياش وقواطع"}]
 
 قواعد:
-1. حدد كل مشكلة مذكورة في البلاغ وأضف نوعها — حتى لو وصلت إلى 5 أنواع.
-2. لا تدمج المشاكل المختلفة في نوع واحد إلا إذا كانت سببها واحد.
-3. subType يكون من الأنواع الفرعية المذكورة للنوع الأول (primaryType) فقط، أو null.
-4. إذا كان البلاغ مبهماً أو غير واضح → types: [], subType: null.
-5. JSON فقط بدون أي نص آخر.
+1. لكل مشكلة مستقلة في البلاغ، أضف عنصراً منفصلاً في المصفوفة
+2. لا تدمج مشاكل مختلفة تحت نوع واحد
+3. subType يجب أن يكون من الأنواع الفرعية المذكورة للنوع أعلاه فقط، أو null
+4. إذا كان البلاغ مبهماً → items: [], confidence: 0
+5. JSON فقط بدون أي نص آخر
 
-الصيغة: {"types":["key1","key2"],"subType":"اسم فرعي أو null","confidence":0.9}`;
+الصيغة: {"items":[{"type":"key","subType":"اسم فرعي أو null"}],"confidence":0.9}`;
 
     const response = await fetch(NARA_URL, {
       method: "POST",
@@ -102,7 +105,7 @@ ${typesList}
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: prompt },
-          { role: "user", content: `Problem: "${description}"` }
+          { role: "user", content: `البلاغ: "${description}"` }
         ]
       })
     });
@@ -115,8 +118,7 @@ ${typesList}
 
     const text = data.choices?.[0]?.message?.content?.trim() || "";
 
-    // Parse JSON response — extract first {...} block regardless of surrounding text
-    let parsed: { types?: string[]; subType?: string | null; confidence?: number; reason?: string };
+    let parsed: { items?: { type: string; subType?: string | null }[]; confidence?: number };
     try {
       const stripped = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
       const jsonMatch = stripped.match(/\{[\s\S]*\}/);
@@ -128,17 +130,28 @@ ${typesList}
     }
 
     const validTypeKeys = new Set(types.map((t) => t.key));
-    const validTypes = (parsed.types ?? []).filter((k) => validTypeKeys.has(k));
-    if (validTypes.length === 0) return null;
+    const items = (parsed.items ?? []).filter(it => validTypeKeys.has(it.type));
+    if (items.length === 0) return null;
 
-    // Resolve subType name → id
+    const validTypes = items.map(it => it.type);
+
+    // Resolve sub-type name → id for each item
+    const allSubTypeIds: string[] = [];
+    for (const item of items) {
+      if (item.subType && item.subType !== "null") {
+        const match = subTypes.find(
+          s => s.nameAr === item.subType && s.parentKey === item.type
+        );
+        if (match) allSubTypeIds.push(match.id);
+      }
+    }
+
+    // Primary sub-type (for primary type)
     let subTypeId: string | undefined;
     let subTypeNameAr: string | undefined;
-    if (parsed.subType && parsed.subType !== "null") {
-      const match = subTypes.find(
-        s => s.nameAr === parsed.subType && s.parentKey === validTypes[0]
-      );
-      if (match) { subTypeId = match.id; subTypeNameAr = match.nameAr; }
+    if (allSubTypeIds.length > 0) {
+      subTypeId = allSubTypeIds[0];
+      subTypeNameAr = items[0].subType ?? undefined;
     }
 
     return {
@@ -146,9 +159,10 @@ ${typesList}
       allTypes:      validTypes,
       subTypeId,
       subTypeNameAr,
+      allSubTypeIds,
       confidence:    parsed.confidence ?? 0.8,
-      reason:        parsed.reason ?? "",
-      source:        "gemini", // Keeping this to avoid breaking DB source references
+      reason:        "",
+      source:        "gemini",
     };
   } catch (err: any) {
     console.error("[NaraRouter] classify error:", err.message);
@@ -158,11 +172,12 @@ ${typesList}
 
 // ── Batch classification — multiple tickets in one request ─────────────────
 export interface GeminiBatchResult {
-  id:           string;
-  primaryType:  string;
-  allTypes:     string[];
-  subTypeId?:   string;
-  confidence:   number;
+  id:             string;
+  primaryType:    string;
+  allTypes:       string[];
+  subTypeId?:     string;
+  allSubTypeIds:  string[];
+  confidence:     number;
 }
 
 export async function classifyBatchWithGemini(
@@ -176,7 +191,7 @@ export async function classifyBatchWithGemini(
 
   const typesList = types
     .map((t) => {
-      const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join("، ");
+      const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join(" | ");
       const desc = t.description ? ` — ${t.description}` : "";
       return `- ${t.key}: ${t.nameAr}${desc}${subs ? ` (${subs})` : ""}`;
     })
@@ -188,17 +203,21 @@ export async function classifyBatchWithGemini(
 
   const prompt = `أنت متخصص في تصنيف بلاغات صيانة المساكن العربية. ردّك يجب أن يكون JSON array فقط.
 
-أنواع الصيانة المتاحة (مع وصف نطاق كل نوع):
+أنواع الصيانة المتاحة (مع وصف نطاق كل نوع وأنواعه الفرعية):
 ${typesList}
 
 طريقة التصنيف:
-اقرأ كل بلاغ كاملاً وافهم معناه الحقيقي في ضوء وصف كل نوع أعلاه. البلاغ الواحد قد يحتوي على مشاكل متعددة ومختلفة تماماً.
-- ابحث عن النوع الذي يتطابق وصفه مع المشكلة، لا مجرد تطابق كلمة واحدة.
-- حدد نوع كل مشكلة بشكل مستقل وأضفها في المصفوفة.
-- subType من الأنواع الفرعية للنوع الأول فقط، أو null.
+لكل بلاغ، اقرأه كاملاً واستخرج كل مشكلة فيه. لكل مشكلة:
+1. حدد النوع الأنسب (type) من القائمة — بناءً على وصفه وفهم السياق
+2. حدد النوع الفرعي الأدق (subType) من الأنواع الفرعية لذلك النوع — أو null
 
-أعد JSON array فقط. الصيغة:
-[{"i":1,"types":["key1","key2"],"subType":"اسم فرعي أو null","confidence":0.9}]`;
+قواعد:
+- كل مشكلة مستقلة تحصل على عنصر منفصل في items
+- subType من الأنواع الفرعية للنوع المذكور فقط، أو null
+- إذا كان البلاغ مبهماً → items: []
+
+الصيغة:
+[{"i":1,"items":[{"type":"key","subType":"اسم فرعي أو null"}],"confidence":0.9}]`;
 
   try {
     const response = await fetch(NARA_URL, {
@@ -212,7 +231,7 @@ ${typesList}
         temperature: 0.1,
         messages: [
           { role: "system", content: prompt },
-          { role: "user", content: `Tickets:\n${ticketLines}` }
+          { role: "user", content: `البلاغات:\n${ticketLines}` }
         ]
       })
     });
@@ -225,7 +244,6 @@ ${typesList}
 
     const text = data.choices?.[0]?.message?.content?.trim() || "";
 
-    // Extract JSON array from response — strip // and /* */ comments Bynara sometimes injects
     const stripped  = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
     const arrMatch  = stripped.match(/\[[\s\S]*\]/);
     if (!arrMatch) {
@@ -233,30 +251,36 @@ ${typesList}
       return [];
     }
 
-    const parsed: { i: number; types?: string[]; subType?: string | null; confidence?: number }[] = JSON.parse(arrMatch[0]);
+    const parsed: { i: number; items?: { type: string; subType?: string | null }[]; confidence?: number }[] = JSON.parse(arrMatch[0]);
     const validTypeKeys = new Set(types.map((t) => t.key));
 
     return parsed
       .filter((r) => r.i >= 1 && r.i <= items.length)
       .map((r) => {
-        const validTypes = (r.types ?? []).filter((k) => validTypeKeys.has(k));
-        // Resolve subType name → id
-        let subTypeId: string | undefined;
-        if (r.subType && r.subType !== "null" && validTypes[0]) {
-          const match = subTypes.find(s => s.nameAr === r.subType && s.parentKey === validTypes[0]);
-          if (match) subTypeId = match.id;
+        const validItems = (r.items ?? []).filter(it => validTypeKeys.has(it.type));
+        const validTypes = validItems.map(it => it.type);
+
+        // Resolve sub-type IDs
+        const allSubTypeIds: string[] = [];
+        for (const item of validItems) {
+          if (item.subType && item.subType !== "null") {
+            const match = subTypes.find(s => s.nameAr === item.subType && s.parentKey === item.type);
+            if (match) allSubTypeIds.push(match.id);
+          }
         }
+
         return {
-          id:          items[r.i - 1].id,
-          primaryType: validTypes[0] ?? "unclassified",
-          allTypes:    validTypes,
-          subTypeId,
-          confidence:  r.confidence ?? 0.8,
+          id:           items[r.i - 1].id,
+          primaryType:  validTypes[0] ?? "unclassified",
+          allTypes:     validTypes,
+          subTypeId:    allSubTypeIds[0],
+          allSubTypeIds,
+          confidence:   r.confidence ?? 0.8,
         };
       });
   } catch (err: any) {
     console.error("[NaraRouter batch] error:", err.message);
-    throw err; // let worker handle 429
+    throw err;
   }
 }
 
@@ -267,9 +291,7 @@ export async function learnFromGeminiResult(
 ): Promise<void> {
   if (!description || types.length === 0) return;
 
-  // Arabic stop words — don't add these as keywords
   const stopWords = new Set([
-    // Prepositions & conjunctions
     "في","من","الى","على","عن","مع","هذا","هذه","ذلك","تلك","التي","الذي",
     "كان","كانت","يكون","هو","هي","هم","انا","نحن","انت","يوجد","لا","لم",
     "لن","ما","قد","كل","بعض","غير","وقت","يوم","ساعه","الان","اليوم",
@@ -278,16 +300,12 @@ export async function learnFromGeminiResult(
     "هناك","يرجى","يوجد","فيه","فيها","منه","منها","عليه","عليها",
     "مشكله","مشكلة","موجود","موجوده","محتاج","محتاجه","عايز","عايزه",
     "ارجو","ارجوكم","يلزم","يلزمنا","نريد","نحتاج",
-    // Greetings (very common in Arabic messages, not maintenance terms)
     "سلام","عليكم","وعليكم","السلامه","حياكم","شكرا","شكرً","مرحبا","اهلا",
     "تحيه","تحية","صباح","مساء","خير","معك","تواصل","حضرتك","حضرتكم",
-    // Generic location words (too broad to be useful keywords)
     "منزل","مسكن","شقه","شقة","فيلا","وحده","وحدة","مبنى","مبني",
     "صاله","صالة","مجلس","غرفه","غرفة","اوضه","اوضة",
-    // Generic adjectives & ordinals
     "كبير","كبيره","صغير","صغيره","جديد","جديده","قديم","قديمه",
     "اول","ثاني","ثالث","رابع","خامس",
-    // Generic nouns (appear in many ticket types)
     "تقرير","طلب","موضوع","حاله","حالة","نوع","سبب","نتيجه","نتيجة",
     "عمل","شغل","تنفيذ","اصلاح","صيانه","صيانة","تركيب","تغيير",
   ]);
@@ -304,7 +322,6 @@ export async function learnFromGeminiResult(
       const typeRecord = await prisma.ticketType.findUnique({ where: { key: typeKey } });
       if (!typeRecord) continue;
 
-      // Only learn the most meaningful words (avoid learning too many generics)
       const wordsToLearn = uniqueWords.slice(0, 8);
 
       for (const word of wordsToLearn) {
@@ -313,7 +330,6 @@ export async function learnFromGeminiResult(
         });
 
         if (existing) {
-          // Reinforce existing keyword + flag for reclassification
           await prisma.ticketTypeKeyword.update({
             where: { id: existing.id },
             data: {
@@ -323,11 +339,10 @@ export async function learnFromGeminiResult(
             },
           });
         } else {
-          // Check if this word is already strongly associated with another type
           const rival = await prisma.ticketTypeKeyword.findFirst({
             where: { keyword: word, typeId: { not: typeRecord.id }, weight: { gt: 2.0 } },
           });
-          if (rival) continue; // Don't confuse a strong keyword from another type
+          if (rival) continue;
 
           await prisma.ticketTypeKeyword.create({
             data: {

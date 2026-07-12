@@ -303,6 +303,8 @@ export function TicketTable({
   const {
     typeTranslations: dbTypeTranslations,
     typeBg: dbTypeBg,
+    subTypeTranslations,
+    subTypeBg,
   } = useTicketTypes();
 
   // دمج: DB أولاً ثم الـ static fallback
@@ -737,10 +739,15 @@ export function TicketTable({
               ticket.detectedTypes?.length
                 ? ticket.detectedTypes as string[]
                 : ticket.type ? [ticket.type as string] : [];
+            // Sub-types: show specific sub-type names when available, otherwise fall back to type names
+            const subTypeIds: string[] = (ticket as any).detectedSubTypeIds ?? [];
+            const displayLabels: { label: string; bg: string }[] = subTypeIds.length > 0
+              ? subTypeIds.map(id => ({ label: subTypeTranslations[id] ?? id, bg: subTypeBg[id] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }))
+              : typeList.map(t => ({ label: mergedTranslations[t] ?? t, bg: mergedTypeBg[t] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }));
             const supervisorNames = getSupervisorNames(ticket);
             const isSelected  = selectedIds?.includes(ticket.id) ?? false;
             const isOverdue   = !isClosed && daysOpen > 6;
-            const canSelect   = hasSelection; // التذاكر المغلقة قابلة للتحديد كمان
+            const canSelect   = hasSelection;
 
             const handleCardClick = () => {
               if (canSelect && inSelectionMode) { toggleOne(ticket.id); return; }
@@ -837,15 +844,15 @@ export function TicketTable({
                         </>
                       ) : null}
                     </div>
-                    {/* Right: type tags */}
+                    {/* Right: type/subtype tags */}
                     <div className="flex items-center gap-1 shrink-0">
-                      {typeList.length === 0 ? (
+                      {displayLabels.length === 0 ? (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-orange-500/10 text-orange-400 border-orange-500/20">
                           غير مصنف
                         </span>
-                      ) : typeList.slice(0, 2).map((t, i) => (
-                        <span key={i} className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-md border', mergedTypeBg[t] || 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
-                          {mergedTranslations[t] ?? t}
+                      ) : displayLabels.slice(0, 2).map((item, i) => (
+                        <span key={i} className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-md border', item.bg)}>
+                          {item.label}
                         </span>
                       ))}
                     </div>
@@ -942,6 +949,10 @@ export function TicketTable({
                   ticket.detectedTypes?.length
                     ? ticket.detectedTypes as string[]
                     : ticket.type ? [ticket.type as string] : [];
+                const subTypeIdsRow: string[] = (ticket as any).detectedSubTypeIds ?? [];
+                const displayLabelsRow: { label: string; bg: string }[] = subTypeIdsRow.length > 0
+                  ? subTypeIdsRow.map(id => ({ label: subTypeTranslations[id] ?? id, bg: subTypeBg[id] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }))
+                  : typeList.map(t => ({ label: mergedTranslations[t] ?? t, bg: mergedTypeBg[t] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }));
                 const supervisorNames = getSupervisorNames(ticket);
                 const isSelected = selectedIds?.includes(ticket.id) ?? false;
                 const isOverdue  = !isClosed && daysOpen > 6;
@@ -1050,12 +1061,11 @@ export function TicketTable({
                         </td>
                       )}
                       <td className="px-4 py-3 text-center w-20">
-                        {typeList.length > 0 ? (
+                        {displayLabelsRow.length > 0 ? (
                           <div className="flex flex-col gap-1 items-center">
-                            {typeList.map((t, i) => (
-                              <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap',
-                                mergedTypeBg[t] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
-                                {mergedTranslations[t] ?? t}
+                            {displayLabelsRow.map((item, i) => (
+                              <span key={i} className={cn('text-[10px] font-bold px-2 py-0.5 rounded-lg border whitespace-nowrap', item.bg)}>
+                                {item.label}
                               </span>
                             ))}
                           </div>

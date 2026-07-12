@@ -2,18 +2,29 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { getAuthHeaders } from '@/services/classificationApi';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
+interface TicketSubTypeEntry {
+  id: string;
+  nameAr: string;
+  parentTypeId: string;
+  parentKey: string;   // key of parent TicketType
+}
+
 interface TicketTypeEntry {
   id: string;
   key: string;
   nameAr: string;
   isActive: boolean;
   specialty?: { key: string; nameAr: string };
+  subTypes?: TicketSubTypeEntry[];
 }
 
 interface TicketTypesContextValue {
-  typeTranslations: Record<string, string>;   // key → nameAr
-  typeBg: Record<string, string>;             // key → tailwind classes
-  types: TicketTypeEntry[];
+  typeTranslations:    Record<string, string>;   // key → nameAr
+  typeBg:              Record<string, string>;   // key → tailwind classes
+  types:               TicketTypeEntry[];
+  subTypes:            TicketSubTypeEntry[];
+  subTypeTranslations: Record<string, string>;   // subTypeId → nameAr
+  subTypeBg:           Record<string, string>;   // subTypeId → tailwind classes (inherited from parent)
   refresh: () => void;
 }
 
@@ -69,9 +80,12 @@ const STATIC_FALLBACKS: Record<string, string> = {
 
 // ─── Context ───────────────────────────────────────────────────────────────────
 const TicketTypesContext = createContext<TicketTypesContextValue>({
-  typeTranslations: {},
-  typeBg: {},
-  types: [],
+  typeTranslations:    {},
+  typeBg:              {},
+  types:               [],
+  subTypes:            [],
+  subTypeTranslations: {},
+  subTypeBg:           {},
   refresh: () => {},
 });
 
@@ -103,8 +117,22 @@ export function TicketTypesProvider({ children }: { children: React.ReactNode })
       COLOR_POOL[idx % COLOR_POOL.length];
   });
 
+  // Build sub-type maps from the subTypes already included in each type
+  const subTypes: TicketSubTypeEntry[] = [];
+  const subTypeTranslations: Record<string, string> = {};
+  const subTypeBg: Record<string, string> = {};
+
+  types.forEach((t, idx) => {
+    const bg = typeBg[t.key] ?? COLOR_POOL[idx % COLOR_POOL.length];
+    (t.subTypes ?? []).forEach(s => {
+      subTypes.push({ ...s, parentKey: t.key });
+      subTypeTranslations[s.id] = s.nameAr;
+      subTypeBg[s.id] = bg;
+    });
+  });
+
   return (
-    <TicketTypesContext.Provider value={{ typeTranslations, typeBg, types, refresh: load }}>
+    <TicketTypesContext.Provider value={{ typeTranslations, typeBg, types, subTypes, subTypeTranslations, subTypeBg, refresh: load }}>
       {children}
     </TicketTypesContext.Provider>
   );

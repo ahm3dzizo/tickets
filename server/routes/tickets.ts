@@ -177,6 +177,7 @@ async function classifyInBackground(
       detectedTypes: classification.allTypes,
       typeId: resolvedTypeId,
       subTypeId: classification.subTypeId || null,
+      detectedSubTypeIds: classification.allSubTypeIds ?? [],
     };
 
     if (!keepManualSupervisors) {

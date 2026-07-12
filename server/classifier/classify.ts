@@ -41,14 +41,15 @@ function naraQuotaStatus(): string {
 }
 
 export interface ClassificationResult {
-  primaryType: string;
-  allTypes:    string[];
-  typeId:      string | null;
-  subType?:    string | null;
-  subTypeId?:  string | null;
-  confidence:  number;
-  source:      string;
-  reason?:     string;
+  primaryType:    string;
+  allTypes:       string[];
+  typeId:         string | null;
+  subType?:       string | null;
+  subTypeId?:     string | null;
+  allSubTypeIds?: string[];   // one sub-type ID per detected type (from AI per-type matching)
+  confidence:     number;
+  source:         string;
+  reason?:        string;
   suggestedNewType?:    string | null;
   suggestedNewSubType?: string | null;
   alreadyClassified?:  boolean;
@@ -78,16 +79,16 @@ export async function classifyTicket(
         const geminiResult = await classifyWithGemini(description);
         if (geminiResult && geminiResult.primaryType !== "unclassified") {
           learnFromGeminiResult(description, geminiResult.allTypes).catch(() => {});
-          const [subType, subTypeId] = await resolveSubTypeFromML(description, geminiResult.primaryType);
           return {
-            primaryType: geminiResult.primaryType,
-            allTypes:    geminiResult.allTypes,
-            typeId:      null,
-            subType,
-            subTypeId,
-            confidence:  geminiResult.confidence,
-            source:      "gemini",
-            reason:      geminiResult.reason,
+            primaryType:  geminiResult.primaryType,
+            allTypes:     geminiResult.allTypes,
+            typeId:       null,
+            subType:      geminiResult.subTypeNameAr ?? null,
+            subTypeId:    geminiResult.subTypeId ?? null,
+            allSubTypeIds: geminiResult.allSubTypeIds,
+            confidence:   geminiResult.confidence,
+            source:       "gemini",
+            reason:       geminiResult.reason,
           };
         }
       } catch (err: any) {
