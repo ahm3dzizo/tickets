@@ -55,12 +55,21 @@ function buildBookmarklet(appOrigin: string, token: string): string {
 
   try{
     /* ── 1. Fetch report via SF Analytics API ── */
+    /* lightning.force.com rejects UI session for REST — use my.salesforce.com instead */
+    var sfApiBase='';
+    var hn=window.location.hostname;
+    if(hn.indexOf('.lightning.force.com')>=0)
+      sfApiBase='https://'+hn.replace('.lightning.force.com','.my.salesforce.com');
+    else if(hn.indexOf('.force.com')>=0)
+      sfApiBase='https://'+hn.replace('.force.com','.salesforce.com');
+    var apiUrl=sfApiBase+'/services/data/v59.0/analytics/reports/'+rid+'?includeDetails=true';
+    console.log('[رتال] API URL:',apiUrl);
     var hdrs={'Accept':'application/json'};
     if(sfTok)hdrs['Authorization']='Bearer '+sfTok;
-    var resp=await fetch('/services/data/v59.0/analytics/reports/'+rid+'?includeDetails=true',{credentials:'include',headers:hdrs});
+    var resp=await fetch(apiUrl,{credentials:'include',headers:hdrs});
     if(!resp.ok){
       var errBody='';try{errBody=await resp.text();}catch(e){}
-      throw new Error('Salesforce API: HTTP '+resp.status+' — '+errBody.slice(0,120));
+      throw new Error('Salesforce API: HTTP '+resp.status+' — '+errBody.slice(0,150));
     }
     var data=await resp.json();
     console.log('[رتال] SF response keys:',Object.keys(data));
