@@ -215,7 +215,14 @@ export default function SalesforceImport() {
               </div>
             </div>
             {importResult.errors?.length > 0 && (
-              <p className="text-xs text-red-400 mt-2">⚠️ أخطاء: {importResult.errors.length}</p>
+              <div className="mt-3 space-y-1">
+                <p className="text-xs font-bold text-red-400">⚠️ أخطاء ({importResult.errors.length}):</p>
+                <div className="bg-red-900/20 border border-red-500/20 rounded-xl p-3 max-h-48 overflow-y-auto space-y-1">
+                  {importResult.errors.map((err, i) => (
+                    <p key={i} className="text-xs text-red-300 font-mono break-all">{err}</p>
+                  ))}
+                </div>
+              </div>
             )}
             <button
               onClick={() => setImportResult(null)}
