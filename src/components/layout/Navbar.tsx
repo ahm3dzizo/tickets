@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Ticket, Users, Settings, LogOut, Bell,
   Briefcase, UserCheck, HardHat, CalendarClock, ClipboardList,
-  CheckCheck, Moon, Sun, Settings2, BarChart3, X,
+  CheckCheck, Moon, Sun, Settings2, BarChart3, X, CloudLightning,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ const allNavItems = [
   { icon: HardHat,         label: 'الفنيين',     path: '/technicians',   roles: ['admin', 'supervisor'] },
   { icon: Users,           label: 'الفريق',      path: '/team',          roles: ['admin', 'engineer'] },
   { icon: Settings2,       label: 'أنواع التذاكر', path: '/ticket-types', roles: ['admin'] },
+  { icon: CloudLightning,  label: 'Salesforce',  path: '/salesforce-import', roles: ['admin', 'engineer'] },
   { icon: Settings,        label: 'الإعدادات',   path: '/settings',      roles: ['admin', 'engineer', 'supervisor'] },
 ];
 

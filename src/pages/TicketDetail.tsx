@@ -39,7 +39,7 @@ import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
 import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
-import { SaveInternalAppointmentDialog } from '@/components/tickets/SaveInternalAppointmentDialog';
+import { InternalAppointmentDialog } from '@/components/tickets/InternalAppointmentDialog';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -934,7 +934,7 @@ export default function TicketDetail() {
       )}
 
       {ticket && (
-        <SaveInternalAppointmentDialog
+        <InternalAppointmentDialog
           open={internalApptOpen}
           onOpenChange={setInternalApptOpen}
           tickets={[ticket]}

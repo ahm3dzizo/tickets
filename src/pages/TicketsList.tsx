@@ -12,7 +12,7 @@ import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/TicketTable';
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
 import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
-import { SaveInternalAppointmentDialog } from '@/components/tickets/SaveInternalAppointmentDialog';
+import { InternalAppointmentDialog } from '@/components/tickets/InternalAppointmentDialog';
 import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
@@ -506,7 +506,7 @@ export default function TicketsList() {
         )}
 
         {apptTicket && apptTicket.length > 0 && (
-          <SaveInternalAppointmentDialog
+          <InternalAppointmentDialog
             open={internalApptOpen}
             onOpenChange={setInternalApptOpen}
             tickets={apptTicket}

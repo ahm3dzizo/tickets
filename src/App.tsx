@@ -23,6 +23,7 @@ import Appointments from '@/pages/Appointments';
 import Contractors from '@/pages/Contractors';
 import ClientDetail from '@/pages/ClientDetail';
 import ContractorDetail from '@/pages/ContractorDetail';
+import SalesforceImport from '@/pages/SalesforceImport';
 import UnitDetail from '@/pages/UnitDetail';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
@@ -146,6 +147,10 @@ function AppContent() {
           <Route
             path="/units/:id"
             element={user && !requiresProfileCompletion ? <UnitDetail /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/salesforce-import"
+            element={user && !requiresProfileCompletion ? <SalesforceImport /> : <Navigate to="/login" />}
           />
           {/* ⛔️ تمت إزالة Route /register */}
         </Routes>

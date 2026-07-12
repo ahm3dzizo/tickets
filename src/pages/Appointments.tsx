@@ -14,7 +14,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { QuickAddSpecialtyDialog } from '@/components/tickets/QuickAddSpecialtyDialog';
-import { DirectAppointmentDialog } from '@/components/tickets/DirectAppointmentDialog';
+import { InternalAppointmentDialog } from '@/components/tickets/InternalAppointmentDialog';
 import { ClientTicketsModal } from '@/components/tickets/ClientTicketsModal';
 import { EditAppointmentDialog } from '@/components/tickets/EditAppointmentDialog';
 import { TranslatedText } from '@/components/ui/TranslatedText';
@@ -928,7 +928,7 @@ export default function Appointments() {
         />
       )}
       {directApptDate && (
-        <DirectAppointmentDialog
+        <InternalAppointmentDialog
           open={!!directApptDate}
           onOpenChange={(v) => !v && setDirectApptDate(null)}
           dateStr={directApptDate}
