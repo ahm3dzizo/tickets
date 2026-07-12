@@ -377,29 +377,72 @@ export default function Appointments() {
       if (!el) continue;
 
       try {
-        const imgData = await htmlToImage.toJpeg(el, { 
-          quality: 0.95, 
+        const pdf = new jsPDF('p', 'pt', 'a4');
+        const margin = 24;
+        const pdfPageW = pdf.internal.pageSize.getWidth();
+        const pdfPageH = pdf.internal.pageSize.getHeight();
+        const contentW = pdfPageW - margin * 2;
+        const contentH = pdfPageH - margin * 2;
+
+        // Page height in element pixels
+        const pageHeightPx = (contentH * el.offsetWidth) / contentW;
+
+        // Find natural cut points between card rows (never mid-card)
+        const elRect = el.getBoundingClientRect();
+        const cardEls = Array.from(el.querySelectorAll('[data-export-card]'));
+
+        const pageCuts: number[] = [0];
+        let nextCutBottom = pageHeightPx;
+
+        for (const card of cardEls) {
+          const r = card.getBoundingClientRect();
+          const cardBottom = r.bottom - elRect.top;
+          const cardTop    = r.top    - elRect.top;
+          if (cardBottom > nextCutBottom) {
+            // Cut just before this card (or its row twin in the grid)
+            const cut = Math.max(0, cardTop - 4);
+            pageCuts.push(cut);
+            nextCutBottom = cut + pageHeightPx;
+          }
+        }
+
+        // Capture full image once
+        const imgData = await htmlToImage.toJpeg(el, {
+          quality: 0.95,
           pixelRatio: 2,
           imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
         });
-        const pdf = new jsPDF('p', 'pt', 'a4');
-        const margin = 24; // 24pt margin (~8.5mm)
-        const pdfWidth = pdf.internal.pageSize.getWidth() - (margin * 2);
-        const pdfHeight = (el.offsetHeight * pdfWidth) / el.offsetWidth;
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const contentHeight = pageHeight - (margin * 2);
-        
-        let heightLeft = pdfHeight;
-        let position = margin;
 
-        pdf.addImage(imgData, 'JPEG', margin, position, pdfWidth, pdfHeight);
-        heightLeft -= contentHeight;
+        // Load image for slicing
+        const img = await new Promise<HTMLImageElement>(resolve => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.src = imgData;
+        });
+        const imgScaleY = img.height / el.offsetHeight;
 
-        while (heightLeft > 0) {
-          position -= contentHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, 'JPEG', margin, position, pdfWidth, pdfHeight);
-          heightLeft -= contentHeight;
+        for (let pi = 0; pi < pageCuts.length; pi++) {
+          const sliceTop    = pageCuts[pi];
+          const sliceBottom = pi + 1 < pageCuts.length ? pageCuts[pi + 1] : el.offsetHeight;
+          const sliceH      = sliceBottom - sliceTop;
+
+          const canvas = document.createElement('canvas');
+          canvas.width  = img.width;
+          canvas.height = Math.ceil(sliceH * imgScaleY);
+          const ctx = canvas.getContext('2d')!;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(
+            img,
+            0, sliceTop * imgScaleY, img.width, sliceH * imgScaleY,
+            0, 0, canvas.width, canvas.height
+          );
+
+          const sliceData    = canvas.toDataURL('image/jpeg', 0.95);
+          const slicePdfH    = (sliceH / el.offsetWidth) * contentW;
+
+          if (pi > 0) pdf.addPage();
+          pdf.addImage(sliceData, 'JPEG', margin, margin, contentW, slicePdfH);
         }
 
         const langName = l === 'ar' ? 'Arabic' : l === 'ur' ? 'Urdu' : 'Hindi';
@@ -440,6 +483,7 @@ export default function Appointments() {
             return (
               <div
                 key={i}
+                data-export-card
                 className={`border border-black rounded-lg p-2 flex flex-col gap-1.5 break-inside-avoid overflow-hidden ${hasImages ? 'col-span-2' : 'col-span-1 min-h-[80px] justify-center'}`}
               >
                 <div className="flex justify-between items-center border-b border-black/30 pb-1">
