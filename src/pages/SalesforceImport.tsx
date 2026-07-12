@@ -103,7 +103,7 @@ function buildBookmarklet(appOrigin: string, token: string): string {
 
 // ── Page component ─────────────────────────────────────────────────────────────
 export default function SalesforceImport() {
-  const [bookmarkletHref, setBookmarkletHref] = useState('');
+  const [bookmarkletCode, setBookmarkletCode] = useState('');
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   const generateHref = () => {
@@ -111,10 +111,17 @@ export default function SalesforceImport() {
       localStorage.getItem('retal_auth_token') ||
       localStorage.getItem('token') ||
       '';
-    setBookmarkletHref(buildBookmarklet(window.location.origin, token));
+    setBookmarkletCode(buildBookmarklet(window.location.origin, token));
   };
 
   useEffect(() => { generateHref(); }, []);
+
+  // Set href directly on DOM node — React blocks javascript: URLs in the href prop
+  useEffect(() => {
+    if (linkRef.current && bookmarkletCode) {
+      linkRef.current.setAttribute('href', bookmarkletCode);
+    }
+  }, [bookmarkletCode]);
 
   return (
     <Layout>
@@ -157,13 +164,13 @@ export default function SalesforceImport() {
         <div className="border-2 border-dashed border-blue-500/30 rounded-2xl p-8 text-center space-y-5 bg-blue-500/5">
           <p className="text-sm text-muted-foreground">اسحب الزرار لشريط المفضلة</p>
 
-          {bookmarkletHref ? (
+          {bookmarkletCode ? (
             <a
               ref={linkRef}
-              href={bookmarkletHref}
+              href="#"
               onClick={e => e.preventDefault()}
               draggable
-              title="اسحب لشريط المفضلة"
+              title="اسحب لشريط المفضلة — لا تضغط هنا"
               className={cn(
                 'inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-bold text-sm',
                 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors',
