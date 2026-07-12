@@ -7,26 +7,48 @@ import { cn } from '@/lib/utils';
 // Runs inside the Salesforce page (same-origin) → no SF credentials needed.
 // Parses the Analytics API response, sends rows to our server.
 function buildBookmarklet(appOrigin: string, token: string): string {
-  // Minified self-contained IIFE — no external deps
   const fn = `async function(O,T){
-  var m=window.location.href.match(/Report\\/([A-Za-z0-9]+)\\//);
-  if(!m){alert('❌ افتح صفحة تقرير Salesforce أولاً');return;}
+  /* ── popup helper (max z-index so it floats above SF UI) ── */
+  var el=null;
+  var upd=function(html,bg){
+    if(el){el.innerHTML=html;if(bg)el.style.background=bg;}
+    else{alert(html.replace(/<[^>]+>/g,''));}
+  };
+  try{
+    el=document.createElement('div');
+    el.setAttribute('style','all:initial;position:fixed!important;top:20px!important;right:20px!important;z-index:2147483647!important;background:#1e293b;color:#e2e8f0;padding:16px 22px;border-radius:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.8;box-shadow:0 8px 32px rgba(0,0,0,.55);direction:rtl;min-width:260px;max-width:360px');
+    el.innerHTML='⏳ مزامنة رتال — جاري التهيئة...';
+    (document.body||document.documentElement).appendChild(el);
+  }catch(initErr){
+    console.error('[رتال]',initErr);
+    el=null;
+  }
+
+  /* ── extract report ID from URL ── */
+  var href=window.location.href;
+  console.log('[رتال] URL:',href);
+  var m=href.match(/Report\\/([A-Za-z0-9]+)\\//);
+  if(!m){
+    upd('❌ افتح صفحة تقرير Salesforce أولاً<br><small style="opacity:.7">'+href.slice(0,70)+'</small>','#7f1d1d');
+    setTimeout(function(){if(el)el.remove();},8000);
+    return;
+  }
   var rid=m[1];
-  var el=document.createElement('div');
-  el.style='position:fixed;top:20px;right:20px;z-index:99999;background:#1e293b;color:#e2e8f0;padding:16px 22px;border-radius:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.8;box-shadow:0 8px 32px rgba(0,0,0,.55);direction:rtl;min-width:250px;max-width:340px';
-  el.innerHTML='⏳ جاري جلب البيانات من Salesforce...';
-  document.body.appendChild(el);
-  var upd=function(html,bg){el.innerHTML=html;if(bg)el.style.background=bg;};
+  console.log('[رتال] report ID:',rid);
+  upd('⏳ جاري جلب البيانات من Salesforce...');
+
   try{
     /* ── 1. Fetch report via SF Analytics API ── */
     var resp=await fetch('/services/data/v59.0/analytics/reports/'+rid+'?includeDetails=true',{headers:{Accept:'application/json'}});
     if(!resp.ok)throw new Error('Salesforce API: HTTP '+resp.status);
     var data=await resp.json();
+    console.log('[رتال] SF response keys:',Object.keys(data));
 
     /* ── 2. Map column labels to indices ── */
     var cols=(data.reportMetadata||{}).detailColumns||[];
     var info=((data.reportExtendedMetadata||{}).detailColumnInfo)||{};
     var lbls=cols.map(function(c){return((info[c]||{}).label||c).toLowerCase();});
+    console.log('[رتال] columns:',lbls);
     var fi=function(){
       var keys=Array.prototype.slice.call(arguments);
       for(var a=0;a<keys.length;a++){
@@ -41,6 +63,7 @@ function buildBookmarklet(appOrigin: string, token: string): string {
     var iDate  =fi('opened date','open date','created date','تاريخ');
     var iDesc  =fi('description','وصف');
     var iStatus=fi('status','case status','حالة');
+    console.log('[رتال] col idx case='+iCase+' unit='+iUnit+' acc='+iAcc+' date='+iDate+' desc='+iDesc+' status='+iStatus);
 
     /* ── 3. Collect rows from factMap ── */
     var rows=[];
@@ -52,21 +75,15 @@ function buildBookmarklet(appOrigin: string, token: string): string {
         var c=r.dataCells||[];
         var get=function(i){return(i>=0&&c[i])?(c[i].label||''):'';};
         var cn=get(iCase);
-        if(!cn)return; // skip empty rows
-        rows.push({
-          caseNumber: cn,
-          unit:        get(iUnit),
-          accountName: get(iAcc),
-          openedDate:  get(iDate),
-          description: get(iDesc),
-          status:      get(iStatus)
-        });
+        if(!cn)return;
+        rows.push({caseNumber:cn,unit:get(iUnit),accountName:get(iAcc),openedDate:get(iDate),description:get(iDesc),status:get(iStatus)});
       });
     });
+    console.log('[رتال] rows collected:',rows.length);
 
     if(!rows.length){
       upd('⚠️ لم يتم العثور على بيانات في التقرير');
-      setTimeout(function(){el.remove();},5000);
+      setTimeout(function(){if(el)el.remove();},5000);
       return;
     }
 
@@ -80,25 +97,25 @@ function buildBookmarklet(appOrigin: string, token: string): string {
     });
     if(!sr.ok)throw new Error('Server: HTTP '+sr.status);
     var res=await sr.json();
+    console.log('[رتال] server response:',res);
 
     var bg=res.added>0?'#14532d':(res.updated>0?'#1e3a5f':'#1e293b');
     var html='✅ اكتملت المزامنة!<br>';
     html+='<span style="color:#86efac">➕ جديدة: <b>'+res.added+'</b></span><br>';
     html+='<span style="color:#93c5fd">🔄 مُحدَّثة: <b>'+res.updated+'</b></span><br>';
     html+='<span style="color:#94a3b8">⏭️ مطابقة: <b>'+res.skipped+'</b></span>';
-    if(res.errors&&res.errors.length){
-      html+='<br><span style="color:#fca5a5">⚠️ أخطاء: '+res.errors.length+'</span>';
-    }
+    if(res.errors&&res.errors.length){html+='<br><span style="color:#fca5a5">⚠️ أخطاء: '+res.errors.length+'</span>';}
     upd(html,bg);
-    setTimeout(function(){el.remove();},10000);
+    setTimeout(function(){if(el)el.remove();},10000);
 
   }catch(e){
+    console.error('[رتال]',e);
     upd('❌ خطأ: '+e.message,'#7f1d1d');
-    setTimeout(function(){el.remove();},7000);
+    setTimeout(function(){if(el)el.remove();},7000);
   }
 }`;
 
-  return `javascript:(${fn})('${appOrigin}','${token}')`;
+  return `javascript:void (${fn})('${appOrigin}','${token}')`;
 }
 
 // ── Page component ─────────────────────────────────────────────────────────────
