@@ -35,12 +35,33 @@ function buildBookmarklet(appOrigin: string, token: string): string {
   }
   var rid=m[1];
   console.log('[رتال] report ID:',rid);
+  /* ── try to grab SF session token for Authorization header ── */
+  var sfTok='';
+  try{
+    if(window.sforce&&window.sforce.connection&&window.sforce.connection.sessionId)
+      sfTok=window.sforce.connection.sessionId;
+  }catch(e){}
+  /* scan inline scripts for a session id pattern (00D…!…) */
+  if(!sfTok){
+    var sc=document.querySelectorAll('script');
+    for(var si=0;si<sc.length;si++){
+      var st=sc[si].textContent||'';
+      var sm=st.match(/["']?(00D[A-Za-z0-9]{12,18}![A-Za-z0-9._]+)["']?/);
+      if(sm){sfTok=sm[1];break;}
+    }
+  }
+  console.log('[رتال] sfTok found:',!!sfTok, sfTok?sfTok.slice(0,20)+'…':'');
   upd('⏳ جاري جلب البيانات من Salesforce...');
 
   try{
     /* ── 1. Fetch report via SF Analytics API ── */
-    var resp=await fetch('/services/data/v59.0/analytics/reports/'+rid+'?includeDetails=true',{headers:{Accept:'application/json'}});
-    if(!resp.ok)throw new Error('Salesforce API: HTTP '+resp.status);
+    var hdrs={'Accept':'application/json'};
+    if(sfTok)hdrs['Authorization']='Bearer '+sfTok;
+    var resp=await fetch('/services/data/v59.0/analytics/reports/'+rid+'?includeDetails=true',{credentials:'include',headers:hdrs});
+    if(!resp.ok){
+      var errBody='';try{errBody=await resp.text();}catch(e){}
+      throw new Error('Salesforce API: HTTP '+resp.status+' — '+errBody.slice(0,120));
+    }
     var data=await resp.json();
     console.log('[رتال] SF response keys:',Object.keys(data));
 
