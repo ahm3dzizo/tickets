@@ -304,7 +304,7 @@ export default function Reports() {
 
   // ── chart data ──────────────────────────────────────────────────────────────
   const specialtyData  = useMemo(() => (data?.bySpecialty ?? []).map((s:any,i:number) => ({ ...s, fill: COLORS[i % COLORS.length] })), [data]);
-  const mainTypeData   = useMemo(() => (data?.byMainType ?? []).slice(0,12).map((x:any) => ({ name:x.nameAr, مغلق:x.closed, مفتوح:x.open })), [data]);
+  const mainTypeData   = useMemo(() => (data?.byMainType ?? []).map((x:any) => ({ name:x.nameAr, مغلق:x.closed, مفتوح:x.open })), [data]);
   const subTypeData    = useMemo(() => (data?.bySubType  ?? []).slice(0,15).map((x:any,i:number) => ({ name:x.nameAr, عدد:x.count, fill:COLORS[i%COLORS.length] })), [data]);
   const monthlyData    = useMemo(() => (data?.byMonth    ?? []).map((m:any) => ({ month:m.month, إجمالي:m.total, مغلق:m.closed, مفتوح:m.open })), [data]);
   const projectData    = useMemo(() => (data?.byProject  ?? []).slice(0,10).map((x:any) => ({ name:x.abbr||x.name.slice(0,10), مغلق:x.closed, مفتوح:x.open })), [data]);
@@ -461,52 +461,22 @@ export default function Reports() {
           </div>
         </div>
 
-        {/* ── Main Type + Priority ─────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2">
-            <Card title="التوزيع حسب النوع الرئيسي">
-              {loading ? <Skeleton h="h-64" /> : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={mainTypeData} margin={{ top:5, right:10, left:-20, bottom:50 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize:9, fill:'hsl(var(--muted-foreground))' }} angle={-40} textAnchor="end" tickLine={false} axisLine={false} interval={0} />
-                    <YAxis tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                    <Tooltip content={<TooltipBox />} />
-                    <Legend wrapperStyle={{ fontSize:11, paddingTop:8, direction:'rtl' }} />
-                    <Bar dataKey="مغلق"  stackId="a" fill="#22c55e" radius={[0,0,0,0]} />
-                    <Bar dataKey="مفتوح" stackId="a" fill="#f97316" radius={[4,4,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </Card>
-          </div>
-
-          <Card title="توزيع الأولويات">
-            {loading ? <Skeleton h="h-64" /> : (
-              <div className="space-y-4">
-                <ResponsiveContainer width="100%" height={180}>
-                  <PieChart>
-                    <Pie data={priorityData} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                      innerRadius={40} outerRadius={75} paddingAngle={3}>
-                      {priorityData.map((e:any,i:number) => <Cell key={i} fill={e.fill} />)}
-                    </Pie>
-                    <Tooltip content={<TooltipBox />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-2 border-t border-border pt-3">
-                  {priorityData.map((p:any,i:number) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.fill }} />
-                      <span className="text-sm flex-1 text-right text-foreground">{p.name}</span>
-                      <span className="text-xs text-muted-foreground">{pct(p.value, total)}%</span>
-                      <span className="text-sm font-bold tabular-nums w-12 text-right">{p.value?.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
-        </div>
+        {/* ── Main Type — full width ───────────────────────────────────────── */}
+        <Card title="التوزيع حسب النوع الرئيسي">
+          {loading ? <Skeleton h="h-80" /> : (
+            <ResponsiveContainer width="100%" height={Math.max(360, mainTypeData.length * 28 + 80)}>
+              <BarChart data={mainTypeData} margin={{ top:5, right:10, left:-20, bottom:60 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize:9, fill:'hsl(var(--muted-foreground))' }} angle={-40} textAnchor="end" tickLine={false} axisLine={false} interval={0} />
+                <YAxis tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                <Tooltip content={<TooltipBox />} />
+                <Legend wrapperStyle={{ fontSize:11, paddingTop:8, direction:'rtl' }} />
+                <Bar dataKey="مغلق"  stackId="a" fill="#22c55e" radius={[0,0,0,0]} />
+                <Bar dataKey="مفتوح" stackId="a" fill="#f97316" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
 
         {/* ── Projects + Avg Days by Type ─────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
