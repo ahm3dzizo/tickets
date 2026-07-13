@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Ticket, Client, Project } from '@/types';
 import { ticketsApi, projectsApi, whatsappApi } from '@/lib/api';
+import { AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -130,15 +131,18 @@ const [cardStatus, setCardStatus] = useState('تم');
 const [closingMsgTemplate, setClosingMsgTemplate] = useState('');
 const [absentMsgTemplate, setAbsentMsgTemplate] = useState('');
 const [outOfScopeMsgTemplate, setOutOfScopeMsgTemplate] = useState('');
+const [waConnected, setWaConnected] = useState<boolean | null>(null);
 
 React.useEffect(() => {
 if (open) {
 setCloseType('normal');
+setWaConnected(null);
 WhatsAppService.getTemplates().then(t => {
 setClosingMsgTemplate(t.closingMsg);
 setAbsentMsgTemplate(t.absentMsg || '');
 setOutOfScopeMsgTemplate(t.outOfScopeMsg || '');
 });
+whatsappApi.getStatus().then(s => setWaConnected(s.connected)).catch(() => setWaConnected(false));
 }
 }, [open]);
 
@@ -594,6 +598,18 @@ onChange={(e) => setNotes(e.target.value)}
 </div>
 </div>
 
+{waConnected === false && (
+<div className="flex items-start gap-3 rounded-2xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-right">
+<AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+<div className="space-y-0.5">
+<p className="text-sm font-bold text-red-400">واتساب غير مرتبط</p>
+<p className="text-xs text-red-300/80 leading-relaxed">
+لا يمكن إقفال التذاكر حتى يتم ربط الواتساب — يرجى الربط أولاً من الشريط أعلى الصفحة.
+</p>
+</div>
+</div>
+)}
+
 <DialogFooter className="gap-3 pt-4 border-t border-white/5 flex-col sm:flex-row">
 {closeType === 'normal' && (
 <Button
@@ -609,8 +625,8 @@ className="border-slate-600 text-slate-300 hover:text-white rounded-xl gap-2 h-1
 )}
 <Button
 onClick={handleSubmit}
-disabled={loading}
-className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 rounded-xl h-12 font-bold shadow-lg shadow-emerald-500/20 flex-1 gap-2"
+disabled={loading || waConnected === false || waConnected === null}
+className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 rounded-xl h-12 font-bold shadow-lg shadow-emerald-500/20 flex-1 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 >
 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
 <>
