@@ -350,8 +350,8 @@ export default function Settings() {
 
   // current config being edited
   const currentWH: WorkHoursConfig = whProjectId
-    ? (whSettings.byProject[whProjectId] ?? { ...DEFAULT_WH_CONFIG })
-    : whSettings.default;
+    ? (whSettings.byProject[whProjectId] ?? whSettings.default ?? DEFAULT_WH_CONFIG)
+    : (whSettings.default ?? DEFAULT_WH_CONFIG);
   const hasCustomOverride = whProjectId ? !!whSettings.byProject[whProjectId] : true;
 
   const setCurrentWH = (cfg: WorkHoursConfig) => {
@@ -381,7 +381,12 @@ export default function Settings() {
     setLoadingWorkHours(true);
     try {
       const data = await settingsApi.getWorkHours();
-      setWhSettings(data || { default: DEFAULT_WH_CONFIG, byProject: {} });
+      // Guard: old DB format doesn't have a .default key
+      if (data?.default) {
+        setWhSettings(data);
+      } else {
+        setWhSettings({ default: DEFAULT_WH_CONFIG, byProject: {} });
+      }
     } catch {
       toast.error('تعذر تحميل أوقات الدوام');
     } finally {
