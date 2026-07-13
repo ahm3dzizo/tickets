@@ -652,6 +652,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       isDirectAppointment:  data.isDirectAppointment  ?? undefined,
       contractorId:         data.contractorId         ?? undefined,
       contractorName:       data.contractorName       ?? undefined,
+      contractorNote:       data.contractorNote       ?? undefined,
     };
 
     // ── Auto-reassign supervisor when classification changes ───────────────
