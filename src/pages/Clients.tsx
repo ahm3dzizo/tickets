@@ -69,9 +69,9 @@ export default function Clients() {
   const toggleExportProject = (id: string) =>
     setExportProjectIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  const clientsForExport = clients.filter(c =>
-    exportProjectIds.length === 0 || exportProjectIds.includes(c.projectId)
-  );
+  const clientsForExport = exportProjectIds.length === 0
+    ? []
+    : clients.filter(c => exportProjectIds.includes(c.projectId));
 
   // "721 محمد" — villa + first word of name
   const contactName = (c: any) => {
@@ -88,15 +88,15 @@ export default function Clients() {
 
   const exportExcel = () => {
     const rows = clientsForExport.map(c => ({
-      'المشروع':      projects.find(p => p.id === c.projectId)?.name || '',
-      'رقم الفيلا':  c.villaNumber || '',
-      'رقم البلوك':  c.blockNumber || '',
-      'الاسم':       c.name || '',
-      'رقم الجوال':  c.phone || '',
+      'المشروع':        projects.find(p => p.id === c.projectId)?.name || '',
+      'رقم الفيلا':    c.villaNumber || '',
+      'رقم البلوك':    c.blockNumber || '',
+      'الاسم':         contactName(c),
+      'الاسم الكامل':  c.name || '',
+      'رقم الجوال':    c.phone || '',
     }));
     const ws = XLSX.utils.json_to_sheet(rows, { skipHeader: false });
-    // RTL column widths
-    ws['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 18 }];
+    ws['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 30 }, { wch: 18 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'العملاء');
     const label = exportProjectIds.length === 1
@@ -283,7 +283,7 @@ export default function Clients() {
                     })}
                   </div>
                   {exportProjectIds.length === 0 && (
-                    <p className="text-xs text-amber-500">لم تختر مشروعاً — سيتم تصدير كل العملاء</p>
+                    <p className="text-xs text-amber-500">اختر مشروعاً واحداً على الأقل للتصدير</p>
                   )}
                   <p className="text-xs text-muted-foreground/70">
                     {clientsForExport.length} عميل سيُصدَّر
@@ -301,7 +301,13 @@ export default function Clients() {
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <button
                       onClick={exportExcel}
-                      className="flex flex-col items-center gap-2 p-4 rounded-2xl border-2 border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors"
+                      disabled={exportProjectIds.length === 0}
+                      className={cn(
+                        'flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-colors',
+                        exportProjectIds.length === 0
+                          ? 'border-border/30 bg-muted/20 opacity-40 cursor-not-allowed'
+                          : 'border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 cursor-pointer',
+                      )}
                     >
                       <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
                       <div className="text-center">
@@ -311,7 +317,13 @@ export default function Clients() {
                     </button>
                     <button
                       onClick={exportVCard}
-                      className="flex flex-col items-center gap-2 p-4 rounded-2xl border-2 border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-colors"
+                      disabled={exportProjectIds.length === 0}
+                      className={cn(
+                        'flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-colors',
+                        exportProjectIds.length === 0
+                          ? 'border-border/30 bg-muted/20 opacity-40 cursor-not-allowed'
+                          : 'border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer',
+                      )}
                     >
                       <Contact className="w-6 h-6 text-blue-400" />
                       <div className="text-center">
