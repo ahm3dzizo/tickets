@@ -170,7 +170,7 @@ export function PWAInstallPrompt() {
       <button
         onMouseDown={e => e.stopPropagation()}
         onClick={handleClose}
-        className="absolute top-3 left-3 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        className="absolute top-3 right-3 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
       >
         <X className="w-4 h-4" />
       </button>

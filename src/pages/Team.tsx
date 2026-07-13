@@ -143,12 +143,12 @@ export default function Team() {
                       {/* Name */}
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3 justify-start">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
+                            <Shield className="w-4 h-4" />
+                          </div>
                           <div className="text-right">
                             <div className="font-semibold text-foreground text-sm">{t.displayName}</div>
                             <div className="text-[10px] text-muted-foreground font-mono">{t.employeeId ? `#${t.employeeId}` : ''}</div>
-                          </div>
-                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
-                            <Shield className="w-4 h-4" />
                           </div>
                         </div>
                       </td>

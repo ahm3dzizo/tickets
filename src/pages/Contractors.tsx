@@ -653,7 +653,7 @@ export default function Contractors() {
             <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="بحث بالاسم، تخصص، رقم فيلا..." className="pr-9 h-9 rounded-xl bg-card border-border text-sm" />
+                placeholder="بحث بالاسم، تخصص، رقم فيلا..." className={cn("pr-9 h-9 rounded-xl bg-card border-border text-sm", search && "pl-9")} />
               {search && (
                 <button onClick={() => setSearch('')} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                   <X className="w-3.5 h-3.5" />

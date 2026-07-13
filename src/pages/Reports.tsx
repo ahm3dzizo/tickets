@@ -343,7 +343,7 @@ export default function Reports() {
             <label className="text-[11px] font-semibold text-muted-foreground text-right">المشروع</label>
             <div className="relative">
               <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
-                className="w-full appearance-none bg-muted border border-border rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/40 pr-8" dir="rtl">
+                className="w-full appearance-none bg-muted border border-border rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/40 pl-8" dir="rtl">
                 <option value="">جميع المشاريع</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>

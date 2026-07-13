@@ -334,15 +334,15 @@ export default function TicketsList() {
                 <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
 
                 <ClientForm trigger={
-                  <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all">
-                    <UserPlus className="w-4 h-4 ml-2 text-primary" />
+                  <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all gap-2">
+                    <UserPlus className="w-4 h-4 text-primary" />
                     إضافة عميل جديد
                   </Button>
                 } onSuccess={loadData} />
 
                 <Link to="/clients">
-                  <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all">
-                    <User className="w-4 h-4 ml-2 text-slate-400" />
+                  <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all gap-2">
+                    <User className="w-4 h-4 text-slate-400" />
                     صفحة العملاء
                   </Button>
                 </Link>

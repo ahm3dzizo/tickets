@@ -574,7 +574,7 @@ export function TicketTable({
                 placeholder="بحث برقم التذكرة أو الفيلا أو التفاصيل..."
                 value={localSearch}
                 onChange={e => setLocalSearch(e.target.value)}
-                className="pr-9 h-10 bg-card border-border/50 rounded-xl text-sm text-foreground text-right"
+                className={cn("pr-9 h-10 bg-card border-border/50 rounded-xl text-sm text-foreground text-right", localSearch && "pl-9")}
               />
               {localSearch && (
                 <button

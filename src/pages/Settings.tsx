@@ -42,7 +42,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       )}
     >
       <span className={cn(
-        'absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+        'absolute top-1 left-0 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
         checked ? 'translate-x-6' : 'translate-x-1',
       )} />
     </button>
@@ -710,8 +710,8 @@ export default function Settings() {
             )}
 
             <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl px-5 py-3 justify-start">
-              <span className="text-xs font-bold">وصولك مؤمَّن عبر PostgreSQL + JWT</span>
               <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span className="text-xs font-bold">وصولك مؤمَّن عبر PostgreSQL + JWT</span>
             </div>
           </div>
         </Section>
@@ -738,11 +738,11 @@ export default function Settings() {
             {!loadingWA && waStatus && !waStatus.running && (
               <div className="space-y-4">
                 <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 justify-start">
+                  <WifiOff className="w-5 h-5 text-amber-400 shrink-0" />
                   <div className="text-right">
                     <p className="text-amber-400 font-bold text-sm">خدمة الواتساب التلقائي متوقفة</p>
                     <p className="text-muted-foreground text-xs mt-0.5">يمكنك تشغيل الخدمة مباشرة من هنا أو فحص حالتها</p>
                   </div>
-                  <WifiOff className="w-5 h-5 text-amber-400 shrink-0" />
                 </div>
                 
                 <div className="flex gap-3">
@@ -774,13 +774,13 @@ export default function Settings() {
             {!loadingWA && waStatus?.running && waStatus.connected && (
               <div className="space-y-4">
                 <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-5 py-4 justify-start">
+                  <Wifi className="w-5 h-5 text-emerald-400 shrink-0" />
                   <div className="text-right">
                     <p className="text-emerald-400 font-bold text-sm">مرتبط ونشط</p>
                     <p className="text-muted-foreground text-xs mt-0.5">
                       {waStatus.linkedPhone ? `مربوط برقم: ${waStatus.linkedPhone}` : 'الرسائل التلقائية تعمل من واتسابك'}
                     </p>
                   </div>
-                  <Wifi className="w-5 h-5 text-emerald-400 shrink-0" />
                 </div>
                 
                 <div className="flex gap-3">
@@ -813,11 +813,11 @@ export default function Settings() {
             {!loadingWA && waStatus?.running && !waStatus.connected && (
               <div className="space-y-5">
                 <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl px-5 py-4 justify-start">
+                  <MessageSquare className="w-5 h-5 text-blue-400 shrink-0" />
                   <div className="text-right">
                     <p className="text-blue-400 font-bold text-sm">في انتظار الربط</p>
                     <p className="text-muted-foreground text-xs mt-0.5">امسح رمز QR من واتساب على هاتفك</p>
                   </div>
-                  <MessageSquare className="w-5 h-5 text-blue-400 shrink-0" />
                 </div>
 
                 {waQR ? (
@@ -995,7 +995,7 @@ export default function Settings() {
                       >
                         {p.name}
                         {whSettings.byProject[p.id] && (
-                          <span className="absolute -top-1 -left-1 w-2 h-2 bg-emerald-400 rounded-full" />
+                          <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-400 rounded-full" />
                         )}
                       </button>
                     ))}
