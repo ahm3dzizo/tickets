@@ -434,7 +434,7 @@ export default function Settings() {
               <div className="relative group cursor-pointer" onClick={() => photoInputRef.current?.click()}>
                 <div className="w-20 h-20 rounded-2xl overflow-hidden bg-blue-500/20 flex items-center justify-center text-2xl font-black text-blue-400 border-2 border-blue-500/30">
                   {photoPreview
-                    ? <img src={photoPreview} alt="avatar" className="w-full h-full object-cover" />
+                    ? <img src={photoPreview} alt="avatar" className="w-full h-full object-cover" onError={() => setPhotoPreview(null)} />
                     : initials}
                 </div>
                 <div className="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -494,7 +494,7 @@ export default function Settings() {
         {/* ── Security ────────────────────────────────────────────────────── */}
         <Section icon={Lock} title="الأمان" desc="تغيير كلمة المرور وإدارة الجلسات"
           accent="amber" open={openSection === 'security'} onToggle={() => toggle('security')}>
-          <div className="space-y-4">
+          <form onSubmit={e => { e.preventDefault(); handleChangePassword(); }} className="space-y-4">
             {/* Current password */}
             <div className="space-y-1.5">
               <Label className="text-muted-foreground text-xs font-bold text-right block">كلمة المرور الحالية</Label>
@@ -566,7 +566,7 @@ export default function Settings() {
 
             <div className="flex justify-start">
               <Button
-                onClick={handleChangePassword}
+                type="submit"
                 disabled={savingPass || !currentPass || !newPass || !confirmPass}
                 className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 px-6 gap-2 font-bold"
               >
@@ -574,7 +574,7 @@ export default function Settings() {
                 تغيير كلمة المرور
               </Button>
             </div>
-          </div>
+          </form>
         </Section>
 
         {/* ── Notifications ───────────────────────────────────────────────── */}
