@@ -206,6 +206,9 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
     const disabled = data.disabled !== undefined ? Boolean(data.disabled) : existing.disabled;
     const onLeave = data.onLeave !== undefined ? Boolean(data.onLeave) : existing.onLeave;
     const substituteUid = data.substituteUid !== undefined ? (data.substituteUid === "" ? null : asTrimmedString(data.substituteUid)) : existing.substituteUid;
+    const idNumber = data.idNumber !== undefined ? (asTrimmedString(data.idNumber) ?? null) : (existing as any).idNumber ?? null;
+    const clothingSize = data.clothingSize !== undefined ? (asTrimmedString(data.clothingSize) ?? null) : (existing as any).clothingSize ?? null;
+    const shoeSize = data.shoeSize !== undefined ? (asTrimmedString(data.shoeSize) ?? null) : (existing as any).shoeSize ?? null;
 
     // If changing identity fields, check uniqueness
     if (
@@ -236,7 +239,10 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
         onLeave,
         substituteUid,
         notifPrefs: data.notifPrefs ?? existing.notifPrefs ?? undefined,
-      },
+        idNumber,
+        clothingSize,
+        shoeSize,
+      } as any,
       include: { projects: true, specialtiesRef: true }
     });
 

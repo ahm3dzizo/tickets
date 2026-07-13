@@ -430,7 +430,7 @@ export default function Settings() {
           accent="blue" open={openSection === 'profile'} onToggle={() => toggle('profile')}>
           <div className="space-y-5">
             {/* Avatar row */}
-            <div className="flex items-center gap-5 flex-row-reverse">
+            <div className="flex items-center gap-5">
               <div className="relative group cursor-pointer" onClick={() => photoInputRef.current?.click()}>
                 <div className="w-20 h-20 rounded-2xl overflow-hidden bg-blue-500/20 flex items-center justify-center text-2xl font-black text-blue-400 border-2 border-blue-500/30">
                   {photoPreview

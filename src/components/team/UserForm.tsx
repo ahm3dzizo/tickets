@@ -9,6 +9,9 @@ import {
   Hash,
   Phone,
   Info,
+  CreditCard,
+  Shirt,
+  Footprints,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,6 +71,9 @@ export function UserForm({
   const [displayName,      setDisplayName]      = useState(editingUser?.displayName || '');
   const [employeeId,       setEmployeeId]       = useState(editingUser?.employeeId || '');
   const [phoneNumber,      setPhoneNumber]      = useState(editingUser?.phoneNumber || '');
+  const [idNumber,         setIdNumber]         = useState(editingUser?.idNumber || '');
+  const [clothingSize,     setClothingSize]     = useState(editingUser?.clothingSize || '');
+  const [shoeSize,         setShoeSize]         = useState(editingUser?.shoeSize || '');
   const [role,             setRole]             = useState<UserRole>(editingUser?.role || 'supervisor');
   const [specialties,      setSpecialties]      = useState<string[]>(
     editingUser?.specialties ?? (editingUser?.specialty ? [editingUser.specialty] : ['general'])
@@ -97,6 +103,9 @@ export function UserForm({
       setEmail(fresh.email || '');
       setEmployeeId(fresh.employeeId || '');
       setPhoneNumber(fresh.phoneNumber || '');
+      setIdNumber((fresh as any).idNumber || '');
+      setClothingSize((fresh as any).clothingSize || '');
+      setShoeSize((fresh as any).shoeSize || '');
       setRole(fresh.role || 'supervisor');
       setSpecialties(
         fresh.specialties?.length
@@ -138,6 +147,9 @@ export function UserForm({
           displayName,
           employeeId,
           phoneNumber,
+          idNumber: idNumber || null,
+          clothingSize: clothingSize || null,
+          shoeSize: shoeSize || null,
           specialties,
           specialty: specialties[0],
           role,
@@ -194,6 +206,9 @@ export function UserForm({
             email={email} setEmail={setEmail}
             employeeId={employeeId} setEmployeeId={setEmployeeId}
             phoneNumber={phoneNumber} setPhoneNumber={setPhoneNumber}
+            idNumber={idNumber} setIdNumber={setIdNumber}
+            clothingSize={clothingSize} setClothingSize={setClothingSize}
+            shoeSize={shoeSize} setShoeSize={setShoeSize}
             role={role} setRole={setRole}
             roleTranslations={roleTranslations}
             specialties={specialties} toggleSpecialty={toggleSpecialty}
@@ -230,6 +245,9 @@ export function UserForm({
           email={email} setEmail={setEmail}
           employeeId={employeeId} setEmployeeId={setEmployeeId}
           phoneNumber={phoneNumber} setPhoneNumber={setPhoneNumber}
+          idNumber={idNumber} setIdNumber={setIdNumber}
+          clothingSize={clothingSize} setClothingSize={setClothingSize}
+          shoeSize={shoeSize} setShoeSize={setShoeSize}
           role={role} setRole={setRole}
           roleTranslations={roleTranslations}
           specialties={specialties} toggleSpecialty={toggleSpecialty}
@@ -255,6 +273,9 @@ interface FormBodyProps {
   email: string; setEmail: (v: string) => void;
   employeeId: string; setEmployeeId: (v: string) => void;
   phoneNumber: string; setPhoneNumber: (v: string) => void;
+  idNumber: string; setIdNumber: (v: string) => void;
+  clothingSize: string; setClothingSize: (v: string) => void;
+  shoeSize: string; setShoeSize: (v: string) => void;
   role: UserRole; setRole: (v: UserRole) => void;
   roleTranslations: Record<UserRole, string>;
   specialties: string[]; toggleSpecialty: (s: string) => void;
@@ -268,9 +289,13 @@ interface FormBodyProps {
   onCancel: () => void;
 }
 
+const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+const SHOE_SIZES = ['38', '39', '40', '41', '42', '43', '44', '45', '46', '47'];
+
 function FormBody({
   editingUser, displayName, setDisplayName, email, setEmail,
   employeeId, setEmployeeId, phoneNumber, setPhoneNumber,
+  idNumber, setIdNumber, clothingSize, setClothingSize, shoeSize, setShoeSize,
   role, setRole, roleTranslations,
   specialties, toggleSpecialty,
   selectedProjects, toggleProject, projects,
@@ -473,6 +498,55 @@ function FormBody({
                   onChange={e => setPhoneNumber(e.target.value)}
                 />
                 <Phone className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              </div>
+            </div>
+
+            {/* National ID */}
+            <div className="space-y-2">
+              <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">رقم الهوية الحكومي</Label>
+              <div className="relative">
+                <Input
+                  placeholder="1xxxxxxxxx"
+                  dir="ltr"
+                  className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-left pl-12 font-mono"
+                  value={idNumber}
+                  onChange={e => setIdNumber(e.target.value)}
+                />
+                <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              </div>
+            </div>
+
+            {/* Clothing + Shoe sizes */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">مقاس التيشيرت</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12" />}>
+                    <span className="text-right flex-1 text-sm">{clothingSize || 'اختر'}</span>
+                    <Shirt className="w-3.5 h-3.5 opacity-50 shrink-0" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="bg-card border-border text-slate-200">
+                    <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end text-slate-500" onClick={() => setClothingSize('')}>— بدون —</DropdownMenuItem>
+                    {CLOTHING_SIZES.map(s => (
+                      <DropdownMenuItem key={s} className={cn("hover:bg-white/5 cursor-pointer text-right justify-end", clothingSize === s && 'text-blue-400')} onClick={() => setClothingSize(s)}>{s}</DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">مقاس الحذاء</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12" />}>
+                    <span className="text-right flex-1 text-sm">{shoeSize || 'اختر'}</span>
+                    <Footprints className="w-3.5 h-3.5 opacity-50 shrink-0" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="bg-card border-border text-slate-200">
+                    <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end text-slate-500" onClick={() => setShoeSize('')}>— بدون —</DropdownMenuItem>
+                    {SHOE_SIZES.map(s => (
+                      <DropdownMenuItem key={s} className={cn("hover:bg-white/5 cursor-pointer text-right justify-end", shoeSize === s && 'text-blue-400')} onClick={() => setShoeSize(s)}>{s}</DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
