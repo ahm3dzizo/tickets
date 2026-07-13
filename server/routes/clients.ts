@@ -90,6 +90,14 @@ router.put("/:id", requireAuth, async (req, res) => {
       },
     });
 
+    // Sync clientName on all tickets belonging to this client
+    if (name !== undefined) {
+      await prisma.ticket.updateMany({
+        where: { clientId: req.params.id },
+        data: { clientName: name },
+      });
+    }
+
     // Update the primary unit if unit fields are provided
     if (villaNumber !== undefined || blockNumber !== undefined || handoverDate !== undefined || warrantyExpiryDate !== undefined) {
       const clientUnit = await prisma.clientUnit.findFirst({

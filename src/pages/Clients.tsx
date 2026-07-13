@@ -255,7 +255,7 @@ export default function Clients() {
         <div className="flex items-center justify-between gap-3">
           <div className="text-right">
             <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">العملاء</h1>
-            <p className="text-muted-foreground text-xs hidden sm:block">إدارة بيانات أصحاب الفلل والتواصل معهم</p>
+            <p className="text-muted-foreground text-xs hidden sm:block">إدارة بيانات أصحاب الوحدات والتواصل معهم</p>
           </div>
           <div className="flex gap-2">
             {/* ── Export button ── */}
