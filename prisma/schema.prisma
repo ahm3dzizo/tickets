@@ -158,6 +158,7 @@ model Ticket {
   maintenanceItems         Json?
   contractorId             String?
   contractorName           String?
+  contractorNote           String?
   createdAt                DateTime     @default(now())
   closedAt                 DateTime?
   createdBy                String?
@@ -365,4 +366,5 @@ enum TicketStatus {
   out_of_scope
   absent
   contractor
+  note
 }
