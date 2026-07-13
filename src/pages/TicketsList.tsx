@@ -161,8 +161,8 @@ export default function TicketsList() {
   };
 
   const unlinkedTickets      = tickets.filter(t => !t.clientId);
-  const linkedTickets        = tickets.filter(t => !!t.clientId && t.status !== 'contractor');
-  const contractorTickets    = tickets.filter(t => t.status === 'contractor');
+  const linkedTickets        = tickets.filter(t => !!t.clientId && t.status !== 'contractor' && t.status !== 'note');
+  const contractorTickets    = tickets.filter(t => t.status === 'contractor' || t.status === 'note');
   // Unclassified = no type OR explicitly "unclassified" (new fallback)
   const unclassifiedTickets  = tickets.filter(t => !t.type || t.type === 'unclassified');
 
@@ -289,7 +289,7 @@ export default function TicketsList() {
                   className="rounded-xl h-9 text-sm font-bold px-3 border border-border bg-card data-[state=active]:bg-blue-600 data-[state=active]:border-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-1.5 transition-all"
                 >
                   <HardHat className="w-3.5 h-3.5" />
-                  المقاولين
+                  المقاولين - ملاحظات
                   {contractorTickets.length > 0 && (
                     <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-blue-500 text-white border-0">
                       {contractorTickets.length}
@@ -370,7 +370,7 @@ export default function TicketsList() {
             <div className="bg-card border border-blue-500/25 rounded-3xl overflow-hidden shadow-sm">
               <div className="p-3 bg-blue-500/8 border-b border-blue-500/20 flex items-center gap-2 text-blue-400 text-sm font-semibold">
                 <HardHat className="w-4 h-4 shrink-0" />
-                <span>تذاكر المقاولين — يتم عرض التذاكر المسندة لمقاولين خارجيين</span>
+                <span>تذاكر المقاولين والملاحظات — يتم عرض التذاكر المسندة لمقاولين أو التي تحتوي على ملاحظات</span>
               </div>
               <TicketTable
                 tickets={contractorTickets}

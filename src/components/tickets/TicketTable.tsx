@@ -93,8 +93,8 @@ export const statusTranslations: Record<string, string> = {
   'out-of-scope':  'خارج اختصاص',
   'out_of_scope':  'خارج الاختصاص',
   absent:          'عدم تواجد',
-  contractor:      'مقاول',
-  note:            'ملاحظة',
+  contractor:      'مقاول / ملاحظة',
+  note:            'مقاول / ملاحظة',
 };
 
 export const statusColors: Record<string, string> = {
@@ -150,8 +150,7 @@ const DEFAULT_STATUS_OPTIONS = [
   { key: 'in-progress',   label: 'قيد التنفيذ' },
   { key: 'waiting',       label: 'بانتظار الموعد' },
   { key: 'pending',       label: 'معلقة' },
-  { key: 'contractor',    label: 'مقاول' },
-  { key: 'note',          label: 'ملاحظة' },
+  { key: 'contractor',    label: 'مقاول / ملاحظة' },
   { key: 'completed',     label: 'مكتملة' },
   { key: 'closed',        label: 'مغلقة' },
   { key: 'out_of_scope',  label: 'خارج اختصاص', danger: true },
@@ -524,11 +523,9 @@ export function TicketTable({
   const inSelectionMode = hasSelection && !!selectedIds && selectedIds.length > 0;
 
   const getSupervisorNames = (ticket: Ticket): string[] => {
-    if (ticket.status === 'contractor') {
+    if (ticket.status === 'contractor' || ticket.status === 'note') {
+      if (ticket.contractorNote) return [`ملاحظة: ${ticket.contractorNote}`];
       return [ticket.assigneeName || 'مقاول غير محدد'];
-    }
-    if (ticket.status === 'note') {
-      return [ticket.contractorNote ? `ملاحظة: ${ticket.contractorNote}` : 'ملاحظة'];
     }
     const map = (ticket as any).supervisorByType as Record<string, { name: string }[]> | undefined;
     if (map) {
