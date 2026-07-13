@@ -55,12 +55,14 @@ export default function Clients() {
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [clientTickets, setClientTickets]   = useState<ClientTicket[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
-  const [editClient, setEditClient]     = useState<any | null>(null);
-  const [editName, setEditName]         = useState('');
-  const [editPhone, setEditPhone]       = useState('');
-  const [editVilla, setEditVilla]       = useState('');
-  const [editBlock, setEditBlock]       = useState('');
-  const [editSaving, setEditSaving]     = useState(false);
+  const [editClient, setEditClient]         = useState<any | null>(null);
+  const [editName, setEditName]             = useState('');
+  const [editPhone, setEditPhone]           = useState('');
+  const [editVilla, setEditVilla]           = useState('');
+  const [editBlock, setEditBlock]           = useState('');
+  const [editHandover, setEditHandover]     = useState('');
+  const [editWarranty, setEditWarranty]     = useState('');
+  const [editSaving, setEditSaving]         = useState(false);
 
   // ── Export state ──────────────────────────────────────────────────────────
   const [exportOpen, setExportOpen]           = useState(false);
@@ -157,15 +159,27 @@ export default function Clients() {
 
   const openEdit = (c: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditClient(c); setEditName(c.name || ''); setEditPhone(c.phone || '');
-    setEditVilla(c.villaNumber || ''); setEditBlock(c.blockNumber || '');
+    setEditClient(c);
+    setEditName(c.name || '');
+    setEditPhone(c.phone || '');
+    setEditVilla(c.villaNumber || '');
+    setEditBlock(c.blockNumber || '');
+    setEditHandover(c.handoverDate || '');
+    setEditWarranty(c.warrantyExpiryDate || '');
   };
 
   const saveEdit = async () => {
     if (!editClient) return;
     setEditSaving(true);
     try {
-      await clientsApi.update(editClient.id, { name: editName, phone: editPhone, villaNumber: editVilla, blockNumber: editBlock });
+      await clientsApi.update(editClient.id, {
+        name: editName,
+        phone: editPhone,
+        villaNumber: editVilla,
+        blockNumber: editBlock,
+        handoverDate: editHandover || null,
+        warrantyExpiryDate: editWarranty || null,
+      });
       toast.success('تم تحديث بيانات العميل');
       setEditClient(null); loadData();
     } catch { toast.error('فشل التحديث'); }
@@ -646,23 +660,53 @@ export default function Clients() {
 
       {/* ── Edit Dialog ────────────────────────────────────────────── */}
       <Dialog open={!!editClient} onOpenChange={v => { if (!v) setEditClient(null); }}>
-        <DialogContent className="bg-card border-border sm:max-w-[440px] rounded-3xl shadow-2xl">
+        <DialogContent className="bg-card border-border sm:max-w-[480px] rounded-3xl shadow-2xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-foreground text-right">تعديل بيانات العميل</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-3 py-2 max-h-[70dvh] overflow-y-auto">
+            {/* Basic info */}
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">البيانات الأساسية</p>
             {[
-              { label: 'الاسم',        value: editName,  set: setEditName,  ph: 'اسم العميل' },
-              { label: 'رقم الجوال',  value: editPhone, set: setEditPhone, ph: '05xxxxxxxx' },
-              { label: 'رقم الفيلا',  value: editVilla, set: setEditVilla, ph: '12' },
-              { label: 'رقم البلوك',  value: editBlock, set: setEditBlock, ph: 'A' },
-            ].map(({ label, value, set, ph }) => (
+              { label: 'الاسم',       value: editName,  set: setEditName,  ph: 'اسم العميل', type: 'text' },
+              { label: 'رقم الجوال', value: editPhone, set: setEditPhone, ph: '05xxxxxxxx',  type: 'tel'  },
+            ].map(({ label, value, set, ph, type }) => (
               <div key={label} className="space-y-1.5">
-                <Label className="text-muted-foreground text-[10px] font-black uppercase tracking-widest block text-right">{label}</Label>
-                <Input value={value} onChange={e => set(e.target.value)} placeholder={ph}
+                <Label className="text-muted-foreground text-[10px] font-black uppercase tracking-widest block">{label}</Label>
+                <Input value={value} onChange={e => set(e.target.value)} placeholder={ph} type={type}
                   className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-right" />
               </div>
             ))}
+
+            {/* Unit info */}
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pt-1">بيانات الوحدة</p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'رقم الفيلا', value: editVilla, set: setEditVilla, ph: '12' },
+                { label: 'رقم البلوك', value: editBlock, set: setEditBlock, ph: 'A'  },
+              ].map(({ label, value, set, ph }) => (
+                <div key={label} className="space-y-1.5">
+                  <Label className="text-muted-foreground text-[10px] font-black uppercase tracking-widest block">{label}</Label>
+                  <Input value={value} onChange={e => set(e.target.value)} placeholder={ph}
+                    className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-right" />
+                </div>
+              ))}
+            </div>
+
+            {/* Dates */}
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pt-1">التواريخ</p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'تاريخ التسليم',   value: editHandover, set: setEditHandover },
+                { label: 'انتهاء الضمان',   value: editWarranty, set: setEditWarranty },
+              ].map(({ label, value, set }) => (
+                <div key={label} className="space-y-1.5">
+                  <Label className="text-muted-foreground text-[10px] font-black uppercase tracking-widest block">{label}</Label>
+                  <Input value={value} onChange={e => set(e.target.value)} type="date"
+                    className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-right" />
+                </div>
+              ))}
+            </div>
           </div>
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="border-border rounded-xl flex-1" onClick={() => setEditClient(null)}>إلغاء</Button>

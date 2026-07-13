@@ -77,15 +77,61 @@ router.post("/by-project/:projectId", requireAuth, async (req, res) => {
 
 // PUT /api/clients/:id
 router.put("/:id", requireAuth, async (req, res) => {
-  const data = req.body;
-  const client = await prisma.client.update({
-    where: { id: req.params.id },
-    data: {
-      name: data.name ?? undefined,
-      phone: data.phone ?? undefined,
-    },
-  });
-  res.json(client);
+  try {
+    const data = req.body;
+    const { name, phone, villaNumber, blockNumber, handoverDate, warrantyExpiryDate } = data;
+
+    // Update client name/phone
+    const client = await prisma.client.update({
+      where: { id: req.params.id },
+      data: {
+        name: name ?? undefined,
+        phone: phone ?? undefined,
+      },
+    });
+
+    // Update the primary unit if unit fields are provided
+    if (villaNumber !== undefined || blockNumber !== undefined || handoverDate !== undefined || warrantyExpiryDate !== undefined) {
+      const clientUnit = await prisma.clientUnit.findFirst({
+        where: { clientId: req.params.id, isPrimary: true },
+        include: { unit: { include: { block: true } } },
+      });
+
+      if (clientUnit) {
+        const unitId = clientUnit.unitId;
+
+        // Resolve blockId if blockNumber changed
+        let blockId: string | null | undefined = undefined;
+        if (blockNumber !== undefined) {
+          if (!blockNumber || blockNumber === '') {
+            blockId = null;
+          } else {
+            const projectId = clientUnit.unit.projectId;
+            const block = await prisma.block.upsert({
+              where: { projectId_blockNumber: { projectId, blockNumber: String(blockNumber) } },
+              create: { projectId, blockNumber: String(blockNumber) },
+              update: {},
+            });
+            blockId = block.id;
+          }
+        }
+
+        await prisma.unit.update({
+          where: { id: unitId },
+          data: {
+            ...(villaNumber !== undefined ? { unitNumber: String(villaNumber) } : {}),
+            ...(blockId !== undefined ? { blockId } : {}),
+            ...(handoverDate !== undefined ? { handoverDate: handoverDate || null } : {}),
+            ...(warrantyExpiryDate !== undefined ? { warrantyExpiryDate: warrantyExpiryDate || null } : {}),
+          },
+        });
+      }
+    }
+
+    res.json(client);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // DELETE /api/clients/:id
