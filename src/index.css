@@ -57,7 +57,7 @@
 }
 
 :root {
-  --background: #f4f7fb;
+  --background: #edf1f8;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
@@ -65,9 +65,9 @@
   --popover-foreground: #0f172a;
   --primary: #2563eb;
   --primary-foreground: #ffffff;
-  --secondary: #e8eef8;
+  --secondary: #e2e8f6;
   --secondary-foreground: #0f172a;
-  --muted: #edf2f7;
+  --muted: #e8edf8;
   --muted-foreground: #64748b;
   --accent: #2563eb;
   --accent-foreground: #ffffff;
@@ -80,32 +80,32 @@
   --warning: #f59e0b;
   --danger: #ef4444;
   --app-glow-1: rgba(37, 99, 235, 0.1);
-  --app-glow-2: rgba(14, 165, 233, 0.08);
-  --app-grid: rgba(148, 163, 184, 0.06);
+  --app-glow-2: rgba(99, 102, 241, 0.07);
+  --app-grid: rgba(99, 102, 241, 0.04);
 }
 
 .dark {
-  --background: #080b11;
+  --background: #0c1120;
   --foreground: #f1f5f9;
-  --card: #131c2e;        /* رُفع من #0f1623 ليكون مرئياً على الموبايل */
+  --card: #111a2e;
   --card-foreground: #f1f5f9;
-  --popover: #172035;     /* رُفع من #131c2e لمزيد من التمييز */
+  --popover: #172240;
   --popover-foreground: #f1f5f9;
   --primary: #3b82f6;
   --primary-foreground: #ffffff;
-  --secondary: #1a2540;
+  --secondary: #1e2b45;
   --secondary-foreground: #f1f5f9;
-  --muted: #162032;
+  --muted: #1a2540;
   --muted-foreground: #8b9dc3;
   --accent: #3b82f6;
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.10); /* رُفع من 0.07 لحدود أوضح */
-  --input: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.07);
   --ring: #3b82f6;
-  --app-glow-1: rgba(59, 130, 246, 0.15);
-  --app-glow-2: rgba(249, 115, 22, 0.08);
-  --app-grid: rgba(255, 255, 255, 0.025);
+  --app-glow-1: rgba(59, 130, 246, 0.14);
+  --app-glow-2: rgba(99, 102, 241, 0.09);
+  --app-grid: rgba(255, 255, 255, 0.022);
 }
 
 @layer base {

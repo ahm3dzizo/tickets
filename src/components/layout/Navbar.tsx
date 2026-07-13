@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTheme } from 'next-themes';
 import {
   DropdownMenu,
@@ -38,6 +38,14 @@ const allNavItems = [
   { icon: Settings,        label: 'الإعدادات',   path: '/settings',      roles: ['admin', 'engineer', 'supervisor'] },
 ];
 
+/* nav group structure for sidebar */
+const NAV_GROUPS = [
+  { label: null,        paths: ['/', '/projects', '/clients', '/tickets'] },
+  { label: 'العمليات', paths: ['/contractors', '/appointments', '/reports'] },
+  { label: 'الفريق',   paths: ['/technicians', '/team', '/ticket-types', '/salesforce-import'] },
+  { label: 'النظام',   paths: ['/settings'] },
+];
+
 const roleLabel: Record<string, string> = {
   admin: 'مدير النظام',
   engineer: 'مهندس',
@@ -51,8 +59,6 @@ export function Navbar() {
   const { resolvedTheme, setTheme } = useTheme();
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(user?.uid ?? null);
   const isLight = resolvedTheme === 'light';
-
-  // Notification prompt logic has been moved to PWAInstallPrompt
 
   const toggleTheme = () => setTheme(isLight ? 'dark' : 'light');
 
@@ -189,16 +195,40 @@ export function Navbar() {
   return (
     <>
       {/* ═══════════════ MOBILE TOP BAR ═══════════════ */}
-      <header className="print:hidden lg:hidden fixed top-0 inset-x-0 z-50 h-14 bg-card/90 backdrop-blur-xl border-b border-border px-3 flex items-center justify-between">
-        {/* Right: Logo */}
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center p-1 shrink-0">
-            <img src="/logo.jpg" alt="Retal" className="w-full h-full object-contain rounded-md" />
+      <header className="print:hidden lg:hidden fixed top-0 inset-x-0 z-50 h-14 bg-card/85 backdrop-blur-2xl border-b border-border/60 px-3 flex items-center gap-2">
+
+        {/* Right: User avatar → opens more sheet */}
+        <button
+          onClick={() => setMoreOpen(true)}
+          className="shrink-0 relative"
+        >
+          <div className={cn(
+            'w-8 h-8 rounded-full border-2 overflow-hidden flex items-center justify-center text-[10px] font-bold',
+            'bg-primary/10 border-primary/25 text-primary'
+          )}>
+            {user?.photoURL
+              ? <img src={user.photoURL} alt="" className="w-full h-full object-cover" />
+              : <span>{initials}</span>
+            }
           </div>
-          <span className="font-extrabold text-sm text-foreground tracking-tight">Retal Maintenance</span>
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -left-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-card" />
+          )}
+        </button>
+
+        {/* Center: Logo */}
+        <Link to="/" className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/15 flex items-center justify-center p-1 shrink-0">
+            <img src="/logo.jpg" alt="Retal" className="w-full h-full object-contain rounded-lg" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+          </div>
+          <div className="min-w-0 leading-none">
+            <span className="font-extrabold text-sm text-foreground tracking-tight block">Retal</span>
+            <span className="text-[9px] text-muted-foreground font-medium block">Maintenance System</span>
+          </div>
         </Link>
-        {/* Left: Actions */}
-        <div className="flex items-center gap-0.5">
+
+        {/* Left: Theme + Bell */}
+        <div className="flex items-center gap-0.5 shrink-0">
           <Button
             variant="ghost"
             size="icon"
@@ -249,8 +279,11 @@ export function Navbar() {
             onClick={() => setMoreOpen(true)}
             className="flex flex-col items-center justify-center gap-0.5 py-2 px-2 outline-none"
           >
-            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold shrink-0">
-              {initials}
+            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold shrink-0 overflow-hidden">
+              {user?.photoURL
+                ? <img src={user.photoURL} alt="" className="w-full h-full object-cover" />
+                : <span>{initials}</span>
+              }
             </div>
             <span className="text-[9px] font-bold text-muted-foreground leading-none">أنا</span>
           </button>
@@ -322,42 +355,72 @@ export function Navbar() {
       )}
 
       {/* ═══════════════ DESKTOP SIDEBAR ═══════════════ */}
-      <aside className="print:hidden hidden lg:flex fixed right-0 top-0 h-full w-60 bg-card border-l border-border flex-col z-40">
+      <aside className="print:hidden hidden lg:flex fixed right-0 top-0 h-full w-60 flex-col z-40 bg-card border-l border-border/50">
+
+        {/* Subtle top color wash */}
+        <div className="absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-primary/6 to-transparent pointer-events-none" />
+
         {/* Logo */}
-        <div className="flex items-center gap-3 px-5 pt-6 pb-4 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center p-1.5 shrink-0">
-            <img src="/logo.jpg" alt="Retal" className="w-full h-full object-contain rounded-lg" />
-          </div>
-          <div className="min-w-0 leading-tight">
-            <div className="font-extrabold text-sm text-foreground tracking-tight">Retal</div>
-            <div className="text-[10px] text-muted-foreground font-medium">Maintenance System</div>
-          </div>
+        <div className="relative px-4 pt-5 pb-4 shrink-0">
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/15 flex items-center justify-center p-1.5 shrink-0 shadow-md shadow-primary/10 transition-shadow group-hover:shadow-primary/20">
+              <img
+                src="/logo.jpg"
+                alt="Retal"
+                className="w-full h-full object-contain rounded-xl"
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            </div>
+            <div className="min-w-0 leading-tight">
+              <div className="font-extrabold text-sm text-foreground tracking-tight">Retal</div>
+              <div className="text-[10px] text-muted-foreground/70 font-medium">Maintenance System</div>
+            </div>
+          </Link>
         </div>
 
-        {/* Nav items */}
-        <div className="flex-1 overflow-y-auto no-scrollbar px-3 space-y-0.5 pb-2">
-          {filteredNav.map(item => {
-            const active = isActive(item.path);
+        {/* Divider */}
+        <div className="mx-4 h-px bg-border/50 mb-3" />
+
+        {/* Nav groups */}
+        <div className="relative flex-1 overflow-y-auto no-scrollbar px-3 pb-2 space-y-4">
+          {NAV_GROUPS.map((group, gi) => {
+            const items = filteredNav.filter(i => group.paths.includes(i.path));
+            if (!items.length) return null;
             return (
-              <Link key={item.path} to={item.path}>
-                <div className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 cursor-pointer',
-                  active
-                    ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                )}>
-                  <item.icon className="w-4 h-4 shrink-0" strokeWidth={active ? 2.5 : 1.75} />
-                  <span>{item.label}</span>
-                </div>
-              </Link>
+              <div key={gi} className="space-y-0.5">
+                {group.label && (
+                  <p className="px-3 pb-1 text-[9px] font-bold text-muted-foreground/50 uppercase tracking-[0.18em]">
+                    {group.label}
+                  </p>
+                )}
+                {items.map(item => {
+                  const active = isActive(item.path);
+                  return (
+                    <Link key={item.path} to={item.path}>
+                      <div className={cn(
+                        'relative flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 cursor-pointer',
+                        active
+                          ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'
+                      )}>
+                        {active && (
+                          <div className="absolute inset-0 rounded-2xl bg-gradient-to-l from-white/0 to-white/8 pointer-events-none" />
+                        )}
+                        <item.icon className="w-4 h-4 shrink-0 relative" strokeWidth={active ? 2.5 : 1.75} />
+                        <span className="relative">{item.label}</span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </div>
 
         {/* Bottom section */}
-        <div className="px-3 pb-4 pt-3 border-t border-border space-y-1 shrink-0">
+        <div className="px-3 pb-4 pt-3 border-t border-border/50 space-y-1 shrink-0">
           {/* Theme + Bell */}
-          <div className="flex items-center gap-1 px-1 mb-1">
+          <div className="flex items-center gap-1 px-1 mb-2">
             <Button
               variant="ghost"
               size="icon"
@@ -372,22 +435,22 @@ export function Navbar() {
             </div>
           </div>
 
-          {/* User dropdown */}
+          {/* User card */}
           <DropdownMenu>
-            <DropdownMenuTrigger
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-muted transition-colors"
-            >
-              <Avatar className="w-8 h-8 shrink-0 ring-1 ring-border">
-                <AvatarImage src={user?.photoURL} />
-                <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">{initials}</AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col items-end min-w-0 flex-1 text-right leading-tight">
-                <span className="font-semibold text-foreground text-sm truncate w-full">
-                  {user?.displayName}
-                </span>
-                <span className="text-muted-foreground text-[10px] font-medium">
-                  {roleLabel[user?.role ?? ''] ?? user?.role}
-                </span>
+            <DropdownMenuTrigger className="w-full">
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-muted/80 transition-all duration-200 border border-transparent hover:border-border/40 group">
+                <Avatar className="w-8 h-8 shrink-0 ring-2 ring-primary/20 group-hover:ring-primary/35 transition-all">
+                  <AvatarImage src={user?.photoURL} />
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">{initials}</AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col items-end min-w-0 flex-1 text-right leading-tight">
+                  <span className="font-semibold text-foreground text-sm truncate w-full">
+                    {user?.displayName}
+                  </span>
+                  <span className="text-muted-foreground text-[10px] font-medium">
+                    {roleLabel[user?.role ?? ''] ?? user?.role}
+                  </span>
+                </div>
               </div>
             </DropdownMenuTrigger>
 

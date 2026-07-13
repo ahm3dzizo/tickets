@@ -818,13 +818,87 @@ export default function Settings() {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <Layout>
-      <div className="space-y-6 page-in max-w-3xl mx-auto">
+      <div className="page-in">
 
-        {/* Page header */}
-        <div className="text-right">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">الإعدادات</h1>
-          <p className="text-muted-foreground mt-1 text-sm">تخصيص حسابك وتفضيلات النظام</p>
-        </div>
+        {/* Two-column layout on xl+: side panel RIGHT, cards LEFT */}
+        <div className="flex gap-6 items-start">
+
+          {/* ── RIGHT side panel (RTL: first = right, sticky near sidebar) ── */}
+          <div className="hidden xl:flex flex-col gap-4 w-72 shrink-0 sticky top-6">
+
+            {/* User profile card */}
+            <div className="rounded-3xl border border-border bg-card overflow-hidden shadow-sm">
+              {/* Header gradient banner */}
+              <div className="h-20 bg-gradient-to-br from-primary/20 via-blue-500/10 to-transparent relative">
+                <div className="absolute inset-0 bg-gradient-to-tl from-purple-500/10 to-transparent" />
+                {/* Avatar */}
+                <div className="absolute bottom-0 right-5 translate-y-1/2">
+                  <div className="w-16 h-16 rounded-2xl border-4 border-card overflow-hidden bg-muted shadow-lg">
+                    {user?.photoURL
+                      ? <img src={user.photoURL} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+                      : <div className="w-full h-full flex items-center justify-center text-2xl font-extrabold text-primary">
+                          {user?.displayName?.slice(0,1) ?? '?'}
+                        </div>
+                    }
+                  </div>
+                </div>
+              </div>
+              {/* Info */}
+              <div className="pt-12 px-5 pb-5 text-right">
+                <h3 className="font-extrabold text-foreground text-base leading-tight">{user?.displayName}</h3>
+                <p className="text-muted-foreground text-xs mt-0.5 truncate">{user?.email}</p>
+                <div className="flex items-center justify-end gap-2 mt-3">
+                  <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-primary/10 text-primary border border-primary/20">
+                    {roleLabels[user?.role ?? ''] ?? user?.role}
+                  </span>
+                  {user?.specialty && (
+                    <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-muted text-muted-foreground">
+                      {specialtyLabels[user.specialty] ?? user.specialty}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick section nav */}
+            <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-[0.18em] mb-3 text-right">
+                الأقسام
+              </p>
+              <div className="space-y-0.5">
+                {sortedSections.map(sec => {
+                  const isOpen = openSection === sec.key;
+                  const a = ACCENT[sec.accent] ?? ACCENT.blue;
+                  return (
+                    <button
+                      key={sec.key}
+                      onClick={() => handleCardClick(sec.key)}
+                      className={cn(
+                        'w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm transition-all duration-200 text-right',
+                        isOpen
+                          ? cn('font-bold', a.iconBg, a.iconText)
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium'
+                      )}
+                    >
+                      <sec.icon className={cn('w-4 h-4 shrink-0', isOpen ? a.iconText : '')} />
+                      <span className="flex-1 text-right">{sec.title}</span>
+                      {isOpen && <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', a.dotColor)} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+
+          {/* ── LEFT main content ── */}
+          <div className="flex-1 min-w-0 space-y-6">
+
+            {/* Page header */}
+            <div className="text-right">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">الإعدادات</h1>
+              <p className="text-muted-foreground mt-1 text-sm">تخصيص حسابك وتفضيلات النظام</p>
+            </div>
 
         {/* ── Animated card grid ───────────────────────────────────────────── */}
         <LayoutGroup id="settings">
@@ -962,6 +1036,8 @@ export default function Settings() {
           Retal Maintenance System Build 2026.4.17
         </p>
 
+          </div>{/* end LEFT main content */}
+        </div>{/* end two-column flex */}
       </div>
     </Layout>
   );
