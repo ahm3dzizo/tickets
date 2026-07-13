@@ -689,6 +689,46 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       }
     }
 
+    // ── Validate / auto-correct appointmentTime against work hours ───────────
+    // Only applies when a specific time component is present ("YYYY-MM-DD HH:mm")
+    if (data.appointmentTime && String(data.appointmentTime).includes(' ')) {
+      const whSetting = await prisma.systemSetting.findUnique({ where: { key: 'work_hours' } });
+      const whAll = whSetting?.value as unknown as import('./settings.js').WorkHoursSettings | null;
+
+      if (whAll) {
+        // Get the ticket's projectId to apply project-specific work hours
+        const existing = await prisma.ticket.findUnique({ where: { id: req.params.id }, select: { projectId: true } });
+        const cfg = (existing?.projectId && whAll.byProject?.[existing.projectId]) || whAll.default;
+
+        if (cfg?.enabled) {
+          const parts = String(data.appointmentTime).split(' ');
+          const datePart = parts[0];
+          const timePart = parts[1];
+          const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timePart);
+
+          if (timeMatch) {
+            const rawMins = parseInt(timeMatch[1], 10) * 60 + parseInt(timeMatch[2], 10);
+            const { toMins, inWorkHours, autoCorrectMins } = await import('./settings.js');
+
+            const correctedMins = autoCorrectMins(rawMins, cfg);
+            if (correctedMins === null) {
+              const periods = [cfg.morning];
+              if (cfg.hasBreak) periods.push(cfg.afternoon);
+              const rangeStr = periods.map(p => `${p.start}–${p.end}`).join(' و ');
+              res.status(400).json({ error: `الموعد خارج أوقات الدوام — المواعيد متاحة: ${rangeStr}` });
+              return;
+            }
+
+            const h = Math.floor(correctedMins / 60);
+            const m = correctedMins % 60;
+            const corrected = `${datePart} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            data.appointmentTime = corrected;
+            updatePayload.appointmentTime = corrected;
+          }
+        }
+      }
+    }
+
     // ── Fetch old values for audit trail ────────────────────────────────────
     const oldTicket = await prisma.ticket.findUnique({
       where: { id: req.params.id },

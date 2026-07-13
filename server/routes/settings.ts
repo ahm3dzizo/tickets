@@ -4,16 +4,68 @@ import prisma from '../db.js';
 
 const router = Router();
 
+export interface TimePeriod {
+  start: string; // "HH:MM"
+  end: string;   // "HH:MM"
+}
+
+export interface WorkHoursConfig {
+  enabled:    boolean;
+  morning:    TimePeriod;
+  hasBreak:   boolean;
+  break:      TimePeriod;
+  afternoon:  TimePeriod;
+}
+
+export interface WorkHoursSettings {
+  default:   WorkHoursConfig;
+  byProject: Record<string, WorkHoursConfig>;
+}
+
+const DEFAULT_WH_CONFIG: WorkHoursConfig = {
+  enabled:   true,
+  morning:   { start: '08:00', end: '12:00' },
+  hasBreak:  true,
+  break:     { start: '12:00', end: '13:00' },
+  afternoon: { start: '13:00', end: '16:00' },
+};
+
+export const DEFAULT_WORK_HOURS: WorkHoursSettings = {
+  default:   DEFAULT_WH_CONFIG,
+  byProject: {},
+};
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+export function toMins(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+export function inPeriod(mins: number, p: TimePeriod): boolean {
+  return mins >= toMins(p.start) && mins < toMins(p.end);
+}
+
+export function inWorkHours(mins: number, cfg: WorkHoursConfig): boolean {
+  if (inPeriod(mins, cfg.morning)) return true;
+  if (cfg.hasBreak && inPeriod(mins, cfg.afternoon)) return true;
+  return false;
+}
+
+export function autoCorrectMins(mins: number, cfg: WorkHoursConfig): number | null {
+  if (inWorkHours(mins, cfg)) return mins;
+  const hour = Math.floor(mins / 60);
+  if (hour >= 1 && hour <= 11) {
+    const pm = mins + 12 * 60;
+    if (inWorkHours(pm, cfg)) return pm;
+  }
+  return null;
+}
+
 const DEFAULTS = {
   openingMsg:     `السلام عليكم، بخصوص بلاغ الصيانة رقم {ticketId} لوحدتكم {villaNumber}، نرجو إفادتنا بمواعيد تواجدكم في الفيلا لتنسيق موعد الصيانة. شكراً لتعاونكم.`,
   closingMsg:     `السلام عليكم، بخصوص بلاغ الصيانة رقم {ticketId} لوحدتكم رقم {villaNumber}، تم الانتهاء من الصيانة المطلوبة. نرجو التفضل بالتوقيع على نموذج الإغلاق المرفق.\nشكراً لتعاونكم.`,
   absentMsg:      `السلام عليكم،\nتم زيارة وحدتكم رقم {villaNumber} بخصوص بلاغ الصيانة #{ticketId}، ولم يتمكن الفريق من الدخول نظراً لعدم التواجد.\nيرجى رفع تذكرة جديدة عند تواجدكم لإعادة جدولة الزيارة.\nشكراً لتفهمكم.`,
   outOfScopeMsg:  `السلام عليكم،\nبخصوص بلاغ الصيانة #{ticketId} لوحدتكم رقم {villaNumber}، بعد المعاينة تبيّن أن المشكلة خارج نطاق الضمان.\nشكراً لتفهمكم.`,
-  workHours: [
-    { label: 'الصباح (8 ص - 12 م)', value: 'الصباح (8 ص - 12 م)' },
-    { label: 'الظهر (12 م - 3 م)', value: 'الظهر (12 م - 3 م)' },
-    { label: 'المساء (3 م - 6 م)', value: 'المساء (3 م - 6 م)' },
-  ],
 };
 
 // ─── GET /api/settings/whatsapp-templates ────────────────────────────────────
@@ -61,8 +113,7 @@ router.put('/whatsapp-templates', requireAuth, async (req: AuthRequest, res) => 
 router.get('/work-hours', requireAuth, async (_req: AuthRequest, res) => {
   try {
     const setting = await prisma.systemSetting.findUnique({ where: { key: 'work_hours' } });
-    const saved = setting?.value as { label: string; value: string }[] | undefined;
-    res.json(saved || DEFAULTS.workHours);
+    res.json((setting?.value as unknown as WorkHoursSettings | undefined) || DEFAULT_WORK_HOURS);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -71,15 +122,15 @@ router.get('/work-hours', requireAuth, async (_req: AuthRequest, res) => {
 // ─── PUT /api/settings/work-hours ────────────────────────────────────────────
 router.put('/work-hours', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const workHours = req.body;
-    if (!Array.isArray(workHours)) {
-      res.status(400).json({ error: 'workHours يجب أن يكون مصفوفة' });
+    const body = req.body as WorkHoursSettings;
+    if (!body?.default) {
+      res.status(400).json({ error: 'بيانات أوقات الدوام غير صحيحة' });
       return;
     }
     const updated = await prisma.systemSetting.upsert({
       where:  { key: 'work_hours' },
-      update: { value: workHours },
-      create: { key: 'work_hours', value: workHours },
+      update: { value: body as any },
+      create: { key: 'work_hours', value: body as any },
     });
     res.json(updated.value);
   } catch (err: any) {

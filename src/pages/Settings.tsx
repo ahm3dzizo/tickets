@@ -5,13 +5,15 @@ import { useLocation } from 'react-router-dom';
 import {
   User, Lock, Bell, Shield, LogOut, ChevronDown, ChevronUp,
   Camera, Save, Eye, EyeOff, CheckCircle2, Loader2, Check,
-  MessageSquare, RefreshCw, Wifi, WifiOff, Download, Clock, Plus, Trash2,
+  MessageSquare, RefreshCw, Wifi, WifiOff, Download, Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { authApi, usersApi, whatsappApi, settingsApi } from '@/lib/api';
+import { authApi, usersApi, whatsappApi, settingsApi, projectsApi } from '@/lib/api';
+import type { WorkHoursConfig, WorkHoursSettings } from '@/lib/api';
+import type { Project } from '@/types';
 import { toast } from 'sonner';
 import { io } from 'socket.io-client';
 import { cn } from '@/lib/utils';
@@ -332,13 +334,46 @@ export default function Settings() {
   };
 
   // ── Work Hours ─────────────────────────────────────────────────────────────
-  const [workHours, setWorkHours] = useState<{ label: string; value: string }[]>([]);
+  const DEFAULT_WH_CONFIG: WorkHoursConfig = {
+    enabled:   true,
+    morning:   { start: '08:00', end: '12:00' },
+    hasBreak:  true,
+    break:     { start: '12:00', end: '13:00' },
+    afternoon: { start: '13:00', end: '16:00' },
+  };
+
+  const [whSettings, setWhSettings] = useState<WorkHoursSettings>({ default: DEFAULT_WH_CONFIG, byProject: {} });
+  const [whProjects, setWhProjects] = useState<Project[]>([]);
+  const [whProjectId, setWhProjectId] = useState<string | null>(null); // null = default
   const [loadingWorkHours, setLoadingWorkHours] = useState(false);
   const [savingWorkHours, setSavingWorkHours] = useState(false);
+
+  // current config being edited
+  const currentWH: WorkHoursConfig = whProjectId
+    ? (whSettings.byProject[whProjectId] ?? { ...DEFAULT_WH_CONFIG })
+    : whSettings.default;
+  const hasCustomOverride = whProjectId ? !!whSettings.byProject[whProjectId] : true;
+
+  const setCurrentWH = (cfg: WorkHoursConfig) => {
+    if (whProjectId) {
+      setWhSettings(prev => ({ ...prev, byProject: { ...prev.byProject, [whProjectId]: cfg } }));
+    } else {
+      setWhSettings(prev => ({ ...prev, default: cfg }));
+    }
+  };
+
+  const removeCustomOverride = () => {
+    if (!whProjectId) return;
+    setWhSettings(prev => {
+      const { [whProjectId]: _, ...rest } = prev.byProject;
+      return { ...prev, byProject: rest };
+    });
+  };
 
   useEffect(() => {
     if (user?.role === 'admin' && openSection === 'workhours') {
       loadWorkHours();
+      projectsApi.getAll().then(setWhProjects).catch(() => {});
     }
   }, [openSection, user?.role]);
 
@@ -346,7 +381,7 @@ export default function Settings() {
     setLoadingWorkHours(true);
     try {
       const data = await settingsApi.getWorkHours();
-      setWorkHours(data || []);
+      setWhSettings(data || { default: DEFAULT_WH_CONFIG, byProject: {} });
     } catch {
       toast.error('تعذر تحميل أوقات الدوام');
     } finally {
@@ -357,7 +392,7 @@ export default function Settings() {
   const saveWorkHours = async () => {
     setSavingWorkHours(true);
     try {
-      await settingsApi.updateWorkHours(workHours);
+      await settingsApi.updateWorkHours(whSettings);
       toast.success('تم حفظ أوقات الدوام بنجاح');
     } catch {
       toast.error('تعذر حفظ أوقات الدوام');
@@ -366,18 +401,10 @@ export default function Settings() {
     }
   };
 
-  const addWorkHour = () => {
-    setWorkHours([...workHours, { label: 'فترة جديدة (مثال: 8 ص - 12 م)', value: 'فترة جديدة (مثال: 8 ص - 12 م)' }]);
-  };
-
-  const removeWorkHour = (idx: number) => {
-    setWorkHours(workHours.filter((_, i) => i !== idx));
-  };
-
-  const updateWorkHour = (idx: number, text: string) => {
-    const arr = [...workHours];
-    arr[idx] = { label: text, value: text };
-    setWorkHours(arr);
+  const fmtTime = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    const suffix = h < 12 ? 'ص' : 'م';
+    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${suffix}`;
   };
 
   // ── Initials avatar ────────────────────────────────────────────────────────
@@ -930,45 +957,209 @@ export default function Settings() {
 
         {/* ── Work Hours ──────────────────────────────────────────────────── */}
         {user?.role === 'admin' && (
-          <Section icon={Clock} title="أوقات الدوام" desc="تحديد الفترات المتاحة لحجز مواعيد الصيانة"
+          <Section icon={Clock} title="أوقات الدوام" desc="فترات العمل لكل مشروع مع الراحة — تحكم في المواعيد تلقائياً"
             accent="amber" open={openSection === 'workhours'} onToggle={() => toggle('workhours')}>
-            <div className="space-y-6">
+            <div className="space-y-5">
               {loadingWorkHours ? (
-                <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
+                <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
               ) : (
                 <>
-                  <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4 space-y-4">
-                    <p className="text-sm font-bold text-amber-500 text-right">الفترات المتاحة للمواعيد:</p>
-                    <div className="space-y-3">
-                      {workHours.map((wh, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <button
-                            onClick={() => removeWorkHour(idx)}
-                            className="p-2 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors shrink-0"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                          <Input
-                            value={wh.label}
-                            onChange={e => updateWorkHour(idx, e.target.value)}
-                            className="text-right bg-background/70 border-border h-11 rounded-xl"
-                            dir="rtl"
-                          />
-                        </div>
-                      ))}
+                  {/* ── Project tabs ── */}
+                  <div className="flex gap-2 flex-wrap" dir="rtl">
+                    <button
+                      onClick={() => setWhProjectId(null)}
+                      className={cn(
+                        'px-4 py-1.5 rounded-full text-xs font-bold transition-colors border',
+                        whProjectId === null
+                          ? 'bg-amber-500 text-white border-amber-500'
+                          : 'border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400',
+                      )}
+                    >
+                      الإعداد الافتراضي
+                    </button>
+                    {whProjects.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setWhProjectId(p.id)}
+                        className={cn(
+                          'px-4 py-1.5 rounded-full text-xs font-bold transition-colors border relative',
+                          whProjectId === p.id
+                            ? 'bg-amber-500 text-white border-amber-500'
+                            : 'border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400',
+                        )}
+                      >
+                        {p.name}
+                        {whSettings.byProject[p.id] && (
+                          <span className="absolute -top-1 -left-1 w-2 h-2 bg-emerald-400 rounded-full" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ── Project override toggle ── */}
+                  {whProjectId && (
+                    <div className="flex items-center justify-between bg-muted/40 border border-border/50 rounded-2xl px-4 py-3">
+                      <Toggle
+                        checked={hasCustomOverride}
+                        onChange={v => v ? setCurrentWH({ ...DEFAULT_WH_CONFIG }) : removeCustomOverride()}
+                      />
+                      <div className="text-right">
+                        <p className="text-foreground font-bold text-sm">إعداد مخصص لهذا المشروع</p>
+                        <p className="text-muted-foreground text-xs mt-0.5">
+                          {hasCustomOverride ? 'يستخدم إعداداته الخاصة' : 'يرث الإعداد الافتراضي'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex justify-end pt-2">
-                      <Button onClick={addWorkHour} variant="outline" className="text-amber-500 border-amber-500/20 hover:bg-amber-500/10 gap-2 h-9 rounded-xl">
-                        <Plus className="w-4 h-4" />
-                        إضافة فترة
-                      </Button>
+                  )}
+
+                  {/* ── Config editor ── */}
+                  <div className={cn('space-y-4', whProjectId && !hasCustomOverride && 'opacity-40 pointer-events-none')}>
+
+                    {/* Enable toggle */}
+                    <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/15 rounded-2xl px-5 py-4">
+                      <Toggle checked={currentWH.enabled} onChange={v => setCurrentWH({ ...currentWH, enabled: v })} />
+                      <div className="text-right">
+                        <p className="text-foreground font-bold text-sm">تفعيل قيود المواعيد</p>
+                        <p className="text-muted-foreground text-xs mt-0.5">
+                          {currentWH.enabled ? 'المواعيد خارج الدوام تُرفض أو تُصحَّح تلقائياً' : 'لا قيود على وقت المواعيد'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className={cn('space-y-4 transition-opacity', !currentWH.enabled && 'opacity-40 pointer-events-none')}>
+
+                      {/* ── Visual timeline ── */}
+                      <div className="relative h-10 rounded-xl bg-muted/50 overflow-hidden border border-border/40 flex items-center" dir="ltr">
+                        {(() => {
+                          const total = 24 * 60;
+                          const morningStart = currentWH.morning.start.split(':').map(Number).reduce((h,m)=>h*60+m,0);
+                          const morningEnd   = currentWH.morning.end.split(':').map(Number).reduce((h,m)=>h*60+m,0);
+                          const breakStart   = currentWH.hasBreak ? currentWH.break.start.split(':').map(Number).reduce((h,m)=>h*60+m,0) : morningEnd;
+                          const breakEnd     = currentWH.hasBreak ? currentWH.break.end.split(':').map(Number).reduce((h,m)=>h*60+m,0) : morningEnd;
+                          const afternoonStart = currentWH.hasBreak ? breakEnd : morningEnd;
+                          const afternoonEnd   = currentWH.afternoon.end.split(':').map(Number).reduce((h,m)=>h*60+m,0);
+                          return (
+                            <>
+                              <div className="absolute inset-y-0 bg-amber-500/30 border-r border-amber-500/50"
+                                style={{ left: `${morningStart/total*100}%`, width: `${(morningEnd-morningStart)/total*100}%` }} />
+                              {currentWH.hasBreak && (
+                                <div className="absolute inset-y-0 bg-red-500/20 border-x border-red-500/30"
+                                  style={{ left: `${breakStart/total*100}%`, width: `${(breakEnd-breakStart)/total*100}%` }} />
+                              )}
+                              {currentWH.hasBreak && (
+                                <div className="absolute inset-y-0 bg-amber-500/30 border-l border-amber-500/50"
+                                  style={{ left: `${afternoonStart/total*100}%`, width: `${(afternoonEnd-afternoonStart)/total*100}%` }} />
+                              )}
+                              <div className="absolute inset-0 flex items-center justify-around px-2 pointer-events-none">
+                                {[0,3,6,9,12,15,18,21].map(h => (
+                                  <span key={h} className="text-[9px] text-muted-foreground/50 font-mono">{h}</span>
+                                ))}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* ── Morning period ── */}
+                      <div className="bg-card border border-border/60 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center gap-2 justify-end">
+                          <p className="text-sm font-bold text-foreground">الفترة الصباحية</p>
+                          <span className="w-3 h-3 rounded-full bg-amber-500/70 shrink-0" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">إلى</label>
+                            <input type="time" value={currentWH.morning.end}
+                              onChange={e => setCurrentWH({ ...currentWH, morning: { ...currentWH.morning, end: e.target.value } })}
+                              className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-amber-500/50 font-mono text-sm" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">من</label>
+                            <input type="time" value={currentWH.morning.start}
+                              onChange={e => setCurrentWH({ ...currentWH, morning: { ...currentWH.morning, start: e.target.value } })}
+                              className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-amber-500/50 font-mono text-sm" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ── Break toggle + period ── */}
+                      <div className="bg-card border border-border/60 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Toggle checked={currentWH.hasBreak} onChange={v => setCurrentWH({ ...currentWH, hasBreak: v })} />
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-foreground">فترة الراحة</p>
+                            <span className="w-3 h-3 rounded-full bg-red-400/60 shrink-0" />
+                          </div>
+                        </div>
+                        {currentWH.hasBreak && (
+                          <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="space-y-1">
+                              <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">إلى</label>
+                              <input type="time" value={currentWH.break.end}
+                                onChange={e => setCurrentWH({ ...currentWH, break: { ...currentWH.break, end: e.target.value } })}
+                                className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-red-500/50 font-mono text-sm" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">من</label>
+                              <input type="time" value={currentWH.break.start}
+                                onChange={e => setCurrentWH({ ...currentWH, break: { ...currentWH.break, start: e.target.value } })}
+                                className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-red-500/50 font-mono text-sm" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Afternoon period ── */}
+                      {currentWH.hasBreak && (
+                        <div className="bg-card border border-border/60 rounded-2xl p-4 space-y-3">
+                          <div className="flex items-center gap-2 justify-end">
+                            <p className="text-sm font-bold text-foreground">الفترة المسائية</p>
+                            <span className="w-3 h-3 rounded-full bg-amber-500/70 shrink-0" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">إلى</label>
+                              <input type="time" value={currentWH.afternoon.end}
+                                onChange={e => setCurrentWH({ ...currentWH, afternoon: { ...currentWH.afternoon, end: e.target.value } })}
+                                className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-amber-500/50 font-mono text-sm" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">من</label>
+                              <input type="time" value={currentWH.afternoon.start}
+                                onChange={e => setCurrentWH({ ...currentWH, afternoon: { ...currentWH.afternoon, start: e.target.value } })}
+                                className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-amber-500/50 font-mono text-sm" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── Summary ── */}
+                      <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3 text-right space-y-1" dir="rtl">
+                        <div className="flex items-center gap-2 justify-end mb-1">
+                          <p className="text-amber-400 text-xs font-bold">ملخص أوقات الدوام</p>
+                          <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        </div>
+                        <p className="text-foreground text-sm">
+                          🌅 الصباح: {fmtTime(currentWH.morning.start)} — {fmtTime(currentWH.morning.end)}
+                        </p>
+                        {currentWH.hasBreak && (
+                          <p className="text-muted-foreground text-xs">
+                            ☕ الراحة: {fmtTime(currentWH.break.start)} — {fmtTime(currentWH.break.end)}
+                          </p>
+                        )}
+                        {currentWH.hasBreak && (
+                          <p className="text-foreground text-sm">
+                            🌆 المساء: {fmtTime(currentWH.afternoon.start)} — {fmtTime(currentWH.afternoon.end)}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex justify-start pt-2">
-                    <Button onClick={saveWorkHours} disabled={savingWorkHours} className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 px-6 font-bold">
-                      {savingWorkHours ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 ml-2" />}
-                      حفظ أوقات الدوام
+                  <div className="flex justify-start pt-1">
+                    <Button onClick={saveWorkHours} disabled={savingWorkHours} className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 px-6 font-bold gap-2">
+                      {savingWorkHours ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      حفظ جميع الإعدادات
                     </Button>
                   </div>
                 </>

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { appointmentsApi, whatsappApi, ticketsApi, settingsApi, usersApi } from '@/lib/api';
+import { appointmentsApi, whatsappApi, ticketsApi, usersApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 // ── أنواع ─────────────────────────────────────────────────────────────────────
@@ -121,16 +121,8 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
 
     usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => {});
 
-    settingsApi.getWorkHours().then(hours => {
-      const opts = hours && hours.length > 0 ? hours : DEFAULT_TIME_OPTIONS;
-      const finalOpts = [...opts, { label: 'وقت محدد', value: 'custom' }];
-      setTimeOptions(finalOpts);
-      setTimeMode(finalOpts[0].value);
-    }).catch(() => {
-      const finalOpts = [...DEFAULT_TIME_OPTIONS, { label: 'وقت محدد', value: 'custom' }];
-      setTimeOptions(finalOpts);
-      setTimeMode(finalOpts[0].value);
-    });
+    setTimeOptions([...DEFAULT_TIME_OPTIONS]);
+    setTimeMode(DEFAULT_TIME_OPTIONS[0].value);
   }, [open]);
 
   // ── فحص التعارضات ──

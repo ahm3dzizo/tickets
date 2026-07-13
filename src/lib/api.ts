@@ -244,15 +244,27 @@ export const whatsappApi = {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 type WaTemplates = { openingMsg: string; closingMsg: string; absentMsg?: string; outOfScopeMsg?: string };
+export type TimePeriod = { start: string; end: string };
+export type WorkHoursConfig = {
+  enabled:   boolean;
+  morning:   TimePeriod;
+  hasBreak:  boolean;
+  break:     TimePeriod;
+  afternoon: TimePeriod;
+};
+export type WorkHoursSettings = {
+  default:   WorkHoursConfig;
+  byProject: Record<string, WorkHoursConfig>;
+};
 export const settingsApi = {
   getWhatsAppTemplates: () =>
     get<WaTemplates>('/settings/whatsapp-templates'),
   updateWhatsAppTemplates: (data: WaTemplates) =>
     put<WaTemplates>('/settings/whatsapp-templates', data),
   getWorkHours: () =>
-    get<{ label: string; value: string }[]>('/settings/work-hours'),
-  updateWorkHours: (data: { label: string; value: string }[]) =>
-    put<{ label: string; value: string }[]>('/settings/work-hours', data),
+    get<WorkHoursSettings>('/settings/work-hours'),
+  updateWorkHours: (data: WorkHoursSettings) =>
+    put<WorkHoursSettings>('/settings/work-hours', data),
 };
 
 // ── Reports ───────────────────────────────────────────────────────────────────
