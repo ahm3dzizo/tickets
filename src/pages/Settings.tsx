@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import {
-  User, Lock, Bell, Shield, LogOut, ChevronDown, ChevronUp,
+  User, Lock, Bell, Shield, LogOut, X,
   Camera, Save, Eye, EyeOff, CheckCircle2, Loader2, Check,
   MessageSquare, RefreshCw, Wifi, WifiOff, Download, Clock,
 } from 'lucide-react';
@@ -17,8 +17,9 @@ import type { Project } from '@/types';
 import { toast } from 'sonner';
 import { io } from 'socket.io-client';
 import { cn } from '@/lib/utils';
+import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
 
-// ── Role / specialty labels ──────────────────────────────────────────────────
+// ── Static data outside component ────────────────────────────────────────────
 const roleLabels: Record<string, string> = {
   admin:      'مدير النظام',
   engineer:   'مهندس',
@@ -28,6 +29,55 @@ const specialtyLabels: Record<string, string> = {
   mechanics:   'ميكانيكا / سباكة',
   electricity: 'كهرباء',
   general:     'عام',
+};
+
+const DEFAULT_WH_CONFIG: WorkHoursConfig = {
+  enabled:   true,
+  morning:   { start: '08:00', end: '12:00' },
+  hasBreak:  true,
+  break:     { start: '12:00', end: '13:00' },
+  afternoon: { start: '13:00', end: '16:00' },
+};
+
+type SectionMeta = { key: string; title: string; desc: string; icon: React.ElementType; accent: string };
+
+// Full class strings so Tailwind v4 scanner picks them up
+const ACCENT: Record<string, {
+  iconBg: string; iconText: string; border: string;
+  shadow: string; headerGrad: string; dotColor: string;
+}> = {
+  blue: {
+    iconBg:     'bg-blue-500/15',
+    iconText:   'text-blue-400',
+    border:     'border-blue-500/30',
+    shadow:     'shadow-blue-500/10',
+    headerGrad: 'from-blue-500/8',
+    dotColor:   'bg-blue-400',
+  },
+  amber: {
+    iconBg:     'bg-amber-500/15',
+    iconText:   'text-amber-400',
+    border:     'border-amber-500/30',
+    shadow:     'shadow-amber-500/10',
+    headerGrad: 'from-amber-500/8',
+    dotColor:   'bg-amber-400',
+  },
+  purple: {
+    iconBg:     'bg-purple-500/15',
+    iconText:   'text-purple-400',
+    border:     'border-purple-500/30',
+    shadow:     'shadow-purple-500/10',
+    headerGrad: 'from-purple-500/8',
+    dotColor:   'bg-purple-400',
+  },
+  green: {
+    iconBg:     'bg-emerald-500/15',
+    iconText:   'text-emerald-400',
+    border:     'border-emerald-500/30',
+    shadow:     'shadow-emerald-500/10',
+    headerGrad: 'from-emerald-500/8',
+    dotColor:   'bg-emerald-400',
+  },
 };
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
@@ -49,67 +99,21 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   );
 }
 
-// ── Section wrapper ───────────────────────────────────────────────────────────
-function Section({
-  icon: Icon, title, desc, accent = 'blue', open, onToggle, children,
-}: {
-  icon: React.ElementType; title: string; desc: string; accent?: string;
-  open: boolean; onToggle: () => void; children: React.ReactNode;
-}) {
-  const accentMap: Record<string, string> = {
-    blue:   'bg-primary/10 text-primary group-hover:bg-primary/20',
-    amber:  'bg-amber-500/10 text-amber-500 group-hover:bg-amber-500/20',
-    purple: 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500/20',
-    green:  'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500/20',
-  };
-  return (
-    <div className={cn(
-      'bg-card border rounded-3xl overflow-hidden transition-all',
-      open ? 'border-blue-500/30 shadow-lg shadow-blue-500/5' : 'border-border',
-    )}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-6 text-right group"
-      >
-        <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center transition-colors shrink-0', accentMap[accent] ?? accentMap.blue)}>
-          <Icon className="w-6 h-6" />
-        </div>
-        <div className="flex-1 px-4 text-right">
-          <h3 className="font-bold text-foreground text-lg">{title}</h3>
-          <p className="text-muted-foreground text-sm mt-0.5">{desc}</p>
-        </div>
-        {open
-          ? <ChevronUp className="w-5 h-5 text-muted-foreground shrink-0" />
-          : <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />}
-      </button>
-      {open && (
-        <div className="px-6 pb-6 border-t border-border/40 pt-5 animate-in fade-in slide-in-from-top-2 duration-200">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 export default function Settings() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [openSection, setOpenSection] = useState<string | null>(null);
-  const toggle = (s: string) => setOpenSection(prev => prev === s ? null : s);
 
   useEffect(() => {
     const section = location.hash.replace('#', '');
-    if (section === 'profile') {
-      setOpenSection('profile');
-    }
+    if (section) setOpenSection(section);
   }, [location.hash]);
 
   // ── Profile ────────────────────────────────────────────────────────────────
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber ?? '');
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoFile, setPhotoFile]     = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(user?.photoURL ?? null);
   const [savingProfile, setSavingProfile] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -131,12 +135,7 @@ export default function Settings() {
     if (!user) return;
     setSavingProfile(true);
     try {
-      await usersApi.update(user.uid, {
-        displayName: displayName.trim(),
-        phoneNumber: phoneNumber.trim(),
-        photoURL: photoPreview,
-      });
-
+      await usersApi.update(user.uid, { displayName: displayName.trim(), phoneNumber: phoneNumber.trim(), photoURL: photoPreview });
       toast.success('تم حفظ الملف الشخصي');
       setPhotoFile(null);
     } catch (err: any) {
@@ -148,15 +147,15 @@ export default function Settings() {
 
   // ── Security ───────────────────────────────────────────────────────────────
   const [currentPass, setCurrentPass] = useState('');
-  const [newPass, setNewPass] = useState('');
+  const [newPass,     setNewPass]     = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [savingPass, setSavingPass] = useState(false);
+  const [showNew,     setShowNew]     = useState(false);
+  const [savingPass,  setSavingPass]  = useState(false);
 
   const handleChangePassword = async () => {
-    if (newPass.length < 6) { toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
-    if (newPass !== confirmPass) { toast.error('كلمتا المرور غير متطابقتين'); return; }
+    if (newPass.length < 6)         { toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
+    if (newPass !== confirmPass)     { toast.error('كلمتا المرور غير متطابقتين'); return; }
     setSavingPass(true);
     try {
       await authApi.changePassword(currentPass, newPass);
@@ -170,13 +169,8 @@ export default function Settings() {
   };
 
   // ── Notifications ──────────────────────────────────────────────────────────
-  const defaultNotifs = {
-    newTicket:    true,
-    ticketClosed: true,
-    appointment:  true,
-    whatsapp:     true,
-  };
-  const [notifs, setNotifs] = useState<typeof defaultNotifs>(defaultNotifs);
+  const defaultNotifs = { newTicket: true, ticketClosed: true, appointment: true, whatsapp: true };
+  const [notifs, setNotifs]           = useState<typeof defaultNotifs>(defaultNotifs);
   const [savingNotifs, setSavingNotifs] = useState(false);
 
   const handleSaveNotifs = async () => {
@@ -185,81 +179,55 @@ export default function Settings() {
     try {
       await usersApi.update(user.uid, { notifPrefs: notifs });
       toast.success('تم حفظ تفضيلات التنبيهات');
-    } catch {
-      toast.error('فشل الحفظ');
-    } finally {
-      setSavingNotifs(false);
-    }
+    } catch { toast.error('فشل الحفظ'); }
+    finally { setSavingNotifs(false); }
   };
 
   // ── WhatsApp ───────────────────────────────────────────────────────────────
   const [waStatus, setWaStatus] = useState<{
     running: boolean; connected: boolean; state?: string; linkedPhone?: string | null;
   } | null>(null);
-  const [waQR, setWaQR] = useState<string | null>(null);
-  const [loadingWA, setLoadingWA] = useState(false);
-  const [loadingQR, setLoadingQR] = useState(false);
-  const [startingWA, setStartingWA] = useState(false);
-  const [restartingWA, setRestartingWA] = useState(false);
+  const [waQR,          setWaQR]          = useState<string | null>(null);
+  const [loadingWA,     setLoadingWA]     = useState(false);
+  const [loadingQR,     setLoadingQR]     = useState(false);
+  const [startingWA,    setStartingWA]    = useState(false);
+  const [restartingWA,  setRestartingWA]  = useState(false);
 
-  // ── Socket.IO Real-time Updates ──────────────────────────────────────────
   useEffect(() => {
     if (!user?.uid) return;
-    
-    // Connect to same origin
-    const socket = io(window.location.origin, {
-      auth: { token: localStorage.getItem('retal_auth_token') }
-    });
-
-    socket.on(`wa-status-${user.uid}`, (newStatus: any) => {
-      setWaStatus(prev => ({
-        ...prev,
-        running: newStatus.running,
-        connected: newStatus.connected,
-        state: newStatus.state,
-        linkedPhone: newStatus.linkedPhone
-      }));
-
-      if (newStatus.qr) {
-        const qrUrl = newStatus.qr.startsWith('data:') ? newStatus.qr : `data:image/png;base64,${newStatus.qr}`;
-        setWaQR(qrUrl);
-      } else if (newStatus.connected) {
+    const socket = io(window.location.origin, { auth: { token: localStorage.getItem('retal_auth_token') } });
+    socket.on(`wa-status-${user.uid}`, (s: any) => {
+      setWaStatus(prev => ({ ...prev, running: s.running, connected: s.connected, state: s.state, linkedPhone: s.linkedPhone }));
+      if (s.qr) {
+        setWaQR(s.qr.startsWith('data:') ? s.qr : `data:image/png;base64,${s.qr}`);
+      } else if (s.connected) {
         setWaQR(null);
-        toast.success('تم ربط واتساب بنجاح (تحديث لحظي) ✅');
+        toast.success('تم ربط واتساب بنجاح ✅');
       }
     });
-
-    return () => {
-      socket.disconnect();
-    };
+    return () => { socket.disconnect(); };
   }, [user?.uid]);
 
   const startWAService = async () => {
     setStartingWA(true);
     try {
-      const data = await whatsappApi.start();
-      toast.success(data.message || 'جاري تشغيل الخدمة...');
+      const d = await whatsappApi.start();
+      toast.success(d.message || 'جاري تشغيل الخدمة...');
       setTimeout(checkWAStatus, 5000);
-    } catch (err: any) {
-      toast.error(err?.message ?? 'تعذّر تشغيل الخدمة');
-    } finally {
-      setStartingWA(false);
-    }
+    } catch (err: any) { toast.error(err?.message ?? 'تعذّر تشغيل الخدمة'); }
+    finally { setStartingWA(false); }
   };
 
   const restartWAService = async () => {
-    if (!window.confirm('هل أنت متأكد من إعادة تهيئة الجلسة؟ سيؤدي ذلك إلى مسح البيانات الحالية وطلب مسح QR جديد.')) return;
+    if (!window.confirm('هل أنت متأكد من إعادة تهيئة الجلسة؟ سيؤدي ذلك إلى مسح البيانات الحالية.')) return;
     setRestartingWA(true);
     try {
-      const data = await whatsappApi.restart();
-      toast.success(data.message || 'تمت إعادة تهيئة الخدمة');
+      const d = await whatsappApi.restart();
+      toast.success(d.message || 'تمت إعادة تهيئة الخدمة');
       setWaQR(null);
       setTimeout(checkWAStatus, 5000);
-    } catch (err: any) {
-      toast.error(err?.message ?? 'تعذّر إعادة تهيئة الخدمة');
-    } finally {
-      setRestartingWA(false);
-    }
+    } catch (err: any) { toast.error(err?.message ?? 'تعذّر إعادة تهيئة الخدمة'); }
+    finally { setRestartingWA(false); }
   };
 
   const checkWAStatus = useCallback(async () => {
@@ -268,53 +236,44 @@ export default function Settings() {
       const s = await whatsappApi.getStatus();
       setWaStatus(s);
       if (s.running && !s.connected) setWaQR(null);
-    } catch {
-      setWaStatus({ running: false, connected: false });
-    } finally {
-      setLoadingWA(false);
-    }
+    } catch { setWaStatus({ running: false, connected: false }); }
+    finally { setLoadingWA(false); }
   }, []);
 
   const fetchQR = async () => {
     setLoadingQR(true);
     try {
-      const data = await whatsappApi.getQR();
-      const qr = data.qr;
-      setWaQR(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`);
-    } catch (err: any) {
-      toast.error(err?.message ?? 'تعذّر جلب رمز QR');
-    } finally {
-      setLoadingQR(false);
-    }
+      const d = await whatsappApi.getQR();
+      setWaQR(d.qr.startsWith('data:') ? d.qr : `data:image/png;base64,${d.qr}`);
+    } catch (err: any) { toast.error(err?.message ?? 'تعذّر جلب رمز QR'); }
+    finally { setLoadingQR(false); }
+  };
+
+  const handleCardClick = (key: string) => {
+    if (key === 'whatsapp' && openSection !== 'whatsapp') checkWAStatus();
+    setOpenSection(prev => prev === key ? null : key);
   };
 
   // ── WA Templates ──────────────────────────────────────────────────────────
-  const [openingMsg, setOpeningMsg]           = useState('');
-  const [closingMsg, setClosingMsg]           = useState('');
-  const [absentMsg, setAbsentMsg]             = useState('');
-  const [outOfScopeMsg, setOutOfScopeMsg]     = useState('');
+  const [openingMsg,      setOpeningMsg]      = useState('');
+  const [closingMsg,      setClosingMsg]      = useState('');
+  const [absentMsg,       setAbsentMsg]       = useState('');
+  const [outOfScopeMsg,   setOutOfScopeMsg]   = useState('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [savingTemplates, setSavingTemplates]   = useState(false);
+  const [savingTemplates,  setSavingTemplates]  = useState(false);
 
   useEffect(() => {
-    if (user?.role === 'admin' && openSection === 'templates') {
-      loadTemplates();
-    }
+    if (user?.role === 'admin' && openSection === 'templates') loadTemplates();
   }, [openSection, user?.role]);
 
   const loadTemplates = async () => {
     setLoadingTemplates(true);
     try {
-      const data = await settingsApi.getWhatsAppTemplates();
-      setOpeningMsg(data.openingMsg);
-      setClosingMsg(data.closingMsg);
-      setAbsentMsg(data.absentMsg || '');
-      setOutOfScopeMsg(data.outOfScopeMsg || '');
-    } catch {
-      toast.error('تعذر تحميل القوالب');
-    } finally {
-      setLoadingTemplates(false);
-    }
+      const d = await settingsApi.getWhatsAppTemplates();
+      setOpeningMsg(d.openingMsg); setClosingMsg(d.closingMsg);
+      setAbsentMsg(d.absentMsg || ''); setOutOfScopeMsg(d.outOfScopeMsg || '');
+    } catch { toast.error('تعذر تحميل القوالب'); }
+    finally { setLoadingTemplates(false); }
   };
 
   const saveTemplates = async () => {
@@ -322,52 +281,33 @@ export default function Settings() {
     try {
       await settingsApi.updateWhatsAppTemplates({ openingMsg, closingMsg, absentMsg, outOfScopeMsg });
       toast.success('تم حفظ القوالب بنجاح');
-    } catch {
-      toast.error('تعذر حفظ القوالب');
-    } finally {
-      setSavingTemplates(false);
-    }
+    } catch { toast.error('تعذر حفظ القوالب'); }
+    finally { setSavingTemplates(false); }
   };
 
-  const insertVar = (setter: React.Dispatch<React.SetStateAction<string>>, variable: string) => {
-    setter(prev => prev + variable);
-  };
+  const insertVar = (setter: React.Dispatch<React.SetStateAction<string>>, v: string) =>
+    setter(prev => prev + v);
 
   // ── Work Hours ─────────────────────────────────────────────────────────────
-  const DEFAULT_WH_CONFIG: WorkHoursConfig = {
-    enabled:   true,
-    morning:   { start: '08:00', end: '12:00' },
-    hasBreak:  true,
-    break:     { start: '12:00', end: '13:00' },
-    afternoon: { start: '13:00', end: '16:00' },
-  };
-
-  const [whSettings, setWhSettings] = useState<WorkHoursSettings>({ default: DEFAULT_WH_CONFIG, byProject: {} });
-  const [whProjects, setWhProjects] = useState<Project[]>([]);
-  const [whProjectId, setWhProjectId] = useState<string | null>(null); // null = default
+  const [whSettings,      setWhSettings]      = useState<WorkHoursSettings>({ default: DEFAULT_WH_CONFIG, byProject: {} });
+  const [whProjects,      setWhProjects]      = useState<Project[]>([]);
+  const [whProjectId,     setWhProjectId]     = useState<string | null>(null);
   const [loadingWorkHours, setLoadingWorkHours] = useState(false);
-  const [savingWorkHours, setSavingWorkHours] = useState(false);
+  const [savingWorkHours,  setSavingWorkHours]  = useState(false);
 
-  // current config being edited
   const currentWH: WorkHoursConfig = whProjectId
     ? (whSettings.byProject[whProjectId] ?? whSettings.default ?? DEFAULT_WH_CONFIG)
     : (whSettings.default ?? DEFAULT_WH_CONFIG);
   const hasCustomOverride = whProjectId ? !!whSettings.byProject[whProjectId] : true;
 
   const setCurrentWH = (cfg: WorkHoursConfig) => {
-    if (whProjectId) {
-      setWhSettings(prev => ({ ...prev, byProject: { ...prev.byProject, [whProjectId]: cfg } }));
-    } else {
-      setWhSettings(prev => ({ ...prev, default: cfg }));
-    }
+    if (whProjectId) setWhSettings(prev => ({ ...prev, byProject: { ...prev.byProject, [whProjectId]: cfg } }));
+    else             setWhSettings(prev => ({ ...prev, default: cfg }));
   };
 
   const removeCustomOverride = () => {
     if (!whProjectId) return;
-    setWhSettings(prev => {
-      const { [whProjectId]: _, ...rest } = prev.byProject;
-      return { ...prev, byProject: rest };
-    });
+    setWhSettings(prev => { const { [whProjectId]: _, ...rest } = prev.byProject; return { ...prev, byProject: rest }; });
   };
 
   useEffect(() => {
@@ -380,18 +320,10 @@ export default function Settings() {
   const loadWorkHours = async () => {
     setLoadingWorkHours(true);
     try {
-      const data = await settingsApi.getWorkHours();
-      // Guard: old DB format doesn't have a .default key
-      if (data?.default) {
-        setWhSettings(data);
-      } else {
-        setWhSettings({ default: DEFAULT_WH_CONFIG, byProject: {} });
-      }
-    } catch {
-      toast.error('تعذر تحميل أوقات الدوام');
-    } finally {
-      setLoadingWorkHours(false);
-    }
+      const d = await settingsApi.getWorkHours();
+      if (d?.default) setWhSettings(d); else setWhSettings({ default: DEFAULT_WH_CONFIG, byProject: {} });
+    } catch { toast.error('تعذر تحميل أوقات الدوام'); }
+    finally { setLoadingWorkHours(false); }
   };
 
   const saveWorkHours = async () => {
@@ -399,800 +331,637 @@ export default function Settings() {
     try {
       await settingsApi.updateWorkHours(whSettings);
       toast.success('تم حفظ أوقات الدوام بنجاح');
-    } catch {
-      toast.error('تعذر حفظ أوقات الدوام');
-    } finally {
-      setSavingWorkHours(false);
-    }
+    } catch { toast.error('تعذر حفظ أوقات الدوام'); }
+    finally { setSavingWorkHours(false); }
   };
 
   const fmtTime = (t: string) => {
     const [h, m] = t.split(':').map(Number);
-    const suffix = h < 12 ? 'ص' : 'م';
-    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${suffix}`;
+    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'ص' : 'م'}`;
   };
 
-  // ── Initials avatar ────────────────────────────────────────────────────────
+  // ── Avatar initials ─────────────────────────────────────────────────────────
   const initials = (user?.displayName ?? user?.email ?? 'U')
     .split(' ').slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
 
+  // ── Sorted sections (selected card moves to front) ──────────────────────────
+  const sortedSections = useMemo<SectionMeta[]>(() => {
+    const sections: SectionMeta[] = [
+      { key: 'profile',   title: 'الملف الشخصي',        desc: 'تعديل اسمك وصورتك الشخصية',          icon: User,          accent: 'blue'   },
+      { key: 'security',  title: 'الأمان',               desc: 'تغيير كلمة المرور وإدارة الجلسات',    icon: Lock,          accent: 'amber'  },
+      { key: 'notifs',    title: 'التنبيهات',             desc: 'تخصيص تنبيهات الواتساب والتذاكر',     icon: Bell,          accent: 'purple' },
+      { key: 'perms',     title: 'الصلاحيات',             desc: 'عرض صلاحيات الوصول الخاصة بك',        icon: Shield,        accent: 'green'  },
+      { key: 'whatsapp',  title: 'واتساب تلقائي',         desc: 'ربط واتسابك لإرسال الرسائل أوتوماتيك', icon: MessageSquare, accent: 'green'  },
+      ...(user?.role === 'admin' ? [
+        { key: 'templates', title: 'قوالب الواتساب',     desc: 'تخصيص الرسائل التلقائية للعملاء',     icon: MessageSquare, accent: 'blue'   },
+        { key: 'workhours', title: 'أوقات الدوام',       desc: 'فترات العمل والمواعيد لكل مشروع',     icon: Clock,         accent: 'amber'  },
+      ] as SectionMeta[] : []),
+    ];
+    if (!openSection) return sections;
+    const idx = sections.findIndex(s => s.key === openSection);
+    if (idx === -1) return sections;
+    return [sections[idx], ...sections.slice(0, idx), ...sections.slice(idx + 1)];
+  }, [openSection, user?.role]);
+
+  // ── Section content ──────────────────────────────────────────────────────────
+  const renderContent = (key: string): React.ReactNode => {
+    switch (key) {
+
+      // ── Profile ──────────────────────────────────────────────────────────────
+      case 'profile': return (
+        <div className="space-y-5">
+          <div className="flex items-center gap-5">
+            <div className="relative group cursor-pointer" onClick={() => photoInputRef.current?.click()}>
+              <div className="w-20 h-20 rounded-2xl overflow-hidden bg-blue-500/10 flex items-center justify-center text-2xl font-black text-blue-400 border-2 border-blue-500/20">
+                {photoPreview
+                  ? <img src={photoPreview} alt="avatar" className="w-full h-full object-cover" onError={() => setPhotoPreview(null)} />
+                  : initials}
+              </div>
+              <div className="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <Camera className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+            <div className="text-right">
+              <p className="text-foreground font-bold text-base">{user?.displayName || '---'}</p>
+              <p className="text-muted-foreground text-sm">{user?.email}</p>
+              <button type="button" onClick={() => photoInputRef.current?.click()}
+                className="text-blue-400 text-xs mt-1 hover:text-blue-300 transition-colors">
+                تغيير الصورة
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground text-xs font-bold text-right block">الاسم الكامل</Label>
+              <Input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="الاسم الكامل"
+                className="bg-muted/50 border-transparent focus:border-blue-500/30 rounded-xl h-11 text-foreground text-right" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground text-xs font-bold text-right block">رقم الجوال</Label>
+              <Input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="+966xxxxxxxxx"
+                dir="ltr" className="bg-muted/50 border-transparent focus:border-blue-500/30 rounded-xl h-11 text-foreground text-left" />
+            </div>
+          </div>
+          <div className="flex justify-start">
+            <Button onClick={handleSaveProfile} disabled={savingProfile}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-6 gap-2 font-bold">
+              {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              حفظ التغييرات
+            </Button>
+          </div>
+        </div>
+      );
+
+      // ── Security ─────────────────────────────────────────────────────────────
+      case 'security': return (
+        <form onSubmit={e => { e.preventDefault(); handleChangePassword(); }} className="space-y-4">
+          {[
+            { label: 'كلمة المرور الحالية', val: currentPass, set: setCurrentPass, show: showCurrent, setShow: setShowCurrent },
+            { label: 'كلمة المرور الجديدة',  val: newPass,     set: setNewPass,     show: showNew,     setShow: setShowNew     },
+          ].map(({ label, val, set, show, setShow }) => (
+            <div key={label} className="space-y-1.5">
+              <Label className="text-muted-foreground text-xs font-bold text-right block">{label}</Label>
+              <div className="relative">
+                <Input type={show ? 'text' : 'password'} value={val} onChange={e => set(e.target.value)}
+                  placeholder="••••••••" dir="ltr"
+                  className="bg-muted/50 border-transparent focus:border-amber-500/30 rounded-xl h-11 text-foreground pr-12 text-left" />
+                <button type="button" onClick={() => setShow(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          ))}
+          <div className="space-y-1.5">
+            <Label className="text-muted-foreground text-xs font-bold text-right block">تأكيد كلمة المرور</Label>
+            <div className="relative">
+              <Input type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)}
+                placeholder="••••••••" dir="ltr"
+                className={cn('bg-muted/50 border-transparent rounded-xl h-11 text-foreground text-left',
+                  confirmPass && newPass && confirmPass === newPass && 'border-emerald-500/50')} />
+              {confirmPass && newPass && confirmPass === newPass && (
+                <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-400" />
+              )}
+            </div>
+          </div>
+          {newPass.length > 0 && newPass.length < 6 && (
+            <p className="text-red-400 text-xs text-right">كلمة المرور يجب أن تكون 6 أحرف على الأقل</p>
+          )}
+          <div className="flex justify-start">
+            <Button type="submit" disabled={savingPass || !currentPass || !newPass || !confirmPass}
+              className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 px-6 gap-2 font-bold">
+              {savingPass ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+              تغيير كلمة المرور
+            </Button>
+          </div>
+        </form>
+      );
+
+      // ── Notifications ────────────────────────────────────────────────────────
+      case 'notifs': return (
+        <div className="space-y-5">
+          {([
+            { key: 'newTicket',    label: 'تذكرة جديدة',             sub: 'تنبيه عند إضافة تذكرة لمشروعك' },
+            { key: 'ticketClosed', label: 'إغلاق تذكرة',              sub: 'تنبيه عند إقفال أي تذكرة' },
+            { key: 'appointment',  label: 'موعد صيانة',               sub: 'تذكير قبل موعد الصيانة' },
+            { key: 'whatsapp',     label: 'رسائل الواتساب التلقائية',  sub: 'السماح بالإرسال التلقائي' },
+          ] as { key: keyof typeof defaultNotifs; label: string; sub: string }[]).map(({ key: k, label, sub }) => (
+            <div key={k} className="flex items-center justify-between gap-4">
+              <Toggle checked={notifs[k]} onChange={v => setNotifs(p => ({ ...p, [k]: v }))} />
+              <div className="text-right flex-1">
+                <p className="text-foreground font-bold text-sm">{label}</p>
+                <p className="text-muted-foreground text-xs">{sub}</p>
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-start pt-2">
+            <Button onClick={handleSaveNotifs} disabled={savingNotifs}
+              className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-11 px-6 gap-2 font-bold">
+              {savingNotifs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              حفظ التفضيلات
+            </Button>
+          </div>
+          <div className="border-t border-border/40 pt-4 space-y-2">
+            <p className="text-foreground font-bold text-sm text-right">إعدادات المتصفح</p>
+            <Button onClick={async () => {
+              if (!('Notification' in window)) { toast.error('المتصفح لا يدعم الإشعارات'); return; }
+              if (Notification.permission === 'denied') { toast.error('الإشعارات محظورة — افتح إعدادات المتصفح'); return; }
+              const p = await Notification.requestPermission();
+              if (p === 'granted') toast.success('تم تفعيل إشعارات المتصفح 🎉');
+              else toast.error('تم رفض صلاحية الإشعارات');
+            }} variant="outline" className="w-full rounded-xl h-11 justify-between px-4">
+              <Bell className="w-4 h-4 ml-2" />
+              <span className="flex-1 text-right text-sm">
+                طلب صلاحية إشعارات المتصفح
+                {typeof window !== 'undefined' && 'Notification' in window && (
+                  <span className={cn('mr-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                    Notification.permission === 'granted' ? 'bg-emerald-500/10 text-emerald-500' :
+                    Notification.permission === 'denied'  ? 'bg-red-500/10 text-red-500'        : 'bg-amber-500/10 text-amber-500')}>
+                    {Notification.permission === 'granted' ? 'مفعّل' : Notification.permission === 'denied' ? 'محظور' : 'غير محدد'}
+                  </span>
+                )}
+              </span>
+            </Button>
+            <Button onClick={() => { localStorage.removeItem('retal:onboarding-prompt-disabled'); toast.success('تم إعادة تفعيل شاشة التثبيت'); }}
+              variant="outline" className="w-full rounded-xl h-11 justify-between px-4">
+              <Download className="w-4 h-4 ml-2" />
+              <span className="flex-1 text-right text-sm">إعادة إظهار رسالة التثبيت (PWA)</span>
+            </Button>
+          </div>
+        </div>
+      );
+
+      // ── Permissions ──────────────────────────────────────────────────────────
+      case 'perms': return (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between bg-muted/50 rounded-2xl px-5 py-4 border border-border/60">
+            <span className="font-bold text-emerald-400 text-sm px-3 py-1 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+              {roleLabels[user?.role ?? ''] ?? user?.role ?? '---'}
+            </span>
+            <span className="text-muted-foreground text-sm font-bold">الدور الوظيفي</span>
+          </div>
+          {(user?.specialties?.length || user?.specialty) && (
+            <div className="flex items-center justify-between bg-muted/50 rounded-2xl px-5 py-4 border border-border/60">
+              <div className="flex gap-2 flex-wrap justify-start">
+                {(user?.specialties?.length ? user.specialties : [user.specialty!]).map(s => (
+                  <span key={s} className="text-xs font-bold px-3 py-1 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
+                    {specialtyLabels[s] ?? s}
+                  </span>
+                ))}
+              </div>
+              <span className="text-muted-foreground text-sm font-bold shrink-0 mr-4">التخصصات</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between bg-muted/50 rounded-2xl px-5 py-4 border border-border/60">
+            <span className="font-bold text-blue-300 text-sm">
+              {user?.role === 'admin' ? 'جميع المشاريع' : user?.projectIds?.length ? `${user.projectIds.length} مشروع` : 'لا توجد مشاريع'}
+            </span>
+            <span className="text-muted-foreground text-sm font-bold">المشاريع</span>
+          </div>
+          {user?.employeeId && (
+            <div className="flex items-center justify-between bg-muted/50 rounded-2xl px-5 py-4 border border-border/60">
+              <span className="font-mono text-foreground text-sm">{user.employeeId}</span>
+              <span className="text-muted-foreground text-sm font-bold">رقم الموظف</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl px-5 py-3 justify-start">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span className="text-xs font-bold">وصولك مؤمَّن عبر PostgreSQL + JWT</span>
+          </div>
+        </div>
+      );
+
+      // ── WhatsApp ─────────────────────────────────────────────────────────────
+      case 'whatsapp': return (
+        <div className="space-y-5">
+          {loadingWA && <div className="flex items-center justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-emerald-400" /></div>}
+
+          {!loadingWA && waStatus && !waStatus.running && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 justify-start">
+                <WifiOff className="w-5 h-5 text-amber-400 shrink-0" />
+                <div className="text-right">
+                  <p className="text-amber-400 font-bold text-sm">خدمة الواتساب متوقفة</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">يمكنك تشغيل الخدمة مباشرة من هنا</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button onClick={checkWAStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={startingWA}>
+                  <RefreshCw className="w-4 h-4" />إعادة الفحص
+                </Button>
+                <Button onClick={startWAService} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 gap-2 text-sm font-bold" disabled={startingWA}>
+                  {startingWA ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}تشغيل الخدمة
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!loadingWA && waStatus?.running && waStatus.connected && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-5 py-4 justify-start">
+                <Wifi className="w-5 h-5 text-emerald-400 shrink-0" />
+                <div className="text-right">
+                  <p className="text-emerald-400 font-bold text-sm">مرتبط ونشط</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">
+                    {waStatus.linkedPhone ? `مربوط برقم: ${waStatus.linkedPhone}` : 'الرسائل التلقائية تعمل من واتسابك'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button onClick={checkWAStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={restartingWA}>
+                  <RefreshCw className="w-4 h-4" />تحديث
+                </Button>
+                <Button onClick={restartWAService} variant="destructive" className="flex-1 rounded-xl h-10 gap-2 text-sm font-bold" disabled={restartingWA}>
+                  {restartingWA ? <Loader2 className="w-4 h-4 animate-spin" /> : <WifiOff className="w-4 h-4" />}قطع / إعادة ضبط
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!loadingWA && waStatus?.running && !waStatus.connected && (
+            <div className="space-y-5">
+              <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl px-5 py-4 justify-start">
+                <MessageSquare className="w-5 h-5 text-blue-400 shrink-0" />
+                <div className="text-right">
+                  <p className="text-blue-400 font-bold text-sm">في انتظار الربط</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">امسح رمز QR من واتساب على هاتفك</p>
+                </div>
+              </div>
+              {waQR ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="bg-white p-3 rounded-2xl shadow-lg">
+                    <img src={waQR} alt="QR Code" className="w-48 h-48 object-contain" />
+                  </div>
+                  <p className="text-muted-foreground text-xs text-center">افتح واتساب ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="w-48 h-48 bg-muted/60 rounded-2xl border border-border flex items-center justify-center">
+                    <MessageSquare className="w-12 h-12 text-muted-foreground/40" />
+                  </div>
+                  <p className="text-muted-foreground text-xs text-center">اضغط الزر لتوليد رمز QR</p>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <Button onClick={checkWAStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={loadingQR || restartingWA}>
+                  <RefreshCw className="w-4 h-4" />فحص
+                </Button>
+                <Button onClick={fetchQR} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 gap-2 text-sm font-bold" disabled={loadingQR || restartingWA}>
+                  {loadingQR ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                  {waQR ? 'تحديث QR' : 'توليد QR'}
+                </Button>
+              </div>
+              <Button onClick={restartWAService} variant="ghost" className="w-full text-xs text-red-400 hover:bg-red-500/5 rounded-xl h-8" disabled={loadingQR || restartingWA}>
+                إعادة تهيئة الجلسة بالكامل
+              </Button>
+            </div>
+          )}
+        </div>
+      );
+
+      // ── WA Templates ─────────────────────────────────────────────────────────
+      case 'templates': return user?.role !== 'admin' ? null : (
+        <div className="space-y-6">
+          {loadingTemplates ? (
+            <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>
+          ) : (
+            <>
+              <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4 space-y-2">
+                <p className="text-sm font-bold text-blue-400 text-right">متغيرات متاحة (اضغط للإدراج):</p>
+                <div className="flex flex-wrap gap-2 justify-start">
+                  {[
+                    { label: 'اسم العميل', val: '{clientName}' },
+                    { label: 'رقم التذكرة', val: '{ticketId}' },
+                    { label: 'الوصف', val: '{description}' },
+                    { label: 'رقم الفيلا', val: '{villaNumber}' },
+                    { label: 'ملاحظات الإغلاق', val: '{closureNotes}' },
+                    { label: 'التاريخ', val: '{date}' },
+                  ].map(v => (
+                    <button key={v.val} onClick={() => insertVar(setOpeningMsg, v.val)}
+                      className="text-xs font-mono bg-card border border-border px-2 py-1 rounded-lg hover:bg-blue-500/10 transition-colors">
+                      {v.label} <span className="text-muted-foreground">{v.val}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {[
+                { label: 'رسالة الموعد (تنسيق الصيانة)',  val: openingMsg,    set: setOpeningMsg,    color: null  },
+                { label: 'رسالة إغلاق التذكرة (عادي)',    val: closingMsg,    set: setClosingMsg,    color: null  },
+                { label: 'رسالة عدم التواجد',              val: absentMsg,     set: setAbsentMsg,     color: 'amber', badge: 'حالة: مغلقة', placeholder: 'رسالة تُرسل للعميل عند عدم تواجده...' },
+                { label: 'رسالة خارج الاختصاص',           val: outOfScopeMsg, set: setOutOfScopeMsg, color: 'red',   badge: 'حالة: خارج النطاق', placeholder: 'رسالة عند المشكلة خارج نطاق الضمان...' },
+              ].map(({ label, val, set, color, badge, placeholder }) => (
+                <div key={label} className="space-y-2">
+                  <div className="flex items-center gap-2 justify-end">
+                    <Label className={cn('text-xs font-bold', color ? `text-${color}-400` : 'text-muted-foreground')}>{label}</Label>
+                    {badge && color && (
+                      <span className={`text-[10px] bg-${color}-500/10 text-${color}-400 border border-${color}-500/20 px-2 py-0.5 rounded-full`}>{badge}</span>
+                    )}
+                  </div>
+                  <Textarea value={val} onChange={e => set(e.target.value)}
+                    className="min-h-[100px] text-right bg-background/70" dir="rtl" placeholder={placeholder} />
+                </div>
+              ))}
+              <div className="flex justify-start pt-2">
+                <Button onClick={saveTemplates} disabled={savingTemplates}
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-6 font-bold gap-2">
+                  {savingTemplates ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  حفظ القوالب
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      );
+
+      // ── Work Hours ────────────────────────────────────────────────────────────
+      case 'workhours': return user?.role !== 'admin' ? null : (
+        <div className="space-y-5">
+          {loadingWorkHours ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
+          ) : (
+            <>
+              <div className="flex gap-2 flex-wrap" dir="rtl">
+                <button onClick={() => setWhProjectId(null)}
+                  className={cn('px-4 py-1.5 rounded-full text-xs font-bold transition-colors border',
+                    whProjectId === null ? 'bg-amber-500 text-white border-amber-500' : 'border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400')}>
+                  الإعداد الافتراضي
+                </button>
+                {whProjects.map(p => (
+                  <button key={p.id} onClick={() => setWhProjectId(p.id)}
+                    className={cn('px-4 py-1.5 rounded-full text-xs font-bold transition-colors border relative',
+                      whProjectId === p.id ? 'bg-amber-500 text-white border-amber-500' : 'border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400')}>
+                    {p.name}
+                    {whSettings.byProject[p.id] && <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-400 rounded-full" />}
+                  </button>
+                ))}
+              </div>
+
+              {whProjectId && (
+                <div className="flex items-center justify-between bg-muted/40 border border-border/50 rounded-2xl px-4 py-3">
+                  <Toggle checked={hasCustomOverride} onChange={v => v ? setCurrentWH({ ...DEFAULT_WH_CONFIG }) : removeCustomOverride()} />
+                  <div className="text-right">
+                    <p className="text-foreground font-bold text-sm">إعداد مخصص لهذا المشروع</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">{hasCustomOverride ? 'يستخدم إعداداته الخاصة' : 'يرث الإعداد الافتراضي'}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className={cn('space-y-4', whProjectId && !hasCustomOverride && 'opacity-40 pointer-events-none')}>
+                <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/15 rounded-2xl px-5 py-4">
+                  <Toggle checked={currentWH.enabled} onChange={v => setCurrentWH({ ...currentWH, enabled: v })} />
+                  <div className="text-right">
+                    <p className="text-foreground font-bold text-sm">تفعيل قيود المواعيد</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">
+                      {currentWH.enabled ? 'المواعيد خارج الدوام تُرفض أو تُصحَّح تلقائياً' : 'لا قيود على وقت المواعيد'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className={cn('space-y-4 transition-opacity', !currentWH.enabled && 'opacity-40 pointer-events-none')}>
+                  <div className="relative h-10 rounded-xl bg-muted/50 overflow-hidden border border-border/40 flex items-center" dir="ltr">
+                    {(() => {
+                      const total = 24 * 60;
+                      const p = (t: string) => t.split(':').map(Number).reduce((h,m)=>h*60+m,0);
+                      const ms = p(currentWH.morning.start), me = p(currentWH.morning.end);
+                      const bs = currentWH.hasBreak ? p(currentWH.break.start) : me;
+                      const be = currentWH.hasBreak ? p(currentWH.break.end)   : me;
+                      const as2 = currentWH.hasBreak ? be : me;
+                      const ae = p(currentWH.afternoon.end);
+                      return (<>
+                        <div className="absolute inset-y-0 bg-amber-500/30 border-r border-amber-500/50" style={{ left: `${ms/total*100}%`, width: `${(me-ms)/total*100}%` }} />
+                        {currentWH.hasBreak && <div className="absolute inset-y-0 bg-red-500/20 border-x border-red-500/30" style={{ left: `${bs/total*100}%`, width: `${(be-bs)/total*100}%` }} />}
+                        {currentWH.hasBreak && <div className="absolute inset-y-0 bg-amber-500/30 border-l border-amber-500/50" style={{ left: `${as2/total*100}%`, width: `${(ae-as2)/total*100}%` }} />}
+                        <div className="absolute inset-0 flex items-center justify-around px-2 pointer-events-none">
+                          {[0,3,6,9,12,15,18,21].map(h => <span key={h} className="text-[9px] text-muted-foreground/50 font-mono">{h}</span>)}
+                        </div>
+                      </>);
+                    })()}
+                  </div>
+
+                  {[
+                    { label: 'الفترة الصباحية', field: 'morning' as const, color: 'amber' },
+                    ...(currentWH.hasBreak ? [{ label: 'فترة الراحة', field: 'break' as const, color: 'red' }] : []),
+                    ...(currentWH.hasBreak ? [{ label: 'الفترة المسائية', field: 'afternoon' as const, color: 'amber' }] : []),
+                  ].map(({ label, field, color }) => (
+                    <div key={field} className="bg-card border border-border/60 rounded-2xl p-4 space-y-3">
+                      <div className={cn('flex items-center gap-2', field === 'break' ? 'justify-between' : 'justify-end')}>
+                        {field === 'break' && (
+                          <Toggle checked={currentWH.hasBreak} onChange={v => setCurrentWH({ ...currentWH, hasBreak: v })} />
+                        )}
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-foreground">{label}</p>
+                          <span className={`w-3 h-3 rounded-full bg-${color}-${color === 'red' ? '400/60' : '500/70'}`} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {(['end', 'start'] as const).map(side => (
+                          <div key={side} className="space-y-1">
+                            <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">{side === 'end' ? 'إلى' : 'من'}</label>
+                            <input type="time" value={currentWH[field][side]}
+                              onChange={e => setCurrentWH({ ...currentWH, [field]: { ...currentWH[field], [side]: e.target.value } })}
+                              className={`w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-${color}-500/50 font-mono text-sm`} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3 text-right space-y-1" dir="rtl">
+                    <div className="flex items-center gap-2 justify-end mb-1">
+                      <p className="text-amber-400 text-xs font-bold">ملخص أوقات الدوام</p>
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    </div>
+                    <p className="text-foreground text-sm">🌅 الصباح: {fmtTime(currentWH.morning.start)} — {fmtTime(currentWH.morning.end)}</p>
+                    {currentWH.hasBreak && <p className="text-muted-foreground text-xs">☕ الراحة: {fmtTime(currentWH.break.start)} — {fmtTime(currentWH.break.end)}</p>}
+                    {currentWH.hasBreak && <p className="text-foreground text-sm">🌆 المساء: {fmtTime(currentWH.afternoon.start)} — {fmtTime(currentWH.afternoon.end)}</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-start pt-1">
+                <Button onClick={saveWorkHours} disabled={savingWorkHours}
+                  className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 px-6 font-bold gap-2">
+                  {savingWorkHours ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  حفظ جميع الإعدادات
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      );
+
+      default: return null;
+    }
+  };
+
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <Layout>
-      <div className="space-y-5 page-in max-w-2xl mx-auto">
-        {/* Header */}
+      <div className="space-y-6 page-in max-w-3xl mx-auto">
+
+        {/* Page header */}
         <div className="text-right">
           <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">الإعدادات</h1>
           <p className="text-muted-foreground mt-1 text-sm">تخصيص حسابك وتفضيلات النظام</p>
         </div>
 
-        {/* ── Profile ─────────────────────────────────────────────────────── */}
-        <Section icon={User} title="الملف الشخصي" desc="تعديل اسمك وصورتك الشخصية"
-          accent="blue" open={openSection === 'profile'} onToggle={() => toggle('profile')}>
-          <div className="space-y-5">
-            {/* Avatar row */}
-            <div className="flex items-center gap-5">
-              <div className="relative group cursor-pointer" onClick={() => photoInputRef.current?.click()}>
-                <div className="w-20 h-20 rounded-2xl overflow-hidden bg-blue-500/20 flex items-center justify-center text-2xl font-black text-blue-400 border-2 border-blue-500/30">
-                  {photoPreview
-                    ? <img src={photoPreview} alt="avatar" className="w-full h-full object-cover" onError={() => setPhotoPreview(null)} />
-                    : initials}
-                </div>
-                <div className="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Camera className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-              <div className="text-right">
-                <p className="text-foreground font-bold text-base">{user?.displayName || '---'}</p>
-                <p className="text-muted-foreground text-sm">{user?.email}</p>
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  className="text-blue-400 text-xs mt-1 hover:text-blue-300 transition-colors"
-                >
-                  تغيير الصورة
-                </button>
-              </div>
-            </div>
+        {/* ── Animated card grid ───────────────────────────────────────────── */}
+        <LayoutGroup id="settings">
+          <div className="grid grid-cols-2 gap-4">
+            {sortedSections.map(sec => {
+              const isOpen = openSection === sec.key;
+              const a = ACCENT[sec.accent] ?? ACCENT.blue;
 
-            {/* Fields */}
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-muted-foreground text-xs font-bold text-right block">الاسم الكامل</Label>
-                <Input
-                  value={displayName}
-                  onChange={e => setDisplayName(e.target.value)}
-                  placeholder="الاسم الكامل"
-                  className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-foreground text-right"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-muted-foreground text-xs font-bold text-right block">رقم الجوال</Label>
-                <Input
-                  value={phoneNumber}
-                  onChange={e => setPhoneNumber(e.target.value)}
-                  placeholder="+966xxxxxxxxx"
-                  dir="ltr"
-                  className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-foreground text-left"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-start">
-              <Button
-                onClick={handleSaveProfile}
-                disabled={savingProfile}
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-6 gap-2 font-bold"
-              >
-                {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                حفظ التغييرات
-              </Button>
-            </div>
-          </div>
-        </Section>
-
-        {/* ── Security ────────────────────────────────────────────────────── */}
-        <Section icon={Lock} title="الأمان" desc="تغيير كلمة المرور وإدارة الجلسات"
-          accent="amber" open={openSection === 'security'} onToggle={() => toggle('security')}>
-          <form onSubmit={e => { e.preventDefault(); handleChangePassword(); }} className="space-y-4">
-            {/* Current password */}
-            <div className="space-y-1.5">
-              <Label className="text-muted-foreground text-xs font-bold text-right block">كلمة المرور الحالية</Label>
-              <div className="relative">
-                <Input
-                  type={showCurrent ? 'text' : 'password'}
-                  value={currentPass}
-                  onChange={e => setCurrentPass(e.target.value)}
-                  placeholder="••••••••"
-                  dir="ltr"
-                  className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-foreground pr-12 text-left"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrent(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* New password */}
-            <div className="space-y-1.5">
-              <Label className="text-muted-foreground text-xs font-bold text-right block">كلمة المرور الجديدة</Label>
-              <div className="relative">
-                <Input
-                  type={showNew ? 'text' : 'password'}
-                  value={newPass}
-                  onChange={e => setNewPass(e.target.value)}
-                  placeholder="••••••••"
-                  dir="ltr"
-                  className="bg-muted/50 border-transparent focus:border-primary/30 rounded-xl h-11 text-foreground pr-12 text-left"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNew(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Confirm */}
-            <div className="space-y-1.5">
-              <Label className="text-muted-foreground text-xs font-bold text-right block">تأكيد كلمة المرور</Label>
-              <div className="relative">
-                <Input
-                  type="password"
-                  value={confirmPass}
-                  onChange={e => setConfirmPass(e.target.value)}
-                  placeholder="••••••••"
-                  dir="ltr"
+              return (
+                <motion.div
+                  key={sec.key}
+                  layoutId={sec.key}
+                  layout
+                  transition={{ type: 'spring', stiffness: 300, damping: 30, mass: 0.8 }}
                   className={cn(
-                    'bg-background/70 border-border rounded-xl h-11 text-foreground text-left',
-                    confirmPass && newPass && confirmPass === newPass && 'border-emerald-500/50',
+                    'rounded-3xl overflow-hidden border bg-card',
+                    isOpen
+                      ? cn('col-span-2 shadow-2xl', a.border, a.shadow)
+                      : 'border-border cursor-pointer',
                   )}
-                />
-                {confirmPass && newPass && confirmPass === newPass && (
-                  <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-400" />
-                )}
-              </div>
-            </div>
-
-            {newPass.length > 0 && newPass.length < 6 && (
-              <p className="text-red-400 text-xs text-right">كلمة المرور يجب أن تكون 6 أحرف على الأقل</p>
-            )}
-
-            <div className="flex justify-start">
-              <Button
-                type="submit"
-                disabled={savingPass || !currentPass || !newPass || !confirmPass}
-                className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 px-6 gap-2 font-bold"
-              >
-                {savingPass ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                تغيير كلمة المرور
-              </Button>
-            </div>
-          </form>
-        </Section>
-
-        {/* ── Notifications ───────────────────────────────────────────────── */}
-        <Section icon={Bell} title="التنبيهات" desc="تخصيص تنبيهات الواتساب والتذاكر الجديدة"
-          accent="purple" open={openSection === 'notifs'} onToggle={() => toggle('notifs')}>
-          <div className="space-y-5">
-            {([
-              { key: 'newTicket',    label: 'تذكرة جديدة',          sub: 'تنبيه عند إضافة تذكرة لمشروعك' },
-              { key: 'ticketClosed', label: 'إغلاق تذكرة',           sub: 'تنبيه عند إقفال أي تذكرة' },
-              { key: 'appointment',  label: 'موعد صيانة',            sub: 'تذكير قبل موعد الصيانة' },
-              { key: 'whatsapp',     label: 'رسائل الواتساب التلقائية', sub: 'السماح بالإرسال التلقائي' },
-            ] as { key: keyof typeof defaultNotifs; label: string; sub: string }[]).map(({ key, label, sub }) => (
-              <div key={key} className="flex items-center justify-between gap-4">
-                <Toggle checked={notifs[key]} onChange={v => setNotifs(p => ({ ...p, [key]: v }))} />
-                <div className="text-right flex-1">
-                  <p className="text-foreground font-bold text-sm">{label}</p>
-                  <p className="text-muted-foreground text-xs">{sub}</p>
-                </div>
-              </div>
-            ))}
-
-            <div className="flex justify-start pt-2">
-              <Button
-                onClick={handleSaveNotifs}
-                disabled={savingNotifs}
-                className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-11 px-6 gap-2 font-bold"
-              >
-                {savingNotifs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                حفظ التفضيلات
-              </Button>
-            </div>
-
-            <div className="border-t border-border/40 pt-4 mt-4 space-y-3">
-              <p className="text-foreground font-bold text-sm text-right">إعدادات المتصفح والتطبيق</p>
-              
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={async () => {
-                    if (!('Notification' in window)) {
-                      toast.error('المتصفح لا يدعم الإشعارات');
-                      return;
-                    }
-                    if (Notification.permission === 'denied') {
-                      toast.error('الإشعارات محظورة — افتح إعدادات المتصفح لتفعيلها يدويًا');
-                      return;
-                    }
-                    const p = await Notification.requestPermission();
-                    if (p === 'granted') toast.success('تم تفعيل إشعارات المتصفح بنجاح 🎉');
-                    else toast.error('تم رفض صلاحية الإشعارات');
+                  animate={{
+                    scale:   openSection && !isOpen ? 0.97 : 1,
+                    opacity: openSection && !isOpen ? 0.6  : 1,
                   }}
-                  variant="outline"
-                  className="rounded-xl h-11 justify-between px-4"
+                  whileHover={!isOpen ? { scale: openSection ? 0.97 : 1.015, transition: { duration: 0.15 } } : undefined}
+                  whileTap={!isOpen ? { scale: 0.98 } : undefined}
+                  onClick={() => !isOpen && handleCardClick(sec.key)}
                 >
-                  <Bell className="w-4 h-4 ml-2" />
-                  <span className="flex-1 text-right text-sm">
-                    طلب صلاحية إشعارات المتصفح
-                    {typeof window !== 'undefined' && 'Notification' in window && (
-                      <span className={cn(
-                        'mr-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                        Notification.permission === 'granted'
-                          ? 'bg-emerald-500/10 text-emerald-500'
-                          : Notification.permission === 'denied'
-                            ? 'bg-red-500/10 text-red-500'
-                            : 'bg-amber-500/10 text-amber-500',
-                      )}>
-                        {Notification.permission === 'granted' ? 'مفعّل' : Notification.permission === 'denied' ? 'محظور' : 'غير محدد'}
-                      </span>
+                  {/* ── Card header ──────────────────────────────────────── */}
+                  <motion.div
+                    layout
+                    className={cn(
+                      'flex items-center gap-4 p-5',
+                      isOpen && cn('bg-gradient-to-bl to-transparent', a.headerGrad),
                     )}
-                  </span>
-                </Button>
-
-                <Button
-                  onClick={() => {
-                    // Key must match PROMPT_DISABLED_KEY in PWAInstallPrompt.tsx
-                    localStorage.removeItem('retal:onboarding-prompt-disabled');
-                    toast.success('تم إعادة تفعيل شاشة التثبيت — قم بتحديث الصفحة');
-                  }}
-                  variant="outline"
-                  className="rounded-xl h-11 justify-between px-4"
-                >
-                  <Download className="w-4 h-4 ml-2" />
-                  <span className="flex-1 text-right text-sm">إعادة إظهار رسالة التثبيت (PWA)</span>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        {/* ── Permissions ─────────────────────────────────────────────────── */}
-        <Section icon={Shield} title="الصلاحيات" desc="عرض صلاحيات الوصول الخاصة بك"
-          accent="green" open={openSection === 'perms'} onToggle={() => toggle('perms')}>
-          <div className="space-y-4">
-            {/* Role */}
-            <div className="flex items-center justify-between bg-muted/70 rounded-2xl px-5 py-4 border border-border/60">
-              <span className="font-bold text-emerald-400 text-sm px-3 py-1 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                {roleLabels[user?.role ?? ''] ?? user?.role ?? '---'}
-              </span>
-              <span className="text-muted-foreground text-sm font-bold">الدور الوظيفي</span>
-            </div>
-
-            {/* Specialties */}
-            {(user?.specialties?.length || user?.specialty) && (
-              <div className="flex items-center justify-between bg-muted/70 rounded-2xl px-5 py-4 border border-border/60">
-                <div className="flex gap-2 flex-wrap justify-start">
-                  {(user?.specialties?.length ? user.specialties : [user.specialty!]).map(s => (
-                    <span key={s} className="text-xs font-bold px-3 py-1 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
-                      {specialtyLabels[s] ?? s}
-                    </span>
-                  ))}
-                </div>
-                <span className="text-muted-foreground text-sm font-bold shrink-0 mr-4">التخصصات</span>
-              </div>
-            )}
-
-            {/* Projects */}
-            <div className="flex items-center justify-between bg-muted/70 rounded-2xl px-5 py-4 border border-border/60">
-              <span className="font-bold text-blue-300 text-sm">
-                {user?.role === 'admin'
-                  ? 'جميع المشاريع'
-                  : user?.projectIds?.length
-                    ? `${user.projectIds.length} مشروع`
-                    : 'لا توجد مشاريع'}
-              </span>
-              <span className="text-muted-foreground text-sm font-bold">المشاريع</span>
-            </div>
-
-            {/* Employee ID */}
-            {user?.employeeId && (
-              <div className="flex items-center justify-between bg-muted/70 rounded-2xl px-5 py-4 border border-border/60">
-                <span className="font-mono text-foreground text-sm">{user.employeeId}</span>
-                <span className="text-muted-foreground text-sm font-bold">رقم الموظف</span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl px-5 py-3 justify-start">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span className="text-xs font-bold">وصولك مؤمَّن عبر PostgreSQL + JWT</span>
-            </div>
-          </div>
-        </Section>
-
-        {/* ── WhatsApp ────────────────────────────────────────────────────── */}
-        <Section
-          icon={MessageSquare}
-          title="واتساب تلقائي"
-          desc="اربط واتسابك لإرسال رسائل الافتتاح والإغلاق أوتوماتيك"
-          accent="green"
-          open={openSection === 'whatsapp'}
-          onToggle={() => {
-            toggle('whatsapp');
-            if (openSection !== 'whatsapp') checkWAStatus();
-          }}
-        >
-          <div className="space-y-5">
-            {loadingWA && (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
-              </div>
-            )}
-
-            {!loadingWA && waStatus && !waStatus.running && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 justify-start">
-                  <WifiOff className="w-5 h-5 text-amber-400 shrink-0" />
-                  <div className="text-right">
-                    <p className="text-amber-400 font-bold text-sm">خدمة الواتساب التلقائي متوقفة</p>
-                    <p className="text-muted-foreground text-xs mt-0.5">يمكنك تشغيل الخدمة مباشرة من هنا أو فحص حالتها</p>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  <Button
-                    onClick={checkWAStatus}
-                    variant="outline"
-                    className="flex-1 rounded-xl h-10 gap-2 text-sm"
-                    disabled={startingWA}
                   >
-                    <RefreshCw className="w-4 h-4" />
-                    إعادة الفحص
-                  </Button>
-                  <Button
-                    onClick={startWAService}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 gap-2 text-sm font-bold"
-                    disabled={startingWA}
-                  >
-                    {startingWA ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Wifi className="w-4 h-4" />
-                    )}
-                    تشغيل الخدمة
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {!loadingWA && waStatus?.running && waStatus.connected && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-5 py-4 justify-start">
-                  <Wifi className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <div className="text-right">
-                    <p className="text-emerald-400 font-bold text-sm">مرتبط ونشط</p>
-                    <p className="text-muted-foreground text-xs mt-0.5">
-                      {waStatus.linkedPhone ? `مربوط برقم: ${waStatus.linkedPhone}` : 'الرسائل التلقائية تعمل من واتسابك'}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  <Button
-                    onClick={checkWAStatus}
-                    variant="outline"
-                    className="flex-1 rounded-xl h-10 gap-2 text-sm"
-                    disabled={restartingWA}
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    تحديث الحالة
-                  </Button>
-                  <Button
-                    onClick={restartWAService}
-                    variant="destructive"
-                    className="flex-1 rounded-xl h-10 gap-2 text-sm font-bold"
-                    disabled={restartingWA}
-                  >
-                    {restartingWA ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <WifiOff className="w-4 h-4" />
-                    )}
-                    قطع الاتصال / إعادة ضبط
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {!loadingWA && waStatus?.running && !waStatus.connected && (
-              <div className="space-y-5">
-                <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl px-5 py-4 justify-start">
-                  <MessageSquare className="w-5 h-5 text-blue-400 shrink-0" />
-                  <div className="text-right">
-                    <p className="text-blue-400 font-bold text-sm">في انتظار الربط</p>
-                    <p className="text-muted-foreground text-xs mt-0.5">امسح رمز QR من واتساب على هاتفك</p>
-                  </div>
-                </div>
-
-                {waQR ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="bg-white p-3 rounded-2xl shadow-lg">
-                      <img src={waQR} alt="QR Code" className="w-48 h-48 object-contain" />
-                    </div>
-                    <p className="text-muted-foreground text-xs text-center">
-                      افتح واتساب ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3 py-4">
-                    <div className="w-48 h-48 bg-muted/60 rounded-2xl border border-border flex items-center justify-center">
-                      <MessageSquare className="w-12 h-12 text-muted-foreground/40" />
-                    </div>
-                    <p className="text-muted-foreground text-xs text-center">اضغط الزر لتوليد رمز QR</p>
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <Button
-                    onClick={checkWAStatus}
-                    variant="outline"
-                    className="flex-1 rounded-xl h-10 gap-2 text-sm"
-                    disabled={loadingQR || restartingWA}
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    فحص الاتصال
-                  </Button>
-                  <Button
-                    onClick={fetchQR}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 gap-2 text-sm font-bold"
-                    disabled={loadingQR || restartingWA}
-                  >
-                    {loadingQR
-                      ? <Loader2 className="w-4 h-4 animate-spin" />
-                      : <MessageSquare className="w-4 h-4" />}
-                    {waQR ? 'تحديث الرمز' : 'توليد QR'}
-                  </Button>
-                </div>
-                
-                <Button
-                  onClick={restartWAService}
-                  variant="ghost"
-                  className="w-full text-xs text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-xl h-8 mt-1"
-                  disabled={loadingQR || restartingWA}
-                >
-                  إعادة تهيئة الجلسة بالكامل
-                </Button>
-              </div>
-            )}
-          </div>
-        </Section>
-
-        {/* ── WA Templates ────────────────────────────────────────────────── */}
-        {user?.role === 'admin' && (
-          <Section icon={MessageSquare} title="قوالب رسائل الواتساب" desc="تخصيص الرسائل التلقائية التي تصل للعميل (للمدراء فقط)"
-            accent="blue" open={openSection === 'templates'} onToggle={() => toggle('templates')}>
-            <div className="space-y-6">
-              {loadingTemplates ? (
-                <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>
-              ) : (
-                <>
-                  <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4 space-y-2">
-                    <p className="text-sm font-bold text-blue-400 text-right">متغيرات متاحة (اضغط للإدراج):</p>
-                    <div className="flex flex-wrap gap-2 justify-start">
-                      {[
-                        { label: 'اسم العميل', val: '{clientName}' },
-                        { label: 'رقم التذكرة', val: '{ticketId}' },
-                        { label: 'الوصف', val: '{description}' },
-                        { label: 'رقم الفيلا', val: '{villaNumber}' },
-                        { label: 'ملاحظات الإغلاق', val: '{closureNotes}' },
-                        { label: 'التاريخ', val: '{date}' },
-                      ].map(v => (
-                        <button key={v.val} onClick={() => insertVar(setOpeningMsg, v.val)} className="text-xs font-mono bg-background border border-border px-2 py-1 rounded-lg hover:bg-blue-500/10 transition-colors">
-                          {v.label} <span className="text-muted-foreground">{v.val}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground text-xs font-bold text-right block">رسالة الموعد (تنسيق الصيانة)</Label>
-                    <Textarea 
-                      value={openingMsg} 
-                      onChange={e => setOpeningMsg(e.target.value)}
-                      className="min-h-[120px] text-right bg-background/70"
-                      dir="rtl"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground text-xs font-bold text-right block">رسالة إغلاق التذكرة (عادي)</Label>
-                    <Textarea
-                      value={closingMsg}
-                      onChange={e => setClosingMsg(e.target.value)}
-                      className="min-h-[120px] text-right bg-background/70"
-                      dir="rtl"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 justify-end">
-                      <Label className="text-amber-400 text-xs font-bold text-right block">رسالة عدم التواجد</Label>
-                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">حالة: مغلقة</span>
-                    </div>
-                    <Textarea
-                      value={absentMsg}
-                      onChange={e => setAbsentMsg(e.target.value)}
-                      className="min-h-[100px] text-right bg-background/70"
-                      dir="rtl"
-                      placeholder="رسالة تُرسل للعميل عند عدم تواجده وقت الزيارة..."
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 justify-end">
-                      <Label className="text-red-400 text-xs font-bold text-right block">رسالة خارج الاختصاص</Label>
-                      <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full">حالة: خارج النطاق</span>
-                    </div>
-                    <Textarea
-                      value={outOfScopeMsg}
-                      onChange={e => setOutOfScopeMsg(e.target.value)}
-                      className="min-h-[100px] text-right bg-background/70"
-                      dir="rtl"
-                      placeholder="رسالة تُرسل للعميل عندما تكون المشكلة خارج نطاق الضمان..."
-                    />
-                  </div>
-
-                  <div className="flex justify-start pt-2">
-                    <Button onClick={saveTemplates} disabled={savingTemplates} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-6 font-bold">
-                      {savingTemplates ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 ml-2" />}
-                      حفظ القوالب
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          </Section>
-        )}
-
-        {/* ── Work Hours ──────────────────────────────────────────────────── */}
-        {user?.role === 'admin' && (
-          <Section icon={Clock} title="أوقات الدوام" desc="فترات العمل لكل مشروع مع الراحة — تحكم في المواعيد تلقائياً"
-            accent="amber" open={openSection === 'workhours'} onToggle={() => toggle('workhours')}>
-            <div className="space-y-5">
-              {loadingWorkHours ? (
-                <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
-              ) : (
-                <>
-                  {/* ── Project tabs ── */}
-                  <div className="flex gap-2 flex-wrap" dir="rtl">
-                    <button
-                      onClick={() => setWhProjectId(null)}
+                    {/* Icon */}
+                    <motion.div
+                      layout
                       className={cn(
-                        'px-4 py-1.5 rounded-full text-xs font-bold transition-colors border',
-                        whProjectId === null
-                          ? 'bg-amber-500 text-white border-amber-500'
-                          : 'border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400',
+                        'rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300',
+                        a.iconBg, a.iconText,
+                        isOpen ? 'w-14 h-14' : 'w-12 h-12',
                       )}
                     >
-                      الإعداد الافتراضي
-                    </button>
-                    {whProjects.map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => setWhProjectId(p.id)}
-                        className={cn(
-                          'px-4 py-1.5 rounded-full text-xs font-bold transition-colors border relative',
-                          whProjectId === p.id
-                            ? 'bg-amber-500 text-white border-amber-500'
-                            : 'border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400',
-                        )}
+                      <sec.icon className={cn('transition-all duration-300', isOpen ? 'w-7 h-7' : 'w-5 h-5')} />
+                    </motion.div>
+
+                    {/* Text */}
+                    <motion.div layout className="text-right flex-1 min-w-0">
+                      <motion.p
+                        layout
+                        className={cn('font-bold text-foreground transition-all duration-300', isOpen ? 'text-xl' : 'text-base')}
                       >
-                        {p.name}
-                        {whSettings.byProject[p.id] && (
-                          <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-400 rounded-full" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                        {sec.title}
+                      </motion.p>
+                      <p className="text-muted-foreground text-xs mt-0.5 truncate">{sec.desc}</p>
+                    </motion.div>
 
-                  {/* ── Project override toggle ── */}
-                  {whProjectId && (
-                    <div className="flex items-center justify-between bg-muted/40 border border-border/50 rounded-2xl px-4 py-3">
-                      <Toggle
-                        checked={hasCustomOverride}
-                        onChange={v => v ? setCurrentWH({ ...DEFAULT_WH_CONFIG }) : removeCustomOverride()}
-                      />
-                      <div className="text-right">
-                        <p className="text-foreground font-bold text-sm">إعداد مخصص لهذا المشروع</p>
-                        <p className="text-muted-foreground text-xs mt-0.5">
-                          {hasCustomOverride ? 'يستخدم إعداداته الخاصة' : 'يرث الإعداد الافتراضي'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Config editor ── */}
-                  <div className={cn('space-y-4', whProjectId && !hasCustomOverride && 'opacity-40 pointer-events-none')}>
-
-                    {/* Enable toggle */}
-                    <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/15 rounded-2xl px-5 py-4">
-                      <Toggle checked={currentWH.enabled} onChange={v => setCurrentWH({ ...currentWH, enabled: v })} />
-                      <div className="text-right">
-                        <p className="text-foreground font-bold text-sm">تفعيل قيود المواعيد</p>
-                        <p className="text-muted-foreground text-xs mt-0.5">
-                          {currentWH.enabled ? 'المواعيد خارج الدوام تُرفض أو تُصحَّح تلقائياً' : 'لا قيود على وقت المواعيد'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className={cn('space-y-4 transition-opacity', !currentWH.enabled && 'opacity-40 pointer-events-none')}>
-
-                      {/* ── Visual timeline ── */}
-                      <div className="relative h-10 rounded-xl bg-muted/50 overflow-hidden border border-border/40 flex items-center" dir="ltr">
-                        {(() => {
-                          const total = 24 * 60;
-                          const morningStart = currentWH.morning.start.split(':').map(Number).reduce((h,m)=>h*60+m,0);
-                          const morningEnd   = currentWH.morning.end.split(':').map(Number).reduce((h,m)=>h*60+m,0);
-                          const breakStart   = currentWH.hasBreak ? currentWH.break.start.split(':').map(Number).reduce((h,m)=>h*60+m,0) : morningEnd;
-                          const breakEnd     = currentWH.hasBreak ? currentWH.break.end.split(':').map(Number).reduce((h,m)=>h*60+m,0) : morningEnd;
-                          const afternoonStart = currentWH.hasBreak ? breakEnd : morningEnd;
-                          const afternoonEnd   = currentWH.afternoon.end.split(':').map(Number).reduce((h,m)=>h*60+m,0);
-                          return (
-                            <>
-                              <div className="absolute inset-y-0 bg-amber-500/30 border-r border-amber-500/50"
-                                style={{ left: `${morningStart/total*100}%`, width: `${(morningEnd-morningStart)/total*100}%` }} />
-                              {currentWH.hasBreak && (
-                                <div className="absolute inset-y-0 bg-red-500/20 border-x border-red-500/30"
-                                  style={{ left: `${breakStart/total*100}%`, width: `${(breakEnd-breakStart)/total*100}%` }} />
-                              )}
-                              {currentWH.hasBreak && (
-                                <div className="absolute inset-y-0 bg-amber-500/30 border-l border-amber-500/50"
-                                  style={{ left: `${afternoonStart/total*100}%`, width: `${(afternoonEnd-afternoonStart)/total*100}%` }} />
-                              )}
-                              <div className="absolute inset-0 flex items-center justify-around px-2 pointer-events-none">
-                                {[0,3,6,9,12,15,18,21].map(h => (
-                                  <span key={h} className="text-[9px] text-muted-foreground/50 font-mono">{h}</span>
-                                ))}
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                      {/* ── Morning period ── */}
-                      <div className="bg-card border border-border/60 rounded-2xl p-4 space-y-3">
-                        <div className="flex items-center gap-2 justify-end">
-                          <p className="text-sm font-bold text-foreground">الفترة الصباحية</p>
-                          <span className="w-3 h-3 rounded-full bg-amber-500/70 shrink-0" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">إلى</label>
-                            <input type="time" value={currentWH.morning.end}
-                              onChange={e => setCurrentWH({ ...currentWH, morning: { ...currentWH.morning, end: e.target.value } })}
-                              className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-amber-500/50 font-mono text-sm" />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">من</label>
-                            <input type="time" value={currentWH.morning.start}
-                              onChange={e => setCurrentWH({ ...currentWH, morning: { ...currentWH.morning, start: e.target.value } })}
-                              className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-amber-500/50 font-mono text-sm" />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ── Break toggle + period ── */}
-                      <div className="bg-card border border-border/60 rounded-2xl p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Toggle checked={currentWH.hasBreak} onChange={v => setCurrentWH({ ...currentWH, hasBreak: v })} />
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-bold text-foreground">فترة الراحة</p>
-                            <span className="w-3 h-3 rounded-full bg-red-400/60 shrink-0" />
-                          </div>
-                        </div>
-                        {currentWH.hasBreak && (
-                          <div className="grid grid-cols-2 gap-3 pt-1">
-                            <div className="space-y-1">
-                              <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">إلى</label>
-                              <input type="time" value={currentWH.break.end}
-                                onChange={e => setCurrentWH({ ...currentWH, break: { ...currentWH.break, end: e.target.value } })}
-                                className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-red-500/50 font-mono text-sm" />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">من</label>
-                              <input type="time" value={currentWH.break.start}
-                                onChange={e => setCurrentWH({ ...currentWH, break: { ...currentWH.break, start: e.target.value } })}
-                                className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-red-500/50 font-mono text-sm" />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ── Afternoon period ── */}
-                      {currentWH.hasBreak && (
-                        <div className="bg-card border border-border/60 rounded-2xl p-4 space-y-3">
-                          <div className="flex items-center gap-2 justify-end">
-                            <p className="text-sm font-bold text-foreground">الفترة المسائية</p>
-                            <span className="w-3 h-3 rounded-full bg-amber-500/70 shrink-0" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">إلى</label>
-                              <input type="time" value={currentWH.afternoon.end}
-                                onChange={e => setCurrentWH({ ...currentWH, afternoon: { ...currentWH.afternoon, end: e.target.value } })}
-                                className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-amber-500/50 font-mono text-sm" />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">من</label>
-                              <input type="time" value={currentWH.afternoon.start}
-                                onChange={e => setCurrentWH({ ...currentWH, afternoon: { ...currentWH.afternoon, start: e.target.value } })}
-                                className="w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-amber-500/50 font-mono text-sm" />
-                            </div>
-                          </div>
-                        </div>
+                    {/* Action indicator */}
+                    <AnimatePresence mode="wait" initial={false}>
+                      {isOpen ? (
+                        <motion.button
+                          key="close"
+                          layout
+                          initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
+                          animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                          exit={{ opacity: 0, scale: 0.5, rotate: 90 }}
+                          transition={{ duration: 0.2, ease: 'easeOut' }}
+                          onClick={e => { e.stopPropagation(); setOpenSection(null); }}
+                          className="w-9 h-9 rounded-xl bg-muted/60 hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </motion.button>
+                      ) : (
+                        <motion.div
+                          key="plus"
+                          layout
+                          initial={{ opacity: 0, scale: 0.5 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.5 }}
+                          transition={{ duration: 0.15 }}
+                          className={cn('w-7 h-7 rounded-xl flex items-center justify-center shrink-0', a.iconBg)}
+                        >
+                          <span className={cn('text-sm font-bold leading-none', a.iconText)}>+</span>
+                        </motion.div>
                       )}
+                    </AnimatePresence>
+                  </motion.div>
 
-                      {/* ── Summary ── */}
-                      <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3 text-right space-y-1" dir="rtl">
-                        <div className="flex items-center gap-2 justify-end mb-1">
-                          <p className="text-amber-400 text-xs font-bold">ملخص أوقات الدوام</p>
-                          <Clock className="w-3.5 h-3.5 text-amber-400" />
-                        </div>
-                        <p className="text-foreground text-sm">
-                          🌅 الصباح: {fmtTime(currentWH.morning.start)} — {fmtTime(currentWH.morning.end)}
-                        </p>
-                        {currentWH.hasBreak && (
-                          <p className="text-muted-foreground text-xs">
-                            ☕ الراحة: {fmtTime(currentWH.break.start)} — {fmtTime(currentWH.break.end)}
-                          </p>
-                        )}
-                        {currentWH.hasBreak && (
-                          <p className="text-foreground text-sm">
-                            🌆 المساء: {fmtTime(currentWH.afternoon.start)} — {fmtTime(currentWH.afternoon.end)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-start pt-1">
-                    <Button onClick={saveWorkHours} disabled={savingWorkHours} className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-11 px-6 font-bold gap-2">
-                      {savingWorkHours ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      حفظ جميع الإعدادات
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          </Section>
-        )}
+                  {/* ── Expanded content ─────────────────────────────────── */}
+                  <AnimatePresence>
+                    {isOpen && (
+                      <motion.div
+                        key={`content-${sec.key}`}
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
+                        className="overflow-hidden"
+                      >
+                        <motion.div
+                          initial={{ y: 12, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          transition={{ delay: 0.1, duration: 0.3, ease: 'easeOut' }}
+                          className="px-6 pb-6 pt-3 border-t border-border/40"
+                        >
+                          {renderContent(sec.key)}
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </div>
+        </LayoutGroup>
 
         {/* ── Logout ──────────────────────────────────────────────────────── */}
-        <div className="bg-red-500/5 border border-red-500/10 rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <motion.div
+          layout
+          className="bg-red-500/5 border border-red-500/10 rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4"
+        >
           <div className="text-right">
             <h3 className="text-red-400 font-bold text-lg">تسجيل الخروج</h3>
             <p className="text-muted-foreground text-sm mt-0.5">سيتم الخروج من الجلسة الحالية على هذا المتصفح.</p>
           </div>
-          <Button
-            variant="destructive"
-            className="rounded-2xl h-12 px-8 font-black gap-3 w-full sm:w-auto shrink-0"
-            onClick={() => logout()}
-          >
+          <Button variant="destructive" className="rounded-2xl h-12 px-8 font-black gap-3 w-full sm:w-auto shrink-0" onClick={logout}>
             <LogOut className="w-5 h-5" />
             خروج من الحساب
           </Button>
-        </div>
+        </motion.div>
 
-        {/* ── Build info ──────────────────────────────────────────────────── */}
         <p className="text-center text-muted-foreground/70 text-[10px] font-bold uppercase tracking-[0.3em] pb-4">
           Retal Maintenance System Build 2026.4.17
         </p>
+
       </div>
     </Layout>
   );
