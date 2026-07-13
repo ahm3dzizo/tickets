@@ -28,10 +28,14 @@ interface ClientFormProps {
   projectId?: string;
   nativeButton?: boolean;
   onSuccess?: () => void;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
 }
 
-export function ClientForm({ trigger, projectId: initialProjectId, nativeButton, onSuccess }: ClientFormProps) {
-  const [open, setOpen] = useState(false);
+export function ClientForm({ trigger, projectId: initialProjectId, nativeButton, onSuccess, open: openProp, onOpenChange }: ClientFormProps) {
+  const [openInternal, setOpenInternal] = useState(false);
+  const open     = openProp     !== undefined ? openProp     : openInternal;
+  const setOpen  = onOpenChange !== undefined ? onOpenChange : setOpenInternal;
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');

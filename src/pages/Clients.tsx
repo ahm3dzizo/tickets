@@ -4,7 +4,7 @@ import { clientsApi, projectsApi, ticketsApi } from '@/lib/api';
 import {
   Search, MoreHorizontal, UserCheck, FileUp, ChevronDown, X,
   TicketCheck, ExternalLink, Pencil, Phone, Building2,
-  Download, FileSpreadsheet, Contact,
+  Download, FileSpreadsheet, Contact, Plus,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -50,8 +50,9 @@ export default function Clients() {
   const [search, setSearch]             = useState(searchParams.get('search') || '');
   const [filterProject, setFilterProject] = useState('');
   const [filterBlock, setFilterBlock]   = useState('');
-  const [importOpen, setImportOpen]     = useState(false);
+  const [importOpen, setImportOpen]         = useState(false);
   const [importProjectId, setImportProjectId] = useState('');
+  const [clientFormOpen, setClientFormOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [clientTickets, setClientTickets]   = useState<ClientTicket[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
@@ -257,13 +258,14 @@ export default function Clients() {
             <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">العملاء</h1>
             <p className="text-muted-foreground text-xs hidden sm:block">إدارة بيانات أصحاب الوحدات والتواصل معهم</p>
           </div>
-          <div className="flex gap-2">
-            {/* ── Export button ── */}
+          <div className="flex gap-2 items-center">
+            {/* ── Export button (icon + hidden label on mobile) ── */}
             <Dialog open={exportOpen} onOpenChange={v => { setExportOpen(v); if (v) setExportProjectIds(filterProject ? [filterProject] : []); }}>
               {/* @ts-expect-error type mismatch with Radix UI */}
               <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2 rounded-2xl h-10 font-bold border-border">
-                  <Download className="w-4 h-4" /> تصدير
+                <Button variant="outline" className="h-10 px-3 rounded-xl gap-2 border-border shrink-0">
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline text-xs font-bold">تصدير</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-card border-border sm:max-w-[460px] rounded-3xl shadow-2xl" dir="rtl">
@@ -351,63 +353,92 @@ export default function Clients() {
             </Dialog>
 
             {canWrite && (
-              <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportProjectId(''); }}>
-                {/* @ts-expect-error type mismatch with Radix UI */}
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="gap-2 rounded-2xl h-10 font-bold border-border">
-                    <FileUp className="w-4 h-4" /> استيراد
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-card border-border sm:max-w-[520px] rounded-3xl shadow-2xl">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl font-bold text-foreground text-right">استيراد عملاء من ملف</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-5 py-2">
-                    <div className="space-y-2">
-                      <Label className="text-muted-foreground text-[10px] font-black uppercase tracking-widest block text-right">اختر المشروع أولاً</Label>
-                      <DropdownMenu>
-                        {/* @ts-expect-error type mismatch with Radix UI */}
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" className="w-full justify-between border-border rounded-xl h-11">
-                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-foreground">{projects.find(p => p.id === importProjectId)?.name || 'اختر المشروع'}</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="bg-card border-border w-72">
-                          {projects.map(p => (
-                            <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-start justify-start" onClick={() => setImportProjectId(p.id)}>
-                              {p.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              <>
+                {/* ── Import dialog (controlled, triggered from dropdown) ── */}
+                <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportProjectId(''); }}>
+                  <DialogContent className="bg-card border-border sm:max-w-[520px] rounded-3xl shadow-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-xl font-bold text-foreground text-right">استيراد عملاء من ملف</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-5 py-2">
+                      <div className="space-y-2">
+                        <Label className="text-muted-foreground text-[10px] font-black uppercase tracking-widest block text-right">اختر المشروع أولاً</Label>
+                        <DropdownMenu>
+                          {/* @ts-expect-error type mismatch with Radix UI */}
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between border-border rounded-xl h-11">
+                              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-foreground">{projects.find(p => p.id === importProjectId)?.name || 'اختر المشروع'}</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="bg-card border-border w-72">
+                            {projects.map(p => (
+                              <DropdownMenuItem key={p.id} className="hover:bg-muted cursor-pointer text-start justify-start" onClick={() => setImportProjectId(p.id)}>
+                                {p.name}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div className={importProjectId ? '' : 'opacity-40 pointer-events-none select-none'}>
+                        {!importProjectId && <p className="text-amber-500 text-xs text-right mb-2 font-medium">⚠ اختر المشروع أولاً لتفعيل الاستيراد</p>}
+                        <DataImport
+                          title="استيراد عملاء"
+                          description="ارفع ملف Excel — A=رقم الفيلا، B=رقم البلوك، C=الاسم، D=الجوال"
+                          fieldDefs={[
+                            { key: 'villaNumber', label: 'رقم الفيلا',   aliases: ['رقم الفيلا','الفيلا','فيلا','villa','A','__EMPTY'] },
+                            { key: 'blockNumber', label: 'رقم البلوك',   aliases: ['رقم البلوك','البلوك','بلوك','رقم القطعة','block','B','__EMPTY_1'] },
+                            { key: 'name',        label: 'الاسم',         aliases: ['الاسم','اسم العميل','name','C','__EMPTY_2'] },
+                            { key: 'phone',       label: 'رقم الجوال',   aliases: ['الجوال','رقم الجوال','الهاتف','phone','D','__EMPTY_3'] },
+                            { key: 'handoverDate',        label: 'تاريخ التسليم', aliases: ['تاريخ التسليم','handover','E','__EMPTY_4'] },
+                            { key: 'warrantyExpiryDate',  label: 'انتهاء الضمان', aliases: ['انتهاء الضمان','warranty','F','__EMPTY_5'] },
+                          ]}
+                          onImport={handleImportClients}
+                          trigger={
+                            <Button className="w-full bg-primary hover:bg-primary/90 text-white gap-2 rounded-xl h-11 font-bold">
+                              <FileUp className="w-4 h-4" /> رفع ملف Excel
+                            </Button>
+                          }
+                        />
+                      </div>
                     </div>
-                    <div className={importProjectId ? '' : 'opacity-40 pointer-events-none select-none'}>
-                      {!importProjectId && <p className="text-amber-500 text-xs text-right mb-2 font-medium">⚠ اختر المشروع أولاً لتفعيل الاستيراد</p>}
-                      <DataImport
-                        title="استيراد عملاء"
-                        description="ارفع ملف Excel — A=رقم الفيلا، B=رقم البلوك، C=الاسم، D=الجوال"
-                        fieldDefs={[
-                          { key: 'villaNumber', label: 'رقم الفيلا',   aliases: ['رقم الفيلا','الفيلا','فيلا','villa','A','__EMPTY'] },
-                          { key: 'blockNumber', label: 'رقم البلوك',   aliases: ['رقم البلوك','البلوك','بلوك','رقم القطعة','block','B','__EMPTY_1'] },
-                          { key: 'name',        label: 'الاسم',         aliases: ['الاسم','اسم العميل','name','C','__EMPTY_2'] },
-                          { key: 'phone',       label: 'رقم الجوال',   aliases: ['الجوال','رقم الجوال','الهاتف','phone','D','__EMPTY_3'] },
-                          { key: 'handoverDate',        label: 'تاريخ التسليم', aliases: ['تاريخ التسليم','handover','E','__EMPTY_4'] },
-                          { key: 'warrantyExpiryDate',  label: 'انتهاء الضمان', aliases: ['انتهاء الضمان','warranty','F','__EMPTY_5'] },
-                        ]}
-                        onImport={handleImportClients}
-                        trigger={
-                          <Button className="w-full bg-primary hover:bg-primary/90 text-white gap-2 rounded-xl h-11 font-bold">
-                            <FileUp className="w-4 h-4" /> رفع ملف Excel
-                          </Button>
-                        }
-                      />
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogContent>
+                </Dialog>
+
+                {/* ── ClientForm (controlled) ── */}
+                <ClientForm
+                  open={clientFormOpen}
+                  onOpenChange={setClientFormOpen}
+                  onSuccess={loadData}
+                />
+
+                {/* ── Combined + dropdown ── */}
+                <DropdownMenu>
+                  {/* @ts-expect-error type mismatch with Radix UI */}
+                  <DropdownMenuTrigger asChild>
+                    <Button className="bg-primary hover:bg-primary/90 text-white h-10 px-3 sm:px-4 rounded-xl shadow-sm shrink-0 font-bold gap-2">
+                      <Plus className="w-5 h-5" />
+                      <span className="hidden sm:inline text-sm">إضافة</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-card border-border w-48 rounded-2xl p-1">
+                    <DropdownMenuItem
+                      className="gap-2.5 cursor-pointer rounded-xl py-2.5 font-bold text-sm"
+                      onClick={() => setClientFormOpen(true)}
+                    >
+                      <Plus className="w-4 h-4 text-primary" /> عميل جديد
+                    </DropdownMenuItem>
+                    <div className="my-1 border-t border-border/50" />
+                    <DropdownMenuItem
+                      className="gap-2.5 cursor-pointer rounded-xl py-2.5 text-sm"
+                      onClick={() => setImportOpen(true)}
+                    >
+                      <FileUp className="w-4 h-4 text-blue-500" /> استيراد من ملف
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
             )}
-            {canWrite && <ClientForm />}
           </div>
         </div>
 
