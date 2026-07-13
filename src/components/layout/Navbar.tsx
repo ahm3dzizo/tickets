@@ -211,23 +211,23 @@ export function Navbar() {
         </div>
       </header>
 
-      {/* ═══════════════ MOBILE BOTTOM NAV ═══════════════ */}
-      <nav className="print:hidden lg:hidden fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border safe-area-pb">
-        <div className="flex items-center h-16 px-1">
+      {/* ═══════════════ MOBILE BOTTOM NAV — floating pill ═══════════════ */}
+      <nav className="print:hidden lg:hidden fixed bottom-4 inset-x-0 z-50 px-4 pointer-events-none">
+        <div className="pointer-events-auto mx-auto max-w-sm bg-card/95 backdrop-blur-xl border border-border/60 rounded-[28px] shadow-xl shadow-black/20 flex items-center h-[58px] px-2 gap-1">
           {bottomItems.map(item => {
             const active = isActive(item.path);
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className="flex-1 flex flex-col items-center justify-center h-full gap-0.5 transition-all duration-200"
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 py-2"
               >
                 <div className={cn(
-                  'w-12 h-9 rounded-2xl flex items-center justify-center transition-all duration-200',
+                  'w-10 h-8 rounded-2xl flex items-center justify-center transition-all duration-200',
                   active ? 'bg-primary/15' : 'hover:bg-muted/60'
                 )}>
                   <item.icon
-                    className={cn('w-5 h-5 transition-all', active ? 'text-primary scale-110' : 'text-muted-foreground')}
+                    className={cn('w-[18px] h-[18px] transition-all', active ? 'text-primary scale-110' : 'text-muted-foreground')}
                     strokeWidth={active ? 2.5 : 1.75}
                   />
                 </div>
@@ -241,17 +241,18 @@ export function Navbar() {
             );
           })}
 
+          {/* Divider */}
+          <div className="w-px h-8 bg-border/60 mx-1" />
+
           {/* More / Profile */}
           <button
             onClick={() => setMoreOpen(true)}
-            className="flex-1 flex flex-col items-center justify-center h-full gap-0.5 outline-none"
+            className="flex flex-col items-center justify-center gap-0.5 py-2 px-2 outline-none"
           >
-            <div className="w-12 h-9 rounded-2xl flex items-center justify-center hover:bg-muted/60 transition-colors">
-              <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold ring-1 ring-border shrink-0">
-                {initials}
-              </div>
+            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-[10px] font-bold shrink-0">
+              {initials}
             </div>
-            <span className="text-[9px] font-bold text-muted-foreground leading-none">المزيد</span>
+            <span className="text-[9px] font-bold text-muted-foreground leading-none">أنا</span>
           </button>
         </div>
       </nav>

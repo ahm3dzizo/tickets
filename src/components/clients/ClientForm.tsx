@@ -119,15 +119,18 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton,
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger 
-        nativeButton={nativeButton ?? true}
-        render={React.isValidElement(trigger) ? trigger : (
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 rounded-xl h-12 px-6 font-bold shadow-lg shadow-blue-500/20">
-            <Plus className="w-5 h-5" />
-            إضافة عميل
-          </Button>
-        )} 
-      />
+      {/* Only render trigger when NOT controlled externally */}
+      {openProp === undefined && (
+        <DialogTrigger
+          nativeButton={nativeButton ?? true}
+          render={React.isValidElement(trigger) ? trigger : (
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 rounded-xl h-12 px-6 font-bold shadow-lg shadow-blue-500/20">
+              <Plus className="w-5 h-5" />
+              إضافة عميل
+            </Button>
+          )}
+        />
+      )}
       <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/40 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">

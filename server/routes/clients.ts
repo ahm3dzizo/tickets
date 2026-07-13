@@ -17,12 +17,13 @@ router.get("/", requireAuth, async (_req, res) => {
     const primaryUnit = c.units.find(u => u.isPrimary)?.unit || c.units[0]?.unit;
     return {
       ...c,
-      projectId: primaryUnit?.projectId || null,
-      villaNumber: primaryUnit?.unitNumber || null,
+      unitId:      primaryUnit?.id         || null,
+      projectId:   primaryUnit?.projectId  || null,
+      villaNumber: primaryUnit?.unitNumber  || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
     };
   });
-  
+
   res.json(formatted);
 });
 
@@ -52,12 +53,13 @@ router.get("/by-project/:projectId", requireAuth, async (req, res) => {
     const primaryUnit = c.units.find(u => u.isPrimary)?.unit || c.units[0]?.unit;
     return {
       ...c,
-      projectId: primaryUnit?.projectId || null,
-      villaNumber: primaryUnit?.unitNumber || null,
+      unitId:      primaryUnit?.id         || null,
+      projectId:   primaryUnit?.projectId  || null,
+      villaNumber: primaryUnit?.unitNumber  || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
     };
   });
-  
+
   res.json(formatted);
 });
 

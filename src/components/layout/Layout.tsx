@@ -33,7 +33,7 @@ export function Layout({ children }: LayoutProps) {
       {/* Desktop: right padding for sidebar (w-60 = 240px = 15rem)
           Mobile:  top padding for top bar + bottom padding for bottom nav */}
       <main className="
-        pt-14 pb-safe
+        pt-14 pb-28
         px-4 sm:px-5
         lg:pt-0 lg:pb-6 lg:pr-[264px] lg:pl-8
         print:p-0 print:m-0 print:block print:w-full

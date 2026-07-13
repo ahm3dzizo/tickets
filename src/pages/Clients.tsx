@@ -3,8 +3,8 @@ import { Layout } from '@/components/layout/Layout';
 import { clientsApi, projectsApi, ticketsApi } from '@/lib/api';
 import {
   Search, MoreHorizontal, UserCheck, FileUp, ChevronDown, X,
-  TicketCheck, ExternalLink, Pencil, Phone, Building2,
-  Download, FileSpreadsheet, Contact, Plus,
+  TicketCheck, ExternalLink, Pencil, Phone, MessageCircle,
+  Download, FileSpreadsheet, Contact, Plus, Hash, Briefcase,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -446,8 +446,8 @@ export default function Clients() {
         <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
 
           {/* Search + Filters */}
-          <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[160px] sm:max-w-xs">
+          <div className="px-3 py-2.5 border-b border-border flex items-center gap-2">
+            <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
                 placeholder="البحث باسم أو فيلا أو جوال..."
@@ -456,12 +456,22 @@ export default function Clients() {
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
+
+            {/* Project filter — icon on mobile, text on sm+ */}
             <DropdownMenu>
               {/* @ts-expect-error type mismatch with Radix UI */}
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="border-border rounded-xl h-9 px-3 gap-1.5 text-xs font-medium min-w-[110px] justify-between">
-                  <ChevronDown className="w-3 h-3 text-muted-foreground" />
-                  <span className="truncate max-w-[90px]">{filterProject ? projectName(filterProject) : 'كل المشاريع'}</span>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'border-border rounded-xl h-9 shrink-0 gap-1.5 text-xs font-medium',
+                    filterProject ? 'border-primary/40 text-primary bg-primary/5' : '',
+                    'px-2.5 sm:px-3 sm:min-w-[110px] sm:justify-between',
+                  )}
+                >
+                  <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden sm:inline truncate max-w-[80px]">{filterProject ? projectName(filterProject) : 'المشاريع'}</span>
+                  <ChevronDown className="w-3 h-3 text-muted-foreground hidden sm:block" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-card border-border w-52">
@@ -472,13 +482,22 @@ export default function Clients() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* Block filter — icon on mobile */}
             {blockNumbers.length > 0 && (
               <DropdownMenu>
                 {/* @ts-expect-error type mismatch with Radix UI */}
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="border-border rounded-xl h-9 px-3 gap-1.5 text-xs font-medium min-w-[100px] justify-between">
-                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
-                    <span>{filterBlock ? `بلوك ${filterBlock}` : 'كل البلوكات'}</span>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      'border-border rounded-xl h-9 shrink-0 gap-1.5 text-xs font-medium',
+                      filterBlock ? 'border-primary/40 text-primary bg-primary/5' : '',
+                      'px-2.5 sm:px-3 sm:min-w-[100px] sm:justify-between',
+                    )}
+                  >
+                    <Hash className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden sm:inline">{filterBlock ? `بلوك ${filterBlock}` : 'البلوكات'}</span>
+                    <ChevronDown className="w-3 h-3 text-muted-foreground hidden sm:block" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-card border-border w-36 max-h-52 overflow-y-auto">
@@ -491,11 +510,11 @@ export default function Clients() {
             )}
 
             {(filterProject || filterBlock) && (
-              <Button variant="ghost" size="sm" className="h-9 px-2 text-muted-foreground hover:text-foreground gap-1 text-xs" onClick={() => { setFilterProject(''); setFilterBlock(''); }}>
-                <X className="w-3 h-3" />
+              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground rounded-xl" onClick={() => { setFilterProject(''); setFilterBlock(''); }}>
+                <X className="w-3.5 h-3.5" />
               </Button>
             )}
-            <span className="text-muted-foreground text-xs font-bold mr-auto">{filtered.length} عميل</span>
+            <span className="text-muted-foreground text-xs font-bold mr-auto whitespace-nowrap">{filtered.length}</span>
           </div>
 
           {/* Table */}
@@ -504,11 +523,11 @@ export default function Clients() {
               <thead>
                 <tr className="bg-muted/50 text-muted-foreground text-[10px] font-black uppercase tracking-widest border-b border-border">
                   <th className="px-4 py-2.5">العميل</th>
-                  <th className="px-4 py-2.5 hidden sm:table-cell">رقم الفيلا</th>
-                  <th className="px-4 py-2.5 hidden md:table-cell">رقم البلوك</th>
-                  <th className="px-4 py-2.5 hidden lg:table-cell">رقم الهاتف</th>
+                  <th className="px-4 py-2.5 hidden sm:table-cell">الوحدة</th>
+                  <th className="px-4 py-2.5 hidden md:table-cell">البلوك</th>
+                  <th className="px-4 py-2.5 hidden lg:table-cell">الجوال</th>
                   <th className="px-4 py-2.5 hidden xl:table-cell">المشروع</th>
-                  <th className="px-4 py-2.5 text-center w-12">...</th>
+                  <th className="px-4 py-2.5 w-24"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
@@ -533,8 +552,8 @@ export default function Clients() {
                     className="group hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => setSelectedClient(c)}
                   >
-                    {/* Mobile: name + villa + block stacked; Desktop: just name */}
-                    <td className="px-4 py-2.5">
+                    {/* Name column */}
+                    <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0">
                           <UserCheck className="w-3.5 h-3.5" />
@@ -542,43 +561,68 @@ export default function Clients() {
                         <div className="text-right min-w-0">
                           <div className="font-semibold text-foreground text-sm leading-tight truncate">{c.name || '—'}</div>
                           <div className="text-[11px] text-muted-foreground mt-0.5 sm:hidden">
-                            فيلا {c.villaNumber}{c.blockNumber ? ` · بلوك ${c.blockNumber}` : ''}
+                            {c.unitId
+                              ? <a href={`/units/${c.unitId}`} onClick={e => e.stopPropagation()} className="text-primary hover:underline">{c.villaNumber}</a>
+                              : c.villaNumber}
+                            {c.blockNumber ? ` · بلوك ${c.blockNumber}` : ''}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 hidden sm:table-cell">
-                      <span className="text-sm font-bold text-foreground">فيلا {c.villaNumber}</span>
+                    {/* Unit number as link */}
+                    <td className="px-3 py-2.5 hidden sm:table-cell">
+                      {c.unitId
+                        ? <a href={`/units/${c.unitId}`} onClick={e => e.stopPropagation()} className="text-sm font-bold text-primary hover:underline">{c.villaNumber}</a>
+                        : <span className="text-sm font-bold text-foreground">{c.villaNumber}</span>}
                     </td>
-                    <td className="px-4 py-2.5 hidden md:table-cell">
+                    <td className="px-3 py-2.5 hidden md:table-cell">
                       <span className="text-sm text-muted-foreground">{c.blockNumber || '---'}</span>
                     </td>
-                    <td className="px-4 py-2.5 hidden lg:table-cell">
+                    <td className="px-3 py-2.5 hidden lg:table-cell">
                       <span className="text-sm font-mono text-muted-foreground dir-ltr">{c.phone || '---'}</span>
                     </td>
-                    <td className="px-4 py-2.5 hidden xl:table-cell">
+                    <td className="px-3 py-2.5 hidden xl:table-cell">
                       <span className="text-sm text-muted-foreground">{projectName(c.projectId)}</span>
                     </td>
-                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
-                      <div className="flex justify-center">
-                        <DropdownMenu>
-                          {/* @ts-expect-error type mismatch with Radix UI */}
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg">
-                              <MoreHorizontal className="w-3.5 h-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-card border-border w-40 rounded-2xl">
-                            {canWrite && (
+                    {/* Quick actions */}
+                    <td className="px-2 py-2.5" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Quick call */}
+                        {c.phone && (
+                          <a
+                            href={`tel:${c.phone}`}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-colors"
+                            title="اتصال"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                        {/* Quick WhatsApp */}
+                        {c.phone && (
+                          <button
+                            onClick={e => openWhatsApp(c, e)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10 transition-colors"
+                            title="واتساب"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {/* Edit dropdown */}
+                        {canWrite && (
+                          <DropdownMenu>
+                            {/* @ts-expect-error type mismatch with Radix UI */}
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg">
+                                <MoreHorizontal className="w-3.5 h-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-card border-border w-36 rounded-2xl">
                               <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start gap-2 rounded-xl mx-1 my-0.5 text-sm" onClick={e => openEdit(c, e)}>
                                 <Pencil className="w-3.5 h-3.5" /> تعديل
                               </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem className="hover:bg-muted cursor-pointer text-emerald-500 text-start justify-start gap-2 rounded-xl mx-1 my-0.5 text-sm" onClick={e => openWhatsApp(c, e)}>
-                              <Phone className="w-3.5 h-3.5" /> واتساب
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                     </td>
                   </tr>
