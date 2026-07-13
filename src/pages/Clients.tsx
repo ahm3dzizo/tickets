@@ -4,7 +4,9 @@ import { clientsApi, projectsApi, ticketsApi } from '@/lib/api';
 import {
   Search, MoreHorizontal, UserCheck, FileUp, ChevronDown, X,
   TicketCheck, ExternalLink, Pencil, Phone, Building2,
+  Download, FileSpreadsheet, Contact,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,6 +61,78 @@ export default function Clients() {
   const [editVilla, setEditVilla]       = useState('');
   const [editBlock, setEditBlock]       = useState('');
   const [editSaving, setEditSaving]     = useState(false);
+
+  // ── Export state ──────────────────────────────────────────────────────────
+  const [exportOpen, setExportOpen]           = useState(false);
+  const [exportProjectIds, setExportProjectIds] = useState<string[]>([]);
+
+  const toggleExportProject = (id: string) =>
+    setExportProjectIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const clientsForExport = clients.filter(c =>
+    exportProjectIds.length === 0 || exportProjectIds.includes(c.projectId)
+  );
+
+  // "721 محمد" — villa + first word of name
+  const contactName = (c: any) => {
+    const first = (c.name || '').trim().split(/\s+/)[0] || '';
+    return `${c.villaNumber || ''} ${first}`.trim();
+  };
+
+  // Organization tag = "عملاء NTF" → groups contacts by project when searching phone
+  const contactOrg = (c: any) => {
+    const proj = projects.find(p => p.id === c.projectId);
+    const abbr = proj?.abbreviation || proj?.name || '';
+    return `عملاء ${abbr}`;
+  };
+
+  const exportExcel = () => {
+    const rows = clientsForExport.map(c => ({
+      'المشروع':      projects.find(p => p.id === c.projectId)?.name || '',
+      'رقم الفيلا':  c.villaNumber || '',
+      'رقم البلوك':  c.blockNumber || '',
+      'الاسم':       c.name || '',
+      'رقم الجوال':  c.phone || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows, { skipHeader: false });
+    // RTL column widths
+    ws['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'العملاء');
+    const label = exportProjectIds.length === 1
+      ? (projects.find(p => p.id === exportProjectIds[0])?.abbreviation || 'clients')
+      : 'clients';
+    XLSX.writeFile(wb, `${label}_clients.xlsx`);
+    setExportOpen(false);
+  };
+
+  const exportVCard = () => {
+    const lines = clientsForExport.map(c => {
+      const phone = (c.phone || '').replace(/\D/g, '');
+      const intl = phone.startsWith('966') ? phone : phone.startsWith('0') ? '966' + phone.slice(1) : '966' + phone;
+      const fn = contactName(c);
+      const org = contactOrg(c);
+      return [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `FN:${fn}`,
+        `ORG:${org}`,
+        `TEL;TYPE=CELL:+${intl}`,
+        'END:VCARD',
+      ].join('\r\n');
+    });
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/vcard;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    const label = exportProjectIds.length === 1
+      ? (projects.find(p => p.id === exportProjectIds[0])?.abbreviation || 'clients')
+      : 'clients';
+    a.download = `${label}_clients.vcf`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportOpen(false);
+  };
 
   const loadData = async () => {
     try {
@@ -170,6 +244,86 @@ export default function Clients() {
             <p className="text-muted-foreground text-xs hidden sm:block">إدارة بيانات أصحاب الفلل والتواصل معهم</p>
           </div>
           <div className="flex gap-2">
+            {/* ── Export button ── */}
+            <Dialog open={exportOpen} onOpenChange={v => { setExportOpen(v); if (v) setExportProjectIds(filterProject ? [filterProject] : []); }}>
+              {/* @ts-expect-error type mismatch with Radix UI */}
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2 rounded-2xl h-10 font-bold border-border">
+                  <Download className="w-4 h-4" /> تصدير
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-card border-border sm:max-w-[460px] rounded-3xl shadow-2xl" dir="rtl">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold text-foreground text-right">تصدير العملاء</DialogTitle>
+                </DialogHeader>
+
+                {/* Project selector */}
+                <div className="space-y-3 py-1">
+                  <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">اختر المشاريع</p>
+                  <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto">
+                    {projects.map(p => {
+                      const checked = exportProjectIds.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => toggleExportProject(p.id)}
+                          className={cn(
+                            'flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-colors text-right',
+                            checked
+                              ? 'bg-primary/10 border-primary/40 text-primary'
+                              : 'bg-muted/30 border-border text-muted-foreground hover:bg-muted/60',
+                          )}
+                        >
+                          <span className={cn('w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors', checked ? 'bg-primary border-primary' : 'border-border')}>
+                            {checked && <span className="text-white text-[10px] font-black">✓</span>}
+                          </span>
+                          <span className="truncate">{p.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {exportProjectIds.length === 0 && (
+                    <p className="text-xs text-amber-500">لم تختر مشروعاً — سيتم تصدير كل العملاء</p>
+                  )}
+                  <p className="text-xs text-muted-foreground/70">
+                    {clientsForExport.length} عميل سيُصدَّر
+                    {exportProjectIds.length > 0 && ` من ${exportProjectIds.length} مشروع`}
+                  </p>
+
+                  {/* Format note */}
+                  <div className="bg-muted/30 border border-border/50 rounded-xl p-3 text-xs text-muted-foreground space-y-1">
+                    <p className="font-bold text-foreground text-xs mb-1">صيغة الاسم في جهات الاتصال:</p>
+                    <p><span className="font-mono bg-muted px-1 rounded">721 محمد</span> — رقم الفيلا + أول اسم</p>
+                    <p><span className="font-mono bg-muted px-1 rounded">عملاء NTF</span> — اسم الشركة (هاشتاج للبحث)</p>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      onClick={exportExcel}
+                      className="flex flex-col items-center gap-2 p-4 rounded-2xl border-2 border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors"
+                    >
+                      <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
+                      <div className="text-center">
+                        <p className="text-sm font-bold text-foreground">Excel</p>
+                        <p className="text-[10px] text-muted-foreground">للكمبيوتر</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={exportVCard}
+                      className="flex flex-col items-center gap-2 p-4 rounded-2xl border-2 border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-colors"
+                    >
+                      <Contact className="w-6 h-6 text-blue-400" />
+                      <div className="text-center">
+                        <p className="text-sm font-bold text-foreground">جهات اتصال</p>
+                        <p className="text-[10px] text-muted-foreground">iPhone / Android</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
             {canWrite && (
               <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportProjectId(''); }}>
                 {/* @ts-expect-error type mismatch with Radix UI */}
