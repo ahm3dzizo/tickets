@@ -305,7 +305,7 @@ export default function Reports() {
   // ── chart data ──────────────────────────────────────────────────────────────
   const specialtyData  = useMemo(() => (data?.bySpecialty ?? []).map((s:any,i:number) => ({ ...s, fill: COLORS[i % COLORS.length] })), [data]);
   const mainTypeData   = useMemo(() => (data?.byMainType ?? []).map((x:any) => ({ name:x.nameAr, مغلق:x.closed, مفتوح:x.open })), [data]);
-  const subTypeData    = useMemo(() => (data?.bySubType  ?? []).slice(0,15).map((x:any,i:number) => ({ name:x.nameAr, عدد:x.count, fill:COLORS[i%COLORS.length] })), [data]);
+  const subTypeData    = useMemo(() => (data?.bySubType  ?? []).map((x:any,i:number) => ({ name:x.nameAr, عدد:x.count, fill:COLORS[i%COLORS.length] })), [data]);
   const monthlyData    = useMemo(() => (data?.byMonth    ?? []).map((m:any) => ({ month:m.month, إجمالي:m.total, مغلق:m.closed, مفتوح:m.open })), [data]);
   const projectData    = useMemo(() => (data?.byProject  ?? []).slice(0,10).map((x:any) => ({ name:x.abbr||x.name.slice(0,10), مغلق:x.closed, مفتوح:x.open })), [data]);
   const priorityData   = useMemo(() => (data?.byPriority ?? []).map((p:any) => ({ name:p.nameAr, value:p.count, fill:p.color })), [data]);
