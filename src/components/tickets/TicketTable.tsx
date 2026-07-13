@@ -94,6 +94,7 @@ export const statusTranslations: Record<string, string> = {
   'out_of_scope':  'خارج الاختصاص',
   absent:          'عدم تواجد',
   contractor:      'مقاول',
+  note:            'ملاحظة',
 };
 
 export const statusColors: Record<string, string> = {
@@ -107,6 +108,7 @@ export const statusColors: Record<string, string> = {
   'out_of_scope':  'bg-rose-500/10 text-rose-400 border-rose-500/20',
   absent:          'bg-amber-500/10 text-amber-400 border-amber-500/20',
   contractor:      'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  note:            'bg-violet-500/10 text-violet-400 border-violet-500/20',
 };
 
 const priorityBgMap: Record<number, string> = {
@@ -149,6 +151,7 @@ const DEFAULT_STATUS_OPTIONS = [
   { key: 'waiting',       label: 'بانتظار الموعد' },
   { key: 'pending',       label: 'معلقة' },
   { key: 'contractor',    label: 'مقاول' },
+  { key: 'note',          label: 'ملاحظة' },
   { key: 'completed',     label: 'مكتملة' },
   { key: 'closed',        label: 'مغلقة' },
   { key: 'out_of_scope',  label: 'خارج اختصاص', danger: true },
@@ -204,7 +207,7 @@ export function BulkActionBar({
               key={opt.key}
               className={cn('text-start justify-start hover:bg-white/5', opt.danger && 'hover:bg-rose-500/10 text-rose-400')}
               onClick={() => {
-                if (opt.key === 'contractor' && onContractor) {
+                if ((opt.key === 'contractor' || opt.key === 'note') && onContractor) {
                   onContractor();
                 } else {
                   onStatusChange(opt.key);
@@ -523,6 +526,9 @@ export function TicketTable({
   const getSupervisorNames = (ticket: Ticket): string[] => {
     if (ticket.status === 'contractor') {
       return [ticket.assigneeName || 'مقاول غير محدد'];
+    }
+    if (ticket.status === 'note') {
+      return [ticket.contractorNote ? `ملاحظة: ${ticket.contractorNote}` : 'ملاحظة'];
     }
     const map = (ticket as any).supervisorByType as Record<string, { name: string }[]> | undefined;
     if (map) {

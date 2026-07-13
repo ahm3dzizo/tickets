@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { HardHat, Loader2, Search, Check, CalendarPlus, ChevronDown } from 'lucide-react';
+import { HardHat, Loader2, Search, Check, CalendarPlus, ChevronDown, StickyNote } from 'lucide-react';
 import { contractorsApi } from '@/lib/contractorsApi';
 import { ticketsApi } from '@/lib/api';
 import { Contractor, Ticket } from '@/types';
@@ -28,6 +28,8 @@ export function AssignContractorDialog({
   projectId,
   onSuccess,
 }: AssignContractorDialogProps) {
+  const [mode, setMode] = useState<'contractor' | 'note'>('contractor');
+  const [noteText, setNoteText] = useState('');
   const [loading, setLoading] = useState(false);
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [suggested, setSuggested] = useState<Contractor[]>([]);
@@ -46,6 +48,8 @@ export function AssignContractorDialog({
   useEffect(() => {
     if (!open || !projectId) return;
 
+    setMode('contractor');
+    setNoteText('');
     setLoadingContractors(true);
     setSelectedContractor(null);
     setSelectedSpecialty('');
@@ -92,35 +96,70 @@ export function AssignContractorDialog({
   }, [selectedSpecialty, displaySuggested]);
 
   const handleAssign = async () => {
-    if (!selectedContractor) {
-      toast.error('الرجاء اختيار مقاول');
-      return;
-    }
-    setLoading(true);
-    try {
-      await Promise.all(
-        tickets.map(t =>
-          ticketsApi.update(t.id, {
-            status: 'contractor',
-            contractorId: selectedContractor.id,
-            contractorName: selectedContractor.name,
-            assigneeName: selectedContractor.name,
-          })
-        )
-      );
-      toast.success(`تم إسناد ${tickets.length} تذكرة لـ ${selectedContractor.name}`);
-      setAssignedTickets(tickets.map(t => ({
-        ...t,
-        contractorName: selectedContractor.name,
-        assigneeName: selectedContractor.name,
-        status: 'contractor' as any,
-      })));
-      // Ask user if they want to set an appointment
-      setShowAppointment(true);
-    } catch {
-      toast.error('فشل إسناد المقاول');
-    } finally {
-      setLoading(false);
+    if (mode === 'contractor') {
+      if (!selectedContractor) {
+        toast.error('الرجاء اختيار مقاول');
+        return;
+      }
+      setLoading(true);
+      try {
+        await Promise.all(
+          tickets.map(t =>
+            ticketsApi.update(t.id, {
+              status: 'contractor',
+              contractorId: selectedContractor.id,
+              contractorName: selectedContractor.name,
+              assigneeName: selectedContractor.name,
+              contractorNote: null,
+            })
+          )
+        );
+        toast.success(`تم إسناد ${tickets.length} تذكرة لـ ${selectedContractor.name}`);
+        setAssignedTickets(tickets.map(t => ({
+          ...t,
+          contractorName: selectedContractor.name,
+          assigneeName: selectedContractor.name,
+          status: 'contractor' as any,
+        })));
+        setShowAppointment(true);
+      } catch {
+        toast.error('فشل إسناد المقاول');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // note mode
+      if (!noteText.trim()) {
+        toast.error('الرجاء كتابة الملاحظة');
+        return;
+      }
+      setLoading(true);
+      try {
+        await Promise.all(
+          tickets.map(t =>
+            ticketsApi.update(t.id, {
+              status: 'note',
+              contractorNote: noteText.trim(),
+              assigneeName: 'ملاحظة',
+              contractorId: null,
+              contractorName: null,
+            })
+          )
+        );
+        toast.success(`تم تعيين الملاحظة لـ ${tickets.length} تذكرة`);
+        setAssignedTickets(tickets.map(t => ({
+          ...t,
+          contractorNote: noteText.trim(),
+          assigneeName: 'ملاحظة',
+          appointmentNotes: noteText.trim(),
+          status: 'note' as any,
+        })));
+        setShowAppointment(true);
+      } catch {
+        toast.error('فشل حفظ الملاحظة');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -146,25 +185,76 @@ export function AssignContractorDialog({
           {/* ── Header ─────────────────────────────────────────── */}
           <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/50 shrink-0">
             <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                <HardHat className="w-5 h-5 text-blue-400" />
+              <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center', mode === 'note' ? 'bg-violet-500/10' : 'bg-blue-500/10')}>
+                {mode === 'note'
+                  ? <StickyNote className="w-5 h-5 text-violet-400" />
+                  : <HardHat className="w-5 h-5 text-blue-400" />}
               </div>
-              إسناد لمقاول
+              {mode === 'note' ? 'إضافة ملاحظة' : 'إسناد لمقاول'}
             </DialogTitle>
             <p className="text-sm text-muted-foreground mt-1">
               {tickets.length === 1
                 ? `فيلا ${tickets[0].villaNumber} — ${tickets[0].clientName}`
                 : `${tickets.length} تذاكر محددة`}
             </p>
+            {/* Mode toggle */}
+            <div className="flex gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => setMode('contractor')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold border transition-all',
+                  mode === 'contractor'
+                    ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
+                    : 'bg-muted/30 border-border/50 text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <HardHat className="w-4 h-4" />
+                مقاول
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('note')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold border transition-all',
+                  mode === 'note'
+                    ? 'bg-violet-500/15 border-violet-500/40 text-violet-400'
+                    : 'bg-muted/30 border-border/50 text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <StickyNote className="w-4 h-4" />
+                ملاحظة
+              </button>
+            </div>
           </DialogHeader>
 
           {/* ── Body ───────────────────────────────────────────── */}
           <div className="overflow-y-auto max-h-[60vh] no-scrollbar p-5 space-y-4">
-            {loadingContractors ? (
+            {/* Note mode */}
+            {mode === 'note' && (
+              <div className="space-y-3">
+                <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-3 text-right">
+                  <p className="text-xs text-violet-300 leading-relaxed">
+                    ستُنقل التذاكر لقسم المقاولين كـ <span className="font-bold">ملاحظة</span> بدون تعيين مقاول محدد.
+                  </p>
+                </div>
+                <Label className="text-xs font-bold text-muted-foreground block">الملاحظة</Label>
+                <textarea
+                  className="w-full bg-muted/30 border border-border/50 focus:border-violet-500/40 focus:ring-2 focus:ring-violet-500/10 text-foreground rounded-2xl p-4 text-right text-sm min-h-[120px] outline-none transition-all resize-none"
+                  placeholder="اكتب الملاحظة هنا..."
+                  value={noteText}
+                  onChange={e => setNoteText(e.target.value)}
+                  dir="rtl"
+                />
+              </div>
+            )}
+
+            {/* Contractor mode */}
+            {mode === 'contractor' && loadingContractors ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
               </div>
-            ) : (
+            ) : mode === 'contractor' && (
               <>
                 {/* Specialty Filter */}
                 <div className="space-y-2">
@@ -268,14 +358,25 @@ export function AssignContractorDialog({
 
           {/* ── Footer ─────────────────────────────────────────── */}
           <DialogFooter className="px-5 pb-5 pt-4 border-t border-border/50 shrink-0">
-            <Button
-              onClick={handleAssign}
-              disabled={loading || !selectedContractor}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 font-bold flex items-center justify-center gap-2 shadow-md"
-            >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <HardHat className="w-5 h-5" />}
-              {selectedContractor ? `إسناد لـ ${selectedContractor.name}` : 'تأكيد الإسناد'}
-            </Button>
+            {mode === 'note' ? (
+              <Button
+                onClick={handleAssign}
+                disabled={loading || !noteText.trim()}
+                className="w-full bg-violet-600 hover:bg-violet-700 text-white rounded-xl h-11 font-bold flex items-center justify-center gap-2 shadow-md"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <StickyNote className="w-5 h-5" />}
+                حفظ الملاحظة
+              </Button>
+            ) : (
+              <Button
+                onClick={handleAssign}
+                disabled={loading || !selectedContractor}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 font-bold flex items-center justify-center gap-2 shadow-md"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <HardHat className="w-5 h-5" />}
+                {selectedContractor ? `إسناد لـ ${selectedContractor.name}` : 'تأكيد الإسناد'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -285,15 +386,19 @@ export function AssignContractorDialog({
         <Dialog open={showAppointment} onOpenChange={v => { if (!v) handleSkipAppointment(); }}>
           <DialogContent className="bg-card border-border text-foreground sm:max-w-[380px] rounded-3xl p-6" dir="rtl">
             <div className="flex flex-col items-center gap-4 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center">
-                <CalendarPlus className="w-8 h-8 text-blue-400" />
+              <div className={cn('w-16 h-16 rounded-2xl flex items-center justify-center', mode === 'note' ? 'bg-violet-500/10' : 'bg-blue-500/10')}>
+                <CalendarPlus className={cn('w-8 h-8', mode === 'note' ? 'text-violet-400' : 'text-blue-400')} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-foreground">تم الإسناد بنجاح! 🎉</h3>
+                <h3 className="text-lg font-bold text-foreground">
+                  {mode === 'note' ? 'تم حفظ الملاحظة! 🎉' : 'تم الإسناد بنجاح! 🎉'}
+                </h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  هل تريد تحديد موعد للمقاول الآن؟
+                  هل تريد تحديد موعد الآن؟
                 </p>
-                <p className="text-xs text-blue-400 font-semibold mt-1">{selectedContractor?.name}</p>
+                {mode === 'note'
+                  ? <p className="text-xs text-violet-400 font-semibold mt-1 line-clamp-2">{noteText}</p>
+                  : <p className="text-xs text-blue-400 font-semibold mt-1">{selectedContractor?.name}</p>}
               </div>
               <div className="flex gap-3 w-full">
                 <Button
@@ -304,11 +409,9 @@ export function AssignContractorDialog({
                   لاحقاً
                 </Button>
                 <Button
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-2"
+                  className={cn('flex-1 text-white rounded-xl gap-2', mode === 'note' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-blue-600 hover:bg-blue-700')}
                   onClick={() => {
-                    // Close this prompt and open appointment dialog
                     setShowAppointment(false);
-                    // Re-open appointment only
                     setTimeout(() => setShowAppointmentDialog(true), 100);
                   }}
                 >
