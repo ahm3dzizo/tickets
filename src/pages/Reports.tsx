@@ -52,10 +52,10 @@ function Card({ title, badge, children }: { title: string; badge?: string; child
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden">
       <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+        <h2 className="font-bold text-foreground text-sm">{title}</h2>
         <div className="flex items-center gap-2">
           {badge && <Badge variant="secondary" className="text-[10px]">{badge}</Badge>}
         </div>
-        <h2 className="font-bold text-foreground text-sm">{title}</h2>
       </div>
       <div className="p-5">{children}</div>
     </div>
@@ -464,15 +464,16 @@ export default function Reports() {
         {/* ── Main Type — full width ───────────────────────────────────────── */}
         <Card title="التوزيع حسب النوع الرئيسي">
           {loading ? <Skeleton h="h-80" /> : (
-            <ResponsiveContainer width="100%" height={Math.max(360, mainTypeData.length * 28 + 80)}>
-              <BarChart data={mainTypeData} margin={{ top:5, right:10, left:-20, bottom:60 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize:9, fill:'hsl(var(--muted-foreground))' }} angle={-40} textAnchor="end" tickLine={false} axisLine={false} interval={0} />
-                <YAxis tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+            <ResponsiveContainer width="100%" height={Math.max(380, mainTypeData.length * 34 + 60)}>
+              <BarChart data={mainTypeData} layout="vertical" margin={{ top:5, right:60, left:0, bottom:5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                <YAxis type="category" dataKey="name" width={140}
+                  tick={{ fontSize:11, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<TooltipBox />} />
                 <Legend wrapperStyle={{ fontSize:11, paddingTop:8, direction:'rtl' }} />
                 <Bar dataKey="مغلق"  stackId="a" fill="#22c55e" radius={[0,0,0,0]} />
-                <Bar dataKey="مفتوح" stackId="a" fill="#f97316" radius={[4,4,0,0]} />
+                <Bar dataKey="مفتوح" stackId="a" fill="#f97316" radius={[0,4,4,0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -530,25 +531,25 @@ export default function Reports() {
         {(data?.bySubType?.length ?? 0) > 0 && (
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+              <h2 className="font-bold text-sm">التوزيع حسب النوع الفرعي</h2>
               <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-[10px]">{data?.bySubType?.length} نوع</Badge>
                 <button onClick={() => setExpandedChart('subType')}
                   className="text-muted-foreground hover:text-foreground transition-colors" title="تكبير">
                   <Maximize2 className="w-4 h-4" />
                 </button>
-                <Badge variant="secondary" className="text-[10px]">{data?.bySubType?.length} نوع</Badge>
               </div>
-              <h2 className="font-bold text-sm">التوزيع حسب النوع الفرعي</h2>
             </div>
             <div className="p-5">
-              <ResponsiveContainer width="100%" height={Math.max(300, subTypeData.length * 32 + 80)}>
-                <BarChart data={subTypeData} margin={{ top:10, right:10, left:-10, bottom:80 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize:8, fill:'hsl(var(--muted-foreground))' }}
-                    angle={-45} textAnchor="end" tickLine={false} axisLine={false} interval={0} />
-                  <YAxis tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+              <ResponsiveContainer width="100%" height={Math.max(400, subTypeData.length * 26 + 40)}>
+                <BarChart data={subTypeData} layout="vertical" margin={{ top:5, right:50, left:0, bottom:5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" width={130}
+                    tick={{ fontSize:10, fill:'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                   <Tooltip content={<TooltipBox />} />
-                  <Bar dataKey="عدد" radius={[4,4,0,0]}
-                    label={{ position:'top', fontSize:9, fill:'hsl(var(--muted-foreground))' }}>
+                  <Bar dataKey="عدد" radius={[0,4,4,0]}
+                    label={{ position:'right', fontSize:9, fill:'hsl(var(--muted-foreground))' }}>
                     {subTypeData.map((_:any,i:number) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
                   </Bar>
                 </BarChart>
@@ -561,8 +562,8 @@ export default function Reports() {
         {(data?.bySupervisor?.length ?? 0) > 0 && (
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
-              <Badge variant="secondary" className="text-[10px]">{data?.bySupervisor?.length} مشرف</Badge>
               <h2 className="font-bold text-sm flex items-center gap-2"><Users className="w-4 h-4 text-primary" /> أداء المشرفين</h2>
+              <Badge variant="secondary" className="text-[10px]">{data?.bySupervisor?.length} مشرف</Badge>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-right" dir="rtl">
@@ -608,8 +609,8 @@ export default function Reports() {
         {(data?.topClients?.length ?? 0) > 0 && (
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
-              <Badge variant="secondary" className="text-[10px]">أعلى 10</Badge>
               <h2 className="font-bold text-sm flex items-center gap-2"><Star className="w-4 h-4 text-amber-500" /> العملاء الأكثر تذاكر</h2>
+              <Badge variant="secondary" className="text-[10px]">أعلى 10</Badge>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-right" dir="rtl">
