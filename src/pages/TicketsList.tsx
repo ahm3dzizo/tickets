@@ -492,8 +492,13 @@ export default function TicketsList() {
               ticketId: t.ticketId,
               clientName: t.clientName,
               villaNumber: t.villaNumber,
+              projectId: t.projectId,
+              clientId: t.clientId,
+              appointmentId: (t as any).appointmentId,
               appointmentTime: t.appointmentTime,
               appointmentNotes: t.appointmentNotes,
+              type: t.type as string,
+              detectedTypes: t.detectedTypes,
               assignedSupervisorIds: t.assignedSupervisorIds as string[] | undefined,
               status: t.status,
             }))}

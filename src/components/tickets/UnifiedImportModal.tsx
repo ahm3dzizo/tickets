@@ -1,5 +1,5 @@
 // src/components/tickets/UnifiedImportModal.tsx
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -43,6 +43,34 @@ export function UnifiedImportModal({
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const processFile = useCallback(async (file: File) => {
+    if (!file || !selectedProjectId) return;
+    setLoading(true);
+    setProgress(0.1);
+    try {
+      const result = await ticketsApi.importExcel(file, selectedProjectId, true, (p) => setProgress(p));
+      setProgress(1);
+      const parts = [];
+      if (result.skippedByDateFilter > 0) parts.push(`⏳ تم تجاهل ${result.skippedByDateFilter} تذكرة قديمة (مغلقة مسبقاً)`);
+      if (result.closedMissing > 0) parts.push(`🔒 إغلاق ${result.closedMissing} تذكرة غير موجودة بالملف`);
+      if (result.added > 0) parts.push(`✅ إضافة ${result.added} (مصنف: ${result.classified ?? 0}، غير مصنف: ${result.unclassified ?? 0})`);
+      if (result.updated > 0) parts.push(`🔄 تحديث ${result.updated}`);
+      if (result.skippedInDB > 0) parts.push(`⏭ موجود بدون تغيير: ${result.skippedInDB}`);
+      if ((result.skippedInFile ?? 0) > 0) parts.push(`🔁 مكرر في الملف: ${result.skippedInFile}`);
+      if (result.failed > 0) parts.push(`❌ فشل: ${result.failed}`);
+      toast.success(parts.join('\n'));
+      setOpen(false);
+      setSelectedProjectId('');
+      onImportSuccess();
+    } catch (err: any) {
+      toast.error('فشل الاستيراد: ' + err.message);
+    } finally {
+      setLoading(false);
+      setProgress(0);
+    }
+  }, [selectedProjectId]);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
   const hasClientsInProject = selectedProjectId && clients.some(c => c.projectId === selectedProjectId);
@@ -87,44 +115,37 @@ export function UnifiedImportModal({
               )}
 
               <div className="mb-3">
-                <label className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed border-blue-500/40 rounded-xl bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer transition-all ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <div className="flex items-center gap-2 text-blue-400">
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileUp className="w-5 h-5" />}
-                    <span className="text-sm font-bold">استيراد الملف</span>
+                <label
+                  className={`flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-xl cursor-pointer transition-all select-none
+                    ${loading ? 'opacity-50 pointer-events-none' : ''}
+                    ${isDragging
+                      ? 'border-blue-400 bg-blue-500/20 scale-[1.02]'
+                      : 'border-blue-500/40 bg-blue-500/5 hover:bg-blue-500/10'
+                    }`}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragging(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    if (!selectedProjectId || !hasClientsInProject || loading) return;
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) processFile(file);
+                  }}
+                >
+                  <div className={`flex items-center gap-2 transition-colors ${isDragging ? 'text-blue-300' : 'text-blue-400'}`}>
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileUp className={`w-5 h-5 transition-transform ${isDragging ? 'scale-110' : ''}`} />}
+                    <span className="text-sm font-bold">{isDragging ? 'أفلت الملف هنا' : 'اسحب وأفلت أو انقر للرفع'}</span>
                   </div>
-                  <span className="text-xs text-slate-500 mt-1">معالجة سريعة وآمنة على السيرفر</span>
+                  <span className="text-xs text-slate-500 mt-1">.xlsx · .xlsm · .xls · .csv</span>
                   <input
                     type="file"
                     accept=".xlsx,.xlsm,.xls,.csv"
                     className="hidden"
                     disabled={!selectedProjectId || !hasClientsInProject || loading}
-                    onChange={async (e) => {
+                    onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (!file || !selectedProjectId) return;
+                      if (file) processFile(file);
                       e.target.value = '';
-                      setLoading(true);
-                      setProgress(0.1);
-                      try {
-                        const result = await ticketsApi.importExcel(file, selectedProjectId, true, (p) => setProgress(p));
-                        setProgress(1);
-                        const parts = [];
-                        if (result.skippedByDateFilter > 0) parts.push(`⏳ تم تجاهل ${result.skippedByDateFilter} تذكرة قديمة (مغلقة مسبقاً)`);
-                        if (result.closedMissing > 0) parts.push(`🔒 إغلاق ${result.closedMissing} تذكرة غير موجودة بالملف`);
-                        if (result.added > 0) parts.push(`✅ إضافة ${result.added} (مصنف: ${result.classified ?? 0}، غير مصنف: ${result.unclassified ?? 0})`);
-                        if (result.updated > 0) parts.push(`🔄 تحديث ${result.updated}`);
-                        if (result.skippedInDB > 0) parts.push(`⏭ موجود بدون تغيير: ${result.skippedInDB}`);
-                        if ((result.skippedInFile ?? 0) > 0) parts.push(`🔁 مكرر في الملف: ${result.skippedInFile}`);
-                        if (result.failed > 0) parts.push(`❌ فشل: ${result.failed}`);
-                        toast.success(parts.join('\n'));
-                        setOpen(false);
-                        setSelectedProjectId('');
-                        onImportSuccess();
-                      } catch (err: any) {
-                        toast.error('فشل الاستيراد: ' + err.message);
-                      } finally {
-                        setLoading(false);
-                        setProgress(0);
-                      }
                     }}
                   />
                 </label>

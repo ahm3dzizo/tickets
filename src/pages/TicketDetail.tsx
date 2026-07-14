@@ -43,7 +43,7 @@ import { InternalAppointmentDialog } from '@/components/tickets/InternalAppointm
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ticketsApi, projectsApi, clientsApi, whatsappApi, auditApi, settingsApi } from '@/lib/api';
+import { ticketsApi, projectsApi, clientsApi, whatsappApi, auditApi, settingsApi, appointmentsApi } from '@/lib/api';
 import { learnFromCorrection, getAuthHeaders } from '@/services/classificationApi';
 import { toast } from 'sonner';
 
@@ -277,30 +277,46 @@ export default function TicketDetail() {
     if (!ticket) return;
     setApptSaving(true);
     try {
-      const appointmentTime = apptDate ? `${apptDate}${apptTime ? ' ' + apptTime : ''}` : '';
-      await ticketsApi.update(ticket.id, {
-        appointmentTime,
-        appointmentNotes: apptNotes,
-        appointmentAwaitingReply: false,
-        status: ticket.status === 'open' || ticket.status === 'waiting' ? 'pending' : ticket.status,
-      });
+      const appointmentTimeStr = apptDate ? `${apptDate}${apptTime ? ' ' + apptTime : ''}` : '';
+      const supervisorIds = (ticket.assignedSupervisorIds as string[]) || [];
+      const supervisorsList = ticket.assignedSupervisors || [];
+
+      if ((ticket as any).appointmentId) {
+        await appointmentsApi.update((ticket as any).appointmentId, {
+          date: apptDate,
+          time: apptTime || undefined,
+          notes: apptNotes || undefined,
+          supervisorIds,
+          supervisors: supervisorsList,
+        });
+      } else {
+        await appointmentsApi.create({
+          projectId: ticket.projectId,
+          villaNumber: ticket.villaNumber,
+          clientId: ticket.clientId || undefined,
+          clientName: ticket.clientName,
+          date: apptDate,
+          time: apptTime || undefined,
+          notes: apptNotes || undefined,
+          supervisorIds,
+          supervisors: supervisorsList,
+          types: [ticket.type as string].filter(Boolean),
+          ticketIds: [ticket.id],
+        });
+      }
 
       // إرسال رسالة الموعد عبر واتساب تلقائياً
       const phone = client?.phone?.replace(/\D/g, '') || '';
-      if (phone) {
-        const apptMsg = `السلام عليكم ${client?.name || ''}\n\nتم تحديد موعد زيارة فريق الصيانة لوحدتكم رقم ${ticket.villaNumber}.\n\nرقم التذكرة: #${ticket.ticketId}\nموعد الزيارة: ${appointmentTime}\n${apptNotes ? `ملاحظات: ${apptNotes}\n` : ''}\nيرجى التواجد في الموعد المحدد.\nشكراً لتعاونكم.`;
+      if (phone && appointmentTimeStr) {
+        const apptMsg = `السلام عليكم ${client?.name || ''}\n\nتم تحديد موعد زيارة فريق الصيانة لوحدتكم رقم ${ticket.villaNumber}.\n\nرقم التذكرة: #${ticket.ticketId}\nموعد الزيارة: ${appointmentTimeStr}\n${apptNotes ? `ملاحظات: ${apptNotes}\n` : ''}\nيرجى التواجد في الموعد المحدد.\nشكراً لتعاونكم.`;
         try {
           const r = await whatsappApi.send(phone, apptMsg);
-          if (r?.sent) {
-            toast.success('تم تأكيد الموعد وإشعار العميل عبر واتساب');
-          } else {
-            toast.success(`تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
-          }
+          toast.success(r?.sent ? 'تم تأكيد الموعد وإشعار العميل عبر واتساب' : 'تم حفظ الموعد');
         } catch {
-          toast.success(`تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
+          toast.success('تم حفظ الموعد');
         }
       } else {
-        toast.success(`تم حفظ الموعد${appointmentTime ? ` ليوم ${appointmentTime}` : ''}`);
+        toast.success('تم حفظ الموعد');
       }
 
       setApptOpen(false);
@@ -923,8 +939,13 @@ export default function TicketDetail() {
             ticketId: ticket.ticketId,
             clientName: ticket.clientName,
             villaNumber: ticket.villaNumber,
+            projectId: ticket.projectId,
+            clientId: ticket.clientId,
+            appointmentId: (ticket as any).appointmentId,
             appointmentTime: ticket.appointmentTime,
             appointmentNotes: ticket.appointmentNotes,
+            type: ticket.type as string,
+            detectedTypes: ticket.detectedTypes,
             assignedSupervisorIds: ticket.assignedSupervisorIds as string[] | undefined,
             status: ticket.status,
           }]}

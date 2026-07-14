@@ -84,34 +84,34 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     overdueList.sort((a, b) => b.daysOpen - a.daysOpen);
     const overdueTickets = overdueList.slice(0, 10);
 
-    // Fetch appointments separately but exclude closed tickets
-    const rawAppts = await prisma.ticket.findMany({
-      where: { 
-        ...where, 
-        appointmentTime: { not: null },
-        status: { not: "closed" }
-      },
-      select: { id: true, ticketId: true, clientName: true, villaNumber: true, appointmentTime: true, type: true, status: true },
-    });
-
-    for (const t of rawAppts) {
-      if (t.appointmentTime) {
-        const parsedAppt = parseDateString(t.appointmentTime);
-        if (parsedAppt && parsedAppt.getTime() >= todayStartMs) {
-          apptsList.push({ ...t, parsedDate: parsedAppt });
-        } else if (!parsedAppt) {
-          const text = String(t.appointmentTime).trim();
-          const greetingsRegex = /^(صباح الخير|مساء الخير|السلام عليكم|هلا|مرحبا|شكرا|يعطيك العافية|تمام|اوكي|طيب)[\s]*$/i;
-          // Filter out greetings and overly long text
-          if (!greetingsRegex.test(text) && text.length > 0 && text.length <= 50) {
-            apptsList.push({ ...t, parsedDate: new Date("2099-12-31") }); 
-          }
-        }
-      }
+    // Fetch upcoming appointments from Appointment table
+    const apptWhere: any = { date: { gte: todayStr } };
+    if (projectId) {
+      apptWhere.projectId = projectId;
+    } else if (user.role !== 'admin' && projectIds.length > 0) {
+      apptWhere.projectId = { in: projectIds };
+    }
+    if (user.role === 'supervisor') {
+      apptWhere.supervisorIds = { has: user.uid };
     }
 
-    apptsList.sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
-    const todayAppts = apptsList.slice(0, 20);
+    const rawAppts = await prisma.appointment.findMany({
+      where: apptWhere,
+      select: { id: true, clientName: true, villaNumber: true, date: true, time: true, types: true, projectId: true },
+      orderBy: { date: 'asc' },
+      take: 20,
+    });
+
+    const todayAppts = rawAppts.map(a => ({
+      id: a.id,
+      ticketId: '',
+      clientName: a.clientName,
+      villaNumber: a.villaNumber,
+      appointmentTime: `${a.date}${a.time ? ' ' + a.time : ''}`,
+      type: (a.types && a.types[0]) || 'general',
+      status: 'pending',
+      projectId: a.projectId,
+    }));
 
     const [total, openCount, closedCount, unclassified] = await Promise.all([
       prisma.ticket.count({ where: ticketsWhere }),

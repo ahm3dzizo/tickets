@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { appointmentsApi, whatsappApi, ticketsApi, usersApi } from '@/lib/api';
+import { appointmentsApi, whatsappApi, usersApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 // ── أنواع ─────────────────────────────────────────────────────────────────────
@@ -16,8 +16,13 @@ interface AppointmentDialogProps {
     ticketId: string;
     clientName: string;
     villaNumber: string;
+    projectId: string;
+    clientId?: string;
+    appointmentId?: string | null;
     appointmentTime?: string;
     appointmentNotes?: string;
+    type?: string;
+    detectedTypes?: string[];
     assignedSupervisorIds?: string[];
     assignedSupervisors?: any[];
     status: string;
@@ -193,26 +198,41 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
         .filter(s => selectedSupIds.includes(s.uid || s.id))
         .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
 
-      const promises = tickets.map(t => {
-        const payload: any = {
-          appointmentAwaitingReply: true,
-          ...(t.status !== 'closed' ? { status: 'waiting' } : {}),
-          appointmentTime: appointmentTime,
-          appointmentNotes: notes || null
-        };
-        if (selectedSupIds.length > 0) {
-          payload.assignedSupervisorIds = selectedSupIds;
-          payload.assignedSupervisorId = selectedSupIds[0];
-          payload.assignedSupervisors = assignedSupervisorsList;
-        } else {
-          payload.assignedSupervisorIds = [];
-          payload.assignedSupervisorId = null;
-          payload.assignedSupervisors = [];
-        }
-        return ticketsApi.update(t.id, payload);
+      const allTypes = new Set<string>();
+      tickets.forEach(t => {
+        if (t.type) allTypes.add(t.type);
+        if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => allTypes.add(dt));
       });
-      await Promise.all(promises);
-      toast.success('تم حفظ المواعيد بنجاح');
+
+      const existingApptId = tickets.find(t => t.appointmentId)?.appointmentId;
+
+      if (existingApptId) {
+        await appointmentsApi.update(existingApptId, {
+          date: startDate,
+          time: finalTime || undefined,
+          notes: notes || undefined,
+          supervisorIds: selectedSupIds,
+          supervisors: assignedSupervisorsList,
+          types: Array.from(allTypes),
+        });
+      } else {
+        const first = tickets[0];
+        await appointmentsApi.create({
+          projectId: first.projectId,
+          villaNumber: first.villaNumber,
+          clientId: first.clientId || undefined,
+          clientName: first.clientName,
+          date: startDate,
+          time: finalTime || undefined,
+          notes: notes || undefined,
+          supervisorIds: selectedSupIds,
+          supervisors: assignedSupervisorsList,
+          types: Array.from(allTypes),
+          ticketIds: tickets.map(t => t.id),
+        });
+      }
+
+      toast.success('تم حفظ الموعد بنجاح');
       onSuccess?.();
       onOpenChange(false);
     } catch {

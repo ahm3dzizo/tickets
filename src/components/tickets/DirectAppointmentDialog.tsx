@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ticketsApi, clientsApi, usersApi } from '@/lib/api';
+import { ticketsApi, clientsApi, usersApi, appointmentsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { Loader2, CalendarPlus, Search, Clock, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -133,52 +133,46 @@ export function DirectAppointmentDialog({
 
     setLoading(true);
     try {
-      const appointmentTime = `${dateStr} ${time}`;
-      const promises: Promise<any>[] = [];
-
-      const existingTypes = new Set<string>();
-      openTickets.forEach(t => {
-        if (t.type) existingTypes.add(t.type);
-        if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => existingTypes.add(dt));
-      });
-
       const assignedSupervisors = supervisors
         .filter(s => selectedSupIds.includes(s.uid || s.id))
         .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
 
       if (openTickets.length > 0) {
-        // Update all open tickets with the appointment time
-        const first = openTickets[0];
-        const updatedDetectedTypes = Array.from(new Set([...(first.detectedTypes || []), ...selectedTypes.filter(t => !existingTypes.has(t))]));
-        
-        for (let i = 0; i < openTickets.length; i++) {
-          const t = openTickets[i];
-          const payload: any = { appointmentTime, appointmentAwaitingReply: false, isDirectAppointment: true };
-          if (t.status !== 'closed') {
-            payload.status = 'pending';
-          }
-          if (notes) payload.appointmentNotes = notes;
+        const existingApptId: string | undefined = (openTickets[0] as any).appointmentId;
+        const allTypes = new Set<string>(selectedTypes);
+        openTickets.forEach((t: any) => {
+          if (t.type) allTypes.add(t.type);
+          if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => allTypes.add(dt));
+        });
 
-          if (selectedSupIds.length > 0) {
-            payload.assignedSupervisorIds = selectedSupIds;
-            payload.assignedSupervisorId = selectedSupIds[0];
-            payload.assignedSupervisors = assignedSupervisors;
-          } else {
-            payload.assignedSupervisorIds = [];
-            payload.assignedSupervisorId = null;
-            payload.assignedSupervisors = [];
-          }
-          
-          // Append new types to the first ticket only
-          if (i === 0 && updatedDetectedTypes.length > (first.detectedTypes?.length || 0)) {
-            payload.detectedTypes = updatedDetectedTypes;
-          }
-          promises.push(ticketsApi.update(t.id, payload));
+        if (existingApptId) {
+          await appointmentsApi.update(existingApptId, {
+            date: dateStr,
+            time,
+            notes: notes || undefined,
+            supervisorIds: selectedSupIds,
+            supervisors: assignedSupervisors,
+            types: Array.from(allTypes),
+          });
+        } else {
+          await appointmentsApi.create({
+            projectId,
+            villaNumber: selectedVilla,
+            clientId: selectedClientId || undefined,
+            clientName,
+            date: dateStr,
+            time,
+            notes: notes || undefined,
+            supervisorIds: selectedSupIds,
+            supervisors: assignedSupervisors,
+            types: Array.from(allTypes),
+            ticketIds: openTickets.map((t: any) => t.id),
+          });
         }
       } else {
-        // No open tickets => Create a new one
+        // No open tickets → create ticket first then appointment
         const nextId = await ticketsApi.getNextId(projectId);
-        const payload: any = {
+        const ticketPayload: any = {
           ticketId: nextId,
           refNumber: selectedVilla,
           projectId,
@@ -189,22 +183,32 @@ export function DirectAppointmentDialog({
           type: selectedTypes[0],
           detectedTypes: selectedTypes,
           status: 'pending',
-          appointmentAwaitingReply: false,
           priority: 3,
-          appointmentTime,
           isDirectAppointment: true,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
         };
-        if (notes) payload.appointmentNotes = notes;
+        if (notes) ticketPayload.appointmentNotes = notes;
         if (selectedSupIds.length > 0) {
-          payload.assignedSupervisorIds = selectedSupIds;
-          payload.assignedSupervisorId = selectedSupIds[0];
-          payload.assignedSupervisors = assignedSupervisors;
+          ticketPayload.assignedSupervisorIds = selectedSupIds;
+          ticketPayload.assignedSupervisorId = selectedSupIds[0];
+          ticketPayload.assignedSupervisors = assignedSupervisors;
         }
-        promises.push(ticketsApi.create(payload));
+        const newTicket = await ticketsApi.create(ticketPayload);
+        await appointmentsApi.create({
+          projectId,
+          villaNumber: selectedVilla,
+          clientId: selectedClientId || undefined,
+          clientName,
+          date: dateStr,
+          time,
+          notes: notes || undefined,
+          supervisorIds: selectedSupIds,
+          supervisors: assignedSupervisors,
+          types: selectedTypes,
+          ticketIds: [newTicket.id],
+        });
       }
 
-      await Promise.all(promises);
       toast.success('تم جدولة الموعد بنجاح');
       onSuccess?.();
       onOpenChange(false);
