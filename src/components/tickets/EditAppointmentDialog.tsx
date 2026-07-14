@@ -35,28 +35,42 @@ export function EditAppointmentDialog({ open, onOpenChange, group, supervisors =
 
   useEffect(() => {
     if (open && group) {
-      const apptTime = group.appointmentTime || '';
-      const [d, t] = apptTime.split(' ');
+      // date/time
+      const [d, t] = (group.appointmentTime || '').split(' ');
       setDate(d || '');
       setTime(t || '');
-      
-      const groupNotes = group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
-      setNotes(groupNotes);
 
-      // Collect all selected types in the group
-      const types = new Set<string>();
-      group.tickets.forEach((t: any) => {
-        if (t.type) types.add(t.type);
-        if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => types.add(dt));
-      });
-      setSelectedTypes(Array.from(types));
+      // notes: prefer appointment-level notes, fall back to any ticket note
+      setNotes(
+        group.notes ||
+        (group.tickets || []).find((tk: any) => tk.appointmentNotes)?.appointmentNotes ||
+        ''
+      );
 
-      // Collect all supervisor IDs
-      const supIds = new Set<string>();
-      group.tickets.forEach((t: any) => {
-        if (t.assignedSupervisorIds) t.assignedSupervisorIds.forEach((s: string) => supIds.add(s));
-      });
-      setSelectedSupIds(Array.from(supIds));
+      // types: use pre-computed group.types Set (from appointment + tickets)
+      const typesSource: Set<string> =
+        group.types instanceof Set
+          ? group.types
+          : new Set<string>(group.types || []);
+      if (typesSource.size === 0) {
+        (group.tickets || []).forEach((tk: any) => {
+          if (tk.type) typesSource.add(tk.type);
+          if (tk.detectedTypes) tk.detectedTypes.forEach((dt: string) => typesSource.add(dt));
+        });
+      }
+      setSelectedTypes(Array.from(typesSource));
+
+      // supervisors: use pre-computed group.sups Set
+      const supsSource: Set<string> =
+        group.sups instanceof Set
+          ? group.sups
+          : new Set<string>(group.supervisorIds || []);
+      if (supsSource.size === 0) {
+        (group.tickets || []).forEach((tk: any) => {
+          if (tk.assignedSupervisorIds) tk.assignedSupervisorIds.forEach((s: string) => supsSource.add(s));
+        });
+      }
+      setSelectedSupIds(Array.from(supsSource));
     }
   }, [open, group]);
 
