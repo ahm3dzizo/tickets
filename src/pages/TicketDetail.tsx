@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
-  ArrowLeft, 
-  User, 
-  Tag, 
+  ArrowLeft,
+  User,
+  Tag,
   MessageSquare,
   CheckCircle2,
   AlertCircle,
@@ -16,6 +16,8 @@ import {
   ChevronDown,
   Clock,
   ExternalLink,
+  X,
+  ZoomIn,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -48,20 +50,45 @@ import { learnFromCorrection, getAuthHeaders } from '@/services/classificationAp
 import { toast } from 'sonner';
 
 
+function TryImage({ url, index, onOpen }: { url: string; index: number; onOpen: () => void }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all h-max">
+        <ExternalLink className="w-5 h-5 shrink-0" />
+        <span className="text-sm font-bold truncate text-right w-full" dir="ltr">{url}</span>
+      </a>
+    );
+  }
+  return (
+    <button onClick={onOpen}
+      className="relative group block rounded-2xl overflow-hidden border border-white/10 bg-black/20 hover:border-white/30 transition-all flex items-center justify-center min-h-[160px] w-full cursor-pointer">
+      <img src={url} alt={`مرفق ${index + 1}`}
+        className="w-full h-auto max-h-80 object-contain"
+        onError={() => setFailed(true)} />
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+        <ZoomIn className="w-8 h-8 text-white drop-shadow-lg" />
+      </div>
+    </button>
+  );
+}
+
 export default function TicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [ticket, setTicket] = useState<Ticket | null>(null);
+
+  const [lightbox, setLightbox] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
 
   const renderDetailedDescription = (text?: string) => {
     if (!text) return null;
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const urls = text.match(urlRegex) || [];
     const cleanText = text.replace(urlRegex, '').trim();
-  
-    const isImage = (url: string) => /\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i.test(url);
-    const isVideo = (url: string) => /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(url);
-  
+
+    const isVideo = (url: string) => /\.(mp4|webm|ogg|mov|avi|mkv)(\?.*)?$/i.test(url);
+
     return (
       <div className="space-y-6">
         {cleanText && (
@@ -72,13 +99,6 @@ export default function TicketDetail() {
         {urls.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 border-t border-white/5 pt-6">
             {urls.map((url, i) => {
-              if (isImage(url)) {
-                return (
-                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-white/10 bg-black/20 hover:border-white/30 transition-all flex items-center justify-center min-h-[160px]">
-                    <img src={url} alt={`مرفق ${i+1}`} className="w-full h-auto max-h-80 object-contain" />
-                  </a>
-                );
-              }
               if (isVideo(url)) {
                 return (
                   <div key={i} className="rounded-2xl overflow-hidden border border-white/10 bg-black/20 flex items-center justify-center min-h-[160px]">
@@ -87,10 +107,12 @@ export default function TicketDetail() {
                 );
               }
               return (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all h-max">
-                  <ExternalLink className="w-5 h-5 shrink-0" />
-                  <span className="text-sm font-bold truncate text-right w-full" dir="ltr">{url}</span>
-                </a>
+                <TryImage
+                  key={i}
+                  url={url}
+                  index={i}
+                  onOpen={() => setLightbox({ url, type: 'image' })}
+                />
               );
             })}
           </div>
@@ -961,6 +983,47 @@ export default function TicketDetail() {
           tickets={[ticket]}
           onSuccess={() => { setInternalApptOpen(false); loadData(); }}
         />
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            onClick={() => setLightbox(null)}
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <a
+            href={lightbox.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute top-4 left-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="w-5 h-5" />
+          </a>
+          {lightbox.type === 'image' && (
+            <img
+              src={lightbox.url}
+              alt="عرض الصورة"
+              className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          {lightbox.type === 'video' && (
+            <video
+              src={lightbox.url}
+              controls
+              autoPlay
+              className="max-w-full max-h-[90vh] rounded-xl outline-none shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+        </div>
       )}
     </Layout>
   );
