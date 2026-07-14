@@ -74,6 +74,7 @@ export const typeTranslations: Record<string, string> = {
   'ac_ventilation':  'تكييف وتهوية',
   'pumps':           'مضخات',
   'doors_windows':   'أبواب ونوافذ',
+  'garage_door':     'باب كراج',
   'waterproofing':   'عزل مائي',
   'grading':         'ميول وترويبة',
   'pest_control':    'مكافحة حشرات',
@@ -81,6 +82,7 @@ export const typeTranslations: Record<string, string> = {
   'structural':      'إنشائي',
   'painting':        'دهانات',
   'tiles':           'سيراميك',
+  'aluminum':        'ألومنيوم',
 };
 
 export const statusTranslations: Record<string, string> = {
