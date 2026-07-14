@@ -1,6 +1,6 @@
 import { Router } from "express";
 import prisma from "../db.js";
-import { AuthRequest, requireAuth } from "../auth.js";
+import { AuthRequest, requireAuth, requireAdmin } from "../auth.js";
 import { getIO } from "../socket.js";
 
 const router = Router();
@@ -220,7 +220,7 @@ router.delete("/push-unsubscribe", requireAuth, async (req: AuthRequest, res) =>
 });
 
 // ─── POST /api/appointments/migrate ──────────────────────────────────────────
-router.post("/migrate", requireAuth, async (req: AuthRequest, res) => {
+router.post("/migrate", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const migrated = await migrateAppointments();
     res.json({ ok: true, created: migrated });
@@ -368,21 +368,38 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
   const { id } = req.params;
 
   try {
-    // Unlink tickets
-    await prisma.ticket.updateMany({
+    // Fetch linked tickets to preserve non-pending statuses
+    const linked = await prisma.ticket.findMany({
       where: { appointmentId: id },
-      data: {
-        appointmentId: null,
-        appointmentTime: null,
-        appointmentNotes: null,
-        appointmentAwaitingReply: false,
-        isDirectAppointment: false,
-        status: "open",
-        assignedSupervisorId: null,
-        assignedSupervisorIds: [],
-        assignedSupervisors: [],
-      },
+      select: { id: true, status: true },
     });
+
+    const pendingIds = linked.filter(t => t.status === "pending").map(t => t.id);
+    const otherIds   = linked.filter(t => t.status !== "pending").map(t => t.id);
+
+    const appointmentClear = {
+      appointmentId: null as null,
+      appointmentTime: null as null,
+      appointmentNotes: null as null,
+      appointmentAwaitingReply: false,
+      isDirectAppointment: false,
+      assignedSupervisorId: null as null,
+      assignedSupervisorIds: [] as string[],
+      assignedSupervisors: [] as any[],
+    };
+
+    if (pendingIds.length > 0) {
+      await prisma.ticket.updateMany({
+        where: { id: { in: pendingIds } },
+        data: { ...appointmentClear, status: "open" },
+      });
+    }
+    if (otherIds.length > 0) {
+      await prisma.ticket.updateMany({
+        where: { id: { in: otherIds } },
+        data: appointmentClear,
+      });
+    }
 
     await prisma.appointment.delete({ where: { id } });
     getIO()?.emit("appointment:deleted", { id });

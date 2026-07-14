@@ -152,8 +152,6 @@ export default function Appointments() {
 
   const [addSpecOpen, setAddSpecOpen] = useState(false);
   const [addSpecData, setAddSpecData] = useState<any>(null);
-  const [printWithImages, setPrintWithImages] = useState(false);
-  const [preloadImages, setPreloadImages] = useState(false);
 
   const loadAppointments = async () => {
     setLoading(true);
@@ -900,7 +898,7 @@ export default function Appointments() {
 
       {/* --- Print Layout --- */}
       <div className="hidden print:block print:w-full print:bg-white print:text-black print:p-0">
-        {renderPrintLayout(lang, printWithImages)}
+        {renderPrintLayout(lang, false)}
       </div>
 
       {/* --- Export Layouts (Hidden) --- */}
@@ -957,13 +955,6 @@ export default function Appointments() {
           supervisors={supervisors}
           onSuccess={loadAppointments}
         />
-      )}
-      {preloadImages && (
-        <div className="fixed top-0 left-[-9999px] opacity-0 pointer-events-none print:hidden">
-          {appointments.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []).map((url: string, idx: number) => (
-            <img key={idx} src={url} alt="preload" crossOrigin="anonymous" />
-          ))}
-        </div>
       )}
 
       {/* Export Dialog */}

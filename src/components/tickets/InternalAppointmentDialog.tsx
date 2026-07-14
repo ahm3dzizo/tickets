@@ -287,7 +287,7 @@ export function InternalAppointmentDialog({
           clientId: selectedClientId,
           clientName,
           villaNumber: selectedVilla,
-          description: `موعد صيانة مجدول يدوياً (${selectedTypes.map(k => mergedTypeLabels[k] ?? k).join('، ')})`,
+          description: `موعد صيانة مجدول يدوياً للمشرف (${selectedTypes.map(k => mergedTypeLabels[k] ?? k).join('، ')})`,
           type: selectedTypes[0],
           detectedTypes: selectedTypes,
           status: 'pending',
