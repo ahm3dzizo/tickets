@@ -106,14 +106,15 @@ const TRANSLATIONS = {
 export default function Appointments() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { typeTranslations } = useTicketTypes();
+  const { typeTranslations, subTypeTranslations } = useTicketTypes();
   const mergedTypes: Record<string, string> = {
     electricity: 'كهرباء', electrical: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات', painting: 'دهانات',
     ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية', hvac: 'تكييف', ac: 'تكييف',
     waterproofing: 'عزل', pest_control: 'مكافحة حشرات', general: 'عام', carpentry: 'نجارة', civil: 'مدني', mechanics: 'ميكانيكا',
     doors_windows: 'أبواب ونوافذ', cracks: 'كراك', grading: 'ترويبه', gypsum: 'جبس', lighting: 'إضاءة', aluminum: 'ألمنيوم',
     smart_home: 'نظام ذكي', swimming_pool: 'مسبح', landscaping: 'زراعة وحدائق',
-    ...typeTranslations
+    ...typeTranslations,
+    ...subTypeTranslations,  // UUID sub-type IDs → nameAr
   };
 
   const [directApptDate, setDirectApptDate] = useState<string | null>(null);

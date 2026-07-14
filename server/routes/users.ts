@@ -20,7 +20,9 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   });
   const projectIds = currentUser?.projects.map(p => p.id) || [];
   
-  const where = role === "admin" ? {} : { projects: { some: { id: { in: projectIds } } } };
+  const where = role === "admin"
+    ? {}
+    : { role: { not: 'admin' as const }, projects: { some: { id: { in: projectIds } } } };
 
   const users = await prisma.user.findMany({ 
     where,
@@ -68,13 +70,35 @@ router.get("/:uid", requireAuth, async (req, res) => {
   res.json(toPublicUser(mapped));
 });
 
-// POST /api/users — Create a new user (admin only)
-router.post("/", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+// POST /api/users — Create a new user (admin or engineer)
+router.post("/", requireAuth, async (req: AuthRequest, res) => {
   try {
+    const requesterRole = await getRequesterRole(req.uid!);
+    if (requesterRole !== 'admin' && requesterRole !== 'engineer') {
+      res.status(403).json({ error: 'ليس لديك صلاحية إضافة مستخدمين' });
+      return;
+    }
+
     const data = req.body;
     const uidInput = asTrimmedString(data.uid);
     const role = asTrimmedString(data.role) || "engineer";
     if (!USER_ROLES.has(role)) throw new Error("الدور المحدد غير صالح");
+
+    // Engineers can only create supervisors within their own projects
+    if (requesterRole === 'engineer') {
+      if (role !== 'supervisor') {
+        res.status(403).json({ error: 'المهندس يمكنه إضافة المشرفين فقط' });
+        return;
+      }
+      const engineerRecord = await prisma.user.findUnique({
+        where: { uid: req.uid! },
+        select: { projects: { select: { id: true } } },
+      });
+      const myProjectIds = new Set(engineerRecord?.projects.map(p => p.id) ?? []);
+      const requested = Array.isArray(data.projectIds) ? (data.projectIds as string[]) : [];
+      const valid = requested.filter(id => myProjectIds.has(id));
+      data.projectIds = valid.length > 0 ? valid : [...myProjectIds];
+    }
 
     const employeeId = asTrimmedString(data.employeeId);
     const phoneNumber = asTrimmedString(data.phoneNumber);

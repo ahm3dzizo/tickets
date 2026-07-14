@@ -30,6 +30,7 @@ export default function Team() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
+  const isEngineer = currentUser?.role === 'engineer';
   const [team, setTeam]         = useState<any[]>([]);
   const [projects, setProjects] = useState<Record<string, string>>({});
   const [loading, setLoading]   = useState(true);
@@ -50,11 +51,18 @@ export default function Team() {
 
   useEffect(() => { loadData(); }, []);
 
-  const filtered = team.filter(t =>
-    t.displayName?.toLowerCase().includes(search.toLowerCase()) ||
-    t.role?.toLowerCase().includes(search.toLowerCase()) ||
-    t.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = team.filter(t => {
+    if (!isAdmin && t.role === 'admin') return false;
+    if (isEngineer) {
+      const myProjects: string[] = currentUser?.projectIds ?? [];
+      if (!(t.projectIds ?? []).some((id: string) => myProjects.includes(id))) return false;
+    }
+    return (
+      t.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+      t.role?.toLowerCase().includes(search.toLowerCase()) ||
+      t.email?.toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   const getSpecialties = (t: any): string[] => {
     if (t.specialties?.length) return t.specialties;
@@ -80,7 +88,12 @@ export default function Team() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">إدارة الفريق</h1>
             <p className="text-muted-foreground mt-1 text-sm">إضافة وإدارة المهندسين والمشرفين</p>
           </div>
-          {isAdmin && <UserForm />}
+          {(isAdmin || isEngineer) && (
+            <UserForm
+              allowedRoles={isEngineer ? ['supervisor'] : undefined}
+              lockedProjectIds={isEngineer ? (currentUser?.projectIds ?? []) : undefined}
+            />
+          )}
         </div>
 
         {/* Main card */}

@@ -45,6 +45,10 @@ interface UserFormProps {
   onOpenChange?: (open: boolean) => void;
   /** Called after successful save */
   onSaved?: () => void;
+  /** Restrict role dropdown (engineers can only create supervisors) */
+  allowedRoles?: UserRole[];
+  /** Show only these projects in the picker (engineer's own projects) */
+  lockedProjectIds?: string[];
 }
 
 export function UserForm({
@@ -54,6 +58,8 @@ export function UserForm({
   open: controlledOpen,
   onOpenChange: controlledOnChange,
   onSaved,
+  allowedRoles,
+  lockedProjectIds,
 }: UserFormProps) {
   // Support both controlled and uncontrolled open state
   const isControlled  = controlledOpen !== undefined;
@@ -220,6 +226,8 @@ export function UserForm({
             loading={loading}
             onSubmit={handleSubmit}
             onCancel={() => setOpen(false)}
+            allowedRoles={allowedRoles}
+            lockedProjectIds={lockedProjectIds}
           />
         </DialogContent>
       </Dialog>
@@ -259,6 +267,8 @@ export function UserForm({
           loading={loading}
           onSubmit={handleSubmit}
           onCancel={() => setOpen(false)}
+          allowedRoles={allowedRoles}
+          lockedProjectIds={lockedProjectIds}
         />
       </DialogContent>
     </Dialog>
@@ -287,6 +297,8 @@ interface FormBodyProps {
   loading: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  allowedRoles?: UserRole[];
+  lockedProjectIds?: string[];
 }
 
 const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
@@ -301,7 +313,12 @@ function FormBody({
   selectedProjects, toggleProject, projects,
   onLeave, setOnLeave, substituteUid, setSubstituteUid, allUsers,
   loading, onSubmit, onCancel,
+  allowedRoles, lockedProjectIds,
 }: FormBodyProps) {
+  const visibleRoles = allowedRoles ?? (['admin', 'engineer', 'supervisor'] as UserRole[]);
+  const visibleProjects = lockedProjectIds
+    ? projects.filter(p => lockedProjectIds.includes(p.id))
+    : projects;
   return (
     <>
       <DialogHeader>
@@ -393,7 +410,7 @@ function FormBody({
               <span>{roleTranslations[role]}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="bg-card border-border text-slate-200 w-64">
-              {(['admin', 'engineer', 'supervisor'] as UserRole[]).map(r => (
+              {visibleRoles.map(r => (
                 <DropdownMenuItem key={r} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setRole(r)}>
                   {roleTranslations[r]}
                 </DropdownMenuItem>
@@ -456,7 +473,7 @@ function FormBody({
               )}
             </Label>
             <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 bg-white/5 rounded-xl border border-border">
-              {projects.map(p => (
+              {visibleProjects.map(p => (
                 <div
                   key={p.id}
                   className={cn(

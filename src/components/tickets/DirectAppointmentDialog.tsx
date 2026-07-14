@@ -54,12 +54,32 @@ export function DirectAppointmentDialog({
   const [supervisors, setSupervisors] = useState<any[]>([]);
   const [selectedSupIds, setSelectedSupIds] = useState<string[]>([]);
 
-  const { typeTranslations } = useTicketTypes();
+  const { typeTranslations, types: dbTypes, subTypes, subTypeTranslations } = useTicketTypes();
   const mergedTypes = Object.keys(typeTranslations).length > 0 ? typeTranslations : {
     electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات',
     ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية',
     waterproofing: 'عزل مائي', pest_control: 'مكافحة حشرات'
   };
+
+  const getTypeLabel = (key: string) =>
+    subTypeTranslations[key] || typeTranslations[key] || mergedTypes[key] || key;
+
+  // Build picker items: show sub-types where parent has sub-types, parent otherwise
+  const pickerItems: { key: string; label: string }[] = [];
+  const seenKeys = new Set<string>();
+  dbTypes.forEach(t => {
+    const subs = subTypes.filter(s => s.parentKey === t.key);
+    if (subs.length > 0) {
+      subs.forEach(s => { pickerItems.push({ key: s.id, label: s.nameAr }); seenKeys.add(t.key); });
+    } else {
+      pickerItems.push({ key: t.key, label: t.nameAr });
+      seenKeys.add(t.key);
+    }
+  });
+  // Add static fallback types not covered by DB
+  Object.entries(mergedTypes).forEach(([k, v]) => {
+    if (!seenKeys.has(k)) pickerItems.push({ key: k, label: v as string });
+  });
 
   useEffect(() => {
     if (open) {
@@ -92,10 +112,14 @@ export function DirectAppointmentDialog({
          const tks = res.filter((t: any) => String(t.villaNumber) === String(selectedVilla) && !['closed', 'out-of-scope', 'completed'].includes(t.status));
          setOpenTickets(tks);
          
-         // Pre-select existing types
+         // Pre-select types: prefer specific subTypeId over generic parent type
          const types = new Set<string>();
          tks.forEach((t: any) => {
-           if (t.type) types.add(t.type);
+           if (t.subTypeId) {
+             types.add(t.subTypeId);
+           } else if (t.type) {
+             types.add(t.type);
+           }
            if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => types.add(dt));
          });
          setSelectedTypes(Array.from(types));
@@ -141,7 +165,11 @@ export function DirectAppointmentDialog({
         const existingApptId: string | undefined = (openTickets[0] as any).appointmentId;
         const allTypes = new Set<string>(selectedTypes);
         openTickets.forEach((t: any) => {
-          if (t.type) allTypes.add(t.type);
+          if (t.subTypeId) {
+            allTypes.add(t.subTypeId);
+          } else if (t.type) {
+            allTypes.add(t.type);
+          }
           if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => allTypes.add(dt));
         });
 
@@ -179,7 +207,7 @@ export function DirectAppointmentDialog({
           clientId: selectedClientId,
           clientName,
           villaNumber: selectedVilla,
-          description: `موعد صيانة مجدول يدوياً للمشرف (${selectedTypes.map(t => mergedTypes[t] || t).join('، ')})`,
+          description: `موعد صيانة مجدول يدوياً للمشرف (${selectedTypes.map(t => getTypeLabel(t)).join('، ')})`,
           type: selectedTypes[0],
           detectedTypes: selectedTypes,
           status: 'pending',
@@ -352,12 +380,12 @@ export function DirectAppointmentDialog({
               تخصصات الصيانة المطلوبة
             </Label>
             <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
-              {Object.entries(mergedTypes).map(([k, v]) => {
-                const isSelected = selectedTypes.includes(k);
+              {pickerItems.map(({ key, label }) => {
+                const isSelected = selectedTypes.includes(key);
                 return (
                   <button
-                    key={k}
-                    onClick={() => setSelectedTypes(prev => isSelected ? prev.filter(x => x !== k) : [...prev, k])}
+                    key={key}
+                    onClick={() => setSelectedTypes(prev => isSelected ? prev.filter(x => x !== key) : [...prev, key])}
                     className={cn(
                       'px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1.5',
                       isSelected
@@ -365,7 +393,7 @@ export function DirectAppointmentDialog({
                         : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
                     )}
                   >
-                    {v as React.ReactNode}
+                    {label}
                   </button>
                 );
               })}

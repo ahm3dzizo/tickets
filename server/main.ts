@@ -31,6 +31,7 @@ import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
 import { startReclassifyWorker, stopReclassifyWorker } from "./classifier/reclassify-worker.js";
+import { seedSubTypes } from "./classifier/seed-subtypes.js";
 
 let globalIo: any = null;
 
@@ -172,6 +173,9 @@ async function startServer() {
   // ── Background Jobs ────────────────────────────────────────────────────
   startGeminiWorker();        // classifies open unclassified tickets via Gemini (4/min)
   startReclassifyWorker();    // reclassifies tickets when keywords are learned (every 30s)
+
+  // Ensure critical sub-types exist (e.g. روائح كريهة under drainage)
+  seedSubTypes().catch((e) => console.error('⚠️  Sub-type seed failed:', e.message));
 
   // Migrate existing appointmentTime fields to Appointment table (one-time, idempotent)
   migrateAppointments()
