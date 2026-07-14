@@ -81,7 +81,7 @@ const PRESETS: Record<string, { label: string; keys: string[] }> = {
   },
   contractors: {
     label: 'مقاولين',
-    keys:  ['ticketId', 'clientName', 'clientPhone', 'description', 'supervisors', 'type'],
+    keys:  ['ticketId', 'refNumber', 'clientName', 'clientPhone', 'issuedAt', 'description', 'daysOpen', 'supervisors', 'type', 'appointmentTime'],
   },
   extended: {
     label: 'موسع',
@@ -184,7 +184,10 @@ export function ExportTicketsModal({
         return String(differenceInDays((isClosed && closeDate) ? closeDate : new Date(), openDate));
       }
       case 'clientName':  return ticket.clientName || '';
-      case 'clientPhone': return clients?.[(ticket as any).clientId ?? '']?.phone      || '';
+      case 'clientPhone':
+        return (ticket as any).clientPhone
+          || clients?.[(ticket as any).clientId ?? '']?.phone
+          || '';
       case 'blockNumber': return clients?.[(ticket as any).clientId ?? '']?.blockNumber || '';
       case 'issuedAt': {
         if (!ticket.issuedAt) return format(new Date(ticket.createdAt as any), 'd/M/yyyy');

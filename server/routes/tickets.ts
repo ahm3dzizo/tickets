@@ -281,10 +281,19 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const tickets = await prisma.ticket.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    include: { ticketSubType: { select: { id: true, nameAr: true } } },
+    include: {
+      ticketSubType: { select: { id: true, nameAr: true } },
+      client:        { select: { phone: true } },
+    },
   });
   const enriched = await enrichSupervisorNames(tickets);
-  res.json(enriched.map(t => ({ ...t, subTypeName: (t as any).ticketSubType?.nameAr ?? null })));
+  res.json(enriched.map(t => ({
+    ...t,
+    subTypeName:  (t as any).ticketSubType?.nameAr ?? null,
+    clientPhone:  (t as any).client?.phone         ?? null,
+    client:       undefined,
+    ticketSubType: undefined,
+  })));
 });
 
 // GET /api/tickets/ticketids — للكشف عن المكررات في الاستيراد (خفيف)
