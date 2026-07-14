@@ -89,6 +89,8 @@ const remoteLines = [
   `npm install --silent`,
   `echo "▶  npx prisma db push --accept-data-loss..."`,
   `npx prisma db push --accept-data-loss`,
+  `echo "▶  نقل بيانات المواعيد القديمة..."`,
+  `node scripts/migrate-appointments.js`,
   `echo "▶  npm run build (frontend + backend)..."`,
   `rm -rf dist`,
   `rm -rf node_modules/.vite`,
