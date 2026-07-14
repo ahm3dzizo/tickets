@@ -22,7 +22,7 @@ import auditRoutes from "./routes/audit.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import whatsappRoutes from "./routes/whatsapp.js";
 import settingsRoutes from "./routes/settings.js";
-import appointmentRoutes from "./routes/appointments.js";
+import appointmentRoutes, { migrateAppointments } from "./routes/appointments.js";
 import ocrRoutes from "./routes/ocr.js";
 import importExcelRoutes from "./routes/import-excel.js";
 import contractorRoutes from "./routes/contractors.js";
@@ -172,6 +172,11 @@ async function startServer() {
   // ── Background Jobs ────────────────────────────────────────────────────
   startGeminiWorker();        // classifies open unclassified tickets via Gemini (4/min)
   startReclassifyWorker();    // reclassifies tickets when keywords are learned (every 30s)
+
+  // Migrate existing appointmentTime fields to Appointment table (one-time, idempotent)
+  migrateAppointments()
+    .then((n) => { if (n > 0) console.log(`✅ Migrated ${n} appointment groups to Appointment table`); })
+    .catch((e) => console.error('⚠️  Appointment migration failed:', e.message));
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
