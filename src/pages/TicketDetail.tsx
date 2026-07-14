@@ -842,9 +842,12 @@ export default function TicketDetail() {
                 <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)]" align="end">
                   <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('open')}>مفتوحة</DropdownMenuItem>
                   <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('in_progress')}>قيد التنفيذ</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('waiting')}>بانتظار الموعد</DropdownMenuItem>
                   <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('pending')}>معلقة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('contractor')}>مقاول / ملاحظة</DropdownMenuItem>
                   <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('completed')}>مكتملة</DropdownMenuItem>
                   <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-start justify-start" onClick={() => setEditStatus('closed')}>مغلقة</DropdownMenuItem>
+                  <DropdownMenuItem className="hover:bg-amber-500/10 cursor-pointer text-start justify-start text-amber-400" onClick={() => setEditStatus('absent')}>عدم تواجد</DropdownMenuItem>
                   <DropdownMenuItem className="hover:bg-red-500/10 cursor-pointer text-start justify-start text-rose-400" onClick={() => setEditStatus('out_of_scope')}>خارج اختصاص</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
