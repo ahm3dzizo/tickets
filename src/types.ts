@@ -98,6 +98,7 @@ export interface Ticket {
   contractorId?: string | null;
   contractorName?: string | null;
   contractorNote?: string | null;
+  appointmentId?: string | null;
 }
 
 // ─── Contractor Types ─────────────────────────────────────────────────────────

@@ -336,6 +336,17 @@ export const appointmentsApi = {
     post<{ ok: boolean }>('/appointments/push-subscribe', { subscription }),
   unsubscribePush: () =>
     del<{ ok: boolean }>('/appointments/push-unsubscribe'),
+  create: (data: {
+    projectId: string; villaNumber: string; clientId?: string; clientName: string;
+    clientPhone?: string; date: string; time?: string; notes?: string;
+    supervisorIds?: string[]; supervisors?: any[]; types?: string[]; ticketIds?: string[];
+  }) => post<any>('/appointments', data),
+  update: (id: string, data: {
+    date: string; time?: string; notes?: string;
+    supervisorIds?: string[]; supervisors?: any[]; types?: string[];
+  }) => put<any>(`/appointments/${id}`, data),
+  deleteAppointment: (id: string) => del<any>(`/appointments/${id}`),
+  migrate: () => post<{ ok: boolean; created: number }>('/appointments/migrate', {}),
 };
 
 // ── Learned Keywords ──────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { ticketsApi } from '@/lib/api';
+import { ticketsApi, appointmentsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { Loader2, CalendarClock, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -80,76 +80,42 @@ export function EditAppointmentDialog({ open, onOpenChange, group, supervisors =
     }
 
     setLoading(true);
-    const newAppointmentTime = `${date} ${time}`;
 
     const assignedSupervisors = supervisors
       .filter(s => selectedSupIds.includes(s.uid || s.id))
       .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
 
     try {
-      const remainingTickets: any[] = [];
-      const unscheduledTickets: any[] = [];
-      const extraTypes = [...selectedTypes];
+      const appointmentId: string | undefined = group?.appointmentId;
 
-      // Identify which tickets to keep vs unschedule
-      group.tickets.forEach((t: any) => {
-        if (selectedTypes.includes(t.type)) {
-          remainingTickets.push(t);
-          // Remove from extra types because it is already handled by ticket.type
-          const idx = extraTypes.indexOf(t.type);
-          if (idx !== -1) extraTypes.splice(idx, 1);
-        } else {
-          unscheduledTickets.push(t);
-        }
-      });
-
-      // It's possible the user removed all main ticket types, but added new specialties.
-      // E.g. ticket is 'plumbing', user removes 'plumbing' and selects 'ceramics'.
-      // In this case remainingTickets is empty, so we must keep the first ticket and convert it.
-      if (remainingTickets.length === 0 && unscheduledTickets.length > 0) {
-        // Keep the first ticket so we don't lose the appointment entirely
-        remainingTickets.push(unscheduledTickets[0]);
-        unscheduledTickets.shift();
-      }
-
-      // Distribute extra types
-      const promises: any[] = [];
-
-      remainingTickets.forEach((t: any, index: number) => {
-        // First remaining ticket gets all extra types in its detectedTypes
-        const dTypes = index === 0 ? extraTypes : [];
-        promises.push(
+      if (appointmentId) {
+        // Use the new Appointment API — server syncs all linked tickets automatically
+        await appointmentsApi.update(appointmentId, {
+          date,
+          time,
+          notes,
+          supervisorIds: selectedSupIds,
+          supervisors: assignedSupervisors,
+          types: selectedTypes,
+        });
+      } else {
+        // Fallback: legacy direct ticket update (for old appointments without appointmentId)
+        const newAppointmentTime = `${date} ${time}`;
+        const promises = (group?.tickets || []).map((t: any) =>
           ticketsApi.update(t.id, {
             appointmentTime: newAppointmentTime,
+            appointmentNotes: notes,
             appointmentAwaitingReply: false,
             isDirectAppointment: true,
-            appointmentNotes: notes,
             assignedSupervisorId: selectedSupIds.length > 0 ? selectedSupIds[0] : null,
             assignedSupervisorIds: selectedSupIds,
             assignedSupervisors,
-            detectedTypes: dTypes,
-            status: t.status === 'waiting' ? 'pending' : t.status
+            status: t.status === 'waiting' ? 'pending' : t.status,
           })
         );
-      });
+        await Promise.all(promises);
+      }
 
-      unscheduledTickets.forEach((t: any) => {
-        promises.push(
-          ticketsApi.update(t.id, {
-            appointmentTime: null,
-            appointmentAwaitingReply: false,
-            isDirectAppointment: false,
-            appointmentNotes: '',
-            status: 'open',
-            assignedSupervisorId: null,
-            assignedSupervisorIds: [],
-            assignedSupervisors: [],
-            detectedTypes: []
-          })
-        );
-      });
-
-      await Promise.all(promises);
       toast.success('تم تعديل الموعد بنجاح');
       onSuccess?.();
       onOpenChange(false);

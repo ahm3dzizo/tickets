@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { ticketsApi, clientsApi, usersApi } from '@/lib/api';
+import { ticketsApi, clientsApi, usersApi, appointmentsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { Loader2, CalendarPlus, Save, Search, Clock, Home, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -237,37 +237,50 @@ export function InternalAppointmentDialog({
 
     setLoading(true);
     try {
-      const appointmentTime = `${effectiveDate} ${time}`;
       const assignedSupervisors = supervisors
         .filter(s => selectedSupIds.includes(s.uid || s.id))
         .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
 
-      const promises: Promise<any>[] = [];
+      const allTypes = new Set<string>();
+      for (const t of activeTickets) {
+        if (t.type) allTypes.add(t.type);
+        if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => allTypes.add(dt));
+      }
 
       if (hasExistingTickets) {
-        for (const t of activeTickets) {
-          const payload: any = {
-            appointmentTime,
-            appointmentAwaitingReply: false,
-            isDirectAppointment: true,
-            appointmentNotes: notes || null,
-          };
-          if (t.status !== 'closed') payload.status = 'pending';
-          if (selectedSupIds.length > 0) {
-            payload.assignedSupervisorIds = selectedSupIds;
-            payload.assignedSupervisorId = selectedSupIds[0];
-            payload.assignedSupervisors = assignedSupervisors;
-          } else {
-            payload.assignedSupervisorIds = [];
-            payload.assignedSupervisorId = null;
-            payload.assignedSupervisors = [];
-          }
-          promises.push(ticketsApi.update(t.id, payload));
+        // Check if tickets already belong to an appointment
+        const existingApptId: string | undefined = (activeTickets[0] as any).appointmentId;
+
+        if (existingApptId) {
+          await appointmentsApi.update(existingApptId, {
+            date: effectiveDate,
+            time,
+            notes: notes || undefined,
+            supervisorIds: selectedSupIds,
+            supervisors: assignedSupervisors,
+            types: Array.from(allTypes),
+          });
+        } else {
+          const firstTicket = activeTickets[0];
+          await appointmentsApi.create({
+            projectId: firstTicket.projectId || projectId,
+            villaNumber: firstTicket.villaNumber || selectedVilla,
+            clientId: firstTicket.clientId || selectedClientId || undefined,
+            clientName: firstTicket.clientName || clientName,
+            date: effectiveDate,
+            time,
+            notes: notes || undefined,
+            supervisorIds: selectedSupIds,
+            supervisors: assignedSupervisors,
+            types: Array.from(allTypes),
+            ticketIds: activeTickets.map((t: any) => t.id),
+          });
         }
       } else {
-        // Create new ticket (calendar mode, no existing open tickets)
+        // Create new ticket first, then create appointment
+        const appointmentTime = `${effectiveDate} ${time}`;
         const nextId = await ticketsApi.getNextId(projectId);
-        const payload: any = {
+        const ticketPayload: any = {
           ticketId: nextId,
           refNumber: selectedVilla,
           projectId,
@@ -284,16 +297,28 @@ export function InternalAppointmentDialog({
           isDirectAppointment: true,
           createdAt: new Date().toISOString(),
         };
-        if (notes) payload.appointmentNotes = notes;
+        if (notes) ticketPayload.appointmentNotes = notes;
         if (selectedSupIds.length > 0) {
-          payload.assignedSupervisorIds = selectedSupIds;
-          payload.assignedSupervisorId = selectedSupIds[0];
-          payload.assignedSupervisors = assignedSupervisors;
+          ticketPayload.assignedSupervisorIds = selectedSupIds;
+          ticketPayload.assignedSupervisorId = selectedSupIds[0];
+          ticketPayload.assignedSupervisors = assignedSupervisors;
         }
-        promises.push(ticketsApi.create(payload));
+        const newTicket = await ticketsApi.create(ticketPayload);
+        await appointmentsApi.create({
+          projectId,
+          villaNumber: selectedVilla,
+          clientId: selectedClientId || undefined,
+          clientName,
+          date: effectiveDate,
+          time,
+          notes: notes || undefined,
+          supervisorIds: selectedSupIds,
+          supervisors: assignedSupervisors,
+          types: selectedTypes,
+          ticketIds: [newTicket.id],
+        });
       }
 
-      await Promise.all(promises);
       toast.success('تم حفظ الموعد بنجاح');
       onSuccess?.();
       onOpenChange(false);

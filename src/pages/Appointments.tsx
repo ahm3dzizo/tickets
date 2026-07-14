@@ -220,39 +220,40 @@ export default function Appointments() {
       map[dateStr(day)] = [];
     }
 
-    const allByDate: Record<string, any[]> = {};
+    // appointments is now an array of Appointment objects from the API
     for (const appt of appointments) {
-      const d = (appt.appointmentTime || '').split(' ')[0];
-      if (!allByDate[d]) allByDate[d] = [];
-      allByDate[d].push(appt);
+      const d = appt.date;
+      if (!map[d]) continue;
+
+      // Collect types from appointment + tickets
+      const types = new Set<string>(appt.types || []);
+      for (const t of (appt.tickets || [])) {
+        if (t.type) types.add(t.type);
+        if (t.detectedTypes) t.detectedTypes.forEach((dt: string) => types.add(dt));
+      }
+
+      const sups = new Set<string>(appt.supervisorIds || []);
+      const clientPhone = appt.clientPhone ||
+        (appt.tickets?.[0]?.client?.phone) || null;
+
+      map[d].push({
+        appointmentId: appt.id,
+        clientId: appt.clientId,
+        clientName: appt.clientName,
+        clientPhone,
+        villaNumber: appt.villaNumber,
+        projectId: appt.projectId,
+        appointmentTime: `${appt.date} ${appt.time || ''}`.trim(),
+        notes: appt.notes,
+        types,
+        sups,
+        supervisors: appt.supervisors,
+        tickets: appt.tickets || [],
+      });
     }
 
     for (const d of Object.keys(map)) {
-      const dayAppts = allByDate[d] || [];
-      const clientMap: Record<string, any> = {};
-
-      for (const appt of dayAppts) {
-        const key = appt.villaNumber + '_' + (appt.projectId || '');
-        if (!clientMap[key]) {
-          clientMap[key] = {
-            clientId: appt.clientId,
-            clientName: appt.clientName,
-            clientPhone: appt.client?.phone || null,
-            villaNumber: appt.villaNumber,
-            projectId: appt.projectId,
-            appointmentTime: appt.appointmentTime,
-            types: new Set<string>(),
-            sups: new Set<string>(),
-            tickets: [],
-          };
-        }
-        if (appt.type) clientMap[key].types.add(appt.type);
-        if (appt.detectedTypes) appt.detectedTypes.forEach((t: string) => clientMap[key].types.add(t));
-        if (appt.assignedSupervisorIds) appt.assignedSupervisorIds.forEach((s: string) => clientMap[key].sups.add(s));
-        clientMap[key].tickets.push(appt);
-      }
-
-      let groups = Object.values(clientMap);
+      let groups = map[d];
 
       if (filterSup) {
         groups = groups.filter(g => g.sups.has(filterSup));
