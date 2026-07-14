@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { AuthRequest, requireAuth } from '../auth.js';
+import { AuthRequest, requireAuth, requireAdmin, getRequesterRole } from '../auth.js';
 import prisma from '../db.js';
 
 const router = Router();
@@ -85,7 +85,7 @@ router.get('/whatsapp-templates', requireAuth, async (_req: AuthRequest, res) =>
 });
 
 // ─── PUT /api/settings/whatsapp-templates ────────────────────────────────────
-router.put('/whatsapp-templates', requireAuth, async (req: AuthRequest, res) => {
+router.put('/whatsapp-templates', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const { openingMsg, closingMsg, absentMsg, outOfScopeMsg } = req.body;
     if (!openingMsg || !closingMsg) {
@@ -122,15 +122,47 @@ router.get('/work-hours', requireAuth, async (_req: AuthRequest, res) => {
 // ─── PUT /api/settings/work-hours ────────────────────────────────────────────
 router.put('/work-hours', requireAuth, async (req: AuthRequest, res) => {
   try {
+    const role = await getRequesterRole(req.uid!);
     const body = req.body as WorkHoursSettings;
     if (!body?.default) {
       res.status(400).json({ error: 'بيانات أوقات الدوام غير صحيحة' });
       return;
     }
+
+    const currentSetting = await prisma.systemSetting.findUnique({ where: { key: 'work_hours' } });
+    const currentWH = (currentSetting?.value as unknown as WorkHoursSettings) || DEFAULT_WORK_HOURS;
+
+    let finalValue = body;
+
+    if (role !== 'admin') {
+      const currentUser = await prisma.user.findUnique({
+        where: { uid: req.uid! },
+        select: { projects: { select: { id: true } } }
+      });
+      const myProjectIds = currentUser?.projects.map(p => p.id) || [];
+
+      const newByProject = { ...(currentWH.byProject || {}) };
+      for (const [pid, config] of Object.entries(body.byProject || {})) {
+        if (myProjectIds.includes(pid)) {
+          newByProject[pid] = config;
+        }
+      }
+      for (const pid of myProjectIds) {
+        if (!body.byProject || !body.byProject[pid]) {
+          delete newByProject[pid];
+        }
+      }
+
+      finalValue = {
+        default: currentWH.default,
+        byProject: newByProject
+      };
+    }
+
     const updated = await prisma.systemSetting.upsert({
       where:  { key: 'work_hours' },
-      update: { value: body as any },
-      create: { key: 'work_hours', value: body as any },
+      update: { value: finalValue as any },
+      create: { key: 'work_hours', value: finalValue as any },
     });
     res.json(updated.value);
   } catch (err: any) {

@@ -311,9 +311,14 @@ export default function Settings() {
   };
 
   useEffect(() => {
-    if (user?.role === 'admin' && openSection === 'workhours') {
+    if ((user?.role === 'admin' || user?.role === 'engineer') && openSection === 'workhours') {
       loadWorkHours();
-      projectsApi.getAll().then(setWhProjects).catch(() => {});
+      projectsApi.getAll().then(projects => {
+        setWhProjects(projects);
+        if (user?.role === 'engineer' && projects.length > 0 && !whProjectId) {
+          setWhProjectId(projects[0].id);
+        }
+      }).catch(() => {});
     }
   }, [openSection, user?.role]);
 
@@ -354,6 +359,8 @@ export default function Settings() {
       { key: 'whatsapp',  title: 'واتساب تلقائي',         desc: 'ربط واتسابك لإرسال الرسائل أوتوماتيك', icon: MessageSquare, accent: 'green'  },
       ...(user?.role === 'admin' ? [
         { key: 'templates', title: 'قوالب الواتساب',     desc: 'تخصيص الرسائل التلقائية للعملاء',     icon: MessageSquare, accent: 'blue'   },
+      ] as SectionMeta[] : []),
+      ...((user?.role === 'admin' || user?.role === 'engineer') ? [
         { key: 'workhours', title: 'أوقات الدوام',       desc: 'فترات العمل والمواعيد لكل مشروع',     icon: Clock,         accent: 'amber'  },
       ] as SectionMeta[] : []),
     ];
@@ -695,18 +702,20 @@ export default function Settings() {
       );
 
       // ── Work Hours ────────────────────────────────────────────────────────────
-      case 'workhours': return user?.role !== 'admin' ? null : (
+      case 'workhours': return (user?.role !== 'admin' && user?.role !== 'engineer') ? null : (
         <div className="space-y-5">
           {loadingWorkHours ? (
             <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
           ) : (
             <>
               <div className="flex gap-2 flex-wrap" dir="rtl">
-                <button onClick={() => setWhProjectId(null)}
-                  className={cn('px-4 py-1.5 rounded-full text-xs font-bold transition-colors border',
-                    whProjectId === null ? 'bg-amber-500 text-white border-amber-500' : 'border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400')}>
-                  الإعداد الافتراضي
-                </button>
+                {user?.role === 'admin' && (
+                  <button onClick={() => setWhProjectId(null)}
+                    className={cn('px-4 py-1.5 rounded-full text-xs font-bold transition-colors border',
+                      whProjectId === null ? 'bg-amber-500 text-white border-amber-500' : 'border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400')}>
+                    الإعداد الافتراضي
+                  </button>
+                )}
                 {whProjects.map(p => (
                   <button key={p.id} onClick={() => setWhProjectId(p.id)}
                     className={cn('px-4 py-1.5 rounded-full text-xs font-bold transition-colors border relative',

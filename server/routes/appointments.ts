@@ -1,6 +1,6 @@
 import { Router } from "express";
 import prisma from "../db.js";
-import { AuthRequest, requireAuth, requireAdmin } from "../auth.js";
+import { AuthRequest, requireAuth, requireAdmin, getRequesterRole } from "../auth.js";
 import { getIO } from "../socket.js";
 
 const router = Router();
@@ -26,10 +26,21 @@ router.get("/conflicts", requireAuth, async (req: AuthRequest, res) => {
   }
 
   try {
+    const role = await getRequesterRole(req.uid!);
+    const currentUser = await prisma.user.findUnique({
+      where: { uid: req.uid! },
+      select: { projects: { select: { id: true } } }
+    });
+    const userProjectIds = currentUser?.projects.map(p => p.id) || [];
+
     const where: any = {
       supervisorIds: { hasSome: ids },
       date: { gte: startDate, lte: endDate },
     };
+
+    if (role !== "admin") {
+      where.projectId = { in: userProjectIds.length ? userProjectIds : ["__none__"] };
+    }
 
     const appts = await prisma.appointment.findMany({
       where,
@@ -77,11 +88,24 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
   const endStr = endDate.toISOString().split("T")[0];
 
   try {
+    const role = await getRequesterRole(req.uid!);
+    const currentUser = await prisma.user.findUnique({
+      where: { uid: req.uid! },
+      select: { projects: { select: { id: true } } }
+    });
+    const userProjectIds = currentUser?.projects.map(p => p.id) || [];
+
+    const where: any = {
+      supervisorIds: { has: uid },
+      date: { gte: todayStr, lte: endStr },
+    };
+
+    if (role !== "admin") {
+      where.projectId = { in: userProjectIds.length ? userProjectIds : ["__none__"] };
+    }
+
     const appts = await prisma.appointment.findMany({
-      where: {
-        supervisorIds: { has: uid },
-        date: { gte: todayStr, lte: endStr },
-      },
+      where,
       include: {
         tickets: {
           select: {
@@ -154,6 +178,23 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
   }
 
   try {
+    const role = await getRequesterRole(req.uid!);
+    const currentUser = await prisma.user.findUnique({
+      where: { uid: req.uid! },
+      select: { projects: { select: { id: true } } }
+    });
+    const userProjectIds = currentUser?.projects.map(p => p.id) || [];
+
+    if (role !== "admin") {
+      if (where.projectId && typeof where.projectId === 'string') {
+        if (!userProjectIds.includes(where.projectId)) where.projectId = { in: [] };
+      } else if (where.projectId && where.projectId.in) {
+        where.projectId.in = where.projectId.in.filter((id: string) => userProjectIds.includes(id));
+        if (where.projectId.in.length === 0) where.projectId.in = ["__none__"];
+      } else {
+        where.projectId = { in: userProjectIds.length ? userProjectIds : ["__none__"] };
+      }
+    }
     const appointments = await prisma.appointment.findMany({
       where,
       include: {

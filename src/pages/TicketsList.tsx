@@ -353,6 +353,7 @@ export default function TicketsList() {
           <TabsContent value="linked" className="mt-0">
             <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
               <TicketTable
+                clientMap={clients}
                 tickets={linkedTickets}
                 selectedIds={selectedTicketIds}
                 onSelectionChange={setSelectedTicketIds}
@@ -373,6 +374,7 @@ export default function TicketsList() {
                 <span>تذاكر المقاولين والملاحظات — يتم عرض التذاكر المسندة لمقاولين أو التي تحتوي على ملاحظات</span>
               </div>
               <TicketTable
+                clientMap={clients}
                 tickets={contractorTickets}
                 selectedIds={selectedTicketIds}
                 onSelectionChange={setSelectedTicketIds}
@@ -383,6 +385,7 @@ export default function TicketsList() {
                 stateKey="tl_contractors"
                 exportOpen={activeTab === 'contractors' ? exportOpen : false}
                 onExportOpenChange={setExportOpen}
+                contractorMode
               />
             </div>
           </TabsContent>
@@ -394,6 +397,7 @@ export default function TicketsList() {
                 هذه التذاكر لا تحتوي على بيانات عميل أو رقم الفيلا غير مسجل في قائمة العملاء
               </div>
               <TicketTable
+                clientMap={clients}
                 tickets={unlinkedTickets}
                 selectedIds={selectedTicketIds}
                 onSelectionChange={setSelectedTicketIds}
@@ -427,6 +431,7 @@ export default function TicketsList() {
                 </div>
               </div>
               <TicketTable
+                clientMap={clients}
                 tickets={unclassifiedTickets}
                 selectedIds={selectedTicketIds}
                 onSelectionChange={setSelectedTicketIds}

@@ -34,8 +34,10 @@ interface ColumnDef {
 }
 
 const ALL_COLUMNS: ColumnDef[] = [
-  { key: 'projectAbbr',     label: 'المقاول',         group: 'classification', groupLabel: 'التصنيف' },
-  { key: 'refNumber',       label: 'رقم التذكرة',     group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'projectAbbr',     label: 'رمز المشروع',     group: 'classification', groupLabel: 'التصنيف' },
+  { key: 'contractorName',  label: 'المقاول',         group: 'classification', groupLabel: 'التصنيف' },
+  { key: 'contractorNote',  label: 'ملاحظة المقاول',  group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'ticketId',        label: 'رقم التذكرة',     group: 'ticket',         groupLabel: 'معلومات التذكرة' },
   { key: 'villaNumber',     label: 'رقم الفيلا',      group: 'ticket',         groupLabel: 'معلومات التذكرة' },
   { key: 'clientName',      label: 'اسم العميل',      group: 'client',         groupLabel: 'العميل' },
   { key: 'issuedAt',        label: 'تاريخ الإنشاء',   group: 'dates',          groupLabel: 'التواريخ' },
@@ -43,7 +45,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: 'clientPhone',     label: 'رقم الهاتف',      group: 'client',         groupLabel: 'العميل' },
   
   // Optional columns
-  { key: 'ticketId',        label: 'المعرف الداخلي',  group: 'ticket',         groupLabel: 'معلومات التذكرة' },
+  { key: 'refNumber',       label: 'المرجع',          group: 'ticket',         groupLabel: 'معلومات التذكرة' },
   { key: 'status',          label: 'الحالة',          group: 'ticket',         groupLabel: 'معلومات التذكرة' },
   { key: 'priority',        label: 'الأولوية',        group: 'ticket',         groupLabel: 'معلومات التذكرة' },
   { key: 'daysOpen',        label: 'عدد الأيام',      group: 'ticket',         groupLabel: 'معلومات التذكرة' },
@@ -52,7 +54,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: 'appointmentTime', label: 'موعد الصيانة',    group: 'dates',          groupLabel: 'التواريخ' },
   { key: 'type',            label: 'التخصص',          group: 'classification', groupLabel: 'التصنيف' },
   { key: 'detectedTypes',   label: 'جميع التخصصات',  group: 'classification', groupLabel: 'التصنيف' },
-  { key: 'supervisors',     label: 'المشرفون',        group: 'classification', groupLabel: 'التصنيف' },
+  { key: 'supervisors',     label: 'المسئول',         group: 'classification', groupLabel: 'التصنيف' },
   { key: 'projectName',     label: 'المشروع',         group: 'classification', groupLabel: 'التصنيف' },
 ];
 
@@ -71,15 +73,19 @@ const GROUP_ICONS: Record<string, React.ReactNode> = {
 const PRESETS: Record<string, { label: string; keys: string[] }> = {
   minimal:  {
     label: 'مختصر',
-    keys:  ['projectAbbr', 'refNumber', 'villaNumber', 'clientName', 'issuedAt'],
+    keys:  ['projectAbbr', 'ticketId', 'villaNumber', 'clientName', 'issuedAt'],
   },
   standard: {
     label: 'أساسي',
-    keys:  ['projectAbbr', 'refNumber', 'villaNumber', 'clientName', 'issuedAt', 'description', 'clientPhone'],
+    keys:  ['projectAbbr', 'ticketId', 'villaNumber', 'clientName', 'issuedAt', 'description', 'clientPhone'],
+  },
+  contractors: {
+    label: 'مقاولين',
+    keys:  ['ticketId', 'clientName', 'clientPhone', 'description', 'supervisors', 'type'],
   },
   extended: {
     label: 'موسع',
-    keys:  ['projectAbbr', 'refNumber', 'villaNumber', 'clientName', 'issuedAt', 'description', 'clientPhone', 'status', 'priority', 'daysOpen', 'type', 'supervisors'],
+    keys:  ['projectAbbr', 'ticketId', 'villaNumber', 'clientName', 'issuedAt', 'description', 'clientPhone', 'status', 'priority', 'daysOpen', 'type', 'supervisors', 'contractorName', 'contractorNote'],
   },
   full: {
     label: 'كامل',
@@ -115,7 +121,9 @@ interface ExportTicketsModalProps {
   onOpenChange: (open: boolean) => void;
   tickets: Ticket[];
   projects?: Record<string, { name: string; abbreviation?: string }>;
-  clients?: Record<string, { name: string; phone?: string; blockNumber?: string }>;
+  clients?: Record<string, any>;
+  /** Pre-selects contractor columns and fixes المسئول to show contractor vs supervisor */
+  contractorMode?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -125,9 +133,10 @@ export function ExportTicketsModal({
   tickets,
   projects,
   clients,
+  contractorMode = false,
 }: ExportTicketsModalProps) {
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(
-    new Set(PRESETS.standard.keys)
+    new Set(contractorMode ? PRESETS.contractors.keys : PRESETS.standard.keys)
   );
   const [exportFormat, setExportFormat] = useState<'xlsx' | 'pdf'>('xlsx');
   const [exporting, setExporting] = useState(false);
@@ -191,6 +200,8 @@ export function ExportTicketsModal({
         return types.map(t => TYPE_LABELS[t] || t).join('، ') || '---';
       }
       case 'supervisors': {
+        // Contractor tickets → show contractor name; everything else → supervisor
+        if (ticket.status === 'contractor') return ticket.contractorName || '---';
         const sups = (ticket as any).assignedSupervisors;
         if (Array.isArray(sups)) return sups.map((s: any) => s?.name).filter(Boolean).join('، ');
         return ticket.assigneeName || '---';
@@ -200,6 +211,10 @@ export function ExportTicketsModal({
       case 'projectAbbr':
         return projects?.[(ticket as any).projectId ?? '']?.abbreviation
           || (ticket as any).projectAbbr || '---';
+      case 'contractorName':
+        return ticket.contractorName || '---';
+      case 'contractorNote':
+        return ticket.contractorNote || '---';
       default: return '';
     }
   };

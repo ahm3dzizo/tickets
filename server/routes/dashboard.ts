@@ -18,10 +18,16 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     const { projectId } = req.query as { projectId?: string };
     const where: any = {};
     
-    if (projectId) {
+    if (user.role !== 'admin') {
+      if (projectId) {
+        where.projectId = projectIds.includes(projectId) ? projectId : { in: [] };
+      } else if (projectIds.length > 0) {
+        where.projectId = { in: projectIds };
+      } else {
+        where.projectId = { in: [] };
+      }
+    } else if (projectId) {
       where.projectId = projectId;
-    } else if (user.role !== 'admin' && projectIds.length > 0) {
-      where.projectId = { in: projectIds };
     }
 
     if (user.role === 'supervisor') {
@@ -86,10 +92,16 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
 
     // Fetch upcoming appointments from Appointment table
     const apptWhere: any = { date: { gte: todayStr } };
-    if (projectId) {
+    if (user.role !== 'admin') {
+      if (projectId) {
+        apptWhere.projectId = projectIds.includes(projectId) ? projectId : { in: [] };
+      } else if (projectIds.length > 0) {
+        apptWhere.projectId = { in: projectIds };
+      } else {
+        apptWhere.projectId = { in: [] };
+      }
+    } else if (projectId) {
       apptWhere.projectId = projectId;
-    } else if (user.role !== 'admin' && projectIds.length > 0) {
-      apptWhere.projectId = { in: projectIds };
     }
     if (user.role === 'supervisor') {
       apptWhere.supervisorIds = { has: user.uid };

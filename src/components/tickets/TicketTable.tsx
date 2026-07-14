@@ -279,6 +279,8 @@ interface TicketTableProps {
   defaultShowClosed?: boolean;
   exportOpen?: boolean;
   onExportOpenChange?: (open: boolean) => void;
+  clientMap?: Record<string, any>;
+  contractorMode?: boolean;
 }
 
 export function TicketTable({
@@ -297,6 +299,8 @@ export function TicketTable({
   stateKey,
   exportOpen: controlledExportOpen,
   onExportOpenChange,
+  clientMap,
+  contractorMode = false,
 }: TicketTableProps) {
   const navigate = useNavigate();
   const [showMobileSort, setShowMobileSort] = useState(false);
@@ -1138,12 +1142,16 @@ export function TicketTable({
       )}
 
       {/* ── Export Modal ─────────────────────────────────────────────────── */}
-      <ExportTicketsModal
-        open={exportModalOpen}
-        onOpenChange={setExportModalOpen}
-        tickets={baseTickets}
-        projects={projects}
-      />
+      {exportModalOpen && (
+        <ExportTicketsModal
+          open={exportModalOpen}
+          onOpenChange={setExportModalOpen}
+          tickets={baseTickets}
+          projects={projects}
+          clients={clientMap}
+          contractorMode={contractorMode}
+        />
+      )}
 
       {/* ── Classify Dialog ──────────────────────────────────────────────── */}
       {classifyTicket && (

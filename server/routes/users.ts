@@ -55,12 +55,29 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // GET /api/users/:uid
-router.get("/:uid", requireAuth, async (req, res) => {
+router.get("/:uid", requireAuth, async (req: AuthRequest, res) => {
   const user = await prisma.user.findUnique({ 
     where: { uid: req.params.uid },
     include: { projects: true, specialtiesRef: true }
   });
   if (!user) { res.status(404).json({ error: "Not found" }); return; }
+
+  // Security check: isolate users from other projects
+  const role = await getRequesterRole(req.uid!);
+  if (role !== "admin" && user.role !== "admin" && req.uid !== req.params.uid) {
+    const currentUser = await prisma.user.findUnique({
+      where: { uid: req.uid! },
+      select: { projects: { select: { id: true } } }
+    });
+    const myProjectIds = currentUser?.projects.map(p => p.id) || [];
+    const targetProjectIds = user.projects.map(p => p.id);
+    const sharesProject = targetProjectIds.some(id => myProjectIds.includes(id));
+    if (!sharesProject) {
+      res.status(403).json({ error: "Forbidden: No shared projects" });
+      return;
+    }
+  }
+
   const mapped = {
     ...user,
     projectIds: user.projects.map(p => p.id),
