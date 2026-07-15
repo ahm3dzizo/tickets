@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, ArrowUpDown, User } from 'lucide-react';
+import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, ArrowUpDown, User, Filter } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
@@ -14,6 +14,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
 } from '@/components/ui/dropdown-menu';
 import { Ticket, TicketType } from '@/types';
 import { format, differenceInDays, parse, isValid } from 'date-fns';
@@ -112,6 +113,23 @@ export const statusColors: Record<string, string> = {
   contractor:      'bg-blue-500/10 text-blue-400 border-blue-500/20',
   note:            'bg-violet-500/10 text-violet-400 border-violet-500/20',
 };
+
+// Status values that share the same Arabic label are grouped so the Excel-style
+// filter shows one checkbox per label instead of confusing near-duplicates.
+export const STATUS_FILTER_GROUPS: { key: string; label: string; values: string[] }[] = [
+  { key: 'open',          label: 'مفتوحة',        values: ['open'] },
+  { key: 'in-progress',   label: 'قيد التنفيذ',    values: ['in-progress', 'in_progress'] },
+  { key: 'waiting',       label: 'بانتظار الموعد', values: ['waiting'] },
+  { key: 'pending',       label: 'معلقة',          values: ['pending'] },
+  { key: 'contractor',    label: 'مقاول / ملاحظة', values: ['contractor', 'note'] },
+  { key: 'completed',     label: 'مكتملة',         values: ['completed'] },
+  { key: 'closed',        label: 'مغلقة',          values: ['closed'] },
+  { key: 'out-of-scope',  label: 'خارج اختصاص',    values: ['out-of-scope', 'out_of_scope'] },
+  { key: 'absent',        label: 'عدم تواجد',      values: ['absent'] },
+];
+
+const STATUS_TO_GROUP_KEY: Record<string, string> = {};
+STATUS_FILTER_GROUPS.forEach(g => g.values.forEach(v => { STATUS_TO_GROUP_KEY[v] = g.key; }));
 
 const priorityBgMap: Record<number, string> = {
   9: 'bg-red-600 text-white',
@@ -252,6 +270,92 @@ export function BulkActionBar({
   return createPortal(content, document.body);
 }
 
+// ─── ExcelFilterMenu (searchable multi-select, Excel autofilter style) ────────
+
+interface ExcelFilterOption {
+  value: string;
+  label: string;
+}
+
+function ExcelFilterMenu({
+  trigger,
+  options,
+  selected,
+  onChange,
+  align = 'end',
+}: {
+  trigger: React.ReactElement;
+  options: ExcelFilterOption[];
+  selected: string[];
+  onChange: (vals: string[]) => void;
+  align?: 'start' | 'end' | 'center';
+}) {
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    if (!s) return options;
+    return options.filter(o => o.label.toLowerCase().includes(s));
+  }, [options, search]);
+
+  const toggle = (value: string) => {
+    onChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]);
+  };
+
+  return (
+    <DropdownMenu onOpenChange={(open: boolean) => { if (!open) setSearch(''); }}>
+      <DropdownMenuTrigger render={trigger} />
+      <DropdownMenuContent align={align} className="bg-card border-border text-foreground w-56 p-0" dir="rtl">
+        <div className="p-2 border-b border-border/50 space-y-1.5">
+          <div className="relative">
+            <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+              placeholder="بحث..."
+              className="w-full bg-background border border-input rounded-lg h-8 pr-7 pl-2 text-xs text-foreground text-right outline-none focus:border-blue-500/50"
+            />
+          </div>
+          <div className="flex items-center justify-between px-0.5">
+            <button
+              type="button"
+              onClick={() => onChange(options.map(o => o.value))}
+              className="text-[10px] font-bold text-blue-400 hover:underline"
+            >
+              تحديد الكل
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="text-[10px] font-bold text-slate-500 hover:underline"
+            >
+              مسح الكل
+            </button>
+          </div>
+        </div>
+        <div className="max-h-56 overflow-y-auto p-1">
+          {filtered.length === 0 && (
+            <div className="text-[11px] text-slate-500 text-center py-4">لا نتائج</div>
+          )}
+          {filtered.map(o => (
+            <DropdownMenuCheckboxItem
+              key={o.value}
+              checked={selected.includes(o.value)}
+              onCheckedChange={() => toggle(o.value)}
+              className="text-xs justify-start text-right pr-2"
+            >
+              {o.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ─── TicketTable ──────────────────────────────────────────────────────────────
 
 interface TicketTableProps {
@@ -308,13 +412,18 @@ export function TicketTable({
   const mergedTranslations: Record<string, string> = { ...typeTranslations, ...dbTypeTranslations };
   const mergedTypeBg: Record<string, string>        = { ...typeBgStatic,    ...dbTypeBg };
 
-  // ── Local filter state ────────────────────────────────────────────────────
+  // ── Local filter state (multi-select, Excel-style) ───────────────────────
+  const readStoredArr = (suffix: string): string[] => {
+    if (!stateKey) return [];
+    try { return JSON.parse(sessionStorage.getItem(`${stateKey}_${suffix}`) || '[]'); } catch { return []; }
+  };
+
   const [localSearch,  setLocalSearch]  = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_search`) || '' : '');
-  const [localStatus,  setLocalStatus]  = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_status`) || '' : '');
-  const [localType,    setLocalType]    = useState<string>(() => stateKey ? sessionStorage.getItem(`${stateKey}_type`) || '' : '');
-  const [localProject, setLocalProject] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_project`) || '' : '');
+  const [localStatuses, setLocalStatuses] = useState<string[]>(() => readStoredArr('statuses'));
+  const [localTypes,    setLocalTypes]    = useState<string[]>(() => readStoredArr('types'));
+  const [localProjects, setLocalProjects] = useState<string[]>(() => readStoredArr('projects'));
   const [showClosed,   setShowClosed]   = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_closed`) === 'true' : defaultShowClosed);
-  const [localSupervisor, setLocalSupervisor] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_supervisor`) || '' : '');
+  const [localSupervisors, setLocalSupervisors] = useState<string[]>(() => readStoredArr('supervisors'));
   const [internalExportOpen, setInternalExportOpen] = useState(false);
   const exportModalOpen = controlledExportOpen !== undefined ? controlledExportOpen : internalExportOpen;
   const setExportModalOpen = (v: boolean) => {
@@ -323,11 +432,11 @@ export function TicketTable({
   };
 
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_search`, localSearch); }, [localSearch, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_status`, localStatus); }, [localStatus, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_type`, localType); }, [localType, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_project`, localProject); }, [localProject, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_statuses`, JSON.stringify(localStatuses)); }, [localStatuses, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_types`, JSON.stringify(localTypes)); }, [localTypes, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_projects`, JSON.stringify(localProjects)); }, [localProjects, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_closed`, String(showClosed)); }, [showClosed, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_supervisor`, localSupervisor); }, [localSupervisor, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_supervisors`, JSON.stringify(localSupervisors)); }, [localSupervisors, stateKey]);
 
   const uniqueSupervisors = useMemo(() => {
     const map = new Map<string, string>();
@@ -347,6 +456,34 @@ export function TicketTable({
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
   }, [tickets]);
+
+  // ── Excel-style filter option lists (only values actually present) ───────
+  const statusFilterOptions = useMemo(() => {
+    const present = new Set<string>(tickets.map(t => t.status));
+    return STATUS_FILTER_GROUPS.filter(g => g.values.some(v => present.has(v)))
+      .map(g => ({ value: g.key, label: g.label }));
+  }, [tickets]);
+
+  const typeFilterOptions = useMemo(() => {
+    const set = new Set<string>();
+    tickets.forEach(t => {
+      if (t.type) set.add(t.type as string);
+      (t.detectedTypes as string[] | undefined)?.forEach(dt => set.add(dt));
+    });
+    return Array.from(set)
+      .map(k => ({ value: k, label: mergedTranslations[k] ?? k }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'ar'));
+  }, [tickets, mergedTranslations]);
+
+  const supervisorFilterOptions = useMemo(
+    () => uniqueSupervisors.map(s => ({ value: s.id, label: s.name })),
+    [uniqueSupervisors],
+  );
+
+  const projectFilterOptions = useMemo(
+    () => (projects ? Object.entries(projects).map(([id, p]) => ({ value: id, label: p.name })) : []),
+    [projects],
+  );
 
   // ── Sort state (default: oldest first) ───────────────────────────────────
   type SortKey = 'date' | 'days' | 'priority' | 'status' | 'ref' | 'client';
@@ -398,13 +535,15 @@ export function TicketTable({
         t.clientName?.toLowerCase().includes(s) ||
         t.ticketId?.toLowerCase().includes(s) ||
         t.refNumber?.toLowerCase().includes(s);
-      const matchStatus  = !localStatus  || t.status === localStatus;
-      const matchType    = !localType    || t.type === localType || (t.detectedTypes as string[] | undefined)?.includes(localType);
-      const matchProject = !localProject || t.projectId === localProject;
-      const matchSupervisor = !localSupervisor || t.assignedSupervisorId === localSupervisor || (t.assignedSupervisorIds as string[] | undefined)?.includes(localSupervisor);
+      const matchStatus  = localStatuses.length === 0  || localStatuses.includes(STATUS_TO_GROUP_KEY[t.status] ?? t.status);
+      const matchType    = localTypes.length === 0     || (t.type && localTypes.includes(t.type)) || (t.detectedTypes as string[] | undefined)?.some(dt => localTypes.includes(dt));
+      const matchProject = localProjects.length === 0  || localProjects.includes(t.projectId);
+      const matchSupervisor = localSupervisors.length === 0
+        || (t.assignedSupervisorId && localSupervisors.includes(t.assignedSupervisorId))
+        || (t.assignedSupervisorIds as string[] | undefined)?.some(id => localSupervisors.includes(id));
       return matchSearch && matchStatus && matchType && matchProject && matchSupervisor;
     });
-  }, [tickets, showInlineFilters, showClosed, localSearch, localStatus, localType, localProject, localSupervisor, closedStatuses]);
+  }, [tickets, showInlineFilters, showClosed, localSearch, localStatuses, localTypes, localProjects, localSupervisors, closedStatuses]);
 
   const focalClientKey = useMemo(() => {
     if (!selectedIds || selectedIds.length === 0) return null;
@@ -472,7 +611,7 @@ export function TicketTable({
   const [visibleCount, setVisibleCount] = useState(20);
   useEffect(() => {
     setVisibleCount(20);
-  }, [localSearch, localStatus, localType, localProject, showClosed, sortKey, sortDir, focalClientKey, baseTickets.length]);
+  }, [localSearch, localStatuses, localTypes, localProjects, localSupervisors, showClosed, sortKey, sortDir, focalClientKey, baseTickets.length]);
 
   const observer = useRef<IntersectionObserver | null>(null);
   const observerRef = useCallback((node: HTMLDivElement | null) => {
@@ -614,86 +753,75 @@ export function TicketTable({
 
           </div>
 
-          {/* ── Filters ── */}
+          {/* ── Filters ──                                                       *
+           * Desktop: column-value filters (حالة/تخصص/مشرف) live on the table    *
+           * header cells themselves, Excel-style. Only المغلقة + المشروع (which *
+           * has no dedicated column) stay here, plus a mobile-only fallback.    */}
           <div className="flex flex-wrap items-center gap-2 mt-3 w-full">
-            {/* فلتر الحالة */}
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <Button variant="outline" size="sm" className={cn(
-                  'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                  localStatus ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
-                )}>
-                  <ChevronDown className="w-3 h-3 opacity-60" />
-                  {localStatus ? statusTranslations[localStatus] : 'الحالة'}
-                </Button>
-              } />
-              <DropdownMenuContent className="bg-card border-border text-foreground">
-                <DropdownMenuItem className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalStatus('')}>كل الحالات</DropdownMenuItem>
-                {Object.entries(statusTranslations).map(([k, v]) => (
-                  <DropdownMenuItem key={k} className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalStatus(k)}>{v}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* فلتر التخصص */}
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <Button variant="outline" size="sm" className={cn(
-                  'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                  localType ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
-                )}>
-                  <ChevronDown className="w-3 h-3 opacity-60" />
-                  {localType ? (mergedTranslations[localType] ?? localType) : 'التخصص'}
-                </Button>
-              } />
-              <DropdownMenuContent className="bg-card border-border text-foreground max-h-72 overflow-y-auto">
-                <DropdownMenuItem className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalType('')}>كل التخصصات</DropdownMenuItem>
-                {Object.entries(mergedTranslations).map(([k, v]) => (
-                  <DropdownMenuItem key={k} className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalType(k)}>{v}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* فلتر المشروع */}
-            {!hideProjectColumn && projects && Object.keys(projects).length > 1 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger render={
+            {/* Mobile-only value filters — desktop uses the column headers instead */}
+            <div className="flex flex-wrap items-center gap-2 md:hidden">
+              <ExcelFilterMenu
+                options={statusFilterOptions}
+                selected={localStatuses}
+                onChange={setLocalStatuses}
+                trigger={
                   <Button variant="outline" size="sm" className={cn(
                     'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                    localProject ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
+                    localStatuses.length > 0 ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
                   )}>
                     <ChevronDown className="w-3 h-3 opacity-60" />
-                    {localProject ? (projects[localProject]?.name ?? 'المشروع') : 'المشروع'}
+                    {localStatuses.length > 0 ? `الحالة (${localStatuses.length})` : 'الحالة'}
                   </Button>
-                } />
-                <DropdownMenuContent className="bg-card border-border text-foreground">
-                  <DropdownMenuItem className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalProject('')}>كل المشاريع</DropdownMenuItem>
-                  {Object.entries(projects).map(([id, p]) => (
-                    <DropdownMenuItem key={id} className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalProject(id)}>{p.name}</DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            {/* فلتر المشرف */}
-            {!hideSupervisorColumn && uniqueSupervisors.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger render={
+                }
+              />
+              <ExcelFilterMenu
+                options={typeFilterOptions}
+                selected={localTypes}
+                onChange={setLocalTypes}
+                trigger={
                   <Button variant="outline" size="sm" className={cn(
                     'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                    localSupervisor ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
+                    localTypes.length > 0 ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
                   )}>
                     <ChevronDown className="w-3 h-3 opacity-60" />
-                    {localSupervisor ? (uniqueSupervisors.find(s => s.id === localSupervisor)?.name ?? 'المشرف') : 'المشرف'}
+                    {localTypes.length > 0 ? `التخصص (${localTypes.length})` : 'التخصص'}
                   </Button>
-                } />
-                <DropdownMenuContent className="bg-card border-border text-foreground max-h-72 overflow-y-auto">
-                  <DropdownMenuItem className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalSupervisor('')}>كل المشرفين</DropdownMenuItem>
-                  {uniqueSupervisors.map((s) => (
-                    <DropdownMenuItem key={s.id} className="hover:bg-muted text-start justify-start cursor-pointer" onClick={() => setLocalSupervisor(s.id)}>{s.name}</DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                }
+              />
+              {!hideSupervisorColumn && uniqueSupervisors.length > 0 && (
+                <ExcelFilterMenu
+                  options={supervisorFilterOptions}
+                  selected={localSupervisors}
+                  onChange={setLocalSupervisors}
+                  trigger={
+                    <Button variant="outline" size="sm" className={cn(
+                      'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
+                      localSupervisors.length > 0 ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
+                    )}>
+                      <ChevronDown className="w-3 h-3 opacity-60" />
+                      {localSupervisors.length > 0 ? `المشرف (${localSupervisors.length})` : 'المشرف'}
+                    </Button>
+                  }
+                />
+              )}
+            </div>
+
+            {/* فلتر المشروع — لا يوجد له عمود في الجدول فيبقى هنا دايماً */}
+            {!hideProjectColumn && projectFilterOptions.length > 1 && (
+              <ExcelFilterMenu
+                options={projectFilterOptions}
+                selected={localProjects}
+                onChange={setLocalProjects}
+                trigger={
+                  <Button variant="outline" size="sm" className={cn(
+                    'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
+                    localProjects.length > 0 ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
+                  )}>
+                    <ChevronDown className="w-3 h-3 opacity-60" />
+                    {localProjects.length > 0 ? `المشروع (${localProjects.length})` : 'المشروع'}
+                  </Button>
+                }
+              />
             )}
 
             <Button variant="outline" size="sm"
@@ -906,12 +1034,29 @@ export function TicketTable({
                   <span className="flex items-center gap-1">التاريخ <SortIcon col="date" /></span>
                 </th>
                 <th className={cn(thCls, 'min-w-[180px]')}>وصف المشكلة</th>
-                <th
-                  className={cn(thCls, 'w-8 text-center cursor-pointer hover:text-slate-200 select-none')}
-                  onClick={() => handleSort('status')}
-                  title="الحالة"
-                >
-                  <span className="flex items-center justify-center">●</span>
+                <th className={cn(thCls, 'w-28 text-center')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span
+                      className="flex items-center gap-1 cursor-pointer hover:text-slate-200 select-none"
+                      onClick={() => handleSort('status')}
+                    >
+                      الحالة <SortIcon col="status" />
+                    </span>
+                    <ExcelFilterMenu
+                      options={statusFilterOptions}
+                      selected={localStatuses}
+                      onChange={setLocalStatuses}
+                      trigger={
+                        <button
+                          type="button"
+                          onClick={e => e.stopPropagation()}
+                          className={cn('p-0.5 rounded hover:bg-white/10 transition-colors', localStatuses.length > 0 && 'text-blue-400')}
+                        >
+                          <Filter className="w-3 h-3" />
+                        </button>
+                      }
+                    />
+                  </div>
                 </th>
                 <th
                   className={cn(thCls, 'w-12 text-center cursor-pointer hover:text-slate-200 select-none')}
@@ -919,8 +1064,50 @@ export function TicketTable({
                 >
                   <span className="flex items-center justify-center gap-1">الأيام <SortIcon col="days" /></span>
                 </th>
-                {!hideSupervisorColumn && <th className={cn(thCls, 'w-24 text-center')}>المسؤول</th>}
-                <th className={cn(thCls, 'w-20 text-center')}>التخصص</th>
+                {!hideSupervisorColumn && (
+                  <th className={cn(thCls, 'w-24 text-center')}>
+                    <div className="flex items-center justify-center gap-1">
+                      <span>المسؤول</span>
+                      {supervisorFilterOptions.length > 0 && (
+                        <ExcelFilterMenu
+                          options={supervisorFilterOptions}
+                          selected={localSupervisors}
+                          onChange={setLocalSupervisors}
+                          trigger={
+                            <button
+                              type="button"
+                              onClick={e => e.stopPropagation()}
+                              className={cn('p-0.5 rounded hover:bg-white/10 transition-colors', localSupervisors.length > 0 && 'text-blue-400')}
+                            >
+                              <Filter className="w-3 h-3" />
+                            </button>
+                          }
+                        />
+                      )}
+                    </div>
+                  </th>
+                )}
+                <th className={cn(thCls, 'w-24 text-center')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>التخصص</span>
+                    {typeFilterOptions.length > 0 && (
+                      <ExcelFilterMenu
+                        options={typeFilterOptions}
+                        selected={localTypes}
+                        onChange={setLocalTypes}
+                        trigger={
+                          <button
+                            type="button"
+                            onClick={e => e.stopPropagation()}
+                            className={cn('p-0.5 rounded hover:bg-white/10 transition-colors', localTypes.length > 0 && 'text-blue-400')}
+                          >
+                            <Filter className="w-3 h-3" />
+                          </button>
+                        }
+                      />
+                    )}
+                  </div>
+                </th>
                 <th className={cn(thCls, 'w-24 text-center')}>موعد</th>
                 <th className={cn(thCls, 'w-14 text-center border-r border-border/20')}>...</th>
               </tr>
@@ -1014,20 +1201,13 @@ export function TicketTable({
                       <td className="px-4 py-3 text-sm text-slate-300 min-w-[260px] max-w-[400px] leading-relaxed">
                         <span className="line-clamp-3">{renderTableDescription(ticket.description)}</span>
                       </td>
-                      <td className="px-3 py-3 text-center w-8">
-                        <span
-                          title={statusTranslations[ticket.status] ?? ticket.status}
-                          className={cn(
-                            'inline-block w-2.5 h-2.5 rounded-full',
-                          ticket.status === 'closed' || ticket.status === 'out-of-scope'
-                              ? 'bg-emerald-500'
-                              : ticket.status === 'in-progress'
-                              ? 'bg-blue-500'
-                              : ticket.status === 'pending' || ticket.status === 'waiting'
-                              ? 'bg-amber-400'
-                              : 'bg-red-500'
-                          )}
-                        />
+                      <td className="px-3 py-3 text-center w-28">
+                        <span className={cn(
+                          'inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap',
+                          statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+                        )}>
+                          {statusTranslations[ticket.status] ?? ticket.status}
+                        </span>
                       </td>
                       <td className={cn('px-3 py-3 text-center text-sm w-12', daysBg)}>
                         {daysOpen}
