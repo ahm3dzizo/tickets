@@ -158,7 +158,7 @@ export function UnifiedAppointmentDialog({
   // Date / time
   const [startDate, setStartDate] = useState(todayStr()); // range start (WhatsApp mode)
   const [date, setDate] = useState(todayStr());           // single date (other modes)
-  const [rangeDays, setRangeDays] = useState(1);
+  const [rangeDays, setRangeDays] = useState(2);
   const [timeMode, setTimeMode] = useState<string>('morning');
   const [customTime, setCustomTime] = useState('09:00');
 
@@ -292,7 +292,7 @@ export function UnifiedAppointmentDialog({
         setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
       }
       setNotes(primaryTicket.appointmentNotes || '');
-      setRangeDays(1);
+      setRangeDays(2);
       setShowPreview(false);
       setConflicts([]);
       setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length
