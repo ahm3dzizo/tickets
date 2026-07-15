@@ -215,6 +215,7 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
             priority: true,
             appointmentTime: true,
             appointmentNotes: true,
+            client: { select: { phone: true } },
           },
         },
       },
@@ -362,13 +363,14 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 // ─── PUT /api/appointments/:id ────────────────────────────────────────────────
 router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   const { id } = req.params;
-  const { date, time, notes, supervisorIds, supervisors, types } = req.body as {
+  const { date, time, notes, supervisorIds, supervisors, types, clientPhone } = req.body as {
     date: string;
     time?: string;
     notes?: string;
     supervisorIds?: string[];
     supervisors?: any[];
     types?: string[];
+    clientPhone?: string;
   };
 
   try {
@@ -381,6 +383,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         supervisorIds: supervisorIds || [],
         supervisors: supervisors || [],
         types: types || [],
+        ...(clientPhone ? { clientPhone } : {}),
       },
     });
 

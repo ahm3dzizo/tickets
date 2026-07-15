@@ -95,7 +95,7 @@ async function startServer() {
       const clients = await prisma.client.findMany({
         where: { units: { some: { unit: { projectId: req.params.projectId } } } },
         orderBy: { name: "asc" },
-        include: { units: { include: { unit: true } } }
+        include: { units: { include: { unit: { include: { block: true } } } } }
       });
       // Flatten back to old structure if needed for legacy apps
       const mapped = clients.map(c => {
@@ -106,7 +106,7 @@ async function startServer() {
           name: c.name,
           phone: c.phone,
           villaNumber: primaryUnit?.unitNumber || '',
-          blockNumber: primaryUnit?.blockId || '', // Not quite blockNumber, but works for legacy
+          blockNumber: primaryUnit?.block?.blockNumber || '',
           handoverDate: primaryUnit?.handoverDate || null,
           warrantyExpiryDate: primaryUnit?.warrantyExpiryDate || null,
           createdAt: c.createdAt

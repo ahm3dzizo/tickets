@@ -16,7 +16,7 @@ interface ClassifyDialogProps {
 }
 
 export function ClassifyDialog({ ticket, open, onClose, onDone }: ClassifyDialogProps) {
-  const { typeTranslations, typeBg, types } = useTicketTypes();
+  const { typeTranslations, typeBg, activeTypes: types } = useTicketTypes();
 
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [autoSuggestion, setAutoSuggestion]   = useState<string[]>([]);

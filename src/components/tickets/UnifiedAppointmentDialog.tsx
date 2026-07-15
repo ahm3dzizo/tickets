@@ -398,6 +398,11 @@ export function UnifiedAppointmentDialog({
     setSaving(true);
     try {
       const saveTime = timeMode === 'custom' ? customTime : (finalTime || undefined);
+      const resolvedClientPhone: string | undefined = isEditMode
+        ? (editGroup?.clientPhone || undefined)
+        : isTicketMode
+        ? (clientPhone || undefined)
+        : (clients.find(c => c.id === selectedClientId)?.phone || undefined);
 
       if (isEditMode) {
         const assignedSupervisors = editSupervisors
@@ -412,6 +417,7 @@ export function UnifiedAppointmentDialog({
             supervisorIds: selectedSupIds,
             supervisors: assignedSupervisors,
             types: selectedTypes,
+            clientPhone: resolvedClientPhone,
           });
         } else {
           const apptTime = `${date} ${saveTime || '08:00'}`;
@@ -447,6 +453,7 @@ export function UnifiedAppointmentDialog({
             notes: notes || undefined,
             supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
             types: Array.from(allTypes),
+            clientPhone: resolvedClientPhone,
           });
         } else {
           const first = tickets![0];
@@ -455,6 +462,7 @@ export function UnifiedAppointmentDialog({
             villaNumber: first.villaNumber,
             clientId: first.clientId || undefined,
             clientName: first.clientName,
+            clientPhone: resolvedClientPhone,
             date: saveDate, time: saveTime,
             notes: notes || undefined,
             supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
@@ -483,11 +491,13 @@ export function UnifiedAppointmentDialog({
               notes: notes || undefined,
               supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
               types: Array.from(allTypes),
+              clientPhone: resolvedClientPhone,
             });
           } else {
             await appointmentsApi.create({
               projectId, villaNumber: selectedVilla,
               clientId: selectedClientId || undefined, clientName,
+              clientPhone: resolvedClientPhone,
               date: effectiveDate, time: saveTime,
               notes: notes || undefined,
               supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
@@ -519,6 +529,7 @@ export function UnifiedAppointmentDialog({
           await appointmentsApi.create({
             projectId, villaNumber: selectedVilla,
             clientId: selectedClientId || undefined, clientName,
+            clientPhone: resolvedClientPhone,
             date: effectiveDate, time: saveTime,
             notes: notes || undefined,
             supervisorIds: selectedSupIds, supervisors: assignedSupervisors,

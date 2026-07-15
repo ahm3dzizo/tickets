@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, ArrowUpDown, User, Filter } from 'lucide-react';
+import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, ArrowUpDown, User, Filter, Archive } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
@@ -14,7 +14,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
 } from '@/components/ui/dropdown-menu';
 import { Ticket, TicketType } from '@/types';
 import { format, differenceInDays, parse, isValid } from 'date-fns';
@@ -340,16 +339,25 @@ function ExcelFilterMenu({
           {filtered.length === 0 && (
             <div className="text-[11px] text-slate-500 text-center py-4">لا نتائج</div>
           )}
-          {filtered.map(o => (
-            <DropdownMenuCheckboxItem
-              key={o.value}
-              checked={selected.includes(o.value)}
-              onCheckedChange={() => toggle(o.value)}
-              className="text-xs justify-start text-right pr-2"
-            >
-              {o.label}
-            </DropdownMenuCheckboxItem>
-          ))}
+          {filtered.map(o => {
+            const isSel = selected.includes(o.value);
+            return (
+              <DropdownMenuItem
+                key={o.value}
+                closeOnClick={false}
+                onClick={() => toggle(o.value)}
+                className="text-xs justify-start text-right gap-2 cursor-pointer"
+              >
+                <div className={cn(
+                  'w-3.5 h-3.5 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors',
+                  isSel ? 'bg-blue-500 border-blue-500' : 'border-muted-foreground/40',
+                )}>
+                  {isSel && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                </div>
+                <span className="truncate">{o.label}</span>
+              </DropdownMenuItem>
+            );
+          })}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -424,6 +432,12 @@ export function TicketTable({
   const [localProjects, setLocalProjects] = useState<string[]>(() => readStoredArr('projects'));
   const [showClosed,   setShowClosed]   = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_closed`) === 'true' : defaultShowClosed);
   const [localSupervisors, setLocalSupervisors] = useState<string[]>(() => readStoredArr('supervisors'));
+  const [localIds,      setLocalIds]      = useState<string[]>(() => readStoredArr('ids'));
+  const [localRefs,     setLocalRefs]     = useState<string[]>(() => readStoredArr('refs'));
+  const [localClients,  setLocalClients]  = useState<string[]>(() => readStoredArr('clients'));
+  const [localDates,    setLocalDates]    = useState<string[]>(() => readStoredArr('dates'));
+  const [localDays,     setLocalDays]     = useState<string[]>(() => readStoredArr('days'));
+  const [localAppointments, setLocalAppointments] = useState<string[]>(() => readStoredArr('appts'));
   const [internalExportOpen, setInternalExportOpen] = useState(false);
   const exportModalOpen = controlledExportOpen !== undefined ? controlledExportOpen : internalExportOpen;
   const setExportModalOpen = (v: boolean) => {
@@ -437,6 +451,12 @@ export function TicketTable({
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_projects`, JSON.stringify(localProjects)); }, [localProjects, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_closed`, String(showClosed)); }, [showClosed, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_supervisors`, JSON.stringify(localSupervisors)); }, [localSupervisors, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_ids`, JSON.stringify(localIds)); }, [localIds, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_refs`, JSON.stringify(localRefs)); }, [localRefs, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_clients`, JSON.stringify(localClients)); }, [localClients, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_dates`, JSON.stringify(localDates)); }, [localDates, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_days`, JSON.stringify(localDays)); }, [localDays, stateKey]);
+  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_appts`, JSON.stringify(localAppointments)); }, [localAppointments, stateKey]);
 
   const uniqueSupervisors = useMemo(() => {
     const map = new Map<string, string>();
@@ -523,6 +543,57 @@ export function TicketTable({
 
   const closedStatuses = useMemo(() => new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']), []);
 
+  // ── More Excel-style filter option lists (ID / المرجع / العميل / التاريخ / الأيام / الموعد) ──
+  const idFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    tickets.forEach(t => { const v = t.ticketId || t.id.slice(0, 6); map.set(v, v); });
+    return Array.from(map.values()).map(v => ({ value: v, label: v }));
+  }, [tickets]);
+
+  const refFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    tickets.forEach(t => { const v = t.refNumber || '---'; map.set(v, v); });
+    return Array.from(map.values()).map(v => ({ value: v, label: v }));
+  }, [tickets]);
+
+  const clientFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    tickets.forEach(t => {
+      const key = t.clientId || t.clientName || '---';
+      if (!map.has(key)) map.set(key, t.clientName || '---');
+    });
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'ar'));
+  }, [tickets]);
+
+  const dateFilterOptions = useMemo(() => {
+    const map = new Map<string, number>();
+    tickets.forEach(t => {
+      const ts = getTicketSortVal(t, 'date') as number;
+      map.set(format(new Date(ts), 'd/M/yyyy'), ts);
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => a[1] - b[1])
+      .map(([label]) => ({ value: label, label }));
+  }, [tickets]);
+
+  const daysFilterOptions = useMemo(() => {
+    const set = new Set<number>();
+    tickets.forEach(t => { set.add(getTicketSortVal(t, 'days') as number); });
+    return Array.from(set).sort((a, b) => a - b).map(d => ({ value: String(d), label: `${d} يوم` }));
+  }, [tickets]);
+
+  const appointmentFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    tickets.forEach(t => {
+      const v = t.appointmentTime || '';
+      if (!v) return;
+      map.set(v, formatAppointmentDayTime(v));
+    });
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+  }, [tickets]);
+
   const baseTickets = useMemo(() => {
     if (!showInlineFilters) return tickets;
     const s = localSearch.toLowerCase();
@@ -541,9 +612,17 @@ export function TicketTable({
       const matchSupervisor = localSupervisors.length === 0
         || (t.assignedSupervisorId && localSupervisors.includes(t.assignedSupervisorId))
         || (t.assignedSupervisorIds as string[] | undefined)?.some(id => localSupervisors.includes(id));
-      return matchSearch && matchStatus && matchType && matchProject && matchSupervisor;
+      const matchId     = localIds.length === 0     || localIds.includes(t.ticketId || t.id.slice(0, 6));
+      const matchRef     = localRefs.length === 0    || localRefs.includes(t.refNumber || '---');
+      const matchClient  = localClients.length === 0 || localClients.includes(t.clientId || t.clientName || '---');
+      const matchDate    = localDates.length === 0   || localDates.includes(format(new Date(getTicketSortVal(t, 'date') as number), 'd/M/yyyy'));
+      const matchDays    = localDays.length === 0    || localDays.includes(String(getTicketSortVal(t, 'days') as number));
+      const matchAppt    = localAppointments.length === 0 || (!!t.appointmentTime && localAppointments.includes(t.appointmentTime));
+      return matchSearch && matchStatus && matchType && matchProject && matchSupervisor
+        && matchId && matchRef && matchClient && matchDate && matchDays && matchAppt;
     });
-  }, [tickets, showInlineFilters, showClosed, localSearch, localStatuses, localTypes, localProjects, localSupervisors, closedStatuses]);
+  }, [tickets, showInlineFilters, showClosed, localSearch, localStatuses, localTypes, localProjects, localSupervisors,
+      localIds, localRefs, localClients, localDates, localDays, localAppointments, closedStatuses]);
 
   const focalClientKey = useMemo(() => {
     if (!selectedIds || selectedIds.length === 0) return null;
@@ -611,7 +690,9 @@ export function TicketTable({
   const [visibleCount, setVisibleCount] = useState(20);
   useEffect(() => {
     setVisibleCount(20);
-  }, [localSearch, localStatuses, localTypes, localProjects, localSupervisors, showClosed, sortKey, sortDir, focalClientKey, baseTickets.length]);
+  }, [localSearch, localStatuses, localTypes, localProjects, localSupervisors,
+      localIds, localRefs, localClients, localDates, localDays, localAppointments,
+      showClosed, sortKey, sortDir, focalClientKey, baseTickets.length]);
 
   const observer = useRef<IntersectionObserver | null>(null);
   const observerRef = useCallback((node: HTMLDivElement | null) => {
@@ -711,18 +792,31 @@ export function TicketTable({
                 placeholder="بحث برقم التذكرة أو الفيلا أو التفاصيل..."
                 value={localSearch}
                 onChange={e => setLocalSearch(e.target.value)}
-                className={cn("pr-9 h-10 bg-card border-border/50 rounded-xl text-sm text-foreground text-right", localSearch && "pl-9")}
+                className={cn("pr-9 h-10 bg-card border-border/50 rounded-xl text-sm text-foreground text-right", localSearch ? "pl-16" : "pl-10")}
               />
-              {localSearch && (
+              <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {localSearch && (
+                  <button
+                    onClick={() => setLocalSearch('')}
+                    className="p-1 text-slate-400 hover:text-foreground transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
                 <button
-                  onClick={() => setLocalSearch('')}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-foreground transition-colors"
+                  type="button"
+                  onClick={() => setShowClosed(prev => !prev)}
+                  title="إظهار/إخفاء التذاكر المغلقة"
+                  className={cn(
+                    'flex items-center justify-center w-7 h-7 rounded-lg transition-colors shrink-0',
+                    showClosed ? 'bg-slate-500/20 text-slate-200' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5',
+                  )}
                 >
-                  <X className="w-4 h-4" />
+                  <Archive className="w-4 h-4" />
                 </button>
-              )}
+              </div>
             </div>
-            
+
             <DropdownMenu>
               <DropdownMenuTrigger render={
                 <Button variant="outline" className={cn("h-10 px-3 rounded-xl gap-2 md:hidden transition-all", showMobileSort ? "bg-blue-500/10 border-blue-500/30 text-blue-400" : "bg-card border-border/50 text-slate-400")}>
@@ -754,9 +848,10 @@ export function TicketTable({
           </div>
 
           {/* ── Filters ──                                                       *
-           * Desktop: column-value filters (حالة/تخصص/مشرف) live on the table    *
-           * header cells themselves, Excel-style. Only المغلقة + المشروع (which *
-           * has no dedicated column) stay here, plus a mobile-only fallback.    */}
+           * Desktop: column-value filters live on the table header cells        *
+           * themselves, Excel-style. Only المشروع (which has no dedicated       *
+           * column) stays here, plus a mobile-only fallback. المغلقة toggle     *
+           * moved into the search box above, next to the clear (X) button.     */}
           <div className="flex flex-wrap items-center gap-2 mt-3 w-full">
             {/* Mobile-only value filters — desktop uses the column headers instead */}
             <div className="flex flex-wrap items-center gap-2 md:hidden">
@@ -823,16 +918,6 @@ export function TicketTable({
                 }
               />
             )}
-
-            <Button variant="outline" size="sm"
-              onClick={() => setShowClosed(prev => !prev)}
-              className={cn(
-                'h-9 rounded-xl gap-1.5 text-xs font-medium',
-                showClosed ? 'border-slate-500/50 bg-slate-500/10 text-slate-700 dark:text-slate-300' : 'border-border/50 bg-transparent text-slate-500',
-              )}>
-              <span className="text-[11px]">{showClosed ? '🟢' : '⚪'}</span>
-              المغلقة
-            </Button>
 
             <span className="text-[10px] text-slate-500 font-bold px-2 mr-auto hidden sm:block">
               {baseTickets.length} / {tickets.length}
@@ -1013,25 +1098,85 @@ export function TicketTable({
                     </button>
                   </th>
                 )}
-                <th className={cn(thCls, 'w-20')}>ID</th>
-                <th
-                  className={cn(thCls, 'w-24 cursor-pointer hover:text-slate-200 select-none')}
-                  onClick={() => handleSort('ref')}
-                >
-                  <span className="flex items-center gap-1">المرجع <SortIcon col="ref" /></span>
+                <th className={cn(thCls, 'w-20')}>
+                  <div className="flex items-center gap-1">
+                    <span>ID</span>
+                    <ExcelFilterMenu
+                      options={idFilterOptions}
+                      selected={localIds}
+                      onChange={setLocalIds}
+                      trigger={
+                        <button type="button" onClick={e => e.stopPropagation()}
+                          className={cn('p-0.5 rounded hover:bg-white/10 transition-colors', localIds.length > 0 && 'text-blue-400')}>
+                          <Filter className="w-3 h-3" />
+                        </button>
+                      }
+                    />
+                  </div>
                 </th>
-                <th
-                  className={cn(thCls, 'w-28 max-w-[100px] cursor-pointer hover:text-slate-200 select-none')}
-                  onClick={() => handleSort('client')}
-                >
-                  <span className="flex items-center gap-1">العميل <SortIcon col="client" /></span>
+                <th className={cn(thCls, 'w-24')}>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="flex items-center gap-1 cursor-pointer hover:text-slate-200 select-none"
+                      onClick={() => handleSort('ref')}
+                    >
+                      المرجع <SortIcon col="ref" />
+                    </span>
+                    <ExcelFilterMenu
+                      options={refFilterOptions}
+                      selected={localRefs}
+                      onChange={setLocalRefs}
+                      trigger={
+                        <button type="button" onClick={e => e.stopPropagation()}
+                          className={cn('p-0.5 rounded hover:bg-white/10 transition-colors', localRefs.length > 0 && 'text-blue-400')}>
+                          <Filter className="w-3 h-3" />
+                        </button>
+                      }
+                    />
+                  </div>
+                </th>
+                <th className={cn(thCls, 'w-28 max-w-[100px]')}>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="flex items-center gap-1 cursor-pointer hover:text-slate-200 select-none"
+                      onClick={() => handleSort('client')}
+                    >
+                      العميل <SortIcon col="client" />
+                    </span>
+                    <ExcelFilterMenu
+                      options={clientFilterOptions}
+                      selected={localClients}
+                      onChange={setLocalClients}
+                      trigger={
+                        <button type="button" onClick={e => e.stopPropagation()}
+                          className={cn('p-0.5 rounded hover:bg-white/10 transition-colors', localClients.length > 0 && 'text-blue-400')}>
+                          <Filter className="w-3 h-3" />
+                        </button>
+                      }
+                    />
+                  </div>
                 </th>
 
-                <th
-                  className={cn(thCls, 'w-20 cursor-pointer hover:text-slate-200 select-none')}
-                  onClick={() => handleSort('date')}
-                >
-                  <span className="flex items-center gap-1">التاريخ <SortIcon col="date" /></span>
+                <th className={cn(thCls, 'w-20')}>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="flex items-center gap-1 cursor-pointer hover:text-slate-200 select-none"
+                      onClick={() => handleSort('date')}
+                    >
+                      التاريخ <SortIcon col="date" />
+                    </span>
+                    <ExcelFilterMenu
+                      options={dateFilterOptions}
+                      selected={localDates}
+                      onChange={setLocalDates}
+                      trigger={
+                        <button type="button" onClick={e => e.stopPropagation()}
+                          className={cn('p-0.5 rounded hover:bg-white/10 transition-colors', localDates.length > 0 && 'text-blue-400')}>
+                          <Filter className="w-3 h-3" />
+                        </button>
+                      }
+                    />
+                  </div>
                 </th>
                 <th className={cn(thCls, 'min-w-[180px]')}>وصف المشكلة</th>
                 <th className={cn(thCls, 'w-28 text-center')}>
@@ -1058,11 +1203,26 @@ export function TicketTable({
                     />
                   </div>
                 </th>
-                <th
-                  className={cn(thCls, 'w-12 text-center cursor-pointer hover:text-slate-200 select-none')}
-                  onClick={() => handleSort('days')}
-                >
-                  <span className="flex items-center justify-center gap-1">الأيام <SortIcon col="days" /></span>
+                <th className={cn(thCls, 'w-16 text-center')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span
+                      className="flex items-center gap-1 cursor-pointer hover:text-slate-200 select-none"
+                      onClick={() => handleSort('days')}
+                    >
+                      الأيام <SortIcon col="days" />
+                    </span>
+                    <ExcelFilterMenu
+                      options={daysFilterOptions}
+                      selected={localDays}
+                      onChange={setLocalDays}
+                      trigger={
+                        <button type="button" onClick={e => e.stopPropagation()}
+                          className={cn('p-0.5 rounded hover:bg-white/10 transition-colors', localDays.length > 0 && 'text-blue-400')}>
+                          <Filter className="w-3 h-3" />
+                        </button>
+                      }
+                    />
+                  </div>
                 </th>
                 {!hideSupervisorColumn && (
                   <th className={cn(thCls, 'w-24 text-center')}>
@@ -1108,7 +1268,24 @@ export function TicketTable({
                     )}
                   </div>
                 </th>
-                <th className={cn(thCls, 'w-24 text-center')}>موعد</th>
+                <th className={cn(thCls, 'w-24 text-center')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>موعد</span>
+                    {appointmentFilterOptions.length > 0 && (
+                      <ExcelFilterMenu
+                        options={appointmentFilterOptions}
+                        selected={localAppointments}
+                        onChange={setLocalAppointments}
+                        trigger={
+                          <button type="button" onClick={e => e.stopPropagation()}
+                            className={cn('p-0.5 rounded hover:bg-white/10 transition-colors', localAppointments.length > 0 && 'text-blue-400')}>
+                            <Filter className="w-3 h-3" />
+                          </button>
+                        }
+                      />
+                    )}
+                  </div>
+                </th>
                 <th className={cn(thCls, 'w-14 text-center border-r border-border/20')}>...</th>
               </tr>
             </thead>

@@ -19,9 +19,10 @@ interface TicketTypeEntry {
 }
 
 interface TicketTypesContextValue {
-  typeTranslations:    Record<string, string>;   // key → nameAr
+  typeTranslations:    Record<string, string>;   // key → nameAr (active + inactive, so old tickets still resolve)
   typeBg:              Record<string, string>;   // key → tailwind classes
-  types:               TicketTypeEntry[];
+  types:               TicketTypeEntry[];         // active + inactive
+  activeTypes:         TicketTypeEntry[];         // active only — use this for "pick a type" selectors
   subTypes:            TicketSubTypeEntry[];
   subTypeTranslations: Record<string, string>;   // subTypeId → nameAr
   subTypeBg:           Record<string, string>;   // subTypeId → tailwind classes (inherited from parent)
@@ -83,6 +84,7 @@ const TicketTypesContext = createContext<TicketTypesContextValue>({
   typeTranslations:    {},
   typeBg:              {},
   types:               [],
+  activeTypes:         [],
   subTypes:            [],
   subTypeTranslations: {},
   subTypeBg:           {},
@@ -99,13 +101,18 @@ export function TicketTypesProvider({ children }: { children: React.ReactNode })
       });
       if (!res.ok) return;
       const data: TicketTypeEntry[] = await res.json();
-      setTypes(data.filter(t => t.isActive));
+      // Keep inactive types too — tickets tagged with a type that was later
+      // deactivated still need their label/color to resolve instead of
+      // falling back to the raw db key (e.g. "type_1782144360722").
+      setTypes(data);
     } catch {
       // silently fail — TicketTable still works with empty maps
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const activeTypes = types.filter(t => t.isActive);
 
   const typeTranslations: Record<string, string> = { ...STATIC_FALLBACKS };
   const typeBg: Record<string, string> = {};
@@ -132,7 +139,7 @@ export function TicketTypesProvider({ children }: { children: React.ReactNode })
   });
 
   return (
-    <TicketTypesContext.Provider value={{ typeTranslations, typeBg, types, subTypes, subTypeTranslations, subTypeBg, refresh: load }}>
+    <TicketTypesContext.Provider value={{ typeTranslations, typeBg, types, activeTypes, subTypes, subTypeTranslations, subTypeBg, refresh: load }}>
       {children}
     </TicketTypesContext.Provider>
   );

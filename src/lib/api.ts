@@ -342,7 +342,7 @@ export const appointmentsApi = {
     supervisorIds?: string[]; supervisors?: any[]; types?: string[]; ticketIds?: string[];
   }) => post<any>('/appointments', data),
   update: (id: string, data: {
-    date: string; time?: string; notes?: string;
+    date: string; time?: string; notes?: string; clientPhone?: string;
     supervisorIds?: string[]; supervisors?: any[]; types?: string[];
   }) => put<any>(`/appointments/${id}`, data),
   deleteAppointment: (id: string) => del<any>(`/appointments/${id}`),
