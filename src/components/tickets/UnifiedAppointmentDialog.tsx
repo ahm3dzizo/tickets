@@ -237,14 +237,15 @@ export function UnifiedAppointmentDialog({
   useEffect(() => {
     if (!open) return;
 
-    // Load work hours (project-specific if available)
+    // Load work hours (project-specific if available). Resolves asynchronously,
+    // after the mode-specific blocks below already set the correct initial
+    // timeMode (e.g. 'custom' with the existing time in edit mode) — so it
+    // must NOT touch timeMode itself, or it clobbers that with 'morning'.
     settingsApi.getWorkHours().then((wh: any) => {
       const pid = primaryTicket?.projectId;
       const cfg: WorkHoursConfig =
         (pid && wh.byProject?.[pid]) ? wh.byProject[pid] : (wh.default ?? DEFAULT_WH);
       setWorkHours(cfg);
-      // Default to first non-custom option
-      setTimeMode('morning');
     }).catch(() => {});
 
     // Load supervisors
@@ -614,20 +615,20 @@ export function UnifiedAppointmentDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="bg-card border-border text-foreground sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/20 dark:shadow-black/50 max-h-[90vh] overflow-y-auto"
+        className="bg-card border-border text-foreground sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/20 dark:shadow-black/50 max-h-[90vh] overflow-y-auto overflow-x-hidden"
         dir="rtl"
       >
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
-            <TitleIcon className={cn('w-5 h-5', isEditMode ? 'text-amber-400' : 'text-blue-400')} />
+          <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2 break-words">
+            <TitleIcon className={cn('w-5 h-5 shrink-0', isEditMode ? 'text-amber-400' : 'text-blue-400')} />
             {dialogTitle}
           </DialogTitle>
 
           {/* Ticket info */}
           {isTicketMode && primaryTicket && (
             <div className="text-right mt-1">
-              <h3 className="font-bold text-foreground">{primaryTicket.clientName}</h3>
-              <p className="text-xs text-muted-foreground">
+              <h3 className="font-bold text-foreground break-words">{primaryTicket.clientName}</h3>
+              <p className="text-xs text-muted-foreground break-words">
                 {tickets!.length > 1
                   ? `تذاكر: ${tickets!.map(t => t.ticketId).join(', ')}`
                   : `تذكرة #${primaryTicket.ticketId}`
@@ -736,7 +737,7 @@ export function UnifiedAppointmentDialog({
                 {activeTickets.map((t: any) => (
                   <div key={t.id} className="mb-1.5 last:mb-0 border-b border-border/50 pb-1.5 last:border-0 last:pb-0">
                     <span className="text-[10px] text-blue-400 font-bold ml-2">#{t.ticketId || t.id?.slice(0, 6)}</span>
-                    <p className="text-xs text-foreground leading-relaxed">{t.description}</p>
+                    <p className="text-xs text-foreground leading-relaxed break-words">{t.description}</p>
                   </div>
                 ))}
               </div>
