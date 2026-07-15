@@ -61,6 +61,7 @@ export interface UnifiedAppointmentDialogProps {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const RANGE_PRESETS = [
+  { label: 'يوم واحد', days: 1 },
   { label: 'يومين', days: 2 },
   { label: '3 أيام', days: 3 },
   { label: '5 أيام', days: 5 },
@@ -111,11 +112,11 @@ function buildTimeOptions(wh: WorkHoursConfig): TimeOption[] {
       value: 'morning',
       startTime: wh.morning.start,
     },
-    ...(wh.hasBreak ? [{
+    {
       label: `بعد الظهر (${fmtTime(wh.afternoon.start)} - ${fmtTime(wh.afternoon.end)})`,
       value: 'afternoon',
       startTime: wh.afternoon.start,
-    }] : []),
+    },
     { label: 'وقت محدد', value: 'custom', startTime: null },
   ];
 }
@@ -132,7 +133,7 @@ export function UnifiedAppointmentDialog({
   editSupervisors = [],
   onSuccess,
 }: UnifiedAppointmentDialogProps) {
-  const { typeTranslations } = useTicketTypes();
+  const { typeTranslations, subTypeTranslations } = useTicketTypes();
 
   // ── Mode detection ─────────────────────────────────────────────────────────
   const isEditMode = !!editGroup;
@@ -157,7 +158,7 @@ export function UnifiedAppointmentDialog({
   // Date / time
   const [startDate, setStartDate] = useState(todayStr()); // range start (WhatsApp mode)
   const [date, setDate] = useState(todayStr());           // single date (other modes)
-  const [rangeDays, setRangeDays] = useState(2);
+  const [rangeDays, setRangeDays] = useState(1);
   const [timeMode, setTimeMode] = useState<string>('morning');
   const [customTime, setCustomTime] = useState('09:00');
 
@@ -203,7 +204,11 @@ export function UnifiedAppointmentDialog({
     electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات',
     ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية',
     waterproofing: 'عزل مائي', pest_control: 'مكافحة حشرات', general: 'عام',
+    carpentry: 'نجارة', civil: 'مدني', aluminum: 'ألمنيوم', gypsum: 'جبس',
+    lighting: 'إضاءة', cracks: 'كراك', smart_home: 'نظام ذكي',
+    swimming_pool: 'مسبح', landscaping: 'زراعة وحدائق', garage_door: 'باب جراج',
     ...typeTranslations,
+    ...subTypeTranslations,
   };
 
   const activeTickets: any[] = isCalendarMode ? loadedTickets : (tickets ?? []);
@@ -287,7 +292,7 @@ export function UnifiedAppointmentDialog({
         setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
       }
       setNotes(primaryTicket.appointmentNotes || '');
-      setRangeDays(2);
+      setRangeDays(1);
       setShowPreview(false);
       setConflicts([]);
       setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length
@@ -796,7 +801,7 @@ export function UnifiedAppointmentDialog({
                       key={p.days}
                       onClick={() => setRangeDays(p.days)}
                       className={cn(
-                        'flex-1 h-10 rounded-xl text-sm font-bold border transition-all',
+                        'flex-1 h-10 rounded-xl text-xs font-bold border transition-all',
                         rangeDays === p.days
                           ? 'bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-300'
                           : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
