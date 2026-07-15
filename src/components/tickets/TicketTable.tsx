@@ -477,34 +477,6 @@ export function TicketTable({
     return Array.from(map.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
   }, [tickets]);
 
-  // ── Excel-style filter option lists (only values actually present) ───────
-  const statusFilterOptions = useMemo(() => {
-    const present = new Set<string>(tickets.map(t => t.status));
-    return STATUS_FILTER_GROUPS.filter(g => g.values.some(v => present.has(v)))
-      .map(g => ({ value: g.key, label: g.label }));
-  }, [tickets]);
-
-  const typeFilterOptions = useMemo(() => {
-    const set = new Set<string>();
-    tickets.forEach(t => {
-      if (t.type) set.add(t.type as string);
-      (t.detectedTypes as string[] | undefined)?.forEach(dt => set.add(dt));
-    });
-    return Array.from(set)
-      .map(k => ({ value: k, label: mergedTranslations[k] ?? k }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'ar'));
-  }, [tickets, mergedTranslations]);
-
-  const supervisorFilterOptions = useMemo(
-    () => uniqueSupervisors.map(s => ({ value: s.id, label: s.name })),
-    [uniqueSupervisors],
-  );
-
-  const projectFilterOptions = useMemo(
-    () => (projects ? Object.entries(projects).map(([id, p]) => ({ value: id, label: p.name })) : []),
-    [projects],
-  );
-
   // ── Sort state (default: oldest first) ───────────────────────────────────
   type SortKey = 'date' | 'days' | 'priority' | 'status' | 'ref' | 'client';
   const [sortKey, setSortKey] = useState<SortKey>(() => (stateKey ? (sessionStorage.getItem(`${stateKey}_sortKey`) as SortKey) : null) || 'date');
@@ -543,86 +515,154 @@ export function TicketTable({
 
   const closedStatuses = useMemo(() => new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']), []);
 
-  // ── More Excel-style filter option lists (ID / المرجع / العميل / التاريخ / الأيام / الموعد) ──
+  // ── Excel-style filter option lists — dynamic / cross-filtered ───────────
+  // Each list only shows values reachable given every OTHER active filter
+  // (the same "smart autofilter" behavior Excel has), by filtering with
+  // everything except the dimension currently being listed.
+  type FilterDim = 'status' | 'type' | 'project' | 'supervisor' | 'id' | 'ref' | 'client' | 'date' | 'days' | 'appointment';
+  type ApptBucket = 'has' | 'waiting' | 'empty';
+
+  const getApptBucket = (t: Ticket): ApptBucket => {
+    if (t.appointmentAwaitingReply && t.status === 'waiting') return 'waiting';
+    if (t.appointmentTime) return 'has';
+    return 'empty';
+  };
+  const APPOINTMENT_FILTER_GROUPS: { key: ApptBucket; label: string }[] = [
+    { key: 'has',     label: 'موعد' },
+    { key: 'waiting', label: 'في انتظار العميل' },
+    { key: 'empty',   label: 'فارغ' },
+  ];
+
+  const matchesFilters = (t: Ticket, exclude: FilterDim | null): boolean => {
+    const isClosed = closedStatuses.has(t.status);
+    if (!showClosed && isClosed) return false;
+    const s = localSearch.toLowerCase();
+    const matchSearch = !s ||
+      t.villaNumber?.toLowerCase().includes(s) ||
+      t.description?.toLowerCase().includes(s) ||
+      t.clientName?.toLowerCase().includes(s) ||
+      t.ticketId?.toLowerCase().includes(s) ||
+      t.refNumber?.toLowerCase().includes(s);
+    if (!matchSearch) return false;
+
+    if (exclude !== 'status' && localStatuses.length > 0 && !localStatuses.includes(STATUS_TO_GROUP_KEY[t.status] ?? t.status)) return false;
+    if (exclude !== 'type' && localTypes.length > 0 && !((t.type && localTypes.includes(t.type)) || (t.detectedTypes as string[] | undefined)?.some(dt => localTypes.includes(dt)))) return false;
+    if (exclude !== 'project' && localProjects.length > 0 && !localProjects.includes(t.projectId)) return false;
+    if (exclude !== 'supervisor' && localSupervisors.length > 0 && !((t.assignedSupervisorId && localSupervisors.includes(t.assignedSupervisorId)) || (t.assignedSupervisorIds as string[] | undefined)?.some(id => localSupervisors.includes(id)))) return false;
+    if (exclude !== 'id' && localIds.length > 0 && !localIds.includes(t.ticketId || t.id.slice(0, 6))) return false;
+    if (exclude !== 'ref' && localRefs.length > 0 && !localRefs.includes(t.refNumber || '---')) return false;
+    if (exclude !== 'client' && localClients.length > 0 && !localClients.includes(t.clientId || t.clientName || '---')) return false;
+    if (exclude !== 'date' && localDates.length > 0 && !localDates.includes(format(new Date(getTicketSortVal(t, 'date') as number), 'd/M/yyyy'))) return false;
+    if (exclude !== 'days' && localDays.length > 0 && !localDays.includes(String(getTicketSortVal(t, 'days') as number))) return false;
+    if (exclude !== 'appointment' && localAppointments.length > 0 && !localAppointments.includes(getApptBucket(t))) return false;
+
+    return true;
+  };
+
+  const filterDeps = [
+    tickets, showClosed, localSearch, localStatuses, localTypes, localProjects, localSupervisors,
+    localIds, localRefs, localClients, localDates, localDays, localAppointments, closedStatuses,
+  ];
+
+  const statusFilterOptions = useMemo(() => {
+    const present = new Set<string>();
+    tickets.forEach(t => { if (matchesFilters(t, 'status')) present.add(t.status); });
+    return STATUS_FILTER_GROUPS.filter(g => g.values.some(v => present.has(v)))
+      .map(g => ({ value: g.key, label: g.label }));
+  }, filterDeps);
+
+  const typeFilterOptions = useMemo(() => {
+    const set = new Set<string>();
+    tickets.forEach(t => {
+      if (!matchesFilters(t, 'type')) return;
+      if (t.type) set.add(t.type as string);
+      (t.detectedTypes as string[] | undefined)?.forEach(dt => set.add(dt));
+    });
+    return Array.from(set)
+      .map(k => ({ value: k, label: mergedTranslations[k] ?? k }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'ar'));
+  }, [...filterDeps, mergedTranslations]);
+
+  const projectFilterOptions = useMemo(() => {
+    if (!projects) return [];
+    const present = new Set<string>();
+    tickets.forEach(t => { if (matchesFilters(t, 'project')) present.add(t.projectId); });
+    return Object.entries(projects)
+      .filter(([id]) => present.has(id))
+      .map(([id, p]) => ({ value: id, label: p.name }));
+  }, [...filterDeps, projects]);
+
+  const supervisorFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    tickets.forEach(t => {
+      if (!matchesFilters(t, 'supervisor')) return;
+      const sups = t.assignedSupervisors;
+      if (Array.isArray(sups)) {
+        sups.forEach(s => { if (s && s.id && s.name) map.set(s.id, s.name); });
+      } else if (sups && typeof sups === 'object') {
+        Object.values(sups).forEach((s: any) => { if (s && s.id && s.name) map.set(s.id, s.name); });
+      } else if (t.assignedSupervisorId && t.assigneeName && t.assigneeName !== '---') {
+        map.set(t.assignedSupervisorId, t.assigneeName);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'ar'));
+  }, filterDeps);
+
   const idFilterOptions = useMemo(() => {
     const map = new Map<string, string>();
-    tickets.forEach(t => { const v = t.ticketId || t.id.slice(0, 6); map.set(v, v); });
+    tickets.forEach(t => { if (matchesFilters(t, 'id')) { const v = t.ticketId || t.id.slice(0, 6); map.set(v, v); } });
     return Array.from(map.values()).map(v => ({ value: v, label: v }));
-  }, [tickets]);
+  }, filterDeps);
 
   const refFilterOptions = useMemo(() => {
     const map = new Map<string, string>();
-    tickets.forEach(t => { const v = t.refNumber || '---'; map.set(v, v); });
+    tickets.forEach(t => { if (matchesFilters(t, 'ref')) { const v = t.refNumber || '---'; map.set(v, v); } });
     return Array.from(map.values()).map(v => ({ value: v, label: v }));
-  }, [tickets]);
+  }, filterDeps);
 
   const clientFilterOptions = useMemo(() => {
     const map = new Map<string, string>();
     tickets.forEach(t => {
+      if (!matchesFilters(t, 'client')) return;
       const key = t.clientId || t.clientName || '---';
       if (!map.has(key)) map.set(key, t.clientName || '---');
     });
     return Array.from(map.entries())
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label, 'ar'));
-  }, [tickets]);
+  }, filterDeps);
 
   const dateFilterOptions = useMemo(() => {
     const map = new Map<string, number>();
     tickets.forEach(t => {
+      if (!matchesFilters(t, 'date')) return;
       const ts = getTicketSortVal(t, 'date') as number;
       map.set(format(new Date(ts), 'd/M/yyyy'), ts);
     });
     return Array.from(map.entries())
       .sort((a, b) => a[1] - b[1])
       .map(([label]) => ({ value: label, label }));
-  }, [tickets]);
+  }, filterDeps);
 
   const daysFilterOptions = useMemo(() => {
     const set = new Set<number>();
-    tickets.forEach(t => { set.add(getTicketSortVal(t, 'days') as number); });
+    tickets.forEach(t => { if (matchesFilters(t, 'days')) set.add(getTicketSortVal(t, 'days') as number); });
     return Array.from(set).sort((a, b) => a - b).map(d => ({ value: String(d), label: `${d} يوم` }));
-  }, [tickets]);
+  }, filterDeps);
 
   const appointmentFilterOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    tickets.forEach(t => {
-      const v = t.appointmentTime || '';
-      if (!v) return;
-      map.set(v, formatAppointmentDayTime(v));
-    });
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
-  }, [tickets]);
+    const present = new Set<ApptBucket>();
+    tickets.forEach(t => { if (matchesFilters(t, 'appointment')) present.add(getApptBucket(t)); });
+    return APPOINTMENT_FILTER_GROUPS.filter(g => present.has(g.key))
+      .map(g => ({ value: g.key, label: g.label }));
+  }, filterDeps);
 
   const baseTickets = useMemo(() => {
     if (!showInlineFilters) return tickets;
-    const s = localSearch.toLowerCase();
-    return tickets.filter(t => {
-      const isClosed = closedStatuses.has(t.status);
-      if (!showClosed && isClosed) return false;
-      const matchSearch = !s ||
-        t.villaNumber?.toLowerCase().includes(s) ||
-        t.description?.toLowerCase().includes(s) ||
-        t.clientName?.toLowerCase().includes(s) ||
-        t.ticketId?.toLowerCase().includes(s) ||
-        t.refNumber?.toLowerCase().includes(s);
-      const matchStatus  = localStatuses.length === 0  || localStatuses.includes(STATUS_TO_GROUP_KEY[t.status] ?? t.status);
-      const matchType    = localTypes.length === 0     || (t.type && localTypes.includes(t.type)) || (t.detectedTypes as string[] | undefined)?.some(dt => localTypes.includes(dt));
-      const matchProject = localProjects.length === 0  || localProjects.includes(t.projectId);
-      const matchSupervisor = localSupervisors.length === 0
-        || (t.assignedSupervisorId && localSupervisors.includes(t.assignedSupervisorId))
-        || (t.assignedSupervisorIds as string[] | undefined)?.some(id => localSupervisors.includes(id));
-      const matchId     = localIds.length === 0     || localIds.includes(t.ticketId || t.id.slice(0, 6));
-      const matchRef     = localRefs.length === 0    || localRefs.includes(t.refNumber || '---');
-      const matchClient  = localClients.length === 0 || localClients.includes(t.clientId || t.clientName || '---');
-      const matchDate    = localDates.length === 0   || localDates.includes(format(new Date(getTicketSortVal(t, 'date') as number), 'd/M/yyyy'));
-      const matchDays    = localDays.length === 0    || localDays.includes(String(getTicketSortVal(t, 'days') as number));
-      const matchAppt    = localAppointments.length === 0 || (!!t.appointmentTime && localAppointments.includes(t.appointmentTime));
-      return matchSearch && matchStatus && matchType && matchProject && matchSupervisor
-        && matchId && matchRef && matchClient && matchDate && matchDays && matchAppt;
-    });
-  }, [tickets, showInlineFilters, showClosed, localSearch, localStatuses, localTypes, localProjects, localSupervisors,
-      localIds, localRefs, localClients, localDates, localDays, localAppointments, closedStatuses]);
+    return tickets.filter(t => matchesFilters(t, null));
+  }, [...filterDeps, showInlineFilters]);
 
   const focalClientKey = useMemo(() => {
     if (!selectedIds || selectedIds.length === 0) return null;
@@ -792,30 +832,30 @@ export function TicketTable({
                 placeholder="بحث برقم التذكرة أو الفيلا أو التفاصيل..."
                 value={localSearch}
                 onChange={e => setLocalSearch(e.target.value)}
-                className={cn("pr-9 h-10 bg-card border-border/50 rounded-xl text-sm text-foreground text-right", localSearch ? "pl-16" : "pl-10")}
+                className={cn("pr-9 h-10 bg-card border-border/50 rounded-xl text-sm text-foreground text-right", localSearch && "pl-9")}
               />
-              <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {localSearch && (
-                  <button
-                    onClick={() => setLocalSearch('')}
-                    className="p-1 text-slate-400 hover:text-foreground transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+              {localSearch && (
                 <button
-                  type="button"
-                  onClick={() => setShowClosed(prev => !prev)}
-                  title="إظهار/إخفاء التذاكر المغلقة"
-                  className={cn(
-                    'flex items-center justify-center w-7 h-7 rounded-lg transition-colors shrink-0',
-                    showClosed ? 'bg-slate-500/20 text-slate-200' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5',
-                  )}
+                  onClick={() => setLocalSearch('')}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-foreground transition-colors"
                 >
-                  <Archive className="w-4 h-4" />
+                  <X className="w-4 h-4" />
                 </button>
-              </div>
+              )}
             </div>
+
+            <button
+              type="button"
+              onClick={() => setShowClosed(prev => !prev)}
+              title="إظهار/إخفاء التذاكر المغلقة"
+              className={cn(
+                'h-10 rounded-xl gap-1.5 text-sm font-bold flex items-center justify-center shrink-0 border transition-colors px-2.5 sm:px-3.5',
+                showClosed ? 'border-slate-500/50 bg-slate-500/15 text-slate-200' : 'border-border/50 bg-card text-slate-500 hover:text-slate-300 hover:bg-white/5',
+              )}
+            >
+              <Archive className="w-4 h-4" />
+              <span className="hidden sm:inline">المغلقة</span>
+            </button>
 
             <DropdownMenu>
               <DropdownMenuTrigger render={
