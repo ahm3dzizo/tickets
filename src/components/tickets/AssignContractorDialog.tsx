@@ -11,7 +11,7 @@ import { contractorsApi } from '@/lib/contractorsApi';
 import { ticketsApi } from '@/lib/api';
 import { Contractor, Ticket } from '@/types';
 import { cn } from '@/lib/utils';
-import { InternalAppointmentDialog } from './InternalAppointmentDialog';
+import { UnifiedAppointmentDialog } from './UnifiedAppointmentDialog';
 
 interface AssignContractorDialogProps {
   open: boolean;
@@ -425,7 +425,7 @@ export function AssignContractorDialog({
       )}
 
       {/* ── Actual Appointment Dialog ───────────────────────── */}
-      <InternalAppointmentDialog
+      <UnifiedAppointmentDialog
         open={showAppointmentDialog}
         onOpenChange={(v) => {
           setShowAppointmentDialog(v);

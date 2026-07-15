@@ -11,8 +11,7 @@ import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/TicketTable';
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
-import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
-import { InternalAppointmentDialog } from '@/components/tickets/InternalAppointmentDialog';
+import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
 import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
@@ -37,7 +36,6 @@ export default function TicketsList() {
   const [reassigning, setReassigning] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
-  const [internalApptOpen, setInternalApptOpen] = useState(false);
   const [contractorDialogOpen, setContractorDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('ticketsListTab') || 'linked');
 
@@ -143,12 +141,6 @@ export default function TicketsList() {
     setApptOpen(true);
   };
 
-  const handleInternalAppointment = () => {
-    const selected = tickets.filter(t => selectedTicketIds?.includes(t.id));
-    if (selected.length === 0) return;
-    setApptTicket(selected);
-    setInternalApptOpen(true);
-  };
 
   const handleAutoLink = async () => {
     setAutoLinking(true);
@@ -454,7 +446,6 @@ export default function TicketsList() {
             isMultiClient={uniqueClientIds.size > 1}
             onStatusChange={handleBulkStatusChange}
             onAppointment={handleAppointment}
-            onInternalAppointment={handleInternalAppointment}
             onContractor={() => setContractorDialogOpen(true)}
             onClose={() => setCloseDialogOpen(true)}
             onClear={() => setSelectedTicketIds([])}
@@ -489,7 +480,7 @@ export default function TicketsList() {
         />
 
         {apptTicket && apptTicket.length > 0 && (
-          <AppointmentDialog
+          <UnifiedAppointmentDialog
             open={apptOpen}
             onOpenChange={setApptOpen}
             tickets={apptTicket.map(t => ({
@@ -508,19 +499,10 @@ export default function TicketsList() {
               status: t.status,
             }))}
             clientPhone={
-              clients[apptTicket[0].clientId || '']?.phone || 
+              clients[apptTicket[0].clientId || '']?.phone ||
               Object.values(clients).find(c => String(c.villaNumber) === String(apptTicket[0].villaNumber))?.phone
             }
             onSuccess={() => { setApptOpen(false); setSelectedTicketIds([]); loadData(); }}
-          />
-        )}
-
-        {apptTicket && apptTicket.length > 0 && (
-          <InternalAppointmentDialog
-            open={internalApptOpen}
-            onOpenChange={setInternalApptOpen}
-            tickets={apptTicket}
-            onSuccess={() => { setInternalApptOpen(false); setSelectedTicketIds([]); loadData(); }}
           />
         )}
 

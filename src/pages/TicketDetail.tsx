@@ -40,8 +40,7 @@ import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
-import { AppointmentDialog } from '@/components/tickets/AppointmentDialog';
-import { InternalAppointmentDialog } from '@/components/tickets/InternalAppointmentDialog';
+import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -140,7 +139,6 @@ export default function TicketDetail() {
 
   // ── Appointment dialog state ──
   const [apptOpen, setApptOpen] = useState(false);
-  const [internalApptOpen, setInternalApptOpen] = useState(false);
   const [apptDate, setApptDate] = useState('');
   const [apptTime, setApptTime] = useState('');
   const [apptNotes, setApptNotes] = useState('');
@@ -954,9 +952,9 @@ export default function TicketDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Appointment Dialog (Smart) ──────────────── */}
+      {/* ── Appointment Dialog (Unified) ──────────────── */}
       {ticket && (
-        <AppointmentDialog
+        <UnifiedAppointmentDialog
           open={apptOpen}
           onOpenChange={setApptOpen}
           tickets={[{
@@ -976,15 +974,6 @@ export default function TicketDetail() {
           }]}
           clientPhone={client?.phone}
           onSuccess={() => { setApptOpen(false); loadData(); }}
-        />
-      )}
-
-      {ticket && (
-        <InternalAppointmentDialog
-          open={internalApptOpen}
-          onOpenChange={setInternalApptOpen}
-          tickets={[ticket]}
-          onSuccess={() => { setInternalApptOpen(false); loadData(); }}
         />
       )}
 

@@ -14,9 +14,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { QuickAddSpecialtyDialog } from '@/components/tickets/QuickAddSpecialtyDialog';
-import { InternalAppointmentDialog } from '@/components/tickets/InternalAppointmentDialog';
+import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
 import { ClientTicketsModal } from '@/components/tickets/ClientTicketsModal';
-import { EditAppointmentDialog } from '@/components/tickets/EditAppointmentDialog';
 import { TranslatedText } from '@/components/ui/TranslatedText';
 import { Languages } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -928,7 +927,7 @@ export default function Appointments() {
         />
       )}
       {directApptDate && (
-        <InternalAppointmentDialog
+        <UnifiedAppointmentDialog
           open={!!directApptDate}
           onOpenChange={(v) => !v && setDirectApptDate(null)}
           dateStr={directApptDate}
@@ -949,12 +948,12 @@ export default function Appointments() {
         />
       )}
       {editApptGroup && (
-        <EditAppointmentDialog
+        <UnifiedAppointmentDialog
           open={!!editApptGroup}
           onOpenChange={(op) => !op && setEditApptGroup(null)}
-          group={editApptGroup}
-          supervisors={supervisors}
-          onSuccess={loadAppointments}
+          editGroup={editApptGroup}
+          editSupervisors={supervisors}
+          onSuccess={() => { setEditApptGroup(null); loadAppointments(); }}
         />
       )}
 

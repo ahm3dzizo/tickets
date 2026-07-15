@@ -164,7 +164,6 @@ export interface BulkActionBarProps {
   isMultiClient?: boolean;
   onStatusChange: (status: string) => void;
   onAppointment?: () => void;
-  onInternalAppointment?: () => void;
   onContractor?: () => void;
   onClose: () => void;
   onClear: () => void;
@@ -177,7 +176,6 @@ export function BulkActionBar({
   isMultiClient = false,
   onStatusChange,
   onAppointment,
-  onInternalAppointment,
   onContractor,
   onClose,
   onClear,
@@ -231,15 +229,6 @@ export function BulkActionBar({
         </Button>
       )}
 
-      {/* Secondary actions */}
-      {(!isMultiClient && onInternalAppointment) && (
-        <Button variant="outline" size="sm"
-          className="border-sky-500/30 bg-sky-500/10 text-sky-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0 flex"
-          onClick={onInternalAppointment}>
-          <CalendarDays className="w-3.5 h-3.5" />
-          <span>إضافة موعد</span>
-        </Button>
-      )}
       {(!isMultiClient && onClose) && (
         <Button variant="outline" size="sm"
           className="border-yellow-500/30 bg-yellow-500/10 text-yellow-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0 flex"
