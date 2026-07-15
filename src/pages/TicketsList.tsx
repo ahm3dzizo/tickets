@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
-import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, MoreHorizontal, ShieldAlert, Download, Search } from 'lucide-react';
+import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, MoreHorizontal, ShieldAlert, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -37,7 +37,14 @@ export default function TicketsList() {
   const [autoLinking, setAutoLinking] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
   const [contractorDialogOpen, setContractorDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('ticketsListTab') || 'linked');
+  const [activeTab, setActiveTab] = useState(() => {
+    const stored = sessionStorage.getItem('ticketsListTab');
+    return stored && stored !== 'all' ? stored : 'linked';
+  });
+  // Shared across every tab's TicketTable — typing here searches ALL tickets
+  // regardless of which tab is active, instead of being scoped to that tab's
+  // linked/contractor/unlinked/unclassified subset.
+  const [ticketSearch, setTicketSearch] = useState('');
 
   const loadData = async () => {
     if (!user) return;
@@ -271,13 +278,6 @@ export default function TicketsList() {
             <div className="w-full">
               <TabsList className="bg-transparent h-auto p-0 flex flex-wrap items-center gap-2 w-full">
                 <TabsTrigger
-                  value="all"
-                  className="rounded-xl h-9 text-sm font-bold px-4 border border-emerald-500/25 bg-emerald-500/5 text-emerald-500 data-[state=active]:bg-emerald-600 data-[state=active]:border-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-1.5 transition-all"
-                >
-                  <Search className="w-3.5 h-3.5" />
-                  بحث شامل ({tickets.length})
-                </TabsTrigger>
-                <TabsTrigger
                   value="linked"
                   className="rounded-xl h-9 text-sm font-bold px-4 border border-border bg-card data-[state=active]:bg-primary data-[state=active]:border-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
                 >
@@ -349,39 +349,19 @@ export default function TicketsList() {
             </TabsContent>
           </div>
 
-          <TabsContent value="all" className="mt-0">
-            <div className="bg-card border border-emerald-500/25 rounded-3xl overflow-hidden shadow-sm">
-              <div className="p-3 bg-emerald-500/8 border-b border-emerald-500/20 flex items-center gap-2 text-emerald-500 text-sm font-semibold">
-                <Search className="w-4 h-4 shrink-0" />
-                <span>بحث في كل التذاكر دفعة واحدة — مربوطة، مقاولين/ملاحظات، غير مربوطة، وغير مصنفة</span>
-              </div>
-              <TicketTable
-                clientMap={clients}
-                tickets={tickets}
-                selectedIds={selectedTicketIds}
-                onSelectionChange={setSelectedTicketIds}
-                hideProjectColumn={!showProjectColumn}
-                projects={projects}
-                showInlineFilters
-                onRefresh={loadData}
-                stateKey="tl_all"
-                exportOpen={activeTab === 'all' ? exportOpen : false}
-                onExportOpenChange={setExportOpen}
-              />
-            </div>
-          </TabsContent>
-
           <TabsContent value="linked" className="mt-0">
             <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
               <TicketTable
                 clientMap={clients}
-                tickets={linkedTickets}
+                tickets={ticketSearch.trim() ? tickets : linkedTickets}
                 selectedIds={selectedTicketIds}
                 onSelectionChange={setSelectedTicketIds}
                 hideProjectColumn={!showProjectColumn}
                 projects={projects}
                 showInlineFilters
                 stateKey="tl_linked"
+                search={ticketSearch}
+                onSearchChange={setTicketSearch}
                 exportOpen={activeTab === 'linked' ? exportOpen : false}
                 onExportOpenChange={setExportOpen}
               />
@@ -396,7 +376,7 @@ export default function TicketsList() {
               </div>
               <TicketTable
                 clientMap={clients}
-                tickets={contractorTickets}
+                tickets={ticketSearch.trim() ? tickets : contractorTickets}
                 selectedIds={selectedTicketIds}
                 onSelectionChange={setSelectedTicketIds}
                 hideProjectColumn={!showProjectColumn}
@@ -404,6 +384,8 @@ export default function TicketsList() {
                 showInlineFilters
                 onRefresh={loadData}
                 stateKey="tl_contractors"
+                search={ticketSearch}
+                onSearchChange={setTicketSearch}
                 exportOpen={activeTab === 'contractors' ? exportOpen : false}
                 onExportOpenChange={setExportOpen}
                 contractorMode
@@ -419,7 +401,7 @@ export default function TicketsList() {
               </div>
               <TicketTable
                 clientMap={clients}
-                tickets={unlinkedTickets}
+                tickets={ticketSearch.trim() ? tickets : unlinkedTickets}
                 selectedIds={selectedTicketIds}
                 onSelectionChange={setSelectedTicketIds}
                 hideProjectColumn={!showProjectColumn}
@@ -427,6 +409,8 @@ export default function TicketsList() {
                 showInlineFilters
                 onRefresh={loadData}
                 stateKey="tl_unlinked"
+                search={ticketSearch}
+                onSearchChange={setTicketSearch}
                 exportOpen={activeTab === 'unlinked' ? exportOpen : false}
                 onExportOpenChange={setExportOpen}
               />
@@ -453,7 +437,7 @@ export default function TicketsList() {
               </div>
               <TicketTable
                 clientMap={clients}
-                tickets={unclassifiedTickets}
+                tickets={ticketSearch.trim() ? tickets : unclassifiedTickets}
                 selectedIds={selectedTicketIds}
                 onSelectionChange={setSelectedTicketIds}
                 hideProjectColumn={!showProjectColumn}
@@ -461,6 +445,8 @@ export default function TicketsList() {
                 showInlineFilters
                 onRefresh={loadData}
                 stateKey="tl_unclassified"
+                search={ticketSearch}
+                onSearchChange={setTicketSearch}
                 exportOpen={activeTab === 'unclassified' ? exportOpen : false}
                 onExportOpenChange={setExportOpen}
               />

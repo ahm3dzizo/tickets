@@ -384,6 +384,9 @@ interface TicketTableProps {
   onExportOpenChange?: (open: boolean) => void;
   clientMap?: Record<string, any>;
   contractorMode?: boolean;
+  // Controlled search — omit to let the table manage its own search text.
+  search?: string;
+  onSearchChange?: (v: string) => void;
 }
 
 export function TicketTable({
@@ -404,6 +407,8 @@ export function TicketTable({
   onExportOpenChange,
   clientMap,
   contractorMode = false,
+  search: controlledSearch,
+  onSearchChange,
 }: TicketTableProps) {
   const navigate = useNavigate();
   const [showMobileSort, setShowMobileSort] = useState(false);
@@ -426,7 +431,9 @@ export function TicketTable({
     try { return JSON.parse(sessionStorage.getItem(`${stateKey}_${suffix}`) || '[]'); } catch { return []; }
   };
 
-  const [localSearch,  setLocalSearch]  = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_search`) || '' : '');
+  const [internalSearch, setInternalSearch] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_search`) || '' : '');
+  const localSearch = controlledSearch !== undefined ? controlledSearch : internalSearch;
+  const setLocalSearch = onSearchChange ?? setInternalSearch;
   const [localStatuses, setLocalStatuses] = useState<string[]>(() => readStoredArr('statuses'));
   const [localTypes,    setLocalTypes]    = useState<string[]>(() => readStoredArr('types'));
   const [localProjects, setLocalProjects] = useState<string[]>(() => readStoredArr('projects'));
