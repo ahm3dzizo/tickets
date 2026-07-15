@@ -891,7 +891,7 @@ export function UnifiedAppointmentDialog({
               {canSendWhatsApp ? 'الوقت المفضل للعميل' : 'وقت الموعد'}
             </Label>
             <div className="grid grid-cols-2 gap-2">
-              {timeOptions.map(opt => (
+              {timeOptions.filter(opt => opt.value !== 'custom').map(opt => (
                 <button
                   key={opt.value}
                   onClick={() => setTimeMode(opt.value)}
@@ -906,14 +906,16 @@ export function UnifiedAppointmentDialog({
                 </button>
               ))}
             </div>
-            {timeMode === 'custom' && (
+            {/* الوقت المحدد ظاهر دايماً — مش محتاج تدوس على زرار عشان يظهر */}
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
               <input
                 type="time"
-                value={customTime}
-                onChange={e => setCustomTime(e.target.value)}
+                value={timeMode === 'custom' ? customTime : (finalTime || customTime)}
+                onChange={e => { setCustomTime(e.target.value); setTimeMode('custom'); }}
                 className="w-full bg-background border border-input rounded-xl h-11 px-3 text-foreground text-sm"
               />
-            )}
+            </div>
           </div>
 
           {/* ── EDIT MODE: type selector ────────────────────────────────── */}

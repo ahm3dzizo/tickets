@@ -426,25 +426,24 @@ export function TicketTable({
   const mergedTypeBg: Record<string, string>        = { ...typeBgStatic,    ...dbTypeBg };
 
   // ── Local filter state (multi-select, Excel-style) ───────────────────────
-  const readStoredArr = (suffix: string): string[] => {
-    if (!stateKey) return [];
-    try { return JSON.parse(sessionStorage.getItem(`${stateKey}_${suffix}`) || '[]'); } catch { return []; }
-  };
-
+  // Every value-filter always starts cleared on mount — only المغلقة keeps
+  // its persisted/default state. A filter left active from an earlier visit
+  // (especially one whose trigger only exists on the desktop table header)
+  // used to silently zero out the list with no visible cause.
   const [internalSearch, setInternalSearch] = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_search`) || '' : '');
   const localSearch = controlledSearch !== undefined ? controlledSearch : internalSearch;
   const setLocalSearch = onSearchChange ?? setInternalSearch;
-  const [localStatuses, setLocalStatuses] = useState<string[]>(() => readStoredArr('statuses'));
-  const [localTypes,    setLocalTypes]    = useState<string[]>(() => readStoredArr('types'));
-  const [localProjects, setLocalProjects] = useState<string[]>(() => readStoredArr('projects'));
+  const [localStatuses, setLocalStatuses] = useState<string[]>([]);
+  const [localTypes,    setLocalTypes]    = useState<string[]>([]);
+  const [localProjects, setLocalProjects] = useState<string[]>([]);
   const [showClosed,   setShowClosed]   = useState(() => stateKey ? sessionStorage.getItem(`${stateKey}_closed`) === 'true' : defaultShowClosed);
-  const [localSupervisors, setLocalSupervisors] = useState<string[]>(() => readStoredArr('supervisors'));
-  const [localIds,      setLocalIds]      = useState<string[]>(() => readStoredArr('ids'));
-  const [localRefs,     setLocalRefs]     = useState<string[]>(() => readStoredArr('refs'));
-  const [localClients,  setLocalClients]  = useState<string[]>(() => readStoredArr('clients'));
-  const [localDates,    setLocalDates]    = useState<string[]>(() => readStoredArr('dates'));
-  const [localDays,     setLocalDays]     = useState<string[]>(() => readStoredArr('days'));
-  const [localAppointments, setLocalAppointments] = useState<string[]>(() => readStoredArr('appts'));
+  const [localSupervisors, setLocalSupervisors] = useState<string[]>([]);
+  const [localIds,      setLocalIds]      = useState<string[]>([]);
+  const [localRefs,     setLocalRefs]     = useState<string[]>([]);
+  const [localClients,  setLocalClients]  = useState<string[]>([]);
+  const [localDates,    setLocalDates]    = useState<string[]>([]);
+  const [localDays,     setLocalDays]     = useState<string[]>([]);
+  const [localAppointments, setLocalAppointments] = useState<string[]>([]);
   const [internalExportOpen, setInternalExportOpen] = useState(false);
   const exportModalOpen = controlledExportOpen !== undefined ? controlledExportOpen : internalExportOpen;
   const setExportModalOpen = (v: boolean) => {
@@ -453,17 +452,7 @@ export function TicketTable({
   };
 
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_search`, localSearch); }, [localSearch, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_statuses`, JSON.stringify(localStatuses)); }, [localStatuses, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_types`, JSON.stringify(localTypes)); }, [localTypes, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_projects`, JSON.stringify(localProjects)); }, [localProjects, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_closed`, String(showClosed)); }, [showClosed, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_supervisors`, JSON.stringify(localSupervisors)); }, [localSupervisors, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_ids`, JSON.stringify(localIds)); }, [localIds, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_refs`, JSON.stringify(localRefs)); }, [localRefs, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_clients`, JSON.stringify(localClients)); }, [localClients, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_dates`, JSON.stringify(localDates)); }, [localDates, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_days`, JSON.stringify(localDays)); }, [localDays, stateKey]);
-  useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_appts`, JSON.stringify(localAppointments)); }, [localAppointments, stateKey]);
 
   // Some column filters (ID/المرجع/العميل/التاريخ/الأيام/موعد) only have a
   // trigger in the desktop table header — on mobile there's no icon to spot
