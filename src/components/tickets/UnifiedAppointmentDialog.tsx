@@ -140,6 +140,10 @@ export function UnifiedAppointmentDialog({
   const isTicketMode = !isEditMode && (tickets?.length ?? 0) > 0;
   const isCalendarMode = !isEditMode && !isTicketMode;
   const canSendWhatsApp = isTicketMode && !!clientPhone;
+  // Work-hours quick-select (الصباح/بعد الظهر) only makes sense when opened
+  // from the tickets page — from المواعيد (calendar add) or تعديل موعد
+  // (edit), just show a plain date + time picker instead.
+  const showWorkHoursShortcuts = isTicketMode;
 
   const primaryTicket = tickets?.[0] ?? null;
   const multiIds = tickets?.map(t => t.id).join(',') ?? '';
@@ -890,22 +894,24 @@ export function UnifiedAppointmentDialog({
             <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
               {canSendWhatsApp ? 'الوقت المفضل للعميل' : 'وقت الموعد'}
             </Label>
-            <div className="grid grid-cols-2 gap-2">
-              {timeOptions.filter(opt => opt.value !== 'custom').map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setTimeMode(opt.value)}
-                  className={cn(
-                    'h-10 rounded-xl text-xs font-bold border transition-all px-2',
-                    timeMode === opt.value
-                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-700 dark:text-blue-300'
-                      : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            {showWorkHoursShortcuts && (
+              <div className="grid grid-cols-2 gap-2">
+                {timeOptions.filter(opt => opt.value !== 'custom').map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setTimeMode(opt.value)}
+                    className={cn(
+                      'h-10 rounded-xl text-xs font-bold border transition-all px-2',
+                      timeMode === opt.value
+                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-700 dark:text-blue-300'
+                        : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {/* الوقت المحدد ظاهر دايماً — مش محتاج تدوس على زرار عشان يظهر */}
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
