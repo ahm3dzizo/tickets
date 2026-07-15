@@ -465,6 +465,20 @@ export function TicketTable({
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_days`, JSON.stringify(localDays)); }, [localDays, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_appts`, JSON.stringify(localAppointments)); }, [localAppointments, stateKey]);
 
+  // Some column filters (ID/المرجع/العميل/التاريخ/الأيام/موعد) only have a
+  // trigger in the desktop table header — on mobile there's no icon to spot
+  // or clear them, so a stale selection from a previous desktop session can
+  // silently zero out the list. This lets any screen size reset everything.
+  const hasActiveValueFilters =
+    localStatuses.length > 0 || localTypes.length > 0 || localProjects.length > 0 || localSupervisors.length > 0 ||
+    localIds.length > 0 || localRefs.length > 0 || localClients.length > 0 ||
+    localDates.length > 0 || localDays.length > 0 || localAppointments.length > 0;
+  const clearAllValueFilters = () => {
+    setLocalStatuses([]); setLocalTypes([]); setLocalProjects([]); setLocalSupervisors([]);
+    setLocalIds([]); setLocalRefs([]); setLocalClients([]);
+    setLocalDates([]); setLocalDays([]); setLocalAppointments([]);
+  };
+
   const uniqueSupervisors = useMemo(() => {
     const map = new Map<string, string>();
     tickets.forEach(t => {
@@ -966,10 +980,37 @@ export function TicketTable({
               />
             )}
 
-            <span className="text-[10px] text-slate-500 font-bold px-2 mr-auto hidden sm:block">
+            {/* تشمل فلاتر ID/المرجع/العميل/التاريخ/الأيام/الموعد اللي مالهاش زرار على الموبايل */}
+            {hasActiveValueFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearAllValueFilters}
+                className="h-9 rounded-xl gap-1.5 text-xs font-bold border-rose-500/40 bg-rose-500/10 text-rose-500 dark:text-rose-400"
+              >
+                <X className="w-3.5 h-3.5" />
+                مسح كل الفلاتر
+              </Button>
+            )}
+
+            <span className="text-[10px] text-slate-500 font-bold px-2 mr-auto">
               {baseTickets.length} / {tickets.length}
             </span>
           </div>
+        </div>
+      )}
+
+      {showInlineFilters && displayTickets.length === 0 && (
+        <div className="py-16 text-center" dir="rtl">
+          <p className="text-slate-500 text-sm font-medium">لا توجد تذاكر مطابقة للفلاتر الحالية</p>
+          {(hasActiveValueFilters || localSearch) && (
+            <button
+              onClick={() => { clearAllValueFilters(); setLocalSearch(''); }}
+              className="mt-2 text-xs font-bold text-blue-400 hover:underline"
+            >
+              مسح كل الفلاتر والبحث
+            </button>
+          )}
         </div>
       )}
 
