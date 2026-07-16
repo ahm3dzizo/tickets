@@ -512,26 +512,10 @@ export function UnifiedAppointmentDialog({
             });
           }
         } else {
-          const nextId = await ticketsApi.getNextId(projectId);
-          const newTicket = await ticketsApi.create({
-            ticketId: nextId,
-            refNumber: selectedVilla,
-            projectId, clientId: selectedClientId, clientName,
-            villaNumber: selectedVilla,
-            description: `موعد صيانة مجدول (${newTicketTypes.map(k => mergedTypes[k] ?? k).join('، ')})`,
-            type: newTicketTypes[0],
-            detectedTypes: newTicketTypes,
-            status: 'pending',
-            priority: 3,
-            isDirectAppointment: true,
-            createdAt: new Date().toISOString(),
-            ...(notes ? { appointmentNotes: notes } : {}),
-            ...(selectedSupIds.length ? {
-              assignedSupervisorIds: selectedSupIds,
-              assignedSupervisorId: selectedSupIds[0],
-              assignedSupervisors,
-            } : {}),
-          });
+          // No open ticket for this villa — save the appointment on its own
+          // instead of manufacturing a placeholder "ticket" just to hang it
+          // off of. The Appointment record already carries everything
+          // (villa, client, types, supervisors, notes) needed to display it.
           await appointmentsApi.create({
             projectId, villaNumber: selectedVilla,
             clientId: selectedClientId || undefined, clientName,
@@ -540,7 +524,6 @@ export function UnifiedAppointmentDialog({
             notes: notes || undefined,
             supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
             types: newTicketTypes,
-            ticketIds: [newTicket.id],
           });
         }
         toast.success('تم حفظ الموعد بنجاح');
