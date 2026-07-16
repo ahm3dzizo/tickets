@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { appointmentsApi, whatsappApi, usersApi, ticketsApi, clientsApi, settingsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
+import { renderTableDescription } from './TicketTable';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -737,7 +738,7 @@ export function UnifiedAppointmentDialog({
                 {activeTickets.map((t: any) => (
                   <div key={t.id} className="mb-1.5 last:mb-0 border-b border-border/50 pb-1.5 last:border-0 last:pb-0">
                     <span className="text-[10px] text-blue-400 font-bold ml-2">#{t.ticketId || t.id?.slice(0, 6)}</span>
-                    <p className="text-xs text-foreground leading-relaxed break-words">{t.description}</p>
+                    <p className="text-xs text-foreground leading-relaxed break-words">{renderTableDescription(t.description)}</p>
                   </div>
                 ))}
               </div>
