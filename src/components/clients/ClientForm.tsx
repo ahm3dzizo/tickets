@@ -22,6 +22,7 @@ import {
 import { clientsApi, projectsApi } from '@/lib/api';
 import { Project } from '@/types';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ClientFormProps {
   trigger?: React.ReactNode;
@@ -33,6 +34,7 @@ interface ClientFormProps {
 }
 
 export function ClientForm({ trigger, projectId: initialProjectId, nativeButton, onSuccess, open: openProp, onOpenChange }: ClientFormProps) {
+  const { user } = useAuth();
   const [openInternal, setOpenInternal] = useState(false);
   const open     = openProp     !== undefined ? openProp     : openInternal;
   const setOpen  = onOpenChange !== undefined ? onOpenChange : setOpenInternal;
@@ -50,8 +52,18 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton,
   const isCustomTrigger = !!trigger;
 
   useEffect(() => {
-    projectsApi.getAll().then(setProjects).catch(() => {});
-  }, []);
+    projectsApi.getAll().then((all: Project[]) => {
+      const scoped = (!user || user.role === 'admin')
+        ? all
+        : all.filter(p => (user.projectIds || []).includes(p.id));
+      setProjects(scoped);
+      // لو المستخدم مسنودله مشروع واحد بس، اختاره تلقائي
+      if (!initialProjectId && scoped.length === 1) {
+        setProjectId(scoped[0].id);
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

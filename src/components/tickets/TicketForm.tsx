@@ -123,11 +123,17 @@ export function TicketForm({
   useEffect(() => {
     projectsApi.getAll()
       .then((all: Project[]) => {
-        if (!user || user.role === 'admin') { setProjects(all); return; }
-        const ids = user.projectIds || [];
-        setProjects(ids.length ? all.filter(p => ids.includes(p.id)) : []);
+        const scoped = (!user || user.role === 'admin')
+          ? all
+          : all.filter(p => (user.projectIds || []).includes(p.id));
+        setProjects(scoped);
+        // لو المستخدم مسنودله مشروع واحد بس، اختاره تلقائي
+        if (!defaultProjectId && scoped.length === 1) {
+          setProjectId(scoped[0].id);
+        }
       })
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   /* ── Sync defaultProjectId ────────────────────────────────── */

@@ -53,8 +53,11 @@ export default function TicketsList() {
       const clientMap: Record<string, Client> = {};
       allClients.forEach((c: any) => { clientMap[c.id] = c as Client; });
       setClients(clientMap);
+      const scopedProjects = user.role === 'admin'
+        ? allProjects
+        : allProjects.filter((p: any) => user.projectIds?.includes(p.id));
       const projectMap: Record<string, Project> = {};
-      allProjects.forEach((p: any) => { projectMap[p.id] = p as Project; });
+      scopedProjects.forEach((p: any) => { projectMap[p.id] = p as Project; });
       setProjects(projectMap);
 
       const params: Parameters<typeof ticketsApi.getAll>[0] = {};

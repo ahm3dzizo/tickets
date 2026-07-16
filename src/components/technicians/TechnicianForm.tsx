@@ -23,6 +23,7 @@ import { Project, User, TicketType } from '@/types';
 import { typeTranslations } from '@/components/tickets/TicketTable';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TechnicianFormProps {
   trigger?: React.ReactNode;
@@ -35,6 +36,7 @@ const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 const SHOE_SIZES = ['38', '39', '40', '41', '42', '43', '44', '45', '46', '47'];
 
 export function TechnicianForm({ trigger, nativeButton, technician, onSaved }: TechnicianFormProps) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(technician?.name || '');
@@ -53,11 +55,19 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved }: T
     if (!open) return;
     Promise.all([projectsApi.getAll(), usersApi.getAll()])
       .then(([allProjects, allUsers]) => {
-        setProjects(allProjects as Project[]);
+        const scoped = (!user || user.role === 'admin')
+          ? (allProjects as Project[])
+          : (allProjects as Project[]).filter(p => (user.projectIds || []).includes(p.id));
+        setProjects(scoped);
         setAllSupervisors((allUsers as any[]).filter(u => u.role === 'supervisor'));
+        // لو المستخدم مسنودله مشروع واحد بس، اختاره تلقائي
+        if (!technician?.projectId && scoped.length === 1) {
+          setProjectId(scoped[0].id);
+        }
       })
       .catch(() => {});
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, user]);
 
   // When project changes, clear supervisor if they're not in the new project
   const handleProjectChange = (pid: string) => {

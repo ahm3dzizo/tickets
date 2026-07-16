@@ -1,5 +1,5 @@
 // src/components/tickets/UnifiedImportModal.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -44,6 +44,14 @@ export function UnifiedImportModal({
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+
+  // لو المستخدم مسنودله مشروع واحد بس، اختاره تلقائي عند فتح المودال
+  useEffect(() => {
+    if (open && projects.length === 1 && !selectedProjectId) {
+      setSelectedProjectId(projects[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, projects]);
 
   const processFile = useCallback(async (file: File) => {
     if (!file || !selectedProjectId) return;
