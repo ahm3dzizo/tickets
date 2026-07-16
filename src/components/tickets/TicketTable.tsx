@@ -213,7 +213,7 @@ export function BulkActionBar({
         <DropdownMenuTrigger render={
           <Button variant="outline" size="sm" className="border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0">
             <Edit className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">لحالة</span>
+            <span>الحالة</span>
             <ChevronDown className="w-3 h-3" />
           </Button>
         } />
@@ -242,7 +242,7 @@ export function BulkActionBar({
           className="border-green-500/30 bg-green-500/10 text-green-400 font-bold rounded-xl gap-1 h-9 px-2.5 text-xs shrink-0"
           onClick={onAppointment}>
           <MessageCircle className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">ترتيب موعد</span>
+          <span>ترتيب موعد</span>
         </Button>
       )}
 
