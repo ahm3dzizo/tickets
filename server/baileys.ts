@@ -70,7 +70,8 @@ export async function startWA(userId: string) {
     auth: state,
     printQRInTerminal: false,
     logger,
-    browser: ['Ubuntu', 'Chrome', '20.0.04']
+    browser: ['Ubuntu', 'Chrome', '20.0.04'],
+    markOnlineOnConnect: false,
   });
 
   sessions.set(userId, sock);
