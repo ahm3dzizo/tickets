@@ -2,8 +2,8 @@
 // ─── إدارة جلسة بوت الأوامر (رقم منفصل عن جلسات المستخدمين) ─────────────────
 import { Router } from 'express';
 import { AuthRequest, requireAdmin } from '../auth.js';
-import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, pairWACode } from '../baileys.js';
-import { BOT_USER_ID, isBotEnabled, setBotEnabled } from '../whatsappBot.js';
+import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, pairWACode, joinBotGroupByInvite, leaveBotGroup } from '../baileys.js';
+import { BOT_USER_ID, isBotEnabled, setBotEnabled, getBotGroup } from '../whatsappBot.js';
 import qrcode from 'qrcode';
 import prisma from '../db.js';
 
@@ -87,6 +87,34 @@ router.post('/toggle', async (req: AuthRequest, res) => {
   const { enabled } = req.body as { enabled: boolean };
   await setBotEnabled(!!enabled);
   res.json({ ok: true, enabled: !!enabled });
+});
+
+// ─── GET /api/whatsapp-bot/group ──────────────────────────────────────────────
+router.get('/group', async (_req: AuthRequest, res) => {
+  const group = await getBotGroup();
+  res.json({ group });
+});
+
+// ─── POST /api/whatsapp-bot/group/join ───────────────────────────────────────
+router.post('/group/join', async (req: AuthRequest, res) => {
+  const { inviteLink } = req.body as { inviteLink?: string };
+  if (!inviteLink) { res.status(400).json({ error: 'inviteLink مطلوب' }); return; }
+  try {
+    const group = await joinBotGroupByInvite(inviteLink);
+    res.json({ ok: true, group });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/whatsapp-bot/group/leave ──────────────────────────────────────
+router.post('/group/leave', async (_req: AuthRequest, res) => {
+  try {
+    await leaveBotGroup();
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── GET /api/whatsapp-bot/logs ──────────────────────────────────────────────

@@ -6,12 +6,13 @@ import {
   User, Lock, Bell, Shield, LogOut, X,
   Camera, Save, Eye, EyeOff, CheckCircle2, Loader2, Check,
   MessageSquare, RefreshCw, Wifi, WifiOff, Download, Clock,
+  Bot, Link2, ScrollText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { authApi, usersApi, whatsappApi, settingsApi, projectsApi } from '@/lib/api';
+import { authApi, usersApi, whatsappApi, whatsappBotApi, settingsApi, projectsApi } from '@/lib/api';
 import type { WorkHoursConfig, WorkHoursSettings } from '@/lib/api';
 import type { Project } from '@/types';
 import { toast } from 'sonner';
@@ -249,8 +250,115 @@ export default function Settings() {
     finally { setLoadingQR(false); }
   };
 
+  // ── WhatsApp Bot (أدمن فقط) ─────────────────────────────────────────────────
+  const [botStatus, setBotStatus] = useState<{
+    running: boolean; connected: boolean; state?: string; linkedPhone?: string | null; enabled: boolean;
+  } | null>(null);
+  const [botQR,        setBotQR]        = useState<string | null>(null);
+  const [loadingBot,   setLoadingBot]   = useState(false);
+  const [loadingBotQR, setLoadingBotQR] = useState(false);
+  const [startingBot,  setStartingBot]  = useState(false);
+  const [stoppingBot,  setStoppingBot]  = useState(false);
+  const [togglingBot,  setTogglingBot]  = useState(false);
+  const [botGroup,     setBotGroup]     = useState<{ jid: string; subject: string | null } | null>(null);
+  const [groupLink,    setGroupLink]    = useState('');
+  const [joiningGroup, setJoiningGroup] = useState(false);
+  const [leavingGroup, setLeavingGroup] = useState(false);
+
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+    const socket = io(window.location.origin, { auth: { token: localStorage.getItem('retal_auth_token') } });
+    socket.on('wa-status-whatsapp-bot', (s: any) => {
+      setBotStatus(prev => ({ ...(prev ?? { enabled: true }), running: s.running, connected: s.connected, state: s.state, linkedPhone: s.linkedPhone }));
+      if (s.qr) {
+        setBotQR(s.qr.startsWith('data:') ? s.qr : `data:image/png;base64,${s.qr}`);
+      } else if (s.connected) {
+        setBotQR(null);
+        toast.success('تم ربط رقم بوت الأوامر بنجاح ✅');
+      }
+    });
+    return () => { socket.disconnect(); };
+  }, [user?.role]);
+
+  const checkBotStatus = useCallback(async () => {
+    setLoadingBot(true);
+    try {
+      const s = await whatsappBotApi.getStatus();
+      setBotStatus(s);
+      if (s.running && !s.connected) setBotQR(null);
+      const g = await whatsappBotApi.getGroup();
+      setBotGroup(g.group);
+    } catch { setBotStatus({ running: false, connected: false, enabled: true }); }
+    finally { setLoadingBot(false); }
+  }, []);
+
+  const startBotService = async () => {
+    setStartingBot(true);
+    try {
+      await whatsappBotApi.start();
+      toast.success('جاري تشغيل جلسة البوت...');
+      setTimeout(checkBotStatus, 5000);
+    } catch (err: any) { toast.error(err?.message ?? 'تعذّر تشغيل الجلسة'); }
+    finally { setStartingBot(false); }
+  };
+
+  const stopBotService = async () => {
+    if (!window.confirm('هل أنت متأكد من قطع/إعادة تهيئة جلسة البوت؟ سيؤدي ذلك إلى مسح البيانات الحالية.')) return;
+    setStoppingBot(true);
+    try {
+      await whatsappBotApi.stop(true);
+      toast.success('تم إعادة تهيئة الجلسة');
+      setBotQR(null);
+      setTimeout(checkBotStatus, 5000);
+    } catch (err: any) { toast.error(err?.message ?? 'تعذّر إعادة التهيئة'); }
+    finally { setStoppingBot(false); }
+  };
+
+  const fetchBotQR = async () => {
+    setLoadingBotQR(true);
+    try {
+      const d = await whatsappBotApi.getQR();
+      if (d.qr) setBotQR(d.qr.startsWith('data:') ? d.qr : `data:image/png;base64,${d.qr}`);
+    } catch (err: any) { toast.error(err?.message ?? 'تعذّر جلب رمز QR'); }
+    finally { setLoadingBotQR(false); }
+  };
+
+  const toggleBotEnabled = async (enabled: boolean) => {
+    setTogglingBot(true);
+    try {
+      await whatsappBotApi.toggle(enabled);
+      setBotStatus(prev => prev ? { ...prev, enabled } : prev);
+      toast.success(enabled ? 'تم تفعيل البوت' : 'تم إيقاف تنفيذ أوامر البوت');
+    } catch (err: any) { toast.error(err?.message ?? 'تعذّر تغيير الحالة'); }
+    finally { setTogglingBot(false); }
+  };
+
+  const joinBotGroupHandler = async () => {
+    if (!groupLink.trim()) { toast.error('الصق رابط دعوة الجروب أولاً'); return; }
+    setJoiningGroup(true);
+    try {
+      const d = await whatsappBotApi.joinGroup(groupLink.trim());
+      setBotGroup(d.group);
+      setGroupLink('');
+      toast.success(`تم ربط جروب "${d.group.subject}" بنجاح`);
+    } catch (err: any) { toast.error(err?.message ?? 'تعذّر الانضمام للجروب'); }
+    finally { setJoiningGroup(false); }
+  };
+
+  const leaveBotGroupHandler = async () => {
+    if (!window.confirm('هل أنت متأكد من فصل الجروب؟ البوت هيبطل يرد على أي حد فيه.')) return;
+    setLeavingGroup(true);
+    try {
+      await whatsappBotApi.leaveGroup();
+      setBotGroup(null);
+      toast.success('تم فصل الجروب');
+    } catch (err: any) { toast.error(err?.message ?? 'تعذّر فصل الجروب'); }
+    finally { setLeavingGroup(false); }
+  };
+
   const handleCardClick = (key: string) => {
     if (key === 'whatsapp' && openSection !== 'whatsapp') checkWAStatus();
+    if (key === 'whatsappbot' && openSection !== 'whatsappbot') checkBotStatus();
     setOpenSection(prev => prev === key ? null : key);
   };
 
@@ -359,6 +467,7 @@ export default function Settings() {
       { key: 'whatsapp',  title: 'واتساب تلقائي',         desc: 'ربط واتسابك لإرسال الرسائل أوتوماتيك', icon: MessageSquare, accent: 'green'  },
       ...(user?.role === 'admin' ? [
         { key: 'templates', title: 'قوالب الواتساب',     desc: 'تخصيص الرسائل التلقائية للعملاء',     icon: MessageSquare, accent: 'blue'   },
+        { key: 'whatsappbot', title: 'بوت الأوامر',      desc: 'رقم بوت يستقبل أوامر من الموظفين',    icon: Bot,           accent: 'purple' },
       ] as SectionMeta[] : []),
       ...((user?.role === 'admin' || user?.role === 'engineer') ? [
         { key: 'workhours', title: 'أوقات الدوام',       desc: 'فترات العمل والمواعيد لكل مشروع',     icon: Clock,         accent: 'amber'  },
@@ -642,6 +751,154 @@ export default function Settings() {
               <Button onClick={restartWAService} variant="ghost" className="w-full text-xs text-red-400 hover:bg-red-500/5 rounded-xl h-8" disabled={loadingQR || restartingWA}>
                 إعادة تهيئة الجلسة بالكامل
               </Button>
+            </div>
+          )}
+        </div>
+      );
+
+      // ── WhatsApp Bot (أدمن فقط) ─────────────────────────────────────────────────
+      case 'whatsappbot': return user?.role !== 'admin' ? null : (
+        <div className="space-y-5">
+          {loadingBot && <div className="flex items-center justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-purple-400" /></div>}
+
+          {/* مفتاح الإيقاف السريع */}
+          {!loadingBot && botStatus && (
+            <div className="flex items-center justify-between gap-4 bg-muted/30 border border-border rounded-2xl px-5 py-3">
+              <Toggle checked={botStatus.enabled} onChange={v => toggleBotEnabled(v)} />
+              <div className="text-right flex-1">
+                <p className="text-foreground font-bold text-sm">تفعيل تنفيذ الأوامر</p>
+                <p className="text-muted-foreground text-xs">
+                  {togglingBot ? 'جاري التحديث...' : botStatus.enabled ? 'البوت بينفذ الأوامر الآن' : 'البوت متصل بس مش بينفذ أي أمر'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!loadingBot && botStatus && !botStatus.running && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-5 py-4 justify-start">
+                <WifiOff className="w-5 h-5 text-amber-400 shrink-0" />
+                <div className="text-right">
+                  <p className="text-amber-400 font-bold text-sm">جلسة البوت متوقفة</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">شغّل الجلسة عشان تربط رقم البوت</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button onClick={checkBotStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={startingBot}>
+                  <RefreshCw className="w-4 h-4" />إعادة الفحص
+                </Button>
+                <Button onClick={startBotService} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-10 gap-2 text-sm font-bold" disabled={startingBot}>
+                  {startingBot ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}تشغيل الجلسة
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!loadingBot && botStatus?.running && botStatus.connected && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-5 py-4 justify-start">
+                <Wifi className="w-5 h-5 text-emerald-400 shrink-0" />
+                <div className="text-right">
+                  <p className="text-emerald-400 font-bold text-sm">رقم البوت مرتبط</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">
+                    {botStatus.linkedPhone ? `مربوط برقم: ${botStatus.linkedPhone}` : 'الجلسة نشطة'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button onClick={checkBotStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={stoppingBot}>
+                  <RefreshCw className="w-4 h-4" />تحديث
+                </Button>
+                <Button onClick={stopBotService} variant="destructive" className="flex-1 rounded-xl h-10 gap-2 text-sm font-bold" disabled={stoppingBot}>
+                  {stoppingBot ? <Loader2 className="w-4 h-4 animate-spin" /> : <WifiOff className="w-4 h-4" />}قطع / إعادة ضبط
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!loadingBot && botStatus?.running && !botStatus.connected && (
+            <div className="space-y-5">
+              <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl px-5 py-4 justify-start">
+                <Bot className="w-5 h-5 text-blue-400 shrink-0" />
+                <div className="text-right">
+                  <p className="text-blue-400 font-bold text-sm">في انتظار ربط رقم البوت</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">امسح رمز QR من واتساب الرقم المخصص للبوت</p>
+                </div>
+              </div>
+              {botQR ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="bg-white p-3 rounded-2xl shadow-lg">
+                    <img src={botQR} alt="QR Code" className="w-48 h-48 object-contain" />
+                  </div>
+                  <p className="text-muted-foreground text-xs text-center">افتح واتساب على رقم البوت ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="w-48 h-48 bg-muted/60 rounded-2xl border border-border flex items-center justify-center">
+                    <Bot className="w-12 h-12 text-muted-foreground/40" />
+                  </div>
+                  <p className="text-muted-foreground text-xs text-center">اضغط الزر لتوليد رمز QR</p>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <Button onClick={checkBotStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={loadingBotQR || stoppingBot}>
+                  <RefreshCw className="w-4 h-4" />فحص
+                </Button>
+                <Button onClick={fetchBotQR} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-10 gap-2 text-sm font-bold" disabled={loadingBotQR || stoppingBot}>
+                  {loadingBotQR ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+                  {botQR ? 'تحديث QR' : 'توليد QR'}
+                </Button>
+              </div>
+              <Button onClick={stopBotService} variant="ghost" className="w-full text-xs text-red-400 hover:bg-red-500/5 rounded-xl h-8" disabled={loadingBotQR || stoppingBot}>
+                إعادة تهيئة الجلسة بالكامل
+              </Button>
+            </div>
+          )}
+
+          {/* ربط الجروب — اختياري، البوت شغال على الـ DM دايماً */}
+          {!loadingBot && botStatus?.connected && (
+            <div className="space-y-3 border-t border-border/40 pt-5">
+              <div className="text-right">
+                <p className="text-foreground font-bold text-sm flex items-center gap-2 justify-end">
+                  جروب الأوامر (اختياري) <Link2 className="w-4 h-4 text-muted-foreground" />
+                </p>
+                <p className="text-muted-foreground text-xs mt-0.5">البوت بيستقبل أوامر من الرسائل الخاصة دايماً — لو عايز يستقبلها من جروب معين كمان، اربطه هنا</p>
+              </div>
+
+              {botGroup ? (
+                <div className="flex items-center justify-between gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-5 py-3">
+                  <Button onClick={leaveBotGroupHandler} variant="ghost" size="sm" className="text-red-400 hover:bg-red-500/10 rounded-xl h-8 gap-1.5 text-xs" disabled={leavingGroup}>
+                    {leavingGroup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                    فصل
+                  </Button>
+                  <div className="text-right">
+                    <p className="text-emerald-400 font-bold text-sm">{botGroup.subject || 'جروب مرتبط'}</p>
+                    <p className="text-muted-foreground text-[10px] mt-0.5">مربوط ويستقبل أوامر</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Button onClick={joinBotGroupHandler} disabled={joiningGroup} className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-10 px-4 gap-2 text-sm font-bold shrink-0">
+                    {joiningGroup ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                    ربط
+                  </Button>
+                  <Input
+                    value={groupLink}
+                    onChange={e => setGroupLink(e.target.value)}
+                    placeholder="https://chat.whatsapp.com/xxxxxxxx"
+                    className="flex-1 rounded-xl h-10 text-sm text-right"
+                    dir="ltr"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* رابط لسجل الأوامر */}
+          {!loadingBot && botStatus?.connected && (
+            <div className="flex items-center gap-2 text-muted-foreground text-xs justify-end border-t border-border/40 pt-4">
+              <span>سجل الأوامر متاح عبر GET /api/whatsapp-bot/logs</span>
+              <ScrollText className="w-3.5 h-3.5" />
             </div>
           )}
         </div>

@@ -5,7 +5,7 @@ import pino from 'pino';
 import fs from 'fs';
 import prisma from './db.js';
 import { getIO } from './socket.js';
-import { BOT_USER_ID, handleBotMessage, isDuplicateMessage } from './whatsappBot.js';
+import { BOT_USER_ID, handleBotMessage, isDuplicateMessage, getBotGroup, setBotGroup } from './whatsappBot.js';
 
 const isProd = process.env.NODE_ENV === 'production';
 const BASE_SESSIONS = isProd ? '/opt/retal-api/wa-sessions' : path.join(process.cwd(), 'wa-sessions');
@@ -120,21 +120,32 @@ export async function startWA(userId: string) {
       if (!msg.message || msg.key.fromMe) continue;
 
       const senderJid = msg.key.remoteJid!;
-
-      // تجاهل رسائل المجموعات، القنوات (newsletters)، والحالات
-      if (senderJid.includes('@g.us') || senderJid.includes('@newsletter') || senderJid.includes('@broadcast')) {
-        continue;
-      }
+      const isGroupMsg = senderJid.endsWith('@g.us');
 
       // ─── جلسة بوت الأوامر — مسار منفصل تماماً عن ردود العملاء ───────────────
       if (userId === BOT_USER_ID) {
+        let allowed = !isGroupMsg && !senderJid.includes('@newsletter') && !senderJid.includes('@broadcast');
+        if (isGroupMsg) {
+          const group = await getBotGroup();
+          allowed = !!group && group.jid === senderJid;
+        }
+        if (!allowed) continue;
+
         const msgId = msg.key.id || `${senderJid}-${msg.messageTimestamp}`;
         if (isDuplicateMessage(msgId)) continue;
+
+        // في الجروب، remoteJid هو جروب الـ JID مش الشخص — الشخص الفعلي في participant
+        const botSenderJid = isGroupMsg ? (msg.key.participant || senderJid) : senderJid;
         const botText = (
           msg.message.conversation ||
           msg.message.extendedTextMessage?.text || ''
         ).trim();
-        if (botText) await handleBotMessage(senderJid, botText);
+        if (botText) await handleBotMessage(senderJid, botSenderJid, botText);
+        continue;
+      }
+
+      // تجاهل رسائل المجموعات، القنوات (newsletters)، والحالات (لغير جلسة البوت)
+      if (isGroupMsg || senderJid.includes('@newsletter') || senderJid.includes('@broadcast')) {
         continue;
       }
 
@@ -258,6 +269,42 @@ export async function pairWACode(userId: string, phone: string): Promise<string>
     console.error('Pairing code error:', err);
     throw new Error('تعذر توليد كود الربط: ' + err.message);
   }
+}
+
+// ─── ربط جروب بوت الأوامر عن طريق رابط الدعوة ────────────────────────────────
+function extractGroupInviteCode(inviteLink: string): string {
+  const m = inviteLink.trim().match(/chat\.whatsapp\.com\/([A-Za-z0-9]+)/);
+  const code = m ? m[1] : inviteLink.trim();
+  if (!code) throw new Error('رابط الدعوة غير صالح.');
+  return code;
+}
+
+export async function joinBotGroupByInvite(inviteLink: string): Promise<{ jid: string; subject: string }> {
+  const sock = sessions.get(BOT_USER_ID);
+  if (!sock || getWAStatus(BOT_USER_ID) !== 'CONNECTED') {
+    throw new Error('لازم تربط رقم البوت الأول قبل ما تضيفه لجروب.');
+  }
+  const code = extractGroupInviteCode(inviteLink);
+  const jid = await sock.groupAcceptInvite(code);
+  let subject = jid;
+  try {
+    const meta = await sock.groupMetadata(jid);
+    subject = meta.subject || jid;
+  } catch { /* اسم الجروب مش أساسي */ }
+  await setBotGroup(jid, subject);
+  return { jid, subject };
+}
+
+export async function leaveBotGroup(): Promise<void> {
+  const group = await getBotGroup();
+  if (!group) return;
+  const sock = sessions.get(BOT_USER_ID);
+  try {
+    if (sock && getWAStatus(BOT_USER_ID) === 'CONNECTED') {
+      await sock.groupLeave(group.jid);
+    }
+  } catch { /* استمر حتى لو فشل الخروج الفعلي — المهم نلغي الربط */ }
+  await setBotGroup(null);
 }
 
 export async function sendWAText(userId: string, phone: string, message: string): Promise<{ sent: boolean; fallback: boolean, error?: string }> {

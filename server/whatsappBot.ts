@@ -29,6 +29,27 @@ export async function setBotEnabled(enabled: boolean): Promise<void> {
   });
 }
 
+// ─── جروب الأوامر المسموح له (اختياري — البوت شغال على الـ DM دايماً) ───────
+const BOT_GROUP_KEY = 'whatsappBotGroup';
+
+export async function getBotGroup(): Promise<{ jid: string; subject: string | null } | null> {
+  const setting = await prisma.systemSetting.findUnique({ where: { key: BOT_GROUP_KEY } });
+  const value = setting?.value as any;
+  return value?.jid ? { jid: value.jid, subject: value.subject ?? null } : null;
+}
+
+export async function setBotGroup(jid: string | null, subject?: string | null): Promise<void> {
+  if (!jid) {
+    await prisma.systemSetting.deleteMany({ where: { key: BOT_GROUP_KEY } });
+    return;
+  }
+  await prisma.systemSetting.upsert({
+    where: { key: BOT_GROUP_KEY },
+    create: { key: BOT_GROUP_KEY, value: { jid, subject: subject ?? null } },
+    update: { value: { jid, subject: subject ?? null } },
+  });
+}
+
 // ─── حماية من تكرار نفس الرسالة (إعادة إرسال واتساب عند إعادة الاتصال) ──────
 const processedMsgIds = new Set<string>();
 export function isDuplicateMessage(id: string): boolean {
@@ -345,31 +366,33 @@ async function prepareScheduleAppointment(
 }
 
 // ─── نقطة الدخول الرئيسية ─────────────────────────────────────────────────────
+// chatJid: فين نرد (DM الشخص، أو الجروب لو الأمر جالي من جروب)
+// senderJid: مين اللي بعت فعلياً (نفس chatJid في الـ DM، أو participant في الجروب)
 
-export async function handleBotMessage(jid: string, rawText: string): Promise<void> {
+export async function handleBotMessage(chatJid: string, senderJid: string, rawText: string): Promise<void> {
   if (!(await isBotEnabled())) return;
 
-  const user = await resolveSenderUser(jid);
+  const user = await resolveSenderUser(senderJid);
   if (!user) {
-    await sendWAText(BOT_USER_ID, jid, '❌ رقمك مش مسجل كمستخدم في النظام.');
+    await sendWAText(BOT_USER_ID, chatJid, '❌ رقمك مش مسجل كمستخدم في النظام.');
     return;
   }
 
   const text = rawText.trim();
 
-  // تأكيد/إلغاء أمر معلّق
-  const pending = pendingActions.get(jid);
+  // تأكيد/إلغاء أمر معلّق — لكل شخص بتاعه لوحده حتى لو كل ده جوه نفس الجروب
+  const pending = pendingActions.get(senderJid);
   if (pending) {
-    pendingActions.delete(jid);
+    pendingActions.delete(senderJid);
     if (Date.now() < pending.expiresAt && CONFIRM_WORDS.has(text)) {
       const reply = await pending.execute();
-      await sendWAText(BOT_USER_ID, jid, reply);
-      await logCommand(user.uid, jid, rawText, 'confirm', true, reply);
+      await sendWAText(BOT_USER_ID, chatJid, reply);
+      await logCommand(user.uid, chatJid, rawText, 'confirm', true, reply);
       return;
     }
     if (CANCEL_WORDS.has(text)) {
-      await sendWAText(BOT_USER_ID, jid, '❌ اتلغى الأمر.');
-      await logCommand(user.uid, jid, rawText, 'cancel', true, 'اتلغى');
+      await sendWAText(BOT_USER_ID, chatJid, '❌ اتلغى الأمر.');
+      await logCommand(user.uid, chatJid, rawText, 'cancel', true, 'اتلغى');
       return;
     }
     // أي رسالة تانية تتعامل كأمر جديد عادي (مش تأكيد ولا إلغاء)
@@ -377,8 +400,8 @@ export async function handleBotMessage(jid: string, rawText: string): Promise<vo
 
   const intent = parseCommand(text);
   if (!intent) {
-    await sendWAText(BOT_USER_ID, jid, HELP_TEXT);
-    await logCommand(user.uid, jid, rawText, null, false, HELP_TEXT);
+    await sendWAText(BOT_USER_ID, chatJid, HELP_TEXT);
+    await logCommand(user.uid, chatJid, rawText, null, false, HELP_TEXT);
     return;
   }
 
@@ -408,19 +431,19 @@ export async function handleBotMessage(jid: string, rawText: string): Promise<vo
       case 'close_ticket': {
         const result = await prepareCloseTicket(intent.ticketId, projectIds, user.uid);
         if (typeof result === 'string') { reply = result; }
-        else { pendingActions.set(jid, result); reply = `هتقفل تذكرة #${intent.ticketId}. رد بـ "تأكيد" للتنفيذ.`; }
+        else { pendingActions.set(senderJid, result); reply = `هتقفل تذكرة #${intent.ticketId}. رد بـ "تأكيد" للتنفيذ.`; }
         break;
       }
       case 'close_villa_tickets': {
         const result = await prepareCloseVillaTickets(intent.villa, projectIds, user.uid);
         if (typeof result === 'string') { reply = result; }
-        else { pendingActions.set(jid, result); reply = `هتقفل تذاكر فيلا ${intent.villa}. رد بـ "تأكيد" للتنفيذ.`; }
+        else { pendingActions.set(senderJid, result); reply = `هتقفل تذاكر فيلا ${intent.villa}. رد بـ "تأكيد" للتنفيذ.`; }
         break;
       }
       case 'schedule_appointment': {
         const result = await prepareScheduleAppointment(intent.villa, intent.dayText, intent.notes, projectIds, user);
         if (typeof result === 'string') { reply = result; }
-        else { pendingActions.set(jid, result.pending); reply = result.summary; }
+        else { pendingActions.set(senderJid, result.pending); reply = result.summary; }
         break;
       }
     }
@@ -429,6 +452,6 @@ export async function handleBotMessage(jid: string, rawText: string): Promise<vo
     reply = '❌ حصل خطأ أثناء تنفيذ الأمر.';
   }
 
-  await sendWAText(BOT_USER_ID, jid, reply);
-  await logCommand(user.uid, jid, rawText, intent.type, true, reply);
+  await sendWAText(BOT_USER_ID, chatJid, reply);
+  await logCommand(user.uid, chatJid, rawText, intent.type, true, reply);
 }

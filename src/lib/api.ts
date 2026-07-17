@@ -242,6 +242,30 @@ export const whatsappApi = {
   }) => post<{ text: string }>(`/whatsapp/preview-appointment-range/${ticketId}`, data),
 };
 
+// ── WhatsApp Bot (admin-only) ───────────────────────────────────────────────
+export const whatsappBotApi = {
+  getStatus: () =>
+    get<{ running: boolean; connected: boolean; state?: string; linkedPhone?: string | null; enabled: boolean }>('/whatsapp-bot/status'),
+  getQR: () =>
+    get<{ qr: string | null; state?: string }>('/whatsapp-bot/qr'),
+  pairByPhone: (phone: string) =>
+    post<{ code: string }>('/whatsapp-bot/pair', { phone }),
+  start: () =>
+    post<{ ok: boolean }>('/whatsapp-bot/start', {}),
+  stop: (cleanSession?: boolean) =>
+    post<{ ok: boolean }>('/whatsapp-bot/stop', { cleanSession }),
+  toggle: (enabled: boolean) =>
+    post<{ ok: boolean; enabled: boolean }>('/whatsapp-bot/toggle', { enabled }),
+  getGroup: () =>
+    get<{ group: { jid: string; subject: string | null } | null }>('/whatsapp-bot/group'),
+  joinGroup: (inviteLink: string) =>
+    post<{ ok: boolean; group: { jid: string; subject: string } }>('/whatsapp-bot/group/join', { inviteLink }),
+  leaveGroup: () =>
+    post<{ ok: boolean }>('/whatsapp-bot/group/leave', {}),
+  getLogs: (limit = 50) =>
+    get<{ id: string; senderUid: string; jid: string; rawText: string; intent: string | null; success: boolean; reply: string; createdAt: string }[]>(`/whatsapp-bot/logs?limit=${limit}`),
+};
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 type WaTemplates = { openingMsg: string; closingMsg: string; absentMsg?: string; outOfScopeMsg?: string };
 export type TimePeriod = { start: string; end: string };
