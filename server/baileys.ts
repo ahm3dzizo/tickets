@@ -5,6 +5,7 @@ import pino from 'pino';
 import fs from 'fs';
 import prisma from './db.js';
 import { getIO } from './socket.js';
+import { BOT_USER_ID, handleBotMessage, isDuplicateMessage } from './whatsappBot.js';
 
 const isProd = process.env.NODE_ENV === 'production';
 const BASE_SESSIONS = isProd ? '/opt/retal-api/wa-sessions' : path.join(process.cwd(), 'wa-sessions');
@@ -119,12 +120,24 @@ export async function startWA(userId: string) {
       if (!msg.message || msg.key.fromMe) continue;
 
       const senderJid = msg.key.remoteJid!;
-      
+
       // تجاهل رسائل المجموعات، القنوات (newsletters)، والحالات
       if (senderJid.includes('@g.us') || senderJid.includes('@newsletter') || senderJid.includes('@broadcast')) {
         continue;
       }
-      
+
+      // ─── جلسة بوت الأوامر — مسار منفصل تماماً عن ردود العملاء ───────────────
+      if (userId === BOT_USER_ID) {
+        const msgId = msg.key.id || `${senderJid}-${msg.messageTimestamp}`;
+        if (isDuplicateMessage(msgId)) continue;
+        const botText = (
+          msg.message.conversation ||
+          msg.message.extendedTextMessage?.text || ''
+        ).trim();
+        if (botText) await handleBotMessage(senderJid, botText);
+        continue;
+      }
+
       const rawPhone = senderJid.split('@')[0];
       const suffix = rawPhone.slice(-9);
 

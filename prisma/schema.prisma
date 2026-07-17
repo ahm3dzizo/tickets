@@ -357,6 +357,21 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 }
 
+/// سجل أوامر بوت الواتساب — كل أمر جالي من رقم البوت، اتفهم ازاي، ورد بإيه
+model BotCommandLog {
+  id        String   @id @default(cuid())
+  senderUid String
+  jid       String
+  rawText   String
+  intent    String?
+  success   Boolean
+  reply     String
+  createdAt DateTime @default(now())
+
+  @@index([senderUid])
+  @@index([createdAt])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // APPOINTMENTS
 // ─────────────────────────────────────────────────────────────────────────────

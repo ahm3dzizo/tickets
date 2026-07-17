@@ -21,6 +21,7 @@ import reportsStatsRoutes from "./routes/reports.js";
 import auditRoutes from "./routes/audit.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import whatsappRoutes from "./routes/whatsapp.js";
+import whatsappBotRoutes from "./routes/whatsapp-bot.js";
 import settingsRoutes from "./routes/settings.js";
 import appointmentRoutes, { migrateAppointments } from "./routes/appointments.js";
 import ocrRoutes from "./routes/ocr.js";
@@ -82,6 +83,7 @@ async function startServer() {
   app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/admin/ticket-types", ticketTypesAdminRoutes);
   app.use("/api/whatsapp", whatsappRoutes);
+  app.use("/api/whatsapp-bot", whatsappBotRoutes);
   app.use("/api/settings", settingsRoutes);
   app.use("/api/appointments", appointmentRoutes);
   app.use("/api/ocr", ocrRoutes);
