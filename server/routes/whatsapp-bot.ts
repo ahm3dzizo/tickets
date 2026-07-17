@@ -1,7 +1,7 @@
 // server/routes/whatsapp-bot.ts
 // ─── إدارة جلسة بوت الأوامر (رقم منفصل عن جلسات المستخدمين) ─────────────────
 import { Router } from 'express';
-import { AuthRequest, requireAdmin } from '../auth.js';
+import { AuthRequest, requireAuth, requireAdmin } from '../auth.js';
 import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, pairWACode, joinBotGroupByInvite, leaveBotGroup } from '../baileys.js';
 import { BOT_USER_ID, isBotEnabled, setBotEnabled, getBotGroup } from '../whatsappBot.js';
 import qrcode from 'qrcode';
@@ -9,8 +9,9 @@ import prisma from '../db.js';
 
 const router = Router();
 
-// كل مسارات إدارة البوت للأدمن بس
-router.use(requireAdmin);
+// كل مسارات إدارة البوت للأدمن بس — لازم requireAuth الأول عشان يفك التوكن
+// ويحط req.uid، وبعدين requireAdmin يتحقق من الدور
+router.use(requireAuth, requireAdmin);
 
 // ─── GET /api/whatsapp-bot/status ────────────────────────────────────────────
 router.get('/status', async (_req: AuthRequest, res) => {
