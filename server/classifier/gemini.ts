@@ -1,8 +1,8 @@
 /**
- * NaraRouter (ex-Gemini) classifier — fallback when keyword confidence is too low.
- * Uses NaraRouter with mistral-large model.
- *
- * Set NARA_API_KEY in .env to enable.
+ * AI classifier — fallback when keyword confidence is too low.
+ * Prefers OpenRouter (set OPENROUTER_API_KEY, defaults to the free
+ * google/gemma-4-26b-a4b-it:free model) and falls back to NaraRouter
+ * (set NARA_API_KEY) if no OpenRouter key is configured.
  */
 
 import prisma from "../db.js";
@@ -10,12 +10,31 @@ import { loadKeywordsFromDB, normalizeArabic } from "./keywords.js";
 import { invalidateKeywordCache } from "./keywords.js";
 import { nudgeReclassifyWorker } from "./reclassify-worker.js";
 
-export function geminiEnabled(): boolean {
-  return !!process.env.NARA_API_KEY;
-}
-
 const NARA_URL = "https://router.bynara.id/v1/chat/completions";
 const NARA_MODEL = "mistral-large";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free";
+
+interface ProviderConfig {
+  url: string;
+  model: string;
+  apiKey: string;
+  label: string;
+}
+
+function getProvider(): ProviderConfig | null {
+  if (process.env.OPENROUTER_API_KEY) {
+    return { url: OPENROUTER_URL, model: OPENROUTER_MODEL, apiKey: process.env.OPENROUTER_API_KEY, label: "OpenRouter" };
+  }
+  if (process.env.NARA_API_KEY) {
+    return { url: NARA_URL, model: NARA_MODEL, apiKey: process.env.NARA_API_KEY, label: "NaraRouter" };
+  }
+  return null;
+}
+
+export function geminiEnabled(): boolean {
+  return !!getProvider();
+}
 
 // ── Build available-types + subtypes list ──────────────────────────────────
 async function getActiveTypes(): Promise<{ key: string; nameAr: string; description?: string }[]> {
@@ -56,8 +75,8 @@ function stripJsonComments(str: string): string {
 export async function classifyWithGemini(
   description: string
 ): Promise<GeminiClassifyResult | null> {
-  const apiKey = process.env.NARA_API_KEY;
-  if (!apiKey) return null;
+  const provider = getProvider();
+  if (!provider) return null;
 
   try {
     const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
@@ -93,14 +112,14 @@ ${typesList}
 
 الصيغة: {"items":[{"type":"key","subType":"اسم فرعي أو null"}],"confidence":0.9}`;
 
-    const response = await fetch(NARA_URL, {
+    const response = await fetch(provider.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
+        "Authorization": `Bearer ${provider.apiKey}`
       },
       body: JSON.stringify({
-        model: NARA_MODEL,
+        model: provider.model,
         temperature: 0.1,
         response_format: { type: "json_object" },
         messages: [
@@ -112,7 +131,7 @@ ${typesList}
 
     const data = await response.json();
     if (!response.ok) {
-        console.error("[NaraRouter] API error:", data.error?.message || response.statusText);
+        console.error(`[${provider.label}] API error:`, data.error?.message || response.statusText);
         return null;
     }
 
@@ -125,7 +144,7 @@ ${typesList}
       if (!jsonMatch) throw new Error("No JSON object found");
       parsed = JSON.parse(jsonMatch[0]);
     } catch {
-      console.error("[NaraRouter] Failed to parse response:", text);
+      console.error(`[${provider.label}] Failed to parse response:`, text);
       return null;
     }
 
@@ -165,7 +184,7 @@ ${typesList}
       source:        "gemini",
     };
   } catch (err: any) {
-    console.error("[NaraRouter] classify error:", err.message);
+    console.error(`[${provider.label}] classify error:`, err.message);
     return null;
   }
 }
@@ -183,8 +202,8 @@ export interface GeminiBatchResult {
 export async function classifyBatchWithGemini(
   items: { id: string; description: string }[]
 ): Promise<GeminiBatchResult[]> {
-  const apiKey = process.env.NARA_API_KEY;
-  if (!apiKey || items.length === 0) return [];
+  const provider = getProvider();
+  if (!provider || items.length === 0) return [];
 
   const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
   if (types.length === 0) return [];
@@ -220,14 +239,14 @@ ${typesList}
 [{"i":1,"items":[{"type":"key","subType":"اسم فرعي أو null"}],"confidence":0.9}]`;
 
   try {
-    const response = await fetch(NARA_URL, {
+    const response = await fetch(provider.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
+        "Authorization": `Bearer ${provider.apiKey}`
       },
       body: JSON.stringify({
-        model: NARA_MODEL,
+        model: provider.model,
         temperature: 0.1,
         messages: [
           { role: "system", content: prompt },
@@ -238,8 +257,8 @@ ${typesList}
 
     const data = await response.json();
     if (!response.ok) {
-        console.error("[NaraRouter batch] API error:", data.error?.message || response.statusText);
-        throw new Error(data.error?.message || "NaraRouter Error");
+        console.error(`[${provider.label} batch] API error:`, data.error?.message || response.statusText);
+        throw new Error(data.error?.message || `${provider.label} Error`);
     }
 
     const text = data.choices?.[0]?.message?.content?.trim() || "";
@@ -247,7 +266,7 @@ ${typesList}
     const stripped  = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
     const arrMatch  = stripped.match(/\[[\s\S]*\]/);
     if (!arrMatch) {
-      console.error("[NaraRouter batch] No JSON array in response:", text.slice(0, 120));
+      console.error(`[${provider.label} batch] No JSON array in response:`, text.slice(0, 120));
       return [];
     }
 
@@ -279,7 +298,7 @@ ${typesList}
         };
       });
   } catch (err: any) {
-    console.error("[NaraRouter batch] error:", err.message);
+    console.error(`[${provider.label} batch] error:`, err.message);
     throw err;
   }
 }
