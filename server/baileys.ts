@@ -130,23 +130,30 @@ export async function startWA(userId: string) {
 
       // ─── جلسة بوت الأوامر — مسار منفصل تماماً عن ردود العملاء ───────────────
       if (userId === BOT_USER_ID) {
-        let allowed = !isGroupMsg && !senderJid.includes('@newsletter') && !senderJid.includes('@broadcast');
-        if (isGroupMsg) {
-          const group = await getBotGroup();
-          allowed = !!group && group.jid === senderJid;
+        try {
+          let allowed = !isGroupMsg && !senderJid.includes('@newsletter') && !senderJid.includes('@broadcast');
+          if (isGroupMsg) {
+            const group = await getBotGroup();
+            allowed = !!group && group.jid === senderJid;
+          }
+          if (!allowed) continue;
+
+          const msgId = msg.key.id || `${senderJid}-${msg.messageTimestamp}`;
+          if (isDuplicateMessage(msgId)) continue;
+
+          // في الجروب، remoteJid هو جروب الـ JID مش الشخص — الشخص الفعلي في participant
+          const botSenderJid = isGroupMsg ? (msg.key.participant || senderJid) : senderJid;
+          const botText = (
+            msg.message.conversation ||
+            msg.message.extendedTextMessage?.text || ''
+          ).trim();
+          if (botText) await handleBotMessage(senderJid, botSenderJid, botText);
+        } catch (err) {
+          console.error('[WA Bot] failed before reaching handler:', err);
+          try {
+            await sendWAText(BOT_USER_ID, senderJid, '❌ حصل خطأ غير متوقع في البوت. حاول تاني، ولو المشكلة استمرت بلّغ الأدمن.');
+          } catch { /* تجاهل — لو فشل الرد كمان، الخطأ مسجل في اللوج */ }
         }
-        if (!allowed) continue;
-
-        const msgId = msg.key.id || `${senderJid}-${msg.messageTimestamp}`;
-        if (isDuplicateMessage(msgId)) continue;
-
-        // في الجروب، remoteJid هو جروب الـ JID مش الشخص — الشخص الفعلي في participant
-        const botSenderJid = isGroupMsg ? (msg.key.participant || senderJid) : senderJid;
-        const botText = (
-          msg.message.conversation ||
-          msg.message.extendedTextMessage?.text || ''
-        ).trim();
-        if (botText) await handleBotMessage(senderJid, botSenderJid, botText);
         continue;
       }
 

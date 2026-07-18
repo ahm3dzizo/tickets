@@ -370,6 +370,19 @@ async function prepareScheduleAppointment(
 // senderJid: مين اللي بعت فعلياً (نفس chatJid في الـ DM، أو participant في الجروب)
 
 export async function handleBotMessage(chatJid: string, senderJid: string, rawText: string): Promise<void> {
+  try {
+    await handleBotMessageInner(chatJid, senderJid, rawText);
+  } catch (err) {
+    console.error('[WA Bot] unexpected error handling message:', err);
+    try {
+      await sendWAText(BOT_USER_ID, chatJid, '❌ حصل خطأ غير متوقع في البوت. حاول تاني، ولو المشكلة استمرت بلّغ الأدمن.');
+    } catch (sendErr) {
+      console.error('[WA Bot] failed to send error reply:', sendErr);
+    }
+  }
+}
+
+async function handleBotMessageInner(chatJid: string, senderJid: string, rawText: string): Promise<void> {
   if (!(await isBotEnabled())) return;
 
   const user = await resolveSenderUser(senderJid);
