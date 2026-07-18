@@ -98,9 +98,10 @@ function parseClosureTypeReply(text: string): ClosureType | null {
 }
 
 interface PendingClosureChoice {
-  kind: 'ticket' | 'villa';
+  kind: 'ticket' | 'villa' | 'tickets_list';
   ticketId?: string;
   villa?: string;
+  ticketIds?: string[];
   expiresAt: number;
 }
 const pendingClosureChoices = new Map<string, PendingClosureChoice>(); // key: senderJid
@@ -266,6 +267,7 @@ type Intent =
   | { type: 'report' }
   | { type: 'close_ticket'; ticketId: string }
   | { type: 'close_villa_tickets'; villa: string }
+  | { type: 'close_tickets_list'; ticketIds: string[] }
   | { type: 'schedule_appointment'; villa: string; dayText: string; notes?: string };
 
 function parseCommand(rawText: string): Intent | null {
@@ -279,6 +281,11 @@ function parseCommand(rawText: string): Intent | null {
 
   if ((m = t.match(/^(?:اقفل|قفل|اغلق|سكر)\s+تذاكر\s+(?:ال)?فيل[ها]?\s*(\S+)/))) {
     return { type: 'close_villa_tickets', villa: normalizeVilla(m[1]) };
+  }
+  if ((m = t.match(/^(?:اقفل|قفل|اغلق|سكر)\s+تذاكر\s+([\d\s,،]+)$/))) {
+    const ticketIds = m[1].split(/[\s,،]+/).filter(Boolean);
+    if (ticketIds.length > 1) return { type: 'close_tickets_list', ticketIds };
+    return { type: 'close_ticket', ticketId: ticketIds[0] };
   }
   if ((m = t.match(/^(?:اقفل|قفل|اغلق|سكر)\s+تذكره\s*(\d+)/))) {
     return { type: 'close_ticket', ticketId: m[1] };
@@ -318,6 +325,7 @@ const HELP_TEXT = [
   '👤 تذاكر [اسم المشرف] — التذاكر المفتوحة بتاعته',
   '📊 تقرير — ملخص أعداد التذاكر',
   '🔒 اقفل/قفل/اغلق/سكر تذكرة [رقم] — هيسألك نوع الإغلاق',
+  '🔒 اقفل تذاكر [رقم1,رقم2,رقم3] — قفل أكتر من تذكرة مرة واحدة',
   '🔒 اقفل/قفل/اغلق/سكر تذاكر فيلا [رقم] — هيسألك نوع الإغلاق لكل التذاكر المفتوحة',
   '📅 موعد فيلا [رقم] [اليوم] [الوقت] ملاحظات: [نص]',
   '   أمثلة: "موعد فيلا 540 بكرة الساعة 8"، "موعد فيلا 540 السبت"، "موعد فيلا 540 بعد بكرة 5 مساء"',
@@ -419,7 +427,7 @@ async function prepareCloseTicket(
       const { status, closedAt } = closureDataFor(closureType);
       await prisma.ticket.update({ where: { id: ticket.id }, data: { status, closedAt } });
       await prisma.ticketAudit.create({
-        data: { ticketId: ticket.id, field: 'status', oldValue: ticket.status, newValue: status, changedBy: `whatsapp-bot:${user.uid}` },
+        data: { ticketId: ticket.id, field: 'status', oldValue: ticket.status, newValue: status, changedBy: user.uid },
       });
       return buildClosureReport([{ ticketId: ticket.ticketId, villaNumber: ticket.villaNumber }], closureType, user.displayName);
     },
@@ -439,9 +447,34 @@ async function prepareCloseVillaTickets(
       const { status, closedAt } = closureDataFor(closureType);
       await prisma.ticket.updateMany({ where: { id: { in: tickets.map(t => t.id) } }, data: { status, closedAt } });
       await Promise.all(tickets.map(t => prisma.ticketAudit.create({
-        data: { ticketId: t.id, field: 'status', oldValue: t.status, newValue: status, changedBy: `whatsapp-bot:${user.uid}` },
+        data: { ticketId: t.id, field: 'status', oldValue: t.status, newValue: status, changedBy: user.uid },
       })));
       return buildClosureReport(tickets.map(t => ({ ticketId: t.ticketId, villaNumber: t.villaNumber })), closureType, user.displayName);
+    },
+  };
+}
+
+async function prepareCloseTicketsList(
+  ticketIds: string[], projectIds: string[] | null, user: { uid: string; displayName: string }, closureType: ClosureType,
+): Promise<PendingAction | string> {
+  const tickets = await prisma.ticket.findMany({ where: { ticketId: { in: ticketIds }, ...projectWhere(projectIds) } });
+  if (tickets.length === 0) return `❌ مفيش تذاكر بالأرقام دي في نطاق صلاحياتك.`;
+  const openTickets = tickets.filter(t => t.status !== 'closed' && t.status !== 'out_of_scope');
+  const alreadyClosed = tickets.filter(t => t.status === 'closed' || t.status === 'out_of_scope');
+  const notFound = ticketIds.filter(id => !tickets.some(t => t.ticketId === id));
+  if (openTickets.length === 0) return `كل التذاكر دي مقفولة بالفعل.`;
+  return {
+    expiresAt: Date.now() + CONFIRM_TTL_MS,
+    execute: async () => {
+      const { status, closedAt } = closureDataFor(closureType);
+      await prisma.ticket.updateMany({ where: { id: { in: openTickets.map(t => t.id) } }, data: { status, closedAt } });
+      await Promise.all(openTickets.map(t => prisma.ticketAudit.create({
+        data: { ticketId: t.id, field: 'status', oldValue: t.status, newValue: status, changedBy: user.uid },
+      })));
+      let report = buildClosureReport(openTickets.map(t => ({ ticketId: t.ticketId, villaNumber: t.villaNumber })), closureType, user.displayName);
+      if (alreadyClosed.length) report += `\n⚠️ كانت مقفولة بالفعل: ${alreadyClosed.map(t => t.ticketId).join('، ')}`;
+      if (notFound.length) report += `\n⚠️ مش موجودة: ${notFound.join('، ')}`;
+      return report;
     },
   };
 }
@@ -614,13 +647,17 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
     pendingClosureChoices.delete(senderJid);
     const result = closureChoice.kind === 'ticket'
       ? await prepareCloseTicket(closureChoice.ticketId!, projectIds, user, closureType)
-      : await prepareCloseVillaTickets(closureChoice.villa!, projectIds, user, closureType);
+      : closureChoice.kind === 'villa'
+      ? await prepareCloseVillaTickets(closureChoice.villa!, projectIds, user, closureType)
+      : await prepareCloseTicketsList(closureChoice.ticketIds!, projectIds, user, closureType);
     if (typeof result === 'string') {
       await sendWAJid(BOT_USER_ID, chatJid, result);
       await logCommand(user.uid, chatJid, rawText, 'close_confirm', false, result);
     } else {
       pendingActions.set(senderJid, result);
-      const target = closureChoice.kind === 'ticket' ? `تذكرة #${closureChoice.ticketId}` : `تذاكر فيلا ${closureChoice.villa}`;
+      const target = closureChoice.kind === 'ticket' ? `تذكرة #${closureChoice.ticketId}`
+        : closureChoice.kind === 'villa' ? `تذاكر فيلا ${closureChoice.villa}`
+        : `${closureChoice.ticketIds!.length} تذكرة (${closureChoice.ticketIds!.join('، ')})`;
       const confirmMsg = `هتقفل ${target} (${CLOSURE_TYPE_LABELS[closureType]}). رد بـ "تأكيد" للتنفيذ.`;
       await sendWAJid(BOT_USER_ID, chatJid, confirmMsg);
       await logCommand(user.uid, chatJid, rawText, 'close_confirm', true, confirmMsg);
@@ -691,6 +728,15 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
         if (tickets.length === 0) { reply = `مفيش تذاكر مفتوحة لفيلا ${intent.villa} في نطاق صلاحياتك.`; break; }
         pendingClosureChoices.set(senderJid, { kind: 'villa', villa: intent.villa, expiresAt: Date.now() + CONFIRM_TTL_MS });
         reply = `هتقفل ${tickets.length} تذكرة لفيلا ${intent.villa}.\n${CLOSURE_PROMPT}`;
+        break;
+      }
+      case 'close_tickets_list': {
+        const tickets = await prisma.ticket.findMany({
+          where: { ticketId: { in: intent.ticketIds }, status: { notIn: ['closed', 'out_of_scope'] }, ...projectWhere(projectIds) },
+        });
+        if (tickets.length === 0) { reply = `❌ مفيش تذاكر مفتوحة بالأرقام دي في نطاق صلاحياتك.`; break; }
+        pendingClosureChoices.set(senderJid, { kind: 'tickets_list', ticketIds: intent.ticketIds, expiresAt: Date.now() + CONFIRM_TTL_MS });
+        reply = `هتقفل ${tickets.length} تذكرة (${tickets.map(t => t.ticketId).join('، ')}).\n${CLOSURE_PROMPT}`;
         break;
       }
       case 'schedule_appointment': {
