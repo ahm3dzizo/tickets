@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -146,7 +147,9 @@ export function EditAppointmentDialog({ open, onOpenChange, group, supervisors =
         <DialogHeader className="p-5 border-b bg-muted/30">
           <DialogTitle className="text-lg font-bold text-foreground text-right flex items-center gap-2">
             <CalendarClock className="w-5 h-5 text-amber-500" />
-            تعديل موعد شامل (فيلا {group?.villaNumber})
+            تعديل موعد شامل (فيلا {group?.unitId ? (
+              <Link to={`/units/${group.unitId}`} className="text-blue-400 hover:underline hover:text-blue-300 transition-colors">{group?.villaNumber}</Link>
+            ) : group?.villaNumber})
           </DialogTitle>
         </DialogHeader>
 

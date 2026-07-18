@@ -434,7 +434,10 @@ export default function TicketDetail() {
                 </Badge>
               </div>
               <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight">
-                ID: {ticket.ticketId || '---'} | فيلا {ticket.villaNumber}
+                ID: {ticket.ticketId || '---'} | فيلا{' '}
+                {ticket.unitId ? (
+                  <Link to={`/units/${ticket.unitId}`} className="text-blue-400 hover:underline hover:text-blue-300 transition-colors">{ticket.villaNumber}</Link>
+                ) : ticket.villaNumber}
               </h1>
             </div>
           </div>

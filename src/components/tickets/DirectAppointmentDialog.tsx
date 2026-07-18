@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -338,8 +339,14 @@ export function DirectAppointmentDialog({
               <div className="bg-muted/30 border border-border/50 rounded-2xl p-3 max-h-32 overflow-y-auto text-right no-scrollbar shrink-0">
                 {openTickets.map(t => (
                   <div key={t.id} className="mb-2 last:mb-0 border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                    <span className="text-[10px] text-blue-400 font-bold ml-2">#{t.ticketId || t.id.slice(0, 6)}</span>
-                    {t.villaNumber && <span className="text-[10px] text-muted-foreground">فيلا {t.villaNumber}</span>}
+                    <Link to={`/tickets/${t.id}`} className="text-[10px] text-blue-400 font-bold ml-2 hover:underline hover:text-blue-300 transition-colors">#{t.ticketId || t.id.slice(0, 6)}</Link>
+                    {t.villaNumber && (
+                      <span className="text-[10px] text-muted-foreground">
+                        فيلا {t.unitId ? (
+                          <Link to={`/units/${t.unitId}`} className="hover:underline hover:text-blue-300 transition-colors">{t.villaNumber}</Link>
+                        ) : t.villaNumber}
+                      </span>
+                    )}
                     <p className="text-xs text-foreground mt-1 leading-relaxed">{t.description}</p>
                   </div>
                 ))}
