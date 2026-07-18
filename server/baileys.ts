@@ -107,6 +107,8 @@ export async function startWA(userId: string) {
       if (sock.user?.id) {
         linkedPhones.set(userId, sock.user.id);
       }
+      // نجبر الحساب يبان "غير متصل" — markOnlineOnConnect:false بيمنع البث التلقائي بس مش كافي لوحده
+      sock.sendPresenceUpdate('unavailable').catch(() => {});
       getIO()?.emit(`wa-status-${userId}`, { running: true, connected: true, state: 'CONNECTED', linkedPhone: getLinkedPhone(userId) });
     }
   });
@@ -125,7 +127,8 @@ export async function startWA(userId: string) {
       // ─── جلسة بوت الأوامر — مسار منفصل تماماً عن ردود العملاء ───────────────
       if (userId === BOT_USER_ID) {
         try {
-          let allowed = !isGroupMsg && !senderJid.includes('@newsletter') && !senderJid.includes('@broadcast');
+          // البوت بيرد بس على الجروب المربوط — أي رسالة خاصة (DM) للرقم بتاعه بتتجاهل تماماً
+          let allowed = false;
           if (isGroupMsg) {
             const group = await getBotGroup();
             allowed = !!group && group.jid === senderJid;
@@ -324,6 +327,7 @@ export async function sendWAJid(userId: string, jid: string, message: string): P
   }
   try {
     await sock.sendMessage(jid, { text: message });
+    sock.sendPresenceUpdate('unavailable').catch(() => {});
     return { sent: true };
   } catch (err) {
     console.error('Baileys Error sending text to JID:', err);
