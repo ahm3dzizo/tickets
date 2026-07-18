@@ -118,7 +118,7 @@ export async function startWA(userId: string) {
     if (userId === BOT_USER_ID) {
       console.log(`[WA Bot Debug] upsert type=${type} count=${msgs.length}`);
       for (const m of msgs) {
-        console.log(`[WA Bot Debug] msg fromMe=${m.key.fromMe} remoteJid=${m.key.remoteJid} participant=${m.key.participant} hasMessage=${!!m.message} text=${JSON.stringify((m.message?.conversation || m.message?.extendedTextMessage?.text || '').slice(0, 50))}`);
+        console.log(`[WA Bot Debug] msg fromMe=${m.key.fromMe} remoteJid=${m.key.remoteJid} participant=${m.key.participant} participantAlt=${m.key.participantAlt} hasMessage=${!!m.message} text=${JSON.stringify((m.message?.conversation || m.message?.extendedTextMessage?.text || '').slice(0, 50))}`);
       }
     }
     if (type !== 'notify') return;
@@ -142,7 +142,8 @@ export async function startWA(userId: string) {
           if (isDuplicateMessage(msgId)) continue;
 
           // في الجروب، remoteJid هو جروب الـ JID مش الشخص — الشخص الفعلي في participant
-          const botSenderJid = isGroupMsg ? (msg.key.participant || senderJid) : senderJid;
+          // participant ممكن يكون @lid (معرّف مجهول) — participantAlt هو رقم الهاتف الحقيقي لو متاح
+          const botSenderJid = isGroupMsg ? (msg.key.participantAlt || msg.key.participant || senderJid) : senderJid;
           const botText = (
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text || ''
@@ -151,7 +152,7 @@ export async function startWA(userId: string) {
         } catch (err) {
           console.error('[WA Bot] failed before reaching handler:', err);
           try {
-            await sendWAText(BOT_USER_ID, senderJid, '❌ حصل خطأ غير متوقع في البوت. حاول تاني، ولو المشكلة استمرت بلّغ الأدمن.');
+            await sendWAJid(BOT_USER_ID, senderJid, '❌ حصل خطأ غير متوقع في البوت. حاول تاني، ولو المشكلة استمرت بلّغ الأدمن.');
           } catch { /* تجاهل — لو فشل الرد كمان، الخطأ مسجل في اللوج */ }
         }
         continue;
@@ -318,6 +319,22 @@ export async function leaveBotGroup(): Promise<void> {
     }
   } catch { /* استمر حتى لو فشل الخروج الفعلي — المهم نلغي الربط */ }
   await setBotGroup(null);
+}
+
+// إرسال مباشر لـ JID جاهز (جروب أو شخص) — من غير تطبيع رقم أو فحص onWhatsApp
+// (onWhatsApp بيشتغل بس على أرقام أفراد، وبيفشل دايماً على جروبات @g.us)
+export async function sendWAJid(userId: string, jid: string, message: string): Promise<{ sent: boolean; error?: string }> {
+  const sock = sessions.get(userId);
+  if (getWAStatus(userId) !== 'CONNECTED' || !sock) {
+    return { sent: false, error: 'NOT_CONNECTED' };
+  }
+  try {
+    await sock.sendMessage(jid, { text: message });
+    return { sent: true };
+  } catch (err) {
+    console.error('Baileys Error sending text to JID:', err);
+    return { sent: false, error: 'SEND_FAILED' };
+  }
 }
 
 export async function sendWAText(userId: string, phone: string, message: string): Promise<{ sent: boolean; fallback: boolean, error?: string }> {

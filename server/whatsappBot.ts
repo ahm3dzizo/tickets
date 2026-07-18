@@ -4,7 +4,7 @@
 // موظفين مسجلين في النظام وينفذها بنفس صلاحيات كل مستخدم في التطبيق العادي.
 
 import prisma from './db.js';
-import { sendWAText } from './baileys.js';
+import { sendWAJid } from './baileys.js';
 
 export const BOT_USER_ID = 'whatsapp-bot';
 
@@ -375,7 +375,7 @@ export async function handleBotMessage(chatJid: string, senderJid: string, rawTe
   } catch (err) {
     console.error('[WA Bot] unexpected error handling message:', err);
     try {
-      await sendWAText(BOT_USER_ID, chatJid, '❌ حصل خطأ غير متوقع في البوت. حاول تاني، ولو المشكلة استمرت بلّغ الأدمن.');
+      await sendWAJid(BOT_USER_ID, chatJid, '❌ حصل خطأ غير متوقع في البوت. حاول تاني، ولو المشكلة استمرت بلّغ الأدمن.');
     } catch (sendErr) {
       console.error('[WA Bot] failed to send error reply:', sendErr);
     }
@@ -387,7 +387,7 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
 
   const user = await resolveSenderUser(senderJid);
   if (!user) {
-    await sendWAText(BOT_USER_ID, chatJid, '❌ رقمك مش مسجل كمستخدم في النظام.');
+    await sendWAJid(BOT_USER_ID, chatJid, '❌ رقمك مش مسجل كمستخدم في النظام.');
     return;
   }
 
@@ -399,12 +399,12 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
     pendingActions.delete(senderJid);
     if (Date.now() < pending.expiresAt && CONFIRM_WORDS.has(text)) {
       const reply = await pending.execute();
-      await sendWAText(BOT_USER_ID, chatJid, reply);
+      await sendWAJid(BOT_USER_ID, chatJid, reply);
       await logCommand(user.uid, chatJid, rawText, 'confirm', true, reply);
       return;
     }
     if (CANCEL_WORDS.has(text)) {
-      await sendWAText(BOT_USER_ID, chatJid, '❌ اتلغى الأمر.');
+      await sendWAJid(BOT_USER_ID, chatJid, '❌ اتلغى الأمر.');
       await logCommand(user.uid, chatJid, rawText, 'cancel', true, 'اتلغى');
       return;
     }
@@ -413,7 +413,7 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
 
   const intent = parseCommand(text);
   if (!intent) {
-    await sendWAText(BOT_USER_ID, chatJid, HELP_TEXT);
+    await sendWAJid(BOT_USER_ID, chatJid, HELP_TEXT);
     await logCommand(user.uid, chatJid, rawText, null, false, HELP_TEXT);
     return;
   }
@@ -465,6 +465,6 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
     reply = '❌ حصل خطأ أثناء تنفيذ الأمر.';
   }
 
-  await sendWAText(BOT_USER_ID, chatJid, reply);
+  await sendWAJid(BOT_USER_ID, chatJid, reply);
   await logCommand(user.uid, chatJid, rawText, intent.type, true, reply);
 }
