@@ -356,7 +356,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const KEYWORD_MIN_SCORE = 1; // score 1 matches old unified import
 
     for (let index = 0; index < rows.length; index++) {
-      if (index % 5000 === 0) await new Promise(r => setImmediate(r)); // Yield event loop
+      if (index % 25 === 0) await new Promise(r => setImmediate(r)); // Yield event loop often enough that the whole app doesn't freeze during large imports
       const row = rows[index];
       try {
         const get = (key: string) => {
