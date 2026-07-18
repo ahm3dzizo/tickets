@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
 CheckCircle2,
 X,
@@ -448,9 +449,18 @@ return (
 <DialogTitle className="text-xl font-bold text-white text-right">إقفال التذاكر المختارة</DialogTitle>
 </div>
 <div className="text-right p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1">
-<div className="text-xs text-slate-500 font-bold uppercase tracking-widest">فيلا رقم {currentVilla}</div>
-<div className="text-sm font-bold text-blue-400">
-{selectedTickets.map(t => `#${t.ticketId || t.refNumber}`).join(' ، ')}
+<div className="text-xs text-slate-500 font-bold uppercase tracking-widest">
+فيلا رقم {selectedTickets[0]?.unitId ? (
+  <Link to={`/units/${selectedTickets[0].unitId}`} className="hover:underline hover:text-blue-300 transition-colors">{currentVilla}</Link>
+) : currentVilla}
+</div>
+<div className="text-sm font-bold text-blue-400 space-x-1 space-x-reverse">
+{selectedTickets.map((t, i) => (
+  <React.Fragment key={t.id}>
+    {i > 0 && ' ، '}
+    <Link to={`/tickets/${t.id}`} className="hover:underline hover:text-blue-300 transition-colors">#{t.ticketId || t.refNumber}</Link>
+  </React.Fragment>
+))}
 </div>
 </div>
 </DialogHeader>

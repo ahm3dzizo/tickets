@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { CalendarDays, Clock, AlertTriangle, CheckCircle2, Eye, Send, Save, Loader2, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -291,7 +292,16 @@ export function AppointmentDialog({ open, onOpenChange, tickets, clientPhone, on
           <div className="text-right">
             <h3 className="font-bold text-foreground">{primaryTicket.clientName}</h3>
             <p className="text-xs text-muted-foreground">
-              {tickets.length > 1 ? `تذاكر: ${tickets.map(t => t.ticketId).join(', ')}` : `تذكرة #${primaryTicket.ticketId}`} — فيلا {primaryTicket.villaNumber}
+              {tickets.length > 1 ? (
+                <>تذاكر: {tickets.map((t, i) => (
+                  <React.Fragment key={t.id}>
+                    {i > 0 && ', '}
+                    <Link to={`/tickets/${t.id}`} className="text-blue-400 hover:underline hover:text-blue-300 transition-colors">{t.ticketId}</Link>
+                  </React.Fragment>
+                ))}</>
+              ) : (
+                <>تذكرة #<Link to={`/tickets/${primaryTicket.id}`} className="text-blue-400 hover:underline hover:text-blue-300 transition-colors">{primaryTicket.ticketId}</Link></>
+              )} — فيلا {primaryTicket.villaNumber}
             </p>
           </div>
         </DialogHeader>

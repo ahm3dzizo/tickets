@@ -1530,11 +1530,11 @@ export function TicketTable({
                             } />
                             <DropdownMenuContent align="end" className="bg-card border-border text-slate-200 w-52">
                               <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start"
-                                onClick={() => navigate(`/tickets/${ticket.id}`)}>
+                                onClick={() => { sessionStorage.setItem('ticketsListScrollY', window.scrollY.toString()); navigate(`/tickets/${ticket.id}`); }}>
                                 عرض التفاصيل <Eye className="w-4 h-4" />
                               </DropdownMenuItem>
                               <DropdownMenuItem className="hover:bg-white/5 cursor-pointer gap-2 text-start justify-start"
-                                onClick={() => navigate(`/tickets/${ticket.id}`)}>
+                                onClick={() => { sessionStorage.setItem('ticketsListScrollY', window.scrollY.toString()); navigate(`/tickets/${ticket.id}`); }}>
                                 تعديل <Edit2 className="w-4 h-4" />
                               </DropdownMenuItem>
                               <DropdownMenuItem

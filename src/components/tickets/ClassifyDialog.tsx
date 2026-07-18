@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Sparkles, Loader2, Check, X, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
@@ -127,8 +128,17 @@ export function ClassifyDialog({ ticket, open, onClose, onDone }: ClassifyDialog
         {/* Ticket info */}
         <div className="bg-muted/40 border border-border/50 rounded-2xl p-3 text-right space-y-1">
           <p className="text-[11px] text-muted-foreground font-bold">
-            {ticket.refNumber || ticket.ticketId || ticket.id.slice(0, 6)}
-            {ticket.villaNumber && ` · فيلا ${ticket.villaNumber}`}
+            <Link to={`/tickets/${ticket.id}`} className="text-blue-400 hover:underline hover:text-blue-300 transition-colors">
+              {ticket.refNumber || ticket.ticketId || ticket.id.slice(0, 6)}
+            </Link>
+            {ticket.villaNumber && (
+              <>
+                {' · فيلا '}
+                {ticket.unitId ? (
+                  <Link to={`/units/${ticket.unitId}`} className="text-blue-400 hover:underline hover:text-blue-300 transition-colors">{ticket.villaNumber}</Link>
+                ) : ticket.villaNumber}
+              </>
+            )}
           </p>
           <p className="text-sm text-foreground leading-relaxed line-clamp-3">{ticket.description}</p>
         </div>

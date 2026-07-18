@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -100,7 +101,7 @@ export function ReassignSupervisorButton({ ticket, onReassigned, variant = 'butt
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="text-xs text-slate-500 text-right space-y-1">
-              <p>التذكرة: <span className="text-white">{ticket.ticketId || ticket.refNumber || ticket.id.slice(0, 8)}</span></p>
+              <p>التذكرة: <Link to={`/tickets/${ticket.id}`} className="text-blue-400 hover:underline hover:text-blue-300 transition-colors">{ticket.ticketId || ticket.refNumber || ticket.id.slice(0, 8)}</Link></p>
               <p>النوع الحالي: <span className="text-white">{ticket.detectedTypes?.map((t: string) => typeTranslations[t]).join(' · ') || typeTranslations[ticket.type]}</span></p>
             </div>
 

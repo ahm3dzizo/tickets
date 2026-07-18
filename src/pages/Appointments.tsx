@@ -120,6 +120,11 @@ export default function Appointments() {
   const [clientTicketsModal, setClientTicketsModal] = useState<{ villa: string, project: string, notes: string } | null>(null);
   const [editApptGroup, setEditApptGroup] = useState<any>(null);
   const [refDate, setRefDate] = useState(() => {
+    const stored = sessionStorage.getItem('appointments_refDate');
+    if (stored) {
+      const d = new Date(stored);
+      if (!isNaN(d.getTime())) return d;
+    }
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
@@ -139,9 +144,9 @@ export default function Appointments() {
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<any[]>([]);
   const [supervisors, setSupervisors] = useState<any[]>([]);
-  const [filterSup, setFilterSup] = useState<string>('');
-  const [filterProject, setFilterProject] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filterSup, setFilterSup] = useState<string>(() => sessionStorage.getItem('appointments_filterSup') || '');
+  const [filterProject, setFilterProject] = useState<string>(() => sessionStorage.getItem('appointments_filterProject') || '');
+  const [searchQuery, setSearchQuery] = useState<string>(() => sessionStorage.getItem('appointments_searchQuery') || '');
   const [lang, setLang] = useState<'ar' | 'ur' | 'hi'>('ar');
   const t = TRANSLATIONS[lang];
 
@@ -211,6 +216,21 @@ export default function Appointments() {
   }, [user]);
 
   useEffect(() => { loadAppointments(); }, [from, to, filterProject, user]);
+
+  // ── الحفاظ على الفلاتر/البحث/التاريخ المعروض عند مغادرة الصفحة والرجوع ليها ──
+  useEffect(() => { sessionStorage.setItem('appointments_refDate', refDate.toISOString()); }, [refDate]);
+  useEffect(() => { sessionStorage.setItem('appointments_filterSup', filterSup); }, [filterSup]);
+  useEffect(() => { sessionStorage.setItem('appointments_filterProject', filterProject); }, [filterProject]);
+  useEffect(() => { sessionStorage.setItem('appointments_searchQuery', searchQuery); }, [searchQuery]);
+
+  // استرجاع مكان السكرول لو كنا فاكرينه من قبل، وحفظه لما نسيب الصفحة
+  useEffect(() => {
+    const savedY = sessionStorage.getItem('appointmentsScrollY');
+    if (savedY) {
+      setTimeout(() => { window.scrollTo({ top: parseInt(savedY, 10), behavior: 'auto' }); sessionStorage.removeItem('appointmentsScrollY'); }, 100);
+    }
+    return () => { sessionStorage.setItem('appointmentsScrollY', String(window.scrollY)); };
+  }, []);
 
   const groupedByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
