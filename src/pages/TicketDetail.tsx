@@ -56,7 +56,7 @@ function TryImage({ url, index, onOpen }: { url: string; index: number; onOpen: 
       <a href={url} target="_blank" rel="noopener noreferrer"
         className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all h-max">
         <ExternalLink className="w-5 h-5 shrink-0" />
-        <span className="text-sm font-bold truncate text-right w-full" dir="ltr">{url}</span>
+        <span className="text-sm font-bold text-right">فتح الصورة في تبويب جديد</span>
       </a>
     );
   }
@@ -65,6 +65,8 @@ function TryImage({ url, index, onOpen }: { url: string; index: number; onOpen: 
       className="relative group block rounded-2xl overflow-hidden border border-white/10 bg-black/20 hover:border-white/30 transition-all flex items-center justify-center min-h-[160px] w-full cursor-pointer">
       <img src={url} alt={`مرفق ${index + 1}`}
         className="w-full h-auto max-h-80 object-contain"
+        referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
         onError={() => setFailed(true)} />
       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
         <ZoomIn className="w-8 h-8 text-white drop-shadow-lg" />

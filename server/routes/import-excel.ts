@@ -223,6 +223,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: "projectId مطلوب" });
   }
+  const closeMissingTickets = req.body.closeMissingTickets === 'true';
 
   const filePath = req.file.path;
 
@@ -434,8 +435,16 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         // Duplicate check (DB)
         const existing = existingMap.get(ticketId);
         if (existing) {
-          // لا تقم بإرجاع التذكرة لحالة "مفتوحة" إذا كانت في حالة متقدمة (معلقة، قيد التنفيذ، أو مغلقة)
-          const statusChanged = existing.status !== status && !(status === 'open' && existing.status !== 'open');
+          // الملف يحتوي على عمود حالة → القيمة الموجودة فيه مرجعية (بما فيها إعادة فتح المغلقة)
+          // إذا لم يكن فيه عمود حالة → لا تُرجع التذكرة لحالة مفتوحة إذا كانت في حالة متقدمة
+          const fileHasStatusColumn = !!mapping["status"];
+          let statusChanged = existing.status !== status;
+          if (statusChanged && status === 'open') {
+            // اسمح بإعادة الفتح فقط لو الملف فيه عمود حالة والتذكرة كانت مغلقة تحديداً
+            if (!(fileHasStatusColumn && existing.status === 'closed')) {
+              statusChanged = false;
+            }
+          }
           const typeNeedsUpdate =
             (!existing.type || existing.type === "unclassified") &&
             finalType !== "unclassified";
@@ -595,8 +604,9 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       }
     }
 
-    // ── 7.5 Close open tickets not present in the file ────────────────────────
+    // ── 7.5 Close open tickets not present in the file (only if explicitly requested) ──
     let closedMissingCount = 0;
+    let missingCount = 0;
     {
       const fileTicketIds = new Set(
         rows.map(r => {
@@ -606,8 +616,9 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       );
 
       const missingToUpdate = existingRows.filter(t => t.status !== "closed" && !fileTicketIds.has(normalizeTicketId(String(t.ticketId).trim())));
+      missingCount = missingToUpdate.length;
 
-      if (missingToUpdate.length > 0) {
+      if (closeMissingTickets && missingToUpdate.length > 0) {
         const missingIds = missingToUpdate.map(t => t.id);
         const BATCH_MIS = 200;
         for (let i = 0; i < missingIds.length; i += BATCH_MIS) {
@@ -658,6 +669,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         added,
         updated,
         closedMissing: closedMissingCount,
+        missingNotClosed: missingCount - closedMissingCount,
         skippedByDateFilter,
         skippedInFile,
         skippedInDB,
