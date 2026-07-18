@@ -4,7 +4,7 @@
 // موظفين مسجلين في النظام وينفذها بنفس صلاحيات كل مستخدم في التطبيق العادي.
 
 import prisma from './db.js';
-import { sendWAJid } from './baileys.js';
+import { sendWAJid, sendWAText, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from './baileys.js';
 import { DEFAULT_WORK_HOURS, autoCorrectMins, type WorkHoursConfig } from './routes/settings.js';
 
 export const BOT_USER_ID = 'whatsapp-bot';
@@ -121,6 +121,29 @@ function buildClosureReport(items: { ticketId: string; villaNumber: string }[], 
     `بواسطة: ${closedBy}`,
     `الوقت: ${stamp}`,
   ].join('\n');
+}
+
+// ─── إشعار العميل بإغلاق تذكرته — نفس رسالة التطبيق بالظبط (نفس القالب المحفوظ) ─
+async function notifyClientOfClosure(
+  ticket: { ticketId: string; clientId: string | null; clientName: string; description: string; villaNumber: string; closureNotes?: string | null },
+  closureType: ClosureType,
+): Promise<void> {
+  if (!ticket.clientId) return;
+  try {
+    const client = await prisma.client.findUnique({ where: { id: ticket.clientId } });
+    if (!client?.phone) return;
+    const params = {
+      ticketId: ticket.ticketId, clientName: ticket.clientName,
+      description: ticket.description, villaNumber: ticket.villaNumber,
+      closureNotes: ticket.closureNotes,
+    };
+    const msg = closureType === 'absent' ? await buildAbsentMsg(params)
+      : closureType === 'out_of_scope' ? await buildOutOfScopeMsg(params)
+      : await buildClosingMsg(params);
+    await sendWAText(BOT_USER_ID, client.phone, msg);
+  } catch (err) {
+    console.error('[WA Bot] failed to notify client of closure:', err);
+  }
 }
 
 // ─── تسجيل الأوامر ───────────────────────────────────────────────────────────
@@ -429,6 +452,7 @@ async function prepareCloseTicket(
       await prisma.ticketAudit.create({
         data: { ticketId: ticket.id, field: 'status', oldValue: ticket.status, newValue: status, changedBy: user.uid },
       });
+      await notifyClientOfClosure(ticket, closureType);
       return buildClosureReport([{ ticketId: ticket.ticketId, villaNumber: ticket.villaNumber }], closureType, user.displayName);
     },
   };
@@ -449,6 +473,7 @@ async function prepareCloseVillaTickets(
       await Promise.all(tickets.map(t => prisma.ticketAudit.create({
         data: { ticketId: t.id, field: 'status', oldValue: t.status, newValue: status, changedBy: user.uid },
       })));
+      await Promise.all(tickets.map(t => notifyClientOfClosure(t, closureType)));
       return buildClosureReport(tickets.map(t => ({ ticketId: t.ticketId, villaNumber: t.villaNumber })), closureType, user.displayName);
     },
   };
@@ -471,6 +496,7 @@ async function prepareCloseTicketsList(
       await Promise.all(openTickets.map(t => prisma.ticketAudit.create({
         data: { ticketId: t.id, field: 'status', oldValue: t.status, newValue: status, changedBy: user.uid },
       })));
+      await Promise.all(openTickets.map(t => notifyClientOfClosure(t, closureType)));
       let report = buildClosureReport(openTickets.map(t => ({ ticketId: t.ticketId, villaNumber: t.villaNumber })), closureType, user.displayName);
       if (alreadyClosed.length) report += `\n⚠️ كانت مقفولة بالفعل: ${alreadyClosed.map(t => t.ticketId).join('، ')}`;
       if (notFound.length) report += `\n⚠️ مش موجودة: ${notFound.join('، ')}`;
