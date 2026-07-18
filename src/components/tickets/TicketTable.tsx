@@ -1085,9 +1085,19 @@ export function TicketTable({
                       )}
                       <div className="flex flex-col leading-tight min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="font-black text-foreground text-[15px] truncate">
-                            {ticket.villaNumber || ticket.refNumber || '---'}
-                          </span>
+                          {ticket.unitId ? (
+                            <Link
+                              to={`/units/${ticket.unitId}`}
+                              onClick={e => { e.stopPropagation(); sessionStorage.setItem('ticketsListScrollY', window.scrollY.toString()); }}
+                              className="font-black text-blue-400 hover:underline hover:text-blue-300 transition-colors text-[15px] truncate"
+                            >
+                              {ticket.villaNumber || ticket.refNumber || '---'}
+                            </Link>
+                          ) : (
+                            <span className="font-black text-foreground text-[15px] truncate">
+                              {ticket.villaNumber || ticket.refNumber || '---'}
+                            </span>
+                          )}
                           {ticket.clientName && (
                             <span className="text-[12px] text-muted-foreground truncate font-medium">
                               - {ticket.clientName.split(' ')[0]}
@@ -1095,7 +1105,13 @@ export function TicketTable({
                           )}
                         </div>
                         {ticket.ticketId && (
-                          <span className="text-[10px] text-muted-foreground font-mono tracking-wide">#{ticket.ticketId}</span>
+                          <Link
+                            to={`/tickets/${ticket.id}`}
+                            onClick={e => { e.stopPropagation(); sessionStorage.setItem('ticketsListScrollY', window.scrollY.toString()); }}
+                            className="text-[10px] text-blue-400 hover:underline hover:text-blue-300 transition-colors font-mono tracking-wide"
+                          >
+                            #{ticket.ticketId}
+                          </Link>
                         )}
                       </div>
                     </div>
@@ -1434,11 +1450,15 @@ export function TicketTable({
                           </button>
                         </td>
                       )}
-                      <td className="px-4 py-3 text-sm font-medium text-slate-400 whitespace-nowrap w-20">
-                        {ticket.ticketId || ticket.id.slice(0, 6)}
+                      <td className="px-4 py-3 text-sm font-medium whitespace-nowrap w-20">
+                        <Link to={`/tickets/${ticket.id}`} onClick={() => sessionStorage.setItem('ticketsListScrollY', window.scrollY.toString())} className="text-blue-400 hover:underline hover:text-blue-300 transition-colors">
+                          {ticket.ticketId || ticket.id.slice(0, 6)}
+                        </Link>
                       </td>
-                      <td className="px-4 py-3 text-sm font-bold text-slate-200 whitespace-nowrap w-24">
-                        {ticket.refNumber || '---'}
+                      <td className="px-4 py-3 text-sm font-bold whitespace-nowrap w-24">
+                        {ticket.refNumber ? (
+                          <Link to={`/tickets/${ticket.id}`} onClick={() => sessionStorage.setItem('ticketsListScrollY', window.scrollY.toString())} className="text-blue-400 hover:underline hover:text-blue-300 transition-colors">{ticket.refNumber}</Link>
+                        ) : <span className="text-slate-200">---</span>}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-300 truncate w-28 max-w-[100px]" title={ticket.clientName}>
                         {ticket.clientId ? (

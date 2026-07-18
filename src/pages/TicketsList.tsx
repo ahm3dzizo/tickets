@@ -44,7 +44,8 @@ export default function TicketsList() {
   // Shared across every tab's TicketTable — typing here searches ALL tickets
   // regardless of which tab is active, instead of being scoped to that tab's
   // linked/contractor/unlinked/unclassified subset.
-  const [ticketSearch, setTicketSearch] = useState('');
+  const [ticketSearch, setTicketSearch] = useState(() => sessionStorage.getItem('ticketsListSearch') || '');
+  useEffect(() => { sessionStorage.setItem('ticketsListSearch', ticketSearch); }, [ticketSearch]);
 
   const loadData = async () => {
     if (!user) return;
