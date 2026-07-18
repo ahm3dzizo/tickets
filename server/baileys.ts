@@ -115,12 +115,6 @@ export async function startWA(userId: string) {
 
   // ─── معالجة الردود الواردة (موافقة / رفض / تقييم) ─────────────────────────
   sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
-    if (userId === BOT_USER_ID) {
-      console.log(`[WA Bot Debug] upsert type=${type} count=${msgs.length}`);
-      for (const m of msgs) {
-        console.log(`[WA Bot Debug] msg fromMe=${m.key.fromMe} remoteJid=${m.key.remoteJid} participant=${m.key.participant} participantAlt=${m.key.participantAlt} hasMessage=${!!m.message} text=${JSON.stringify((m.message?.conversation || m.message?.extendedTextMessage?.text || '').slice(0, 50))}`);
-      }
-    }
     if (type !== 'notify') return;
     for (const msg of msgs) {
       if (!msg.message || msg.key.fromMe) continue;
