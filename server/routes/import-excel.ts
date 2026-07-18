@@ -11,91 +11,43 @@ import multer from "multer";
 import fs from "fs";
 import * as XLSX from "xlsx";
 import prisma from "../db.js";
-import { Worker } from "worker_threads";
-import path from "path";
-import os from "os";
 import { normalizeArabic, classifyFromKeywordsDB, loadKeywordsFromDB } from "../classifier/keywords.js";
 import { buildTypeToSpecialtyMap } from "../classifier/db-helpers.js";
 
-// Helper to run XLSX parsing in a separate thread so it doesn't block the Node event loop
-function parseExcelAndDetectHeadersAsync(buffer: Buffer, fieldAliases: Record<string, string[]>): Promise<{ allData: any[], mapping: Record<string, string>, skippedByDateFilter: number }> {
-  return new Promise((resolve, reject) => {
-    const workerCode = `
-import { parentPort, workerData } from 'worker_threads';
-import * as XLSX from 'xlsx';
-
-const { buffer, fieldAliases } = workerData;
-
-function autoMatch(cols, aliases) {
-  for (const c of cols) {
-    const cLower = String(c).toLowerCase().trim();
-    if (aliases.some(a => cLower === a.toLowerCase())) return String(c);
-  }
-  return "";
-}
-
-try {
+// بيحلل ملف الإكسل ويكتشف صف العناوين، ويفلتر التذاكر المغلقة القديمة جداً.
+// (كان ده شغال في worker thread منفصل عبر ملف مؤقت، لكن نصوص القالب المتداخلة
+// جوه الكود كانت بتتفسر غلط، وملف الـ worker المؤقت في /tmp مكانش قادر يلاقي
+// حزمة xlsx أصلاً — فالاستيراد كان بيفشل. التحليل نفسه سريع جداً حتى لآلاف
+// الصفوف، فمفيش داعي لتعقيد الـ worker thread من الأساس.)
+function parseExcelAndDetectHeaders(buffer: Buffer, fieldAliases: Record<string, string[]>): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number } {
   const wb = XLSX.read(buffer, { type: "buffer", cellFormula: false, cellHTML: false, cellStyles: false, cellNF: false, sheetStubs: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-  
+  const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+
   let headerRowIndex = 0;
   let maxMatches = -1;
   for (let i = 0; i < rawRows.length; i++) {
-    const cols = rawRows[i].map(c => String(c) || "");
+    const cols = rawRows[i].map((c) => String(c) || "");
     let matches = 0;
     for (const aliases of Object.values(fieldAliases)) {
       if (autoMatch(cols, aliases)) matches++;
     }
-    if (matches > maxMatches) { 
-      maxMatches = matches; 
-      headerRowIndex = i; 
+    if (matches > maxMatches) {
+      maxMatches = matches;
+      headerRowIndex = i;
     }
     if (maxMatches >= 3) break;
     if (i >= 1000) break;
   }
 
-  const allData = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: "" });
-  
+  const allData: any[] = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: "" });
+
   const cols = Object.keys(allData[0] || {});
-  const mapping = {};
+  const mapping: Record<string, string> = {};
   for (const [key, aliases] of Object.entries(fieldAliases)) {
     mapping[key] = autoMatch(cols, aliases);
   }
 
-  function excelSerialToDate(serial) {
-    return new Date((serial - 25569) * 86400 * 1000);
-  }
-  function normalizeDate(raw) {
-    if (!raw) return "";
-    if (raw instanceof Date && !isNaN(raw.getTime())) return raw.toISOString().split("T")[0];
-    if (typeof raw === "number" && raw > 1000 && raw < 100000) {
-      const d = excelSerialToDate(raw);
-      if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
-    }
-    const str = String(raw);
-    const parts = str.split("/");
-    if (parts.length === 3) {
-      let [day, month, year] = parts;
-      if (year.length === 2) year = \`20\${year}\`;
-      return \`\${year}-\${month.padStart(2, "0")}-\${day.padStart(2, "0")}\`;
-    }
-    return str.split("T")[0] || "";
-  }
-  function normalizeStatus(rawStatus) {
-    if (rawStatus === null || rawStatus === undefined) return "open";
-    const s = String(rawStatus).toLowerCase().trim();
-    if (!s || s === "none" || s === "null" || s === "مفتوح" || s === "open" || s === "نشط") return "open";
-    if (
-      s === "مغلق" || s === "مغلوق" || s === "اغلاق" || s === "إغلاق" ||
-      s === "closed" || s === "close" || s === "done" || s === "تم" ||
-      s === "منتهي" || s === "منتهى" || s === "مكتمل" || s === "مكتملة" ||
-      s === "مكتمله" || s === "completed" || s === "out_of_scope" ||
-      s.startsWith("مغلق")
-    ) return "closed";
-    return "open";
-  }
-  
   let maxTime = 0;
   if (mapping["createdAt"]) {
     for (const row of allData) {
@@ -108,12 +60,12 @@ try {
     }
   }
 
-  const cutoffTime = maxTime > 0 ? maxTime - (35 * 24 * 60 * 60 * 1000) : 0;
+  const cutoffTime = maxTime > 0 ? maxTime - 35 * 24 * 60 * 60 * 1000 : 0;
   let skippedByDateFilter = 0;
-  
+
   const NEEDED_COLS = Object.values(mapping).filter(Boolean);
-  const rows = [];
-  
+  const rows: any[] = [];
+
   for (const row of allData) {
     if (cutoffTime > 0) {
       const rawStatus = row[mapping["status"]];
@@ -128,33 +80,12 @@ try {
         }
       }
     }
-    const r = {};
+    const r: any = {};
     for (const col of NEEDED_COLS) r[col] = row[col];
     rows.push(r);
   }
 
-  parentPort.postMessage({ allData: rows, mapping, skippedByDateFilter });
-} catch (err) {
-  throw err;
-}
-    `;
-    const tempFile = path.join(process.cwd(), `worker-${Date.now()}.mjs`);
-    fs.writeFileSync(tempFile, workerCode);
-    
-    const worker = new Worker(tempFile, { workerData: { buffer, fieldAliases } });
-    worker.on("message", (msg) => {
-      resolve(msg);
-      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-    });
-    worker.on("error", (err) => {
-      reject(err);
-      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-    });
-    worker.on("exit", code => {
-      if (code !== 0) reject(new Error("Worker stopped with exit code " + code));
-      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-    });
-  });
+  return { allData: rows, mapping, skippedByDateFilter };
 }
 
 const router = Router();
@@ -308,7 +239,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     }
     const projectAbbr = (project.abbreviation || "").toUpperCase();
 
-    // ── 2 & 3. Parse Excel Asynchronously in a Worker Thread ──────────────────
+    // ── 2 & 3. Parse Excel + detect headers ──────────────────────────────────
     const buffer = fs.readFileSync(filePath);
     fs.unlinkSync(filePath); // حذف الملف المؤقت فوراً
     
@@ -322,22 +253,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       excelType:   ["تصنيف التذاكر", "التصنيف", "نوع التذاكر", "نوع المشكلة"],
     };
 
-    // Send heartbeat every 15 seconds to prevent Nginx from dropping the connection
-    const heartbeatInterval = setInterval(() => {
-      res.write(JSON.stringify({ progress: 0.05, message: "جاري تحليل الملف في الخلفية... الرجاء الانتظار" }) + "\n");
-    }, 15000);
-
-    let allData: any[];
-    let mapping: Record<string, string>;
-    let skippedByDateFilter = 0;
-    try {
-      const result = await parseExcelAndDetectHeadersAsync(buffer, fieldAliases);
-      allData = result.allData;
-      mapping = result.mapping;
-      skippedByDateFilter = result.skippedByDateFilter;
-    } finally {
-      clearInterval(heartbeatInterval);
-    }
+    const { allData, mapping, skippedByDateFilter } = parseExcelAndDetectHeaders(buffer, fieldAliases);
 
     if (allData.length === 0) {
       res.write(JSON.stringify({ error: "الملف فارغ أو لا يحتوي على بيانات" }) + "\n");
