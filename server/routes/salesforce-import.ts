@@ -113,6 +113,15 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
             where: { id: existing.id },
             data: { status: "closed", closedAt: new Date() },
           });
+          await prisma.ticketAudit.create({
+            data: {
+              ticketId: existing.id,
+              field: "status",
+              oldValue: existing.status,
+              newValue: "closed",
+              changedBy: "النظام (الإغلاق التلقائي بسبب المزامنة مع Salesforce)",
+            }
+          });
           updated++;
         } else {
           skipped++;

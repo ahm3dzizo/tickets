@@ -614,6 +614,19 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
             where: { id: { in: batch } },
             data: { status: "closed", closedAt: new Date() }
           });
+          const auditData = batch.map(id => {
+            const oldStatus = missingToUpdate.find(t => t.id === id)?.status || "open";
+            return {
+              ticketId: id,
+              field: "status",
+              oldValue: oldStatus,
+              newValue: "closed",
+              changedBy: "النظام (إغلاق تلقائي بسبب عدم وجود التذكرة في ملف الإكسيل المرفوع)",
+            };
+          });
+          if (auditData.length > 0) {
+            await prisma.ticketAudit.createMany({ data: auditData });
+          }
           closedMissingCount += batch.length;
         }
       }
