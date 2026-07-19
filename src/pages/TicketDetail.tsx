@@ -999,82 +999,72 @@ export default function TicketDetail() {
       )}
 
       {/* Lightbox */}
-      {lightbox && (() => {
-        const current = lightbox.items[lightbox.index];
-        const hasMany = lightbox.items.length > 1;
-        return (
-          <div
-            className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
-            onClick={closeLightbox}
-          >
-            {/* Top controls */}
-            <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 py-3 z-10">
-              {hasMany && (
-                <span className="text-white/60 text-xs font-mono bg-black/40 px-2 py-1 rounded-lg">
-                  {lightbox.index + 1} / {lightbox.items.length}
-                </span>
-              )}
-              <div className="flex items-center gap-2 mr-auto">
-                <a
-                  href={current.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ExternalLink className="w-5 h-5" />
-                </a>
-                <button
-                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-                  onClick={closeLightbox}
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
+      <Dialog open={!!lightbox} onOpenChange={(o) => { if (!o) closeLightbox(); }}>
+        <DialogContent className="sm:max-w-2xl bg-black border-white/10 p-0 overflow-hidden rounded-2xl">
+          {lightbox && (() => {
+            const current = lightbox.items[lightbox.index];
+            const hasMany = lightbox.items.length > 1;
+            return (
+              <>
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
+                  {hasMany ? (
+                    <span className="text-white/50 text-xs font-mono">{lightbox.index + 1} / {lightbox.items.length}</span>
+                  ) : <span />}
+                  <a
+                    href={current.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
 
-            {/* Prev arrow */}
-            {hasMany && (
-              <button
-                className="absolute left-3 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors z-10"
-                onClick={(e) => { e.stopPropagation(); lightboxPrev(); }}
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
-            )}
+                {/* Media + arrows */}
+                <div className="relative flex items-center justify-center bg-black min-h-[200px]">
+                  {hasMany && (
+                    <button
+                      className="absolute left-2 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+                      onClick={lightboxPrev}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                  )}
 
-            {/* Media */}
-            <div className="max-w-[90vw] max-h-[85vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-              {current.type === 'image' ? (
-                <img
-                  key={current.url}
-                  src={current.url}
-                  alt="عرض الصورة"
-                  className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl shadow-2xl"
-                />
-              ) : (
-                <video
-                  key={current.url}
-                  src={current.url}
-                  controls
-                  autoPlay
-                  className="max-w-[90vw] max-h-[85vh] rounded-xl outline-none shadow-2xl"
-                />
-              )}
-            </div>
+                  <div className="w-full flex items-center justify-center p-2">
+                    {current.type === 'image' ? (
+                      <img
+                        key={current.url}
+                        src={current.url}
+                        alt="عرض الصورة"
+                        className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                      />
+                    ) : (
+                      <video
+                        key={current.url}
+                        src={current.url}
+                        controls
+                        autoPlay
+                        className="max-w-full max-h-[70vh] rounded-lg outline-none"
+                      />
+                    )}
+                  </div>
 
-            {/* Next arrow */}
-            {hasMany && (
-              <button
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors z-10"
-                onClick={(e) => { e.stopPropagation(); lightboxNext(); }}
-              >
-                <ChevronRight className="w-6 h-6" />
-              </button>
-            )}
-          </div>
-        );
-      })()}
+                  {hasMany && (
+                    <button
+                      className="absolute right-2 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+                      onClick={lightboxNext}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
