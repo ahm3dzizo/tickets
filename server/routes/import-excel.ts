@@ -112,6 +112,7 @@ function autoMatch(columns: string[], aliases: string[]): string {
   for (const alias of aliases) {
     const na = normalize(alias);
     const found = columns.find((c) => {
+      if (!c) return false; // skip empty columns — na.includes("") is always true and causes false matches
       const nc = normalize(c);
       return nc === na || nc.includes(na) || na.includes(nc);
     });

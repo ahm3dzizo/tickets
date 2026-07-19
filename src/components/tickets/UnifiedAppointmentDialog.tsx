@@ -485,7 +485,7 @@ export function UnifiedAppointmentDialog({
           .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
 
         if (hasExistingTickets) {
-          const existingApptId: string | undefined = (activeTickets[0] as any).appointmentId;
+          const existingApptId: string | undefined = activeTickets.find((t: any) => t.appointmentId)?.appointmentId;
           const allTypes = new Set<string>();
           activeTickets.forEach((t: any) => {
             if (t.type) allTypes.add(t.type);
