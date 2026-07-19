@@ -3,9 +3,13 @@
 // رقم واتساب مخصص (منفصل عن جلسات المستخدمين الشخصية) بيستقبل أوامر نصية من
 // موظفين مسجلين في النظام وينفذها بنفس صلاحيات كل مستخدم في التطبيق العادي.
 
+import { spawn } from 'child_process';
+import { readFileSync, existsSync, unlinkSync } from 'fs';
+import path from 'path';
 import prisma from './db.js';
-import { sendWAJid, sendWAText, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from './baileys.js';
+import { sendWAJid, sendWAText, sendWAImage, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from './baileys.js';
 import { DEFAULT_WORK_HOURS, autoCorrectMins, type WorkHoursConfig } from './routes/settings.js';
+import { __dirname } from './config.js';
 
 export const BOT_USER_ID = 'whatsapp-bot';
 
@@ -123,20 +127,103 @@ function buildClosureReport(items: { ticketId: string; villaNumber: string }[], 
   ].join('\n');
 }
 
+// ─── توليد صورة التقرير عبر Python ────────────────────────────────────────────
+async function generateReportBuffer(payload: Record<string, unknown>): Promise<Buffer | null> {
+  return new Promise((resolve) => {
+    const scriptPath = path.join(__dirname, 'report_generator.py');
+    const pythonBin = process.platform === 'win32' ? 'python' : 'python3';
+    const python = spawn(pythonBin, [scriptPath, '--stdin'], {
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+    });
+    let output = '';
+    let errorOutput = '';
+    python.stdin.write(JSON.stringify(payload));
+    python.stdin.end();
+    python.stdout.on('data', (d: Buffer) => { output += d.toString(); });
+    python.stderr.on('data', (d: Buffer) => { errorOutput += d.toString(); });
+    python.on('close', (code: number | null) => {
+      if (code !== 0) {
+        console.error('[WA Bot] report generation failed:', errorOutput);
+        resolve(null);
+        return;
+      }
+      const jpgPath = output.trim().split(/\r?\n/).pop() ?? '';
+      if (!jpgPath || !existsSync(jpgPath)) {
+        console.error('[WA Bot] report file not found:', jpgPath);
+        resolve(null);
+        return;
+      }
+      try {
+        const buf = readFileSync(jpgPath);
+        unlinkSync(jpgPath);
+        resolve(buf);
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
 // ─── إشعار العميل بإغلاق تذكرته — نفس رسالة التطبيق بالظبط (نفس القالب المحفوظ) ─
 async function notifyClientOfClosure(
-  ticket: { ticketId: string; clientId: string | null; clientName: string; description: string; villaNumber: string; closureNotes?: string | null },
+  ticket: {
+    ticketId: string; clientId: string | null; clientName: string;
+    description: string; villaNumber: string; closureNotes?: string | null;
+    projectId?: string | null; projectAbbr?: string | null;
+    issuedAt?: string | Date | null; priority?: number | null;
+  },
   closureType: ClosureType,
 ): Promise<void> {
   if (!ticket.clientId) return;
   try {
     const client = await prisma.client.findUnique({ where: { id: ticket.clientId } });
     if (!client?.phone) return;
+
     const params = {
       ticketId: ticket.ticketId, clientName: ticket.clientName,
       description: ticket.description, villaNumber: ticket.villaNumber,
       closureNotes: ticket.closureNotes,
     };
+
+    // الإغلاق العادي: نولّد صورة التقرير ونبعتها للعميل مع رسالة الإغلاق كـ caption
+    if (closureType === 'normal') {
+      try {
+        let projectName = '';
+        if (ticket.projectId) {
+          const project = await prisma.project.findUnique({
+            where: { id: ticket.projectId }, select: { name: true },
+          });
+          projectName = project?.name || '';
+        }
+        const priorityMap: Record<string, string> = {
+          '3': 'منخفضة', '4': 'عادية', '6': 'متوسطة', '7': 'عالية', '9': 'عاجلة جداً',
+        };
+        const reportPayload = {
+          ticket_num: ticket.ticketId,
+          villa: ticket.villaNumber,
+          customer_name: ticket.clientName,
+          phone: client.phone,
+          maint_items: [[ticket.description.replace(/(https?:\/\/[^\s]+)/g, '').trim(), 'تم']],
+          notes: ticket.closureNotes || '',
+          block: (client as any).blockNumber || '',
+          project: projectName,
+          ticket_date: ticket.issuedAt ? (typeof ticket.issuedAt === 'string' ? ticket.issuedAt : (ticket.issuedAt as Date).toISOString()) : '',
+          priority: priorityMap[String(ticket.priority)] || '',
+          nhc: ticket.projectAbbr || '',
+          status: 'تم',
+        };
+        const imgBuffer = await generateReportBuffer(reportPayload);
+        if (imgBuffer) {
+          const caption = await buildClosingMsg(params);
+          await sendWAImage(BOT_USER_ID, client.phone, imgBuffer, caption);
+          return;
+        }
+      } catch (err) {
+        console.error('[WA Bot] failed to generate report image, falling back to text:', err);
+      }
+    }
+
+    // إغلاق عدم تواجد / خارج اختصاص — أو fallback لو فشل توليد التقرير
     const msg = closureType === 'absent' ? await buildAbsentMsg(params)
       : closureType === 'out_of_scope' ? await buildOutOfScopeMsg(params)
       : await buildClosingMsg(params);

@@ -210,7 +210,7 @@ export const ticketsApi = {
     }
 
     if (!result) throw new Error('اكتمل الطلب ولكن لم يتم إرجاع نتيجة');
-    return result as { ok: boolean; added: number; updated: number; closedMissing: number; skippedByDateFilter: number; skippedInFile: number; skippedInDB: number; failed: number; classified: number; unclassified: number; errors: string[] };
+    return result as { ok: boolean; added: number; updated: number; closedMissing: number; missingNotClosed: number; skippedByDateFilter: number; skippedInFile: number; skippedInDB: number; failed: number; classified: number; unclassified: number; errors: string[] };
   },
 };
 
