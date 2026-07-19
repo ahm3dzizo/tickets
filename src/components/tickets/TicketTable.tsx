@@ -830,6 +830,17 @@ export function TicketTable({
     return [];
   };
 
+  const getStatusLabel = (ticket: Ticket): string => {
+    if (ticket.status === 'contractor') {
+      return ticket.contractorName || ticket.assigneeName || 'مقاول';
+    }
+    if (ticket.status === 'note') {
+      const note = ((ticket as any).contractorNote || '').trim();
+      return note ? (note.length > 22 ? note.slice(0, 22) + '…' : note) : 'ملاحظة';
+    }
+    return statusTranslations[ticket.status] ?? ticket.status;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -1132,8 +1143,8 @@ export function TicketTable({
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
-                        {statusTranslations[ticket.status] ?? ticket.status}
+                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border max-w-[120px] truncate', statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
+                        {getStatusLabel(ticket)}
                       </span>
                       <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', daysBg)}>{daysOpen}ي</span>
                     </div>
@@ -1493,10 +1504,10 @@ export function TicketTable({
                       </td>
                       <td className="px-3 py-3 text-center w-28">
                         <span className={cn(
-                          'inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap',
+                          'inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border max-w-[110px] truncate',
                           statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20',
                         )}>
-                          {statusTranslations[ticket.status] ?? ticket.status}
+                          {getStatusLabel(ticket)}
                         </span>
                       </td>
                       <td className={cn('px-3 py-3 text-center text-sm w-12', daysBg)}>

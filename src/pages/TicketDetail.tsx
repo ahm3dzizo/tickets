@@ -18,6 +18,9 @@ import {
   ExternalLink,
   X,
   ZoomIn,
+  ChevronLeft,
+  ChevronRight,
+  Play,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -80,7 +83,25 @@ export default function TicketDetail() {
   const navigate = useNavigate();
   const [ticket, setTicket] = useState<Ticket | null>(null);
 
-  const [lightbox, setLightbox] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [lightbox, setLightbox] = useState<{ items: { url: string; type: 'image' | 'video' }[]; index: number } | null>(null);
+
+  const isVideo = (url: string) => /\.(mp4|webm|ogg|mov|avi|mkv)(\?.*)?$/i.test(url);
+
+  const openLightbox = (items: { url: string; type: 'image' | 'video' }[], index: number) => setLightbox({ items, index });
+  const closeLightbox = () => setLightbox(null);
+  const lightboxPrev = () => setLightbox(lb => lb ? { ...lb, index: (lb.index - 1 + lb.items.length) % lb.items.length } : null);
+  const lightboxNext = () => setLightbox(lb => lb ? { ...lb, index: (lb.index + 1) % lb.items.length } : null);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') lightboxNext();
+      if (e.key === 'ArrowRight') lightboxPrev();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox]);
 
   const renderDetailedDescription = (text?: string) => {
     if (!text) return null;
@@ -88,7 +109,7 @@ export default function TicketDetail() {
     const urls = text.match(urlRegex) || [];
     const cleanText = text.replace(urlRegex, '').trim();
 
-    const isVideo = (url: string) => /\.(mp4|webm|ogg|mov|avi|mkv)(\?.*)?$/i.test(url);
+    const mediaItems = urls.map(url => ({ url, type: isVideo(url) ? 'video' as const : 'image' as const }));
 
     return (
       <div className="space-y-6">
@@ -99,20 +120,27 @@ export default function TicketDetail() {
         )}
         {urls.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 border-t border-white/5 pt-6">
-            {urls.map((url, i) => {
-              if (isVideo(url)) {
+            {mediaItems.map((item, i) => {
+              if (item.type === 'video') {
                 return (
-                  <div key={i} className="rounded-2xl overflow-hidden border border-white/10 bg-black/20 flex items-center justify-center min-h-[160px]">
-                    <video src={url} controls className="w-full h-auto max-h-80 outline-none" />
+                  <div
+                    key={i}
+                    className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/20 flex items-center justify-center min-h-[160px] cursor-pointer group"
+                    onClick={() => openLightbox(mediaItems, i)}
+                  >
+                    <video src={item.url} className="w-full h-auto max-h-80 outline-none pointer-events-none" />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Play className="w-12 h-12 text-white drop-shadow-lg" />
+                    </div>
                   </div>
                 );
               }
               return (
                 <TryImage
                   key={i}
-                  url={url}
+                  url={item.url}
                   index={i}
-                  onOpen={() => setLightbox({ url, type: 'image' })}
+                  onOpen={() => openLightbox(mediaItems, i)}
                 />
               );
             })}
@@ -971,45 +999,82 @@ export default function TicketDetail() {
       )}
 
       {/* Lightbox */}
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
-          onClick={() => setLightbox(null)}
-        >
-          <button
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-            onClick={() => setLightbox(null)}
+      {lightbox && (() => {
+        const current = lightbox.items[lightbox.index];
+        const hasMany = lightbox.items.length > 1;
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={closeLightbox}
           >
-            <X className="w-6 h-6" />
-          </button>
-          <a
-            href={lightbox.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute top-4 left-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ExternalLink className="w-5 h-5" />
-          </a>
-          {lightbox.type === 'image' && (
-            <img
-              src={lightbox.url}
-              alt="عرض الصورة"
-              className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-          {lightbox.type === 'video' && (
-            <video
-              src={lightbox.url}
-              controls
-              autoPlay
-              className="max-w-full max-h-[90vh] rounded-xl outline-none shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-        </div>
-      )}
+            {/* Top controls */}
+            <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 py-3 z-10">
+              {hasMany && (
+                <span className="text-white/60 text-xs font-mono bg-black/40 px-2 py-1 rounded-lg">
+                  {lightbox.index + 1} / {lightbox.items.length}
+                </span>
+              )}
+              <div className="flex items-center gap-2 mr-auto">
+                <a
+                  href={current.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink className="w-5 h-5" />
+                </a>
+                <button
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                  onClick={closeLightbox}
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Prev arrow */}
+            {hasMany && (
+              <button
+                className="absolute left-3 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors z-10"
+                onClick={(e) => { e.stopPropagation(); lightboxPrev(); }}
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            )}
+
+            {/* Media */}
+            <div className="max-w-[90vw] max-h-[85vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+              {current.type === 'image' ? (
+                <img
+                  key={current.url}
+                  src={current.url}
+                  alt="عرض الصورة"
+                  className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl shadow-2xl"
+                />
+              ) : (
+                <video
+                  key={current.url}
+                  src={current.url}
+                  controls
+                  autoPlay
+                  className="max-w-[90vw] max-h-[85vh] rounded-xl outline-none shadow-2xl"
+                />
+              )}
+            </div>
+
+            {/* Next arrow */}
+            {hasMany && (
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors z-10"
+                onClick={(e) => { e.stopPropagation(); lightboxNext(); }}
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            )}
+          </div>
+        );
+      })()}
     </Layout>
   );
 }
