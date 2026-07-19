@@ -224,7 +224,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: "projectId مطلوب" });
   }
-  const closeMissingTickets = req.body.closeMissingTickets === 'true';
+  const closeMissingTickets = true; // دايمًا نغلق المفقودة تلقائياً
 
   const filePath = req.file.path;
 
@@ -436,28 +436,15 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         // Duplicate check (DB)
         const existing = existingMap.get(ticketId);
         if (existing) {
-          // الملف يحتوي على عمود حالة → القيمة الموجودة فيه مرجعية (بما فيها إعادة فتح المغلقة)
-          // إذا لم يكن فيه عمود حالة → لا تُرجع التذكرة لحالة مفتوحة إذا كانت في حالة متقدمة
-          const fileHasStatusColumn = !!mapping["status"];
-          let statusChanged = existing.status !== status;
-          if (statusChanged && status === 'open') {
-            // اسمح بإعادة الفتح فقط لو الملف فيه عمود حالة والتذكرة كانت مغلقة تحديداً
-            if (!(fileHasStatusColumn && existing.status === 'closed')) {
-              statusChanged = false;
-            }
-          }
+          // التحديث: الوصف والتصنيف فقط — الحالة لا تتغير أبداً عند الاستيراد
           const typeNeedsUpdate =
             (!existing.type || existing.type === "unclassified") &&
             finalType !== "unclassified";
-            
+
           const descriptionNeedsUpdate = description && existing.description !== description;
 
-          if (statusChanged || typeNeedsUpdate || descriptionNeedsUpdate) {
+          if (typeNeedsUpdate || descriptionNeedsUpdate) {
             const upd: any = { id: existing.id };
-            if (statusChanged) {
-              upd.status = status;
-              if (closedAt) upd.closedAt = closedAt;
-            }
             if (descriptionNeedsUpdate) {
               upd.description = description;
             }
@@ -465,7 +452,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
               upd.type = finalType;
               upd.typeId = finalTypeId;
               upd.detectedTypes = finalTypes;
-              // Also update supervisors since we now classified it
               upd.assigneeName = primarySup?.displayName || null;
               upd.assignedSupervisorId = primarySup?.uid || null;
               upd.assignedSupervisorIds = supervisorIds;

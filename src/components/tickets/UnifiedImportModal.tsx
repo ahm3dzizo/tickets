@@ -44,7 +44,7 @@ export function UnifiedImportModal({
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [closeMissing, setCloseMissing] = useState(false);
+  const closeMissing = true; // دايمًا نغلق المفقودة تلقائياً
 
   // لو المستخدم مسنودله مشروع واحد بس، اختاره تلقائي عند فتح المودال
   useEffect(() => {
@@ -64,7 +64,7 @@ export function UnifiedImportModal({
       const parts = [];
       if (result.skippedByDateFilter > 0) parts.push(`⏳ تم تجاهل ${result.skippedByDateFilter} تذكرة قديمة (مغلقة مسبقاً)`);
       if (result.closedMissing > 0) parts.push(`🔒 إغلاق ${result.closedMissing} تذكرة غير موجودة بالملف`);
-      if ((result.missingNotClosed ?? 0) > 0) parts.push(`⚠ ${result.missingNotClosed} تذكرة غير موجودة في الملف (لم تُغلق — فعّل "إغلاق المفقودة" لإغلاقها)`);
+      if ((result.missingNotClosed ?? 0) > 0) parts.push(`⚠ ${result.missingNotClosed} تذكرة غير موجودة في الملف`);
       if (result.added > 0) parts.push(`✅ إضافة ${result.added} (مصنف: ${result.classified ?? 0}، غير مصنف: ${result.unclassified ?? 0})`);
       if (result.updated > 0) parts.push(`🔄 تحديث ${result.updated}`);
       if (result.skippedInDB > 0) parts.push(`⏭ موجود بدون تغيير: ${result.skippedInDB}`);
@@ -169,38 +169,6 @@ export function UnifiedImportModal({
               <p className="text-xs text-slate-400 text-right mt-1">جاري الاستيراد... {Math.round(progress * 100)}%</p>
             </div>
           )}
-
-          {/* Toggle: إغلاق التذاكر المفقودة */}
-          <div
-            onClick={() => setCloseMissing(v => !v)}
-            className={`cursor-pointer rounded-2xl border p-4 text-right transition-all select-none ${
-              closeMissing
-                ? 'border-red-500/40 bg-red-500/10'
-                : 'border-border bg-white/5 hover:bg-white/10'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className={`w-10 h-5 rounded-full transition-all relative shrink-0 ${closeMissing ? 'bg-red-500' : 'bg-slate-600'}`}>
-                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${closeMissing ? 'right-0.5' : 'left-0.5'}`} />
-              </div>
-              <div className="flex-1">
-                <p className={`text-xs font-bold ${closeMissing ? 'text-red-400' : 'text-slate-300'}`}>
-                  إغلاق التذاكر غير الموجودة في الملف
-                </p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  التذاكر المفتوحة في النظام والغائبة عن الملف ستُغلق تلقائياً
-                </p>
-              </div>
-            </div>
-            {closeMissing && (
-              <div className="mt-3 flex items-start gap-2 text-amber-400">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <p className="text-[10px]">
-                  تأكد أن الملف يحتوي على <strong>كل</strong> التذاكر المفتوحة للمشروع (وليس مفلتراً بمقاول أو فئة معينة) — وإلا ستُغلق تذاكر بالغلط.
-                </p>
-              </div>
-            )}
-          </div>
 
           <div className="bg-white/5 rounded-2xl p-4 text-xs text-right text-slate-400">
             <p className="text-slate-300 font-bold mb-2">يتم تلقائياً:</p>
