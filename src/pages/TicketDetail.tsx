@@ -1000,16 +1000,16 @@ export default function TicketDetail() {
 
       {/* Lightbox */}
       <Dialog open={!!lightbox} onOpenChange={(o) => { if (!o) closeLightbox(); }}>
-        <DialogContent className="sm:max-w-2xl bg-black border-white/10 p-0 overflow-hidden rounded-2xl">
+        <DialogContent className="sm:max-w-2xl bg-zinc-900 border-white/10 p-0 overflow-hidden rounded-2xl [&>button]:text-white [&>button]:opacity-80 [&>button]:bg-white/10 [&>button]:hover:bg-white/20 [&>button]:rounded-full [&>button]:top-3 [&>button]:right-3">
           {lightbox && (() => {
             const current = lightbox.items[lightbox.index];
             const hasMany = lightbox.items.length > 1;
             return (
               <>
                 {/* Header */}
-                <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10 pr-12">
                   {hasMany ? (
-                    <span className="text-white/50 text-xs font-mono">{lightbox.index + 1} / {lightbox.items.length}</span>
+                    <span className="text-white/60 text-xs font-mono">{lightbox.index + 1} / {lightbox.items.length}</span>
                   ) : <span />}
                   <a
                     href={current.url}
@@ -1022,17 +1022,17 @@ export default function TicketDetail() {
                 </div>
 
                 {/* Media + arrows */}
-                <div className="relative flex items-center justify-center bg-black min-h-[200px]">
+                <div className="relative flex items-center justify-center bg-zinc-950 min-h-[200px]">
                   {hasMany && (
                     <button
-                      className="absolute left-2 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+                      className="absolute left-3 z-10 p-2 rounded-full bg-white/15 hover:bg-white/30 text-white border border-white/20 transition-colors shadow-lg"
                       onClick={lightboxPrev}
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
                   )}
 
-                  <div className="w-full flex items-center justify-center p-2">
+                  <div className="w-full flex items-center justify-center p-3">
                     {current.type === 'image' ? (
                       <img
                         key={current.url}
@@ -1053,7 +1053,7 @@ export default function TicketDetail() {
 
                   {hasMany && (
                     <button
-                      className="absolute right-2 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+                      className="absolute right-3 z-10 p-2 rounded-full bg-white/15 hover:bg-white/30 text-white border border-white/20 transition-colors shadow-lg"
                       onClick={lightboxNext}
                     >
                       <ChevronRight className="w-5 h-5" />
