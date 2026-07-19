@@ -7,7 +7,7 @@ import { spawn } from 'child_process';
 import { readFileSync, existsSync, unlinkSync } from 'fs';
 import path from 'path';
 import prisma from './db.js';
-import { sendWAJid, sendWAText, sendWAImage, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from './baileys.js';
+import { sendWAJid, sendWAText, sendWAImage, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg, getWAStatus } from './baileys.js';
 import { DEFAULT_WORK_HOURS, autoCorrectMins, type WorkHoursConfig } from './routes/settings.js';
 import { __dirname } from './config.js';
 
@@ -173,8 +173,13 @@ async function notifyClientOfClosure(
     issuedAt?: string | Date | null; priority?: number | null;
   },
   closureType: ClosureType,
-): Promise<void> {
-  if (!ticket.clientId) return;
+  senderUid?: string,
+): Promise<{ sent: boolean; reason?: string }> {
+  if (!ticket.clientId) return { sent: false, reason: 'no_client' };
+  if (!senderUid || getWAStatus(senderUid) !== 'CONNECTED') {
+    return { sent: false, reason: 'not_connected' };
+  }
+  const senderId = senderUid;
   try {
     const client = await prisma.client.findUnique({ where: { id: ticket.clientId } });
     if (!client?.phone) return;
@@ -215,8 +220,8 @@ async function notifyClientOfClosure(
         const imgBuffer = await generateReportBuffer(reportPayload);
         if (imgBuffer) {
           const caption = await buildClosingMsg(params);
-          await sendWAImage(BOT_USER_ID, client.phone, imgBuffer, caption);
-          return;
+          await sendWAImage(senderId, client.phone, imgBuffer, caption);
+          return { sent: true };
         }
       } catch (err) {
         console.error('[WA Bot] failed to generate report image, falling back to text:', err);
@@ -227,9 +232,11 @@ async function notifyClientOfClosure(
     const msg = closureType === 'absent' ? await buildAbsentMsg(params)
       : closureType === 'out_of_scope' ? await buildOutOfScopeMsg(params)
       : await buildClosingMsg(params);
-    await sendWAText(BOT_USER_ID, client.phone, msg);
+    await sendWAText(senderId, client.phone, msg);
+    return { sent: true };
   } catch (err) {
     console.error('[WA Bot] failed to notify client of closure:', err);
+    return { sent: false, reason: 'error' };
   }
 }
 
@@ -389,16 +396,13 @@ function parseCommand(rawText: string): Intent | null {
 
   let m: RegExpMatchArray | null;
 
-  if ((m = t.match(/^(?:اقفل|قفل|اغلق|سكر)\s+تذاكر\s+(?:ال)?فيل[ها]?\s*(\S+)/))) {
+  if ((m = t.match(/^(?:اقفل|قفل|اغلق|سكر)\s+(?:تذاكر\s+)?(?:ال)?فيل[ها]?\s*(\S+)/))) {
     return { type: 'close_villa_tickets', villa: normalizeVilla(m[1]) };
   }
-  if ((m = t.match(/^(?:اقفل|قفل|اغلق|سكر)\s+تذاكر\s+([\d\s,،]+)$/))) {
-    const ticketIds = m[1].split(/[\s,،]+/).filter(Boolean);
+  if ((m = t.match(/^(?:اقفل|قفل|اغلق|سكر)\s+(?:تذاكر|تذكره)\s+([\d\s,،و]+)$/))) {
+    const ticketIds = m[1].split(/[\s,،و]+/).filter(Boolean);
     if (ticketIds.length > 1) return { type: 'close_tickets_list', ticketIds };
     return { type: 'close_ticket', ticketId: ticketIds[0] };
-  }
-  if ((m = t.match(/^(?:اقفل|قفل|اغلق|سكر)\s+تذكره\s*(\d+)/))) {
-    return { type: 'close_ticket', ticketId: m[1] };
   }
   if ((m = t.match(/^رقم\s+(?:ال)?فيل[ها]?\s*(\S+)/))) {
     return { type: 'client_phone', villa: normalizeVilla(m[1]) };
@@ -539,8 +543,12 @@ async function prepareCloseTicket(
       await prisma.ticketAudit.create({
         data: { ticketId: ticket.id, field: 'status', oldValue: ticket.status, newValue: status, changedBy: user.uid },
       });
-      await notifyClientOfClosure(ticket, closureType);
-      return buildClosureReport([{ ticketId: ticket.ticketId, villaNumber: ticket.villaNumber }], closureType, user.displayName);
+      const notifyResult = await notifyClientOfClosure(ticket, closureType, user.uid);
+      let report = buildClosureReport([{ ticketId: ticket.ticketId, villaNumber: ticket.villaNumber }], closureType, user.displayName);
+      if (!notifyResult.sent && notifyResult.reason === 'not_connected') {
+        report += `\n⚠️ لم يتم إرسال إشعار للعميل لأن رقمك مش مربوط بالواتساب في النظام.`;
+      }
+      return report;
     },
   };
 }
@@ -560,8 +568,12 @@ async function prepareCloseVillaTickets(
       await Promise.all(tickets.map(t => prisma.ticketAudit.create({
         data: { ticketId: t.id, field: 'status', oldValue: t.status, newValue: status, changedBy: user.uid },
       })));
-      await Promise.all(tickets.map(t => notifyClientOfClosure(t, closureType)));
-      return buildClosureReport(tickets.map(t => ({ ticketId: t.ticketId, villaNumber: t.villaNumber })), closureType, user.displayName);
+      const notifyResults = await Promise.all(tickets.map(t => notifyClientOfClosure(t, closureType, user.uid)));
+      let report = buildClosureReport(tickets.map(t => ({ ticketId: t.ticketId, villaNumber: t.villaNumber })), closureType, user.displayName);
+      if (notifyResults.some(r => !r.sent && r.reason === 'not_connected')) {
+        report += `\n⚠️ لم يتم إرسال إشعار للعملاء لأن رقمك مش مربوط بالواتساب في النظام.`;
+      }
+      return report;
     },
   };
 }
@@ -583,10 +595,13 @@ async function prepareCloseTicketsList(
       await Promise.all(openTickets.map(t => prisma.ticketAudit.create({
         data: { ticketId: t.id, field: 'status', oldValue: t.status, newValue: status, changedBy: user.uid },
       })));
-      await Promise.all(openTickets.map(t => notifyClientOfClosure(t, closureType)));
+      const notifyResults = await Promise.all(openTickets.map(t => notifyClientOfClosure(t, closureType, user.uid)));
       let report = buildClosureReport(openTickets.map(t => ({ ticketId: t.ticketId, villaNumber: t.villaNumber })), closureType, user.displayName);
       if (alreadyClosed.length) report += `\n⚠️ كانت مقفولة بالفعل: ${alreadyClosed.map(t => t.ticketId).join('، ')}`;
       if (notFound.length) report += `\n⚠️ مش موجودة: ${notFound.join('، ')}`;
+      if (notifyResults.some(r => !r.sent && r.reason === 'not_connected')) {
+        report += `\n⚠️ لم يتم إرسال إشعار للعملاء لأن رقمك مش مربوط بالواتساب في النظام.`;
+      }
       return report;
     },
   };
