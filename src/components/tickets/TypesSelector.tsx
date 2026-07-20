@@ -2,8 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, Check, ChevronDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TicketType } from '@/types';
+import { useTicketTypes } from '@/contexts/TicketTypesContext';
 
-export const TYPE_LABELS: Record<string, string> = {
+// Static fallback labels (used when context hasn't loaded yet)
+export const TYPE_LABELS_STATIC: Record<string, string> = {
   electricity:     'كهرباء',
   plumbing:        'سباكة',
   doors:           'أبواب',
@@ -20,20 +22,7 @@ export const TYPE_LABELS: Record<string, string> = {
   pest_control:    'مكافحة حشرات',
   cleaning:        'تنظيف',
   structural:      'إنشائي',
-  unclassified:    'غير مصنف',
 };
-
-// Aliases for incoming data that may use alternate keys
-const ALIAS: Record<string, string> = {
-  painting: 'paints',
-  tiles: 'ceramics',
-};
-
-export function normalizeType(t: string): TicketType {
-  return (ALIAS[t] ?? t) as TicketType;
-}
-
-const CANONICAL_TYPES = Object.keys(TYPE_LABELS) as TicketType[];
 
 interface TypesSelectorProps {
   value: TicketType[];
@@ -44,10 +33,21 @@ interface TypesSelectorProps {
 }
 
 export function TypesSelector({ value, onChange, label, min = 1, className }: TypesSelectorProps) {
+  const { activeTypes, typeTranslations } = useTicketTypes();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Use dynamic types from context, fall back to static list if not loaded yet
+  const availableTypes: { key: string; nameAr: string }[] =
+    activeTypes.length > 0
+      ? activeTypes
+      : Object.entries(TYPE_LABELS_STATIC).map(([key, nameAr]) => ({ key, nameAr }));
+
+  // merged label resolver: context first, static fallback
+  const getLabel = (key: string) =>
+    typeTranslations[key] ?? TYPE_LABELS_STATIC[key] ?? key;
 
   // close on outside click
   useEffect(() => {
@@ -70,11 +70,12 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  const filtered = CANONICAL_TYPES.filter(t =>
-    TYPE_LABELS[t].includes(search) || t.includes(search.toLowerCase())
+  const filtered = availableTypes.filter(t =>
+    t.nameAr.includes(search) || t.key.includes(search.toLowerCase())
   );
 
-  const toggle = (t: TicketType) => {
+  const toggle = (key: string) => {
+    const t = key as TicketType;
     if (value.includes(t)) {
       if (value.length <= min) return;
       onChange(value.filter(x => x !== t));
@@ -97,7 +98,6 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
         </label>
       )}
 
-      {/* wrapper — position:relative so the dropdown anchors here */}
       <div ref={rootRef} className="relative">
         {/* Trigger */}
         <button
@@ -118,7 +118,7 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
                 key={t}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[11px] font-bold"
               >
-                {TYPE_LABELS[t] || t}
+                {getLabel(t)}
                 <span
                   role="button"
                   onClick={(e) => remove(t, e)}
@@ -132,7 +132,7 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
           <ChevronDown className={cn('w-3.5 h-3.5 text-slate-500 mr-auto shrink-0 transition-transform', open && 'rotate-180')} />
         </button>
 
-        {/* Dropdown — absolute, inside same DOM tree as Dialog */}
+        {/* Dropdown — absolute inside the same DOM tree so Dialog backdrop won't block it */}
         {open && (
           <div className="absolute z-[200] top-full mt-1 left-0 right-0 rounded-xl border border-border bg-card shadow-2xl shadow-black/60 overflow-hidden">
             {/* Search */}
@@ -142,29 +142,34 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
                 ref={inputRef}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="ابحث..."
+                placeholder="ابحث عن نوع..."
                 className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 outline-none text-right"
               />
+              {search && (
+                <button type="button" onClick={() => setSearch('')} className="text-slate-600 hover:text-slate-400">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
 
             {/* List */}
-            <div className="max-h-48 overflow-y-auto py-1">
+            <div className="max-h-52 overflow-y-auto py-1">
               {filtered.length === 0 ? (
                 <p className="text-center text-slate-600 text-xs py-4">لا توجد نتائج</p>
               ) : (
                 filtered.map(t => {
-                  const selected = value.includes(t);
+                  const selected = value.includes(t.key as TicketType);
                   return (
                     <button
-                      key={t}
+                      key={t.key}
                       type="button"
-                      onClick={() => toggle(t)}
+                      onClick={() => toggle(t.key)}
                       className={cn(
                         'w-full flex items-center justify-between px-3 py-2 text-sm transition-colors text-right',
                         selected ? 'bg-blue-500/10 text-blue-300' : 'text-slate-300 hover:bg-white/5'
                       )}
                     >
-                      <span>{TYPE_LABELS[t]}</span>
+                      <span>{t.nameAr}</span>
                       <div className={cn(
                         'w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors',
                         selected ? 'bg-blue-500 border-blue-500' : 'border-slate-600'
