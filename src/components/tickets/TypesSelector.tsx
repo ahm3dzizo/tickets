@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, Check, ChevronDown, X } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { TicketType } from '@/types';
 
@@ -9,10 +8,8 @@ export const TYPE_LABELS: Record<string, string> = {
   plumbing:        'سباكة',
   doors:           'أبواب',
   paints:          'دهانات',
-  painting:        'دهانات',
   cracks:          'تشققات',
   ceramics:        'سيراميك',
-  tiles:           'سيراميك',
   tank_insulation: 'عزل خزان',
   drainage:        'صرف صحي',
   ac_ventilation:  'تكييف وتهوية',
@@ -26,19 +23,22 @@ export const TYPE_LABELS: Record<string, string> = {
   unclassified:    'غير مصنف',
 };
 
-// Deduplicated canonical list (no duplicate Arabic labels)
-const CANONICAL_TYPES: TicketType[] = [
-  'electricity', 'plumbing', 'doors', 'paints', 'cracks', 'ceramics',
-  'tank_insulation', 'drainage', 'ac_ventilation', 'pumps', 'doors_windows',
-  'waterproofing', 'grading', 'pest_control', 'cleaning', 'structural', 'unclassified',
-];
+// Aliases for incoming data that may use alternate keys
+const ALIAS: Record<string, string> = {
+  painting: 'paints',
+  tiles: 'ceramics',
+};
+
+export function normalizeType(t: string): TicketType {
+  return (ALIAS[t] ?? t) as TicketType;
+}
+
+const CANONICAL_TYPES = Object.keys(TYPE_LABELS) as TicketType[];
 
 interface TypesSelectorProps {
   value: TicketType[];
   onChange: (v: TicketType[]) => void;
-  /** Label shown above the selector */
   label?: string;
-  /** Minimum selections (default 1) */
   min?: number;
   className?: string;
 }
@@ -46,15 +46,32 @@ interface TypesSelectorProps {
 export function TypesSelector({ value, onChange, label, min = 1, className }: TypesSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // close on outside click
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 50);
-    else setSearch('');
+    const handler = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) {
+      document.addEventListener('mousedown', handler);
+      setTimeout(() => inputRef.current?.focus(), 30);
+    }
+    return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
+  // close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
   const filtered = CANONICAL_TYPES.filter(t =>
-    TYPE_LABELS[t]?.includes(search) || t.includes(search.toLowerCase())
+    TYPE_LABELS[t].includes(search) || t.includes(search.toLowerCase())
   );
 
   const toggle = (t: TicketType) => {
@@ -80,108 +97,104 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
         </label>
       )}
 
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              'w-full min-h-[44px] flex flex-wrap items-center gap-1.5 px-3 py-2',
-              'rounded-xl border border-border bg-white/5 text-right',
-              'hover:border-slate-500 transition-colors cursor-pointer',
-              open && 'border-blue-500/40 ring-2 ring-blue-500/10'
-            )}
-          >
-            {value.length === 0 ? (
-              <span className="text-slate-500 text-sm flex-1">اختر الأنواع...</span>
-            ) : (
-              <>
-                {value.map(t => (
-                  <span
-                    key={t}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[11px] font-bold"
-                  >
-                    {TYPE_LABELS[t] || t}
-                    <span
-                      role="button"
-                      onClick={(e) => remove(t, e)}
-                      className="opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </span>
-                  </span>
-                ))}
-              </>
-            )}
-            <ChevronDown className={cn('w-3.5 h-3.5 text-slate-500 mr-auto shrink-0 transition-transform', open && 'rotate-180')} />
-          </button>
-        </PopoverTrigger>
-
-        <PopoverContent
-          className="p-0 w-[var(--radix-popover-trigger-width)] min-w-[220px] max-w-sm"
-          align="start"
-          sideOffset={6}
+      {/* wrapper — position:relative so the dropdown anchors here */}
+      <div ref={rootRef} className="relative">
+        {/* Trigger */}
+        <button
+          type="button"
+          onClick={() => setOpen(p => !p)}
+          className={cn(
+            'w-full min-h-[44px] flex flex-wrap items-center gap-1.5 px-3 py-2',
+            'rounded-xl border border-border bg-white/5 text-right cursor-pointer',
+            'hover:border-slate-500 transition-colors',
+            open && 'border-blue-500/40 ring-2 ring-blue-500/10'
+          )}
         >
-          {/* Search */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-            <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-            <input
-              ref={inputRef}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="ابحث..."
-              className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 outline-none text-right"
-            />
-          </div>
-
-          {/* List */}
-          <div className="max-h-52 overflow-y-auto py-1">
-            {filtered.length === 0 ? (
-              <p className="text-center text-slate-600 text-xs py-4">لا توجد نتائج</p>
-            ) : (
-              filtered.map(t => {
-                const selected = value.includes(t);
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => toggle(t)}
-                    className={cn(
-                      'w-full flex items-center justify-between px-3 py-2 text-sm transition-colors text-right',
-                      selected
-                        ? 'bg-blue-500/10 text-blue-300'
-                        : 'text-slate-300 hover:bg-white/5'
-                    )}
-                  >
-                    <span>{TYPE_LABELS[t] || t}</span>
-                    <div className={cn(
-                      'w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors',
-                      selected ? 'bg-blue-500 border-blue-500' : 'border-slate-600'
-                    )}>
-                      {selected && <Check className="w-2.5 h-2.5 text-white" />}
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-
-          {/* Footer */}
-          {value.length > 0 && (
-            <div className="border-t border-border px-3 py-1.5 flex justify-between items-center">
-              <span className="text-[10px] text-slate-600">{value.length} محدد</span>
-              {value.length > min && (
-                <button
-                  type="button"
-                  onClick={() => onChange(value.slice(0, min))}
-                  className="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
+          {value.length === 0 ? (
+            <span className="text-slate-500 text-sm flex-1">اختر الأنواع...</span>
+          ) : (
+            value.map(t => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[11px] font-bold"
+              >
+                {TYPE_LABELS[t] || t}
+                <span
+                  role="button"
+                  onClick={(e) => remove(t, e)}
+                  className="opacity-60 hover:opacity-100 transition-opacity"
                 >
-                  مسح الكل
-                </button>
+                  <X className="w-2.5 h-2.5" />
+                </span>
+              </span>
+            ))
+          )}
+          <ChevronDown className={cn('w-3.5 h-3.5 text-slate-500 mr-auto shrink-0 transition-transform', open && 'rotate-180')} />
+        </button>
+
+        {/* Dropdown — absolute, inside same DOM tree as Dialog */}
+        {open && (
+          <div className="absolute z-[200] top-full mt-1 left-0 right-0 rounded-xl border border-border bg-card shadow-2xl shadow-black/60 overflow-hidden">
+            {/* Search */}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+              <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <input
+                ref={inputRef}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="ابحث..."
+                className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 outline-none text-right"
+              />
+            </div>
+
+            {/* List */}
+            <div className="max-h-48 overflow-y-auto py-1">
+              {filtered.length === 0 ? (
+                <p className="text-center text-slate-600 text-xs py-4">لا توجد نتائج</p>
+              ) : (
+                filtered.map(t => {
+                  const selected = value.includes(t);
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggle(t)}
+                      className={cn(
+                        'w-full flex items-center justify-between px-3 py-2 text-sm transition-colors text-right',
+                        selected ? 'bg-blue-500/10 text-blue-300' : 'text-slate-300 hover:bg-white/5'
+                      )}
+                    >
+                      <span>{TYPE_LABELS[t]}</span>
+                      <div className={cn(
+                        'w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors',
+                        selected ? 'bg-blue-500 border-blue-500' : 'border-slate-600'
+                      )}>
+                        {selected && <Check className="w-2.5 h-2.5 text-white" />}
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
-          )}
-        </PopoverContent>
-      </Popover>
+
+            {/* Footer */}
+            {value.length > 0 && (
+              <div className="border-t border-border px-3 py-1.5 flex justify-between items-center">
+                <span className="text-[10px] text-slate-600">{value.length} محدد</span>
+                {value.length > min && (
+                  <button
+                    type="button"
+                    onClick={() => onChange(value.slice(0, min))}
+                    className="text-[10px] text-slate-500 hover:text-rose-400 transition-colors"
+                  >
+                    مسح الكل
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
