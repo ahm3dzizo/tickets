@@ -44,6 +44,7 @@ import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
+import { TypesSelector } from '@/components/tickets/TypesSelector';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -905,27 +906,12 @@ export default function TicketDetail() {
             </div>
 
             {/* نوع الصيانة */}
-            <div className="space-y-1.5">
-              <Label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">
-                نوع الصيانة <span className="text-slate-600 normal-case">(يمكن أكثر من نوع)</span>
-              </Label>
-              <div className="flex flex-wrap gap-1.5">
-                {(Object.keys(typeTranslations) as TicketType[]).map(t => (
-                  <button type="button" key={t}
-                    onClick={() => setEditTypes(prev =>
-                      prev.includes(t) ? (prev.length > 1 ? prev.filter(x => x !== t) : prev) : [...prev, t]
-                    )}
-                    className={cn('px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all',
-                      editTypes.includes(t)
-                        ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                        : 'bg-white/5 border-border text-slate-500 hover:border-slate-400'
-                    )}
-                  >
-                    {typeTranslations[t as string]}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <TypesSelector
+              label="نوع الصيانة (يمكن أكثر من نوع)"
+              value={editTypes}
+              onChange={setEditTypes}
+              min={1}
+            />
 
             {/* المشرفون */}
             <div className="space-y-1.5">

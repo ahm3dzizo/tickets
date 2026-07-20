@@ -6,6 +6,7 @@ import {
   Home,
   Check,
 } from 'lucide-react';
+import { TypesSelector } from '@/components/tickets/TypesSelector';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,28 +33,6 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { UnifiedImportModal } from './UnifiedImportModal';
 
-/* ── Constants (خارج الـ component عشان مش تتعمل كل render) ── */
-const TYPE_LABELS: Record<TicketType, string> = {
-  electricity:    'كهرباء',
-  plumbing:       'سباكة',
-  doors:          'أبواب',
-  paints:         'دهانات',
-  cracks:         'تشققات',
-  ceramics:       'سيراميك',
-  tank_insulation:'عزل خزان',
-  drainage:       'صرف صحي',
-  ac_ventilation: 'تكييف وتهوية',
-  pumps:          'مضخات',
-  doors_windows:  'أبواب ونوافذ',
-  waterproofing:  'عزل مائي',
-  grading:        'ميول وترويبة',
-  pest_control:   'مكافحة حشرات',
-  cleaning:       'تنظيف',
-  'structural': 'إنشائي',
-  'painting': 'دهانات',
-  'tiles': 'سيراميك',
-  'unclassified': 'غير مصنف',
-};
 
 const PRIORITY_LABELS: Record<string, string> = {
   '3': '3 - منخفض',
@@ -474,35 +453,12 @@ export function TicketForm({
           </div>
 
           {/* ── Types ───────────────────────────────────────────── */}
-          <div className="space-y-2">
-            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
-              نوع التذكرة{' '}
-              <span className="text-slate-600 normal-case">(يُكتشف تلقائياً من الوصف)</span>
-            </Label>
-            <div className="flex flex-wrap gap-2">
-              {(Object.keys(TYPE_LABELS) as TicketType[]).map(t => (
-                <button
-                  type="button"
-                  key={t}
-                  onClick={() =>
-                    setTypes(prev =>
-                      prev.includes(t)
-                        ? prev.length > 1 ? prev.filter(x => x !== t) : prev
-                        : [...prev, t]
-                    )
-                  }
-                  className={cn(
-                    'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all',
-                    types.includes(t)
-                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                      : 'bg-white/5 border-border text-slate-500 hover:border-slate-400'
-                  )}
-                >
-                  {TYPE_LABELS[t]}
-                </button>
-              ))}
-            </div>
-          </div>
+          <TypesSelector
+            label="نوع التذكرة (يُكتشف تلقائياً من الوصف)"
+            value={types}
+            onChange={setTypes}
+            min={1}
+          />
 
           {/* ── Priority ────────────────────────────────────────── */}
           <div className="space-y-2">
