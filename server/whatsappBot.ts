@@ -176,13 +176,11 @@ async function notifyClientOfClosure(
   senderUid?: string,
 ): Promise<{ sent: boolean; reason?: string }> {
   if (!ticket.clientId) return { sent: false, reason: 'no_client' };
-  if (!senderUid || getWAStatus(senderUid) !== 'CONNECTED') {
-    return { sent: false, reason: 'not_connected' };
-  }
-  const senderId = senderUid;
+  // نبعت من رقم المشرف/المهندس لو واتساب متوصل، وإلا من رقم البوت
+  const senderId = senderUid && getWAStatus(senderUid) === 'CONNECTED' ? senderUid : BOT_USER_ID;
   try {
     const client = await prisma.client.findUnique({ where: { id: ticket.clientId } });
-    if (!client?.phone) return;
+    if (!client?.phone) return { sent: false, reason: 'no_phone' };
 
     const params = {
       ticketId: ticket.ticketId, clientName: ticket.clientName,
@@ -266,6 +264,11 @@ function scopedProjectIds(user: { role: string; projects: { id: string }[] }): s
 }
 function projectWhere(projectIds: string[] | null) {
   return projectIds ? { projectId: { in: projectIds.length ? projectIds : ['__none__'] } } : {};
+}
+// المشرف يشوف تذاكره هو بس — المهندس/الأدمن يشوف الكل
+function supervisorWhere(user: { uid: string; role: string }) {
+  if (user.role === 'supervisor') return { assignedSupervisorIds: { has: user.uid } };
+  return {};
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -463,8 +466,13 @@ async function cmdClientPhone(villa: string, projectIds: string[] | null): Promi
   }).join('\n');
 }
 
-async function cmdTicketDetails(ticketId: string, projectIds: string[] | null): Promise<string> {
-  const ticket = await prisma.ticket.findFirst({ where: { ticketId, ...projectWhere(projectIds) } });
+type BotUser = { uid: string; role: string; displayName: string; projects: { id: string }[] };
+
+async function cmdTicketDetails(ticketId: string, user: BotUser): Promise<string> {
+  const projectIds = scopedProjectIds(user);
+  const ticket = await prisma.ticket.findFirst({
+    where: { ticketId, ...projectWhere(projectIds), ...supervisorWhere(user) },
+  });
   if (!ticket) return `❌ مفيش تذكرة رقم ${ticketId} في نطاق صلاحياتك.`;
   return [
     `🎫 تذكرة #${ticket.ticketId}`,
@@ -476,9 +484,10 @@ async function cmdTicketDetails(ticketId: string, projectIds: string[] | null): 
   ].filter(Boolean).join('\n');
 }
 
-async function cmdVillaTickets(villa: string, projectIds: string[] | null): Promise<string> {
+async function cmdVillaTickets(villa: string, user: BotUser): Promise<string> {
+  const projectIds = scopedProjectIds(user);
   const tickets = await prisma.ticket.findMany({
-    where: { villaNumber: villa, ...projectWhere(projectIds) },
+    where: { villaNumber: villa, ...projectWhere(projectIds), ...supervisorWhere(user) },
     orderBy: { createdAt: 'desc' },
     take: 20,
   });
@@ -487,7 +496,23 @@ async function cmdVillaTickets(villa: string, projectIds: string[] | null): Prom
     tickets.map(t => `#${t.ticketId} — ${statusLabel(t.status)} — ${t.description.slice(0, 40)}`).join('\n');
 }
 
-async function cmdSupervisorTickets(name: string, projectIds: string[] | null): Promise<string> {
+async function cmdSupervisorTickets(name: string, user: BotUser): Promise<string> {
+  const projectIds = scopedProjectIds(user);
+  // المشرف يشوف تذاكره بس مهما كان الاسم المكتوب
+  if (user.role === 'supervisor') {
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        assignedSupervisorIds: { has: user.uid },
+        status: { notIn: ['closed', 'out_of_scope'] },
+        ...projectWhere(projectIds),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    if (tickets.length === 0) return `مفيهوش تذاكر مفتوحة في نطاقك.`;
+    return `تذاكرك المفتوحة (${tickets.length}):\n` +
+      tickets.map(t => `#${t.ticketId} — فيلا ${t.villaNumber} — ${statusLabel(t.status)}`).join('\n');
+  }
   const supervisor = await prisma.user.findFirst({
     where: { role: 'supervisor', displayName: { contains: name, mode: 'insensitive' } },
   });
@@ -506,8 +531,9 @@ async function cmdSupervisorTickets(name: string, projectIds: string[] | null): 
     tickets.map(t => `#${t.ticketId} — فيلا ${t.villaNumber} — ${statusLabel(t.status)}`).join('\n');
 }
 
-async function cmdReport(projectIds: string[] | null): Promise<string> {
-  const where = projectWhere(projectIds);
+async function cmdReport(user: BotUser): Promise<string> {
+  const projectIds = scopedProjectIds(user);
+  const where = { ...projectWhere(projectIds), ...supervisorWhere(user) };
   const [open, inProgress, pending, waiting, closed, total] = await Promise.all([
     prisma.ticket.count({ where: { ...where, status: 'open' } }),
     prisma.ticket.count({ where: { ...where, status: 'in_progress' } }),
@@ -516,8 +542,9 @@ async function cmdReport(projectIds: string[] | null): Promise<string> {
     prisma.ticket.count({ where: { ...where, status: 'closed' } }),
     prisma.ticket.count({ where }),
   ]);
+  const label = user.role === 'supervisor' ? 'تقريرك' : 'تقرير التذاكر';
   return [
-    '📊 تقرير التذاكر',
+    `📊 ${label}`,
     `مفتوحة: ${open}`,
     `قيد التنفيذ: ${inProgress}`,
     `معلقة: ${pending}`,
@@ -530,9 +557,9 @@ async function cmdReport(projectIds: string[] | null): Promise<string> {
 // ─── تنفيذ الأوامر الحساسة (تحتاج تأكيد) ──────────────────────────────────────
 
 async function prepareCloseTicket(
-  ticketId: string, projectIds: string[] | null, user: { uid: string; displayName: string }, closureType: ClosureType,
+  ticketId: string, projectIds: string[] | null, user: BotUser, closureType: ClosureType,
 ): Promise<PendingAction | string> {
-  const ticket = await prisma.ticket.findFirst({ where: { ticketId, ...projectWhere(projectIds) } });
+  const ticket = await prisma.ticket.findFirst({ where: { ticketId, ...projectWhere(projectIds), ...supervisorWhere(user) } });
   if (!ticket) return `❌ مفيش تذكرة رقم ${ticketId} في نطاق صلاحياتك.`;
   if (ticket.status === 'closed' || ticket.status === 'out_of_scope') return `تذكرة #${ticketId} مقفولة بالفعل.`;
   return {
@@ -554,10 +581,10 @@ async function prepareCloseTicket(
 }
 
 async function prepareCloseVillaTickets(
-  villa: string, projectIds: string[] | null, user: { uid: string; displayName: string }, closureType: ClosureType,
+  villa: string, projectIds: string[] | null, user: BotUser, closureType: ClosureType,
 ): Promise<PendingAction | string> {
   const tickets = await prisma.ticket.findMany({
-    where: { villaNumber: villa, status: { notIn: ['closed', 'out_of_scope'] }, ...projectWhere(projectIds) },
+    where: { villaNumber: villa, status: { notIn: ['closed', 'out_of_scope'] }, ...projectWhere(projectIds), ...supervisorWhere(user) },
   });
   if (tickets.length === 0) return `مفيش تذاكر مفتوحة لفيلا ${villa} في نطاق صلاحياتك.`;
   return {
@@ -579,9 +606,9 @@ async function prepareCloseVillaTickets(
 }
 
 async function prepareCloseTicketsList(
-  ticketIds: string[], projectIds: string[] | null, user: { uid: string; displayName: string }, closureType: ClosureType,
+  ticketIds: string[], projectIds: string[] | null, user: BotUser, closureType: ClosureType,
 ): Promise<PendingAction | string> {
-  const tickets = await prisma.ticket.findMany({ where: { ticketId: { in: ticketIds }, ...projectWhere(projectIds) } });
+  const tickets = await prisma.ticket.findMany({ where: { ticketId: { in: ticketIds }, ...projectWhere(projectIds), ...supervisorWhere(user) } });
   if (tickets.length === 0) return `❌ مفيش تذاكر بالأرقام دي في نطاق صلاحياتك.`;
   const openTickets = tickets.filter(t => t.status !== 'closed' && t.status !== 'out_of_scope');
   const alreadyClosed = tickets.filter(t => t.status === 'closed' || t.status === 'out_of_scope');
@@ -830,19 +857,19 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
         reply = await cmdClientPhone(intent.villa, projectIds);
         break;
       case 'ticket_details':
-        reply = await cmdTicketDetails(intent.ticketId, projectIds);
+        reply = await cmdTicketDetails(intent.ticketId, user);
         break;
       case 'villa_tickets':
-        reply = await cmdVillaTickets(intent.villa, projectIds);
+        reply = await cmdVillaTickets(intent.villa, user);
         break;
       case 'supervisor_tickets':
-        reply = await cmdSupervisorTickets(intent.name, projectIds);
+        reply = await cmdSupervisorTickets(intent.name, user);
         break;
       case 'report':
-        reply = await cmdReport(projectIds);
+        reply = await cmdReport(user);
         break;
       case 'close_ticket': {
-        const ticket = await prisma.ticket.findFirst({ where: { ticketId: intent.ticketId, ...projectWhere(projectIds) } });
+        const ticket = await prisma.ticket.findFirst({ where: { ticketId: intent.ticketId, ...projectWhere(projectIds), ...supervisorWhere(user) } });
         if (!ticket) { reply = `❌ مفيش تذكرة رقم ${intent.ticketId} في نطاق صلاحياتك.`; break; }
         if (ticket.status === 'closed' || ticket.status === 'out_of_scope') { reply = `تذكرة #${intent.ticketId} مقفولة بالفعل.`; break; }
         pendingClosureChoices.set(senderJid, { kind: 'ticket', ticketId: intent.ticketId, expiresAt: Date.now() + CONFIRM_TTL_MS });
@@ -851,7 +878,7 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
       }
       case 'close_villa_tickets': {
         const tickets = await prisma.ticket.findMany({
-          where: { villaNumber: intent.villa, status: { notIn: ['closed', 'out_of_scope'] }, ...projectWhere(projectIds) },
+          where: { villaNumber: intent.villa, status: { notIn: ['closed', 'out_of_scope'] }, ...projectWhere(projectIds), ...supervisorWhere(user) },
         });
         if (tickets.length === 0) { reply = `مفيش تذاكر مفتوحة لفيلا ${intent.villa} في نطاق صلاحياتك.`; break; }
         pendingClosureChoices.set(senderJid, { kind: 'villa', villa: intent.villa, expiresAt: Date.now() + CONFIRM_TTL_MS });
@@ -860,7 +887,7 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
       }
       case 'close_tickets_list': {
         const tickets = await prisma.ticket.findMany({
-          where: { ticketId: { in: intent.ticketIds }, status: { notIn: ['closed', 'out_of_scope'] }, ...projectWhere(projectIds) },
+          where: { ticketId: { in: intent.ticketIds }, status: { notIn: ['closed', 'out_of_scope'] }, ...projectWhere(projectIds), ...supervisorWhere(user) },
         });
         if (tickets.length === 0) { reply = `❌ مفيش تذاكر مفتوحة بالأرقام دي في نطاق صلاحياتك.`; break; }
         pendingClosureChoices.set(senderJid, { kind: 'tickets_list', ticketIds: intent.ticketIds, expiresAt: Date.now() + CONFIRM_TTL_MS });
