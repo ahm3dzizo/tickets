@@ -22,11 +22,24 @@ interface ProviderConfig {
   label: string;
 }
 
+// ── Per-provider rate-limit pause tracking ─────────────────────────────────
+const _pausedUntil: Record<string, number> = {};
+
+export function markProviderRateLimited(label: string, pauseMs: number): void {
+  _pausedUntil[label] = Date.now() + pauseMs;
+  console.warn(`[${label}] Rate limited — pausing ${Math.round(pauseMs / 60000)}m`);
+}
+
+function providerAvailable(label: string): boolean {
+  return Date.now() > (_pausedUntil[label] ?? 0);
+}
+
+// ── Provider cascade: OpenRouter → NaraRouter ──────────────────────────────
 function getProvider(): ProviderConfig | null {
-  if (process.env.OPENROUTER_API_KEY) {
+  if (process.env.OPENROUTER_API_KEY && providerAvailable("OpenRouter")) {
     return { url: OPENROUTER_URL, model: OPENROUTER_MODEL, apiKey: process.env.OPENROUTER_API_KEY, label: "OpenRouter" };
   }
-  if (process.env.NARA_API_KEY) {
+  if (process.env.NARA_API_KEY && providerAvailable("NaraRouter")) {
     return { url: NARA_URL, model: NARA_MODEL, apiKey: process.env.NARA_API_KEY, label: "NaraRouter" };
   }
   return null;
@@ -36,8 +49,9 @@ export function geminiEnabled(): boolean {
   return !!getProvider();
 }
 
+// true only when NaraRouter is the currently active provider (for rate limiting)
 export function isUsingNara(): boolean {
-  return !process.env.OPENROUTER_API_KEY && !!process.env.NARA_API_KEY;
+  return getProvider()?.label === "NaraRouter";
 }
 
 // ── Build available-types + subtypes list ──────────────────────────────────
@@ -76,122 +90,131 @@ function stripJsonComments(str: string): string {
   return str.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
+function buildPrompt(typesList: string): string {
+  return `أنت خبير في تصنيف بلاغات صيانة المباني السكنية. ردّك JSON فقط بدون أي نص إضافي.
+
+أنواع الصيانة المتاحة:
+${typesList}
+
+كيف تحلل البلاغ:
+- اقرأ الوصف كاملاً وافهم السياق الفعلي للمشكلة، لا تكتفِ بالكلمات المفتاحية
+- مثال السياق: "ترويبة مياه" في الحمام = صرف صحي | "ترويبة بلاط" = سيراميك/ميول | "تشققات" في الجدار = تشققات وليس دهانات
+- كل مشكلة مستقلة في البلاغ تحصل على عنصر منفصل حتى لو في جملة واحدة
+- اختر النوع الفرعي الأدق من الأنواع الفرعية المذكورة للنوع فقط، أو null
+- إذا كان البلاغ مبهماً تماماً → items: [], confidence: 0
+
+أمثلة:
+"فيه رائحة من الصرف + كسر بلاط + مشكلة في الكهرباء"
+→ {"items":[{"type":"drainage","subType":"روائح كريهة"},{"type":"ceramics","subType":"تبليط أرضيات"},{"type":"electricity","subType":"أفياش وقواطع"}],"confidence":0.95}
+
+"الخزان فيه تسريب من الرقبة"
+→ {"items":[{"type":"tank_neck","subType":null}],"confidence":0.9}
+
+الصيغة: {"items":[{"type":"key","subType":"اسم فرعي أو null"}],"confidence":0.9}`;
+}
+
+async function callProvider(
+  provider: ProviderConfig,
+  messages: { role: string; content: string }[],
+  jsonMode = true
+): Promise<any> {
+  const body: any = {
+    model: provider.model,
+    temperature: 0.1,
+    messages,
+  };
+  if (jsonMode) body.response_format = { type: "json_object" };
+
+  const response = await fetch(provider.url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider.apiKey}` },
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json();
+  if (response.status === 429) {
+    const isDaily = JSON.stringify(data).toLowerCase().includes("day");
+    const pauseMs = isDaily ? 60 * 60_000 : 70_000;
+    markProviderRateLimited(provider.label, pauseMs);
+    throw Object.assign(new Error(`429 ${provider.label}`), { is429: true });
+  }
+  if (!response.ok) {
+    throw new Error(`${provider.label} ${response.status}: ${data.error?.message || response.statusText}`);
+  }
+  return data;
+}
+
 export async function classifyWithGemini(
   description: string
 ): Promise<GeminiClassifyResult | null> {
-  const provider = getProvider();
-  if (!provider) return null;
+  const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
+  if (types.length === 0) return null;
 
-  try {
-    const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
-    if (types.length === 0) return null;
+  const typesList = types
+    .map((t) => {
+      const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join(" | ");
+      const desc = t.description ? ` — ${t.description}` : "";
+      return `- ${t.key}: ${t.nameAr}${desc}${subs ? ` (أنواع فرعية: ${subs})` : ""}`;
+    })
+    .join("\n");
 
-    const typesList = types
-      .map((t) => {
-        const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join(" | ");
-        const desc = t.description ? ` — ${t.description}` : "";
-        return `- ${t.key}: ${t.nameAr}${desc}${subs ? ` (أنواع فرعية: ${subs})` : ""}`;
-      })
-      .join("\n");
+  const messages = [
+    { role: "system", content: buildPrompt(typesList) },
+    { role: "user",   content: `البلاغ: "${description}"` },
+  ];
 
-    const prompt = `أنت متخصص في تصنيف بلاغات صيانة المساكن العربية. ردّك يجب أن يكون JSON فقط بدون أي نص إضافي.
+  // Try providers in cascade order (OpenRouter → NaraRouter)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const provider = getProvider();
+    if (!provider) break;
 
-أنواع الصيانة المتاحة (مع وصف نطاق كل نوع وأنواعه الفرعية):
-${typesList}
-
-طريقة التصنيف:
-اقرأ البلاغ كاملاً وافهم كل مشكلة فيه. لكل مشكلة:
-1. حدد النوع الأنسب (type) من القائمة أعلاه — بناءً على وصف النوع وفهم السياق الكامل
-2. حدد النوع الفرعي الأدق (subType) من الأنواع الفرعية لذلك النوع — أو null إن لم يتطابق
-
-مثال: "روائح صرف صحي + كسر سيراميك + مشكلة أفياش"
-→ [{"type":"drainage","subType":"روائح كريهة"},{"type":"ceramics","subType":"تبليط أرضيات"},{"type":"electricity","subType":"أفياش وقواطع"}]
-
-قواعد:
-1. لكل مشكلة مستقلة في البلاغ، أضف عنصراً منفصلاً في المصفوفة
-2. لا تدمج مشاكل مختلفة تحت نوع واحد
-3. subType يجب أن يكون من الأنواع الفرعية المذكورة للنوع أعلاه فقط، أو null
-4. إذا كان البلاغ مبهماً → items: [], confidence: 0
-5. JSON فقط بدون أي نص آخر
-
-الصيغة: {"items":[{"type":"key","subType":"اسم فرعي أو null"}],"confidence":0.9}`;
-
-    const response = await fetch(provider.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${provider.apiKey}`
-      },
-      body: JSON.stringify({
-        model: provider.model,
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: prompt },
-          { role: "user", content: `البلاغ: "${description}"` }
-        ]
-      })
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-        console.error(`[${provider.label}] API error:`, data.error?.message || response.statusText);
-        return null;
-    }
-
-    const text = data.choices?.[0]?.message?.content?.trim() || "";
-
-    let parsed: { items?: { type: string; subType?: string | null }[]; confidence?: number };
     try {
-      const stripped = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
-      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("No JSON object found");
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch {
-      console.error(`[${provider.label}] Failed to parse response:`, text);
+      const data = await callProvider(provider, messages, true);
+      const text = data.choices?.[0]?.message?.content?.trim() || "";
+
+      let parsed: { items?: { type: string; subType?: string | null }[]; confidence?: number };
+      try {
+        const stripped = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
+        const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON object found");
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        console.error(`[${provider.label}] Failed to parse response:`, text.slice(0, 120));
+        return null;
+      }
+
+      const validTypeKeys = new Set(types.map((t) => t.key));
+      const items = (parsed.items ?? []).filter(it => validTypeKeys.has(it.type));
+      if (items.length === 0) return null;
+
+      const validTypes = items.map(it => it.type);
+      console.log(`[${provider.label}] → types=${validTypes.join(',')} conf=${parsed.confidence ?? 0.8} | "${description.slice(0,80)}"`);
+
+      const allSubTypeIds: string[] = [];
+      for (const item of items) {
+        if (item.subType && item.subType !== "null") {
+          const match = subTypes.find(s => s.nameAr === item.subType && s.parentKey === item.type);
+          if (match) allSubTypeIds.push(match.id);
+        }
+      }
+
+      return {
+        primaryType:   validTypes[0],
+        allTypes:      validTypes,
+        subTypeId:     allSubTypeIds[0],
+        subTypeNameAr: items[0].subType ?? undefined,
+        allSubTypeIds,
+        confidence:    parsed.confidence ?? 0.8,
+        reason:        "",
+        source:        "gemini",
+      };
+    } catch (err: any) {
+      if (err.is429) continue; // provider marked as paused, loop tries next
+      console.error(`[${provider.label}] classify error:`, err.message);
       return null;
     }
-
-    const validTypeKeys = new Set(types.map((t) => t.key));
-    const items = (parsed.items ?? []).filter(it => validTypeKeys.has(it.type));
-    if (items.length === 0) return null;
-
-    const validTypes = items.map(it => it.type);
-    console.log(`[${provider.label}] result → types=${validTypes.join(',')} conf=${parsed.confidence ?? 0.8} subTypes=${items.map(it=>it.subType||'null').join(',')} | "${description.slice(0,80)}"`);
-
-    // Resolve sub-type name → id for each item
-    const allSubTypeIds: string[] = [];
-    for (const item of items) {
-      if (item.subType && item.subType !== "null") {
-        const match = subTypes.find(
-          s => s.nameAr === item.subType && s.parentKey === item.type
-        );
-        if (match) allSubTypeIds.push(match.id);
-      }
-    }
-
-    // Primary sub-type (for primary type)
-    let subTypeId: string | undefined;
-    let subTypeNameAr: string | undefined;
-    if (allSubTypeIds.length > 0) {
-      subTypeId = allSubTypeIds[0];
-      subTypeNameAr = items[0].subType ?? undefined;
-    }
-
-    return {
-      primaryType:   validTypes[0],
-      allTypes:      validTypes,
-      subTypeId,
-      subTypeNameAr,
-      allSubTypeIds,
-      confidence:    parsed.confidence ?? 0.8,
-      reason:        "",
-      source:        "gemini",
-    };
-  } catch (err: any) {
-    console.error(`[${provider.label}] classify error:`, err.message);
-    return null;
   }
+  return null;
 }
 
 // ── Batch classification — multiple tickets in one request ─────────────────
@@ -207,8 +230,7 @@ export interface GeminiBatchResult {
 export async function classifyBatchWithGemini(
   items: { id: string; description: string }[]
 ): Promise<GeminiBatchResult[]> {
-  const provider = getProvider();
-  if (!provider || items.length === 0) return [];
+  if (items.length === 0) return [];
 
   const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
   if (types.length === 0) return [];
@@ -217,7 +239,7 @@ export async function classifyBatchWithGemini(
     .map((t) => {
       const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join(" | ");
       const desc = t.description ? ` — ${t.description}` : "";
-      return `- ${t.key}: ${t.nameAr}${desc}${subs ? ` (${subs})` : ""}`;
+      return `- ${t.key}: ${t.nameAr}${desc}${subs ? ` (أنواع فرعية: ${subs})` : ""}`;
     })
     .join("\n");
 
@@ -225,87 +247,66 @@ export async function classifyBatchWithGemini(
     .map((item, i) => `${i + 1}. "${item.description.replace(/"/g, "'")}"`)
     .join("\n");
 
-  const prompt = `أنت متخصص في تصنيف بلاغات صيانة المساكن العربية. ردّك يجب أن يكون JSON array فقط.
+  const batchPrompt = `${buildPrompt(typesList)}
 
-أنواع الصيانة المتاحة (مع وصف نطاق كل نوع وأنواعه الفرعية):
-${typesList}
+صنّف كل بلاغ من القائمة أدناه بنفس الأسلوب. الصيغة:
+[{"i":1,"items":[{"type":"key","subType":"اسم فرعي أو null"}],"confidence":0.9},...]`;
 
-طريقة التصنيف:
-لكل بلاغ، اقرأه كاملاً واستخرج كل مشكلة فيه. لكل مشكلة:
-1. حدد النوع الأنسب (type) من القائمة — بناءً على وصفه وفهم السياق
-2. حدد النوع الفرعي الأدق (subType) من الأنواع الفرعية لذلك النوع — أو null
+  const messages = [
+    { role: "system", content: batchPrompt },
+    { role: "user",   content: `البلاغات:\n${ticketLines}` },
+  ];
 
-قواعد:
-- كل مشكلة مستقلة تحصل على عنصر منفصل في items
-- subType من الأنواع الفرعية للنوع المذكور فقط، أو null
-- إذا كان البلاغ مبهماً → items: []
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const provider = getProvider();
+    if (!provider) break;
 
-الصيغة:
-[{"i":1,"items":[{"type":"key","subType":"اسم فرعي أو null"}],"confidence":0.9}]`;
+    try {
+      const data = await callProvider(provider, messages, false);
+      const text = data.choices?.[0]?.message?.content?.trim() || "";
 
-  try {
-    const response = await fetch(provider.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${provider.apiKey}`
-      },
-      body: JSON.stringify({
-        model: provider.model,
-        temperature: 0.1,
-        messages: [
-          { role: "system", content: prompt },
-          { role: "user", content: `البلاغات:\n${ticketLines}` }
-        ]
-      })
-    });
+      const stripped = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
+      const arrMatch = stripped.match(/\[[\s\S]*\]/);
+      if (!arrMatch) {
+        console.error(`[${provider.label} batch] No JSON array:`, text.slice(0, 120));
+        return [];
+      }
 
-    const data = await response.json();
-    if (!response.ok) {
-        console.error(`[${provider.label} batch] API error:`, data.error?.message || response.statusText);
-        throw new Error(data.error?.message || `${provider.label} Error`);
-    }
+      const parsed: { i: number; items?: { type: string; subType?: string | null }[]; confidence?: number }[] = JSON.parse(arrMatch[0]);
+      const validTypeKeys = new Set(types.map((t) => t.key));
 
-    const text = data.choices?.[0]?.message?.content?.trim() || "";
+      console.log(`[${provider.label} batch] classified ${parsed.length}/${items.length} tickets`);
 
-    const stripped  = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
-    const arrMatch  = stripped.match(/\[[\s\S]*\]/);
-    if (!arrMatch) {
-      console.error(`[${provider.label} batch] No JSON array in response:`, text.slice(0, 120));
-      return [];
-    }
+      return parsed
+        .filter((r) => r.i >= 1 && r.i <= items.length)
+        .map((r) => {
+          const validItems = (r.items ?? []).filter(it => validTypeKeys.has(it.type));
+          const validTypes = validItems.map(it => it.type);
 
-    const parsed: { i: number; items?: { type: string; subType?: string | null }[]; confidence?: number }[] = JSON.parse(arrMatch[0]);
-    const validTypeKeys = new Set(types.map((t) => t.key));
-
-    return parsed
-      .filter((r) => r.i >= 1 && r.i <= items.length)
-      .map((r) => {
-        const validItems = (r.items ?? []).filter(it => validTypeKeys.has(it.type));
-        const validTypes = validItems.map(it => it.type);
-
-        // Resolve sub-type IDs
-        const allSubTypeIds: string[] = [];
-        for (const item of validItems) {
-          if (item.subType && item.subType !== "null") {
-            const match = subTypes.find(s => s.nameAr === item.subType && s.parentKey === item.type);
-            if (match) allSubTypeIds.push(match.id);
+          const allSubTypeIds: string[] = [];
+          for (const item of validItems) {
+            if (item.subType && item.subType !== "null") {
+              const match = subTypes.find(s => s.nameAr === item.subType && s.parentKey === item.type);
+              if (match) allSubTypeIds.push(match.id);
+            }
           }
-        }
 
-        return {
-          id:           items[r.i - 1].id,
-          primaryType:  validTypes[0] ?? "unclassified",
-          allTypes:     validTypes,
-          subTypeId:    allSubTypeIds[0],
-          allSubTypeIds,
-          confidence:   r.confidence ?? 0.8,
-        };
-      });
-  } catch (err: any) {
-    console.error(`[${provider.label} batch] error:`, err.message);
-    throw err;
+          return {
+            id:           items[r.i - 1].id,
+            primaryType:  validTypes[0] ?? "unclassified",
+            allTypes:     validTypes,
+            subTypeId:    allSubTypeIds[0],
+            allSubTypeIds,
+            confidence:   r.confidence ?? 0.8,
+          };
+        });
+    } catch (err: any) {
+      if (err.is429) continue;
+      console.error(`[${provider?.label} batch] error:`, err.message);
+      throw err;
+    }
   }
+  return [];
 }
 
 // ── Auto-learn: add Gemini's result as keywords so next time keywords catch it ─
