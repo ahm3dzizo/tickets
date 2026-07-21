@@ -15,9 +15,10 @@ export const USER_SPECIALTIES = new Set(["mechanics", "electricity", "general"])
 
 export const VALID_TYPES = [
   "plumbing", "electricity", "doors_windows", "cracks", "ceramics",
-  "tank_insulation", "drainage", "ac_ventilation", "pumps",
+  "drainage", "ac_ventilation", "pumps",
   "waterproofing", "grading", "pest_control", "cleaning", "structural",
   "paints", "doors",
+  "tank_neck", "tank_cover", "tank_broken",
 ];
 
 export const CONFLICTING_PAIRS: [string, string][] = [
@@ -30,7 +31,9 @@ export const CONFLICTING_PAIRS: [string, string][] = [
   ["electricity", "grading"],
   ["electricity", "pest_control"],
   ["electricity", "structural"],
-  ["electricity", "tank_insulation"],
+  ["electricity", "tank_neck"],
+  ["electricity", "tank_cover"],
+  ["electricity", "tank_broken"],
   ["plumbing", "electricity"],
   ["doors_windows", "electricity"],
   // أبواب ونوافذ لا تجتمع مع السباكة (الأعلى score يكسب)
@@ -38,7 +41,9 @@ export const CONFLICTING_PAIRS: [string, string][] = [
   ["doors_windows", "drainage"],
   ["doors_windows", "grading"],
   ["doors_windows", "waterproofing"],
-  ["doors_windows", "tank_insulation"],
+  ["doors_windows", "tank_neck"],
+  ["doors_windows", "tank_cover"],
+  ["doors_windows", "tank_broken"],
   ["doors_windows", "pumps"],
   // السباكة لا تجتمع مع الأبواب
   ["plumbing", "doors_windows"],

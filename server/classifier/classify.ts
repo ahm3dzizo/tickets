@@ -78,6 +78,7 @@ export async function classifyTicket(
       try {
         const geminiResult = await classifyWithGemini(description);
         if (geminiResult && geminiResult.primaryType !== "unclassified") {
+          console.log(`[classify] ✅ gemini → types=${geminiResult.allTypes.join(',')} conf=${geminiResult.confidence} | "${description.slice(0,80)}"`);
           learnFromGeminiResult(description, geminiResult.allTypes).catch(() => {});
           return {
             primaryType:  geminiResult.primaryType,
@@ -90,6 +91,8 @@ export async function classifyTicket(
             source:       "gemini",
             reason:       geminiResult.reason,
           };
+        } else {
+          console.log(`[classify] gemini returned unclassified | "${description.slice(0,80)}"`);
         }
       } catch (err: any) {
         // If 429 (rate limited by server), remove our optimistic timestamp
@@ -113,6 +116,8 @@ export async function classifyTicket(
       ? ML_LOW_SAMPLE_THRESHOLD
       : ML_CONFIDENCE_THRESHOLD;
 
+    console.log(`[classify] ML → type=${mlResult.primaryType} conf=${mlResult.confidence.toFixed(2)} threshold=${threshold} | "${description.slice(0,80)}"`);
+
     if (mlResult.confidence >= threshold) {
       // Keyword override: if keywords strongly signal a DIFFERENT type (score >= 7),
       // prefer keywords over the ML result. Catches cases where ML was trained on
@@ -124,6 +129,7 @@ export async function classifyTicket(
         kwCheck.primaryType !== mlResult.primaryType &&
         kwCheck.confidence >= KEYWORD_OVERRIDE_SCORE
       ) {
+        console.log(`[classify] ✅ keywords_override → ${mlResult.primaryType} → ${kwCheck.primaryType} (kw_score=${kwCheck.confidence}) | "${description.slice(0,80)}"`);
         return {
           primaryType: kwCheck.primaryType,
           allTypes:    kwCheck.allTypes,
@@ -136,6 +142,7 @@ export async function classifyTicket(
       }
 
       // ML service now returns subType directly — use it, then resolve IDs
+      console.log(`[classify] ✅ ml → type=${mlResult.primaryType} allTypes=${mlResult.allTypes.join(',')} conf=${mlResult.confidence.toFixed(2)}`);
       const [typeId, subTypeId] = await Promise.all([
         resolveTypeId(mlResult.primaryType),
         mlResult.subType ? resolveSubTypeId(mlResult.subType, mlResult.primaryType) : Promise.resolve(null),
@@ -154,6 +161,7 @@ export async function classifyTicket(
     // ML not confident enough → try keywords before accepting low-confidence ML
     const kwFallback = classifyFromKeywordsDB(description, keywords);
     if (kwFallback.primaryType !== "unclassified" && kwFallback.confidence >= MIN_CLASSIFY_SCORE) {
+      console.log(`[classify] ✅ keywords (ML low-conf) → type=${kwFallback.primaryType} kw_score=${kwFallback.confidence} | "${description.slice(0,80)}"`);
       return {
         primaryType: kwFallback.primaryType,
         allTypes:    kwFallback.allTypes,
@@ -166,6 +174,7 @@ export async function classifyTicket(
     }
 
     // Last resort: return low-confidence ML result
+    console.log(`[classify] ✅ ml_low_confidence → type=${mlResult.primaryType} conf=${mlResult.confidence.toFixed(2)} | "${description.slice(0,80)}"`);
     const [typeId, subTypeId] = await Promise.all([
       resolveTypeId(mlResult.primaryType),
       mlResult.subType ? resolveSubTypeId(mlResult.subType, mlResult.primaryType) : Promise.resolve(null),
@@ -185,6 +194,7 @@ export async function classifyTicket(
   const kwResult = classifyFromKeywordsDB(description, keywords);
 
   if (kwResult.primaryType !== "unclassified" && kwResult.confidence >= MIN_CLASSIFY_SCORE) {
+    console.log(`[classify] ✅ keywords → type=${kwResult.primaryType} kw_score=${kwResult.confidence} | "${description.slice(0,80)}"`);
     return {
       primaryType: kwResult.primaryType,
       allTypes:    kwResult.allTypes,
@@ -197,6 +207,7 @@ export async function classifyTicket(
   }
 
   // ── 4. Unclassified ─────────────────────────────────────────────────────
+  console.log(`[classify] ❌ unclassified | "${description.slice(0,80)}"`);
   return {
     primaryType: "unclassified",
     allTypes:    [],

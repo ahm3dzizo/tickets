@@ -153,6 +153,7 @@ ${typesList}
     if (items.length === 0) return null;
 
     const validTypes = items.map(it => it.type);
+    console.log(`[${provider.label}] result → types=${validTypes.join(',')} conf=${parsed.confidence ?? 0.8} subTypes=${items.map(it=>it.subType||'null').join(',')} | "${description.slice(0,80)}"`);
 
     // Resolve sub-type name → id for each item
     const allSubTypeIds: string[] = [];

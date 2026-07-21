@@ -76,7 +76,10 @@ const STATIC_FALLBACKS: Record<string, string> = {
   smart_home: 'نظام ذكي',
   swimming_pool: 'مسبح',
   landscaping: 'زراعة وحدائق',
-  mechanics: 'ميكانيكا / سباكة',
+  mechanics:    'ميكانيكا / سباكة',
+  tank_neck:    'رقبة خزان',
+  tank_cover:   'غطاء خزان',
+  tank_broken:  'كسر خزان',
 };
 
 // ─── Context ───────────────────────────────────────────────────────────────────
