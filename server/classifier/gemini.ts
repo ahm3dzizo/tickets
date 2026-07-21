@@ -36,6 +36,10 @@ export function geminiEnabled(): boolean {
   return !!getProvider();
 }
 
+export function isUsingNara(): boolean {
+  return !process.env.OPENROUTER_API_KEY && !!process.env.NARA_API_KEY;
+}
+
 // ── Build available-types + subtypes list ──────────────────────────────────
 async function getActiveTypes(): Promise<{ key: string; nameAr: string; description?: string }[]> {
   const types = await prisma.ticketType.findMany({

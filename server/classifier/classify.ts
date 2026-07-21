@@ -4,7 +4,7 @@ import {
   findSupervisorsDB,
   invalidateReferenceCache,
 } from "./db-helpers.js";
-import { classifyWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
+import { classifyWithGemini, geminiEnabled, isUsingNara, learnFromGeminiResult } from "./gemini.js";
 import { classifyWithML, mlServiceAvailable } from "./ml-client.js";
 
 // ML confidence threshold — below this, fall back to Gemini
@@ -71,10 +71,14 @@ export async function classifyTicket(
   // Load keywords once — used for override check and fallbacks
   const keywords = await loadKeywordsFromDB();
 
-  // ── 1. NaraRouter (bynara) — primary (rate-limited to 10 req/min) ────────
+  // ── 1. AI (OpenRouter primary, NaraRouter fallback) ──────────────────────
+  // NaraRouter rate-limited to 10 req/min; OpenRouter has no local quota guard
   if (!options?.skipGemini && geminiEnabled()) {
-    if (naraQuotaAvailable()) {
-      naraMarkUsed();
+    const useNara = isUsingNara();
+    const canCall = !useNara || naraQuotaAvailable();
+
+    if (canCall) {
+      if (useNara) naraMarkUsed();
       try {
         const geminiResult = await classifyWithGemini(description);
         if (geminiResult && geminiResult.primaryType !== "unclassified") {
@@ -95,12 +99,11 @@ export async function classifyTicket(
           console.log(`[classify] gemini returned unclassified | "${description.slice(0,80)}"`);
         }
       } catch (err: any) {
-        // If 429 (rate limited by server), remove our optimistic timestamp
         if (err.message?.includes('429') || err.message?.includes('rate')) {
-          _naraCallTimestamps.pop();
-          console.warn("[classify] NaraRouter 429 — quota full, falling back to ML");
+          if (useNara) _naraCallTimestamps.pop();
+          console.warn("[classify] AI 429 — rate limited, falling back to ML");
         } else {
-          console.error("[classify] NaraRouter primary error:", err.message);
+          console.error("[classify] AI primary error:", err.message);
         }
       }
     } else {
