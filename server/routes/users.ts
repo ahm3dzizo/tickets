@@ -8,8 +8,56 @@ import {
   toPublicUser, toPublicUsers, assertUserIdentityUnique, signAppToken, getRequesterRole
 } from "../auth.js";
 import { USER_ROLES } from "../config.js";
+import { sendWAText, getWAStatus } from "../baileys.js";
 
 const router = Router();
+
+const ROLE_LABELS: Record<string, string> = {
+  admin:      'مدير النظام',
+  engineer:   'مهندس مشروع',
+  supervisor: 'مشرف',
+};
+
+async function sendWelcomeMessage(senderUid: string, newUser: { displayName: string; phoneNumber: string | null; role: string }): Promise<void> {
+  if (!newUser.phoneNumber) return;
+
+  // Try requester's session first, then any connected admin
+  let fromUid: string | null = null;
+  if (getWAStatus(senderUid) === 'CONNECTED') {
+    fromUid = senderUid;
+  } else {
+    const admins = await prisma.user.findMany({ where: { role: 'admin' }, select: { uid: true } });
+    for (const a of admins) {
+      if (getWAStatus(a.uid) === 'CONNECTED') { fromUid = a.uid; break; }
+    }
+  }
+
+  if (!fromUid) {
+    console.log('[Welcome] No connected WA session — skipping welcome message for', newUser.phoneNumber);
+    return;
+  }
+
+  const appUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+  const roleLabel = ROLE_LABELS[newUser.role] ?? newUser.role;
+
+  const message =
+    `السلام عليكم *${newUser.displayName}* 👋\n\n` +
+    `تم إضافتك في *نظام صيانة رتال* كـ *${roleLabel}*.\n\n` +
+    `لإكمال تسجيلك، اتبع الخطوات:\n\n` +
+    `1️⃣ افتح التطبيق:\n${appUrl}\n\n` +
+    `2️⃣ اضغط *"تسجيل الدخول"*\n\n` +
+    `3️⃣ أدخل رقم جوالك: *${newUser.phoneNumber}*\n\n` +
+    `4️⃣ أنشئ كلمة مرور من اختيارك\n\n` +
+    `5️⃣ أكمل بيانات حسابك\n\n` +
+    `في حالة أي استفسار تواصل معنا 🙌`;
+
+  const result = await sendWAText(fromUid, newUser.phoneNumber, message);
+  if (result.sent) {
+    console.log(`[Welcome] ✅ Sent to ${newUser.phoneNumber}`);
+  } else {
+    console.warn(`[Welcome] ⚠️  Failed to send to ${newUser.phoneNumber}:`, result.error);
+  }
+}
 
 // GET /api/users
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
@@ -206,6 +254,14 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       projects: undefined, specialtiesRef: undefined
     };
     res.status(201).json(toPublicUser(mapped));
+
+    // Fire-and-forget welcome message — doesn't block the response
+    sendWelcomeMessage(req.uid!, {
+      displayName: user.displayName,
+      phoneNumber: user.phoneNumber,
+      role: user.role,
+    }).catch(e => console.warn('[Welcome] Error:', e.message));
+
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

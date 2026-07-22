@@ -69,7 +69,6 @@ const STATIC_FALLBACKS: Record<string, string> = {
   general: 'عام',
   cracks: 'شروخ وتصدعات',
   grading: 'تسوية',
-  gypsum: 'جبس',
   lighting: 'إضاءة',
   aluminum: 'ألمنيوم',
   hvac: 'تكييف',

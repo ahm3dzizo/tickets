@@ -62,6 +62,7 @@ interface SFRow {
   openedDate: string;
   description: string;
   status?: string;     // optional — present when Status column exists in report
+  phone?: string;      // "Person Account: Mobile" column
 }
 
 // ── POST /api/salesforce/import ───────────────────────────────────────────────
@@ -170,6 +171,15 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
       const client = unit?.clients?.[0]?.client ?? null;
       const clientId   = client?.id ?? null;
       const clientName = client?.name ?? row.accountName;
+
+      // Backfill phone on client record when SF supplies it and DB has none
+      const sfPhone = (row.phone || "").replace(/\D/g, "");
+      if (client && !client.phone && sfPhone) {
+        await prisma.client.update({
+          where: { id: client.id },
+          data: { phone: sfPhone },
+        });
+      }
 
       // ── Parse opened date ────────────────────────────────────────────────
       let createdAt: Date;

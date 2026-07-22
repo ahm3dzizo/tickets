@@ -228,6 +228,44 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── GET /api/appointments/by-client/:clientId ───────────────────────────────
+router.get("/by-client/:clientId", requireAuth, async (req: AuthRequest, res) => {
+  const { clientId } = req.params;
+  try {
+    const appointments = await prisma.appointment.findMany({
+      where: { clientId },
+      include: {
+        tickets: { select: { id: true, ticketId: true, status: true, type: true } },
+      },
+      orderBy: [{ date: "desc" }, { time: "desc" }],
+    });
+    res.json(appointments);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/appointments/by-unit ───────────────────────────────────────────
+router.get("/by-unit", requireAuth, async (req: AuthRequest, res) => {
+  const { projectId, villaNumber } = req.query as { projectId?: string; villaNumber?: string };
+  if (!projectId || !villaNumber) {
+    res.status(400).json({ error: "projectId و villaNumber مطلوبان" });
+    return;
+  }
+  try {
+    const appointments = await prisma.appointment.findMany({
+      where: { projectId, villaNumber },
+      include: {
+        tickets: { select: { id: true, ticketId: true, status: true, type: true } },
+      },
+      orderBy: [{ date: "desc" }, { time: "desc" }],
+    });
+    res.json(appointments);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── POST /api/appointments/push-subscribe ────────────────────────────────────
 router.post("/push-subscribe", requireAuth, async (req: AuthRequest, res) => {
   const { subscription } = req.body as { subscription: any };

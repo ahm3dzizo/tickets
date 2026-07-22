@@ -3,12 +3,13 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { TicketTable } from '@/components/tickets/TicketTable';
-import { clientsApi, ticketsApi } from '@/lib/api';
+import { clientsApi, ticketsApi, appointmentsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
-  User, Phone, Calendar, Shield, Hash, MapPin, 
-  Ticket as TicketIcon, Loader2, ArrowRight, Home
+  User, Phone, Calendar, Shield, Hash, MapPin,
+  Ticket as TicketIcon, Loader2, ArrowRight, Home,
+  Clock, FileText
 } from 'lucide-react';
 
 export default function ClientDetail() {
@@ -17,16 +18,19 @@ export default function ClientDetail() {
 
   const [client, setClient] = useState<any>(null);
   const [tickets, setTickets] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
     Promise.all([
       clientsApi.get(id),
-      ticketsApi.getAll({ clientId: id })
-    ]).then(([clientData, ticketsData]) => {
+      ticketsApi.getAll({ clientId: id }),
+      appointmentsApi.getByClient(id).catch(() => [] as any[]),
+    ]).then(([clientData, ticketsData, apptsData]) => {
       setClient(clientData);
       setTickets(ticketsData);
+      setAppointments(apptsData);
     }).catch(() => {
       toast.error('فشل في جلب بيانات العميل');
     }).finally(() => setLoading(false));
@@ -142,6 +146,77 @@ export default function ClientDetail() {
             )}
           </div>
         </div>
+
+        {/* Appointments Section */}
+        {appointments.length > 0 && (() => {
+          const today = new Date().toISOString().split('T')[0];
+          const sorted = [...appointments].sort((a, b) => b.date.localeCompare(a.date) || (b.time || '').localeCompare(a.time || ''));
+          const upcoming = appointments.filter(a => a.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+          return (
+            <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl">
+              <div className="p-5 border-b border-border bg-white/5 flex items-center justify-between">
+                <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">{appointments.length} موعد</span>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-emerald-400" />
+                  المواعيد
+                </h2>
+              </div>
+              {upcoming.length > 0 && (
+                <div className="px-5 py-3 border-b border-border bg-emerald-500/5">
+                  <div className="flex items-center justify-end gap-1.5 mb-2">
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">قادمة</span>
+                  </div>
+                  <div className="space-y-2">
+                    {upcoming.map(appt => (
+                      <div key={appt.id} className="flex items-start justify-between gap-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3">
+                        <div className="flex flex-col items-start gap-1 shrink-0">
+                          {appt.villaNumber && (
+                            <Link to={`/units/${appt.clientId ? '' : ''}`} className="text-[10px] text-slate-500 flex items-center gap-1">
+                              <Home className="w-3 h-3" />
+                              وحدة {appt.villaNumber}
+                            </Link>
+                          )}
+                          {appt.time && (
+                            <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />{appt.time}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-right flex-1">
+                          <div className="font-bold text-emerald-300 text-sm">{appt.date}</div>
+                          {appt.notes && <p className="text-slate-400 text-xs mt-1 leading-relaxed">{appt.notes}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="divide-y divide-border max-h-72 overflow-y-auto">
+                {sorted.filter(a => a.date < today).map(appt => (
+                  <div key={appt.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                    <div className="flex flex-col items-start gap-1 shrink-0">
+                      {appt.villaNumber && (
+                        <span className="text-[10px] text-slate-600 flex items-center gap-1">
+                          <Home className="w-3 h-3" />
+                          وحدة {appt.villaNumber}
+                        </span>
+                      )}
+                      {appt.time && (
+                        <span className="text-[10px] text-slate-600 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />{appt.time}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right flex-1">
+                      <div className="text-slate-400 text-sm font-bold">{appt.date}</div>
+                      {appt.notes && <p className="text-slate-600 text-xs mt-0.5 leading-relaxed">{appt.notes}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Tickets Table */}
         <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl">

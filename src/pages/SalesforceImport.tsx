@@ -16,12 +16,12 @@ function buildBookmarklet(appOrigin: string, token: string): string {
   try{
     el=document.createElement('div');
     el.setAttribute('style','all:initial;position:fixed!important;top:20px!important;right:20px!important;z-index:2147483647!important;background:#1e293b;color:#e2e8f0;padding:16px 22px;border-radius:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.8;box-shadow:0 8px 32px rgba(0,0,0,.55);direction:rtl;min-width:260px;max-width:360px');
-    el.innerHTML='\\u23F3 \\u0645\\u0632\\u0627\\u0645\\u0646\\u0629 \\u0631\\u062A\\u0627\\u0644 \\u2014 \\u062C\\u0627\\u0631\\u064A \\u0627\\u0644\\u0642\\u0631\\u0627\\u0621\\u0629...';
+    el.innerHTML='⏳ مزامنة رتال — جاري القراءة...';
     (document.body||document.documentElement).appendChild(el);
   }catch(e){el=null;}
 
   try{
-    /* find the report iframe (lightningReportApp) — data lives there */
+    /* find the report iframe (lightningReportApp) */
     var searchDoc=document;
     try{
       var iframes=document.querySelectorAll('iframe');
@@ -43,41 +43,54 @@ function buildBookmarklet(appOrigin: string, token: string): string {
     allTables.forEach(function(t){var n=t.querySelectorAll('tr').length;if(n>maxR){maxR=n;dataTable=t;}});
 
     if(!dataTable||maxR<2){
-      upd('\\u274C \\u0644\\u0645 \\u064A\\u062A\\u0645 \\u0627\\u0644\\u0639\\u062B\\u0648\\u0631 \\u0639\\u0644\\u0649 \\u062C\\u062F\\u0648\\u0644 (tables:'+allTables.length+' rows:'+maxR+')','#7f1d1d');
+      upd('❌ لم يتم العثور على جدول (tables:'+allTables.length+' rows:'+maxR+')','#7f1d1d');
       setTimeout(function(){if(el)el.remove();},8000);
       return;
     }
     console.log('[retal] rows in table:',maxR);
 
-    /* extract column headers */
+    /* extract column headers — use direct text nodes to avoid sort/filter button text */
     var headers=[];
     var hcells=dataTable.querySelectorAll('thead th,thead td');
     if(!hcells.length)hcells=dataTable.querySelectorAll('tr:first-child th,tr:first-child td');
-    hcells.forEach(function(c){headers.push((c.textContent||'').trim().toLowerCase());});
+    hcells.forEach(function(c){
+      var txt='';
+      c.childNodes.forEach(function(n){if(n.nodeType===3)txt+=n.textContent;});
+      txt=txt.trim();
+      if(!txt)txt=(c.textContent||'').replace(/[▲▼↑↓︎️]/g,'').trim();
+      headers.push(txt.toLowerCase().replace(/\s+/g,' '));
+    });
     console.log('[retal] headers:',headers.join(' | '));
-    upd('\\u23F3 Headers: '+headers.join(' | '));
+    upd('⏳ Headers: '+headers.join(' | '));
 
     var col=function(){
       var keys=Array.prototype.slice.call(arguments);
-      /* exact match first */
+      /* exact match */
       for(var j=0;j<keys.length;j++)
         for(var i=0;i<headers.length;i++)
           if(headers[i]===keys[j])return i;
-      /* then partial */
+      /* starts-with (handles "unit ↑" suffix) */
+      for(var j=0;j<keys.length;j++)
+        for(var i=0;i<headers.length;i++)
+          if(headers[i].indexOf(keys[j])===0)return i;
+      /* contains */
       for(var j=0;j<keys.length;j++)
         for(var i=0;i<headers.length;i++)
           if(headers[i].indexOf(keys[j])>=0)return i;
       return -1;
     };
-    /* case number: look for 'case number' or 'case no' first — avoid matching 'unit number' etc */
-    var iCase  =col('case number','case no','case#','\\u0631\\u0642\\u0645 \\u0627\\u0644\\u062D\\u0627\\u0644\\u0629');
-    /* unit: villa/unit/property — NOT generic 'number' */
-    var iUnit  =col('unit number','unit no','unit','villa','property','\\u0648\\u062D\\u062F\\u0629','\\u0641\\u064A\\u0644\\u0627');
-    var iAcc   =col('account name','account','client name','client','\\u0627\\u0633\\u0645 \\u0627\\u0644\\u0639\\u0645\\u064A\\u0644','\\u0627\\u0633\\u0645');
-    var iDate  =col('date/time opened','opened','open date','created','date','\\u062A\\u0627\\u0631\\u064A\\u062E');
-    var iDesc  =col('description','subject','\\u0648\\u0635\\u0641');
-    var iStatus=col('status','\\u062D\\u0627\\u0644\\u0629');
-    console.log('[retal] case='+iCase+' unit='+iUnit+' acc='+iAcc+' status='+iStatus+' date='+iDate+' desc='+iDesc);
+
+    /* unit pattern: "ABC-123" — used as per-row fallback when header detection is off */
+    var unitPat=/^[A-Za-z]{2,6}-\d+$/;
+
+    var iCase  =col('case number','case no','case#','رقم الحالة');
+    var iUnit  =col('unit number','unit no','unit','villa','property','وحدة','فيلا');
+    var iAcc   =col('account name','account','client name','client','اسم العميل','اسم');
+    var iDate  =col('date/time opened','opened','open date','created','date','تاريخ');
+    var iDesc  =col('description','subject','وصف');
+    var iStatus=col('status','حالة');
+    var iPhone =col('person account: mobile','person account mobile','mobile phone','mobile','phone','جوال','هاتف');
+    console.log('[retal] case='+iCase+' unit='+iUnit+' acc='+iAcc+' phone='+iPhone+' status='+iStatus+' date='+iDate+' desc='+iDesc);
 
     /* extract rows */
     var rows=[];
@@ -86,31 +99,49 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       if(!cells.length)return;
       var get=function(i){
         if(i<0||i>=cells.length)return'';
-        return(cells[i].textContent||cells[i].innerText||'').trim().replace(/\\s+/g,' ');
+        return(cells[i].textContent||cells[i].innerText||'').trim().replace(/\s+/g,' ');
       };
       var cn=get(iCase);
-      if(!cn||cn==='-'||cn==='\\u2014'||cn==='')return;
-      rows.push({caseNumber:cn,unit:get(iUnit),accountName:get(iAcc),openedDate:get(iDate),description:get(iDesc),status:get(iStatus)});
+      if(!cn||cn==='-'||cn==='—'||cn==='')return;
+
+      /* smart unit: header-detected column first; fallback = scan all cells for ABC-NNN pattern */
+      var unitVal=get(iUnit);
+      if(!unitPat.test(unitVal)){
+        for(var ci=0;ci<cells.length;ci++){
+          var cv=get(ci);
+          if(unitPat.test(cv)){unitVal=cv;break;}
+        }
+      }
+
+      rows.push({
+        caseNumber:cn,
+        unit:unitVal,
+        accountName:get(iAcc),
+        openedDate:get(iDate),
+        description:get(iDesc),
+        status:get(iStatus),
+        phone:get(iPhone)
+      });
     });
     console.log('[retal] rows:',rows.length,rows[0]);
 
     if(!rows.length){
-      upd('\\u26A0\\uFE0F \\u0627\\u0644\\u062C\\u062F\\u0648\\u0644 \\u0641\\u0627\\u0631\\u063A \\u2014 headers: '+headers.slice(0,5).join(' | '));
+      upd('⚠️ الجدول فارغ — headers: '+headers.slice(0,5).join(' | '));
       setTimeout(function(){if(el)el.remove();},8000);
       return;
     }
 
-    /* SF CSP blocks direct fetch to our server — relay via URL hash in a new tab */
+    /* SF CSP blocks direct fetch — relay via URL hash in a new tab */
     var encoded;
     try{encoded=btoa(unescape(encodeURIComponent(JSON.stringify(rows))));}
-    catch(e){encoded=btoa(JSON.stringify(rows).replace(/[\\u0080-\\uFFFF]/g,'?'));}
-    upd('\\u23F3 \\u062A\\u0645 \\u0642\\u0631\\u0627\\u0621\\u0629 <b>'+rows.length+'</b> \\u0633\\u062C\\u0644...<br>\\u062C\\u0627\\u0631\\u064A \\u0641\\u062A\\u062D \\u0627\\u0644\\u062A\\u0637\\u0628\\u064A\\u0642...');
+    catch(e){encoded=btoa(JSON.stringify(rows).replace(/[-￿]/g,'?'));}
+    upd('⏳ تم قراءة <b>'+rows.length+'</b> سجل...<br>جاري فتح التطبيق...');
     window.open(O+'/salesforce-import#sf'+encoded,'_blank');
     setTimeout(function(){if(el)el.remove();},4000);
 
   }catch(e){
     console.error('[retal]',e);
-    upd('\\u274C \\u062E\\u0637\\u0623: '+e.message,'#7f1d1d');
+    upd('❌ خطأ: '+e.message,'#7f1d1d');
     setTimeout(function(){if(el)el.remove();},8000);
   }
 }`;

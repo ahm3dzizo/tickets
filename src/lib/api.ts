@@ -371,6 +371,9 @@ export const appointmentsApi = {
   }) => put<any>(`/appointments/${id}`, data),
   deleteAppointment: (id: string) => del<any>(`/appointments/${id}`),
   migrate: () => post<{ ok: boolean; created: number }>('/appointments/migrate', {}),
+  getByClient: (clientId: string) => get<any[]>(`/appointments/by-client/${clientId}`),
+  getByUnit: (projectId: string, villaNumber: string) =>
+    get<any[]>(`/appointments/by-unit?projectId=${encodeURIComponent(projectId)}&villaNumber=${encodeURIComponent(villaNumber)}`),
 };
 
 // ── Learned Keywords ──────────────────────────────────────────────────────────

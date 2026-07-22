@@ -138,8 +138,8 @@ export function UserForm({
         toast.error('يرجى اختيار مشروع واحد على الأقل'); return;
       }
     } else {
-      if (!employeeId.trim() && !phoneNumber.trim()) {
-        toast.error('يرجى إدخال الرقم الوظيفي أو رقم الهاتف على الأقل'); return;
+      if (!phoneNumber.trim()) {
+        toast.error('رقم الهاتف مطلوب — يُستخدم لتسجيل الدخول وإرسال رسالة الترحيب'); return;
       }
       if (role !== 'admin' && selectedProjects.length === 0) {
         toast.error('يرجى اختيار مشروع واحد على الأقل'); return;
@@ -370,11 +370,11 @@ function FormBody({
           <div className="space-y-3">
             <div className="flex items-center gap-2 p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl">
               <Info className="w-4 h-4 text-blue-400 shrink-0" />
-              <p className="text-xs text-blue-300 text-right">أدخل الرقم الوظيفي أو رقم الهاتف — يكفي واحد منهما. العضو سيُكمل بياناته عند أول تسجيل دخول.</p>
+              <p className="text-xs text-blue-300 text-right">رقم الهاتف <span className="font-bold text-blue-200">مطلوب</span> — يُستخدم لتسجيل الدخول وتُرسل عليه رسالة الترحيب. الرقم الوظيفي اختياري.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">الرقم الوظيفي</Label>
+                <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">الرقم الوظيفي <span className="text-slate-600 normal-case">(اختياري)</span></Label>
                 <div className="relative">
                   <Input
                     placeholder="EMP001"
@@ -386,10 +386,13 @@ function FormBody({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">رقم الهاتف</Label>
+                <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
+                  رقم الهاتف <span className="text-red-400">*</span>
+                </Label>
                 <div className="relative">
                   <Input
                     placeholder="05xxxxxxxx"
+                    required
                     className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-10"
                     value={phoneNumber}
                     onChange={e => setPhoneNumber(e.target.value)}
