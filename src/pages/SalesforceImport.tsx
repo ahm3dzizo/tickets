@@ -21,13 +21,14 @@ function buildBookmarklet(appOrigin: string, token: string): string {
   try{
     /* ── find report document (may be inside an iframe) ── */
     var searchDoc=document;
+    var reportIframe=null;
     try{
       var frames=document.querySelectorAll('iframe');
       for(var fi=0;fi<frames.length;fi++){
         var fsrc=frames[fi].src||'';
         if(fsrc.indexOf('lightningReport')>=0||fsrc.indexOf('reportId')>=0||fsrc.indexOf('force.com')>=0){
           var fd=frames[fi].contentDocument||(frames[fi].contentWindow&&frames[fi].contentWindow.document);
-          if(fd&&fd.querySelectorAll('table').length){searchDoc=fd;break;}
+          if(fd&&fd.querySelectorAll('table').length){searchDoc=fd;reportIframe=frames[fi];break;}
         }
       }
     }catch(e){}
@@ -63,19 +64,24 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       setTimeout(function(){if(el)el.remove();},9000);return;
     }
 
-    /* ── collect scrollable ancestor containers (deepest = primary) ── */
-    var scrollers=[];
-    try{
-      var cur2=dataTable.parentElement;
-      var winRef=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):window;
-      while(cur2&&cur2!==searchDoc.body){
-        try{
-          var ov=(winRef&&winRef.getComputedStyle?winRef:window).getComputedStyle(cur2).overflowY||'';
-          if(ov==='auto'||ov==='scroll')scrollers.push(cur2);
-        }catch(e){}
-        cur2=cur2.parentElement;
-      }
-    }catch(e){}
+    /* ── helpers: get win + find scrollers from element ── */
+    var sfWin=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):window;
+
+    function findScrollers(fromEl){
+      var list=[];
+      try{
+        var c=fromEl.parentElement;
+        while(c&&c!==searchDoc.body){
+          try{
+            var ov=(sfWin&&sfWin.getComputedStyle?sfWin:window).getComputedStyle(c).overflowY||'';
+            if(ov==='auto'||ov==='scroll')list.push(c);
+          }catch(e){}
+          c=c.parentElement;
+        }
+      }catch(e){}
+      return list;
+    }
+    var scrollers=findScrollers(dataTable);
     console.log('[retal] scrollers:',scrollers.length);
 
     /* ── extract column header text ── */
@@ -94,7 +100,7 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       return(c.textContent||'').replace(/[\\u25b2\\u25bc\\u2191\\u2193]/g,'').replace(/\\s+/g,' ').trim().slice(0,60);
     }
 
-    /* ── read headers BEFORE scrolling (they're always visible) ── */
+    /* ── read headers BEFORE scrolling ── */
     var headers=[];
     var hcells=dataTable.querySelectorAll('thead th,thead td');
     if(!hcells.length)hcells=dataTable.querySelectorAll('tr:first-child th,tr:first-child td');
@@ -138,15 +144,25 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       setTimeout(function(){if(el)el.remove();},12000);return;
     }
 
-    /* ── BATCH COLLECT ──────────────────────────────────────────────────────────
-       Salesforce Lightning virtual-scrolls: only ~13 rows exist in the DOM at
-       once. Scrolling down replaces old rows with new ones rather than adding to
-       the list. Strategy: collect visible rows → scroll a bit → collect again →
-       deduplicate by case# → repeat until no new rows appear or target reached.
-    ── */
-    var allRowMap={};   /* case# → texts[] — deduplication key */
+    /* ─────────────────────────────────────────────────────────────────────────
+       BATCH COLLECT
+       SF Lightning virtual-scroll: only ~13 rows in DOM at a time.
+       Scrolling shifts WHICH rows are rendered. We collect & deduplicate by
+       case# after each scroll step.
+
+       Scroll strategies (rotate every step):
+         0 — scrollIntoView(last row, block:start) + scrollTop += BIG
+         1 — scrollIntoView(last row, block:center)
+         2 — BOUNCE: scroll up 300px then down 600px (re-triggers IntersectionObserver)
+         3 — keyboard PageDown on scroll container + scrollTop max
+    ───────────────────────────────────────────────────────────────────────── */
+    var allRowMap={};
 
     function collectVisible(){
+      /* re-find live table (SF may swap table nodes during virtual-scroll) */
+      var fr=getBiggestTable(searchDoc);
+      if(fr.table&&fr.rows>1)dataTable=fr.table;
+
       dataTable.querySelectorAll('tbody tr').forEach(function(tr){
         var cells=tr.querySelectorAll('td');if(!cells.length)return;
         var texts=Array.from(cells).map(function(c){
@@ -157,48 +173,87 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       });
     }
 
-    collectVisible(); /* first pass — grab whatever is already rendered */
+    collectVisible();
 
     var noNewCount=0;
-    var MAX_NO_NEW=12; /* 12 × 1000ms = 12 s max stall before giving up */
+    var stepNum=0;
+    var MAX_NO_NEW=16;
+
+    function doScroll(strategy){
+      /* re-find scrollers in case SF changed DOM structure */
+      var fresh=findScrollers(dataTable);
+      if(fresh.length>0)scrollers=fresh;
+
+      var trs=dataTable.querySelectorAll('tbody tr');
+      var lastRow=trs.length?trs[trs.length-1]:null;
+      var sc=scrollers.length?scrollers[scrollers.length-1]:null; /* deepest scroller */
+      var sc0=scrollers.length?scrollers[0]:null;                 /* outermost scroller */
+
+      if(strategy===2){
+        /* BOUNCE: scroll up then down — re-triggers IntersectionObserver */
+        if(sc){var orig=sc.scrollTop;sc.scrollTop=Math.max(0,orig-300);}
+        if(sc0&&sc0!==sc){var orig0=sc0.scrollTop;sc0.scrollTop=Math.max(0,orig0-300);}
+        try{if(sfWin)sfWin.scrollBy(0,-300);}catch(e){}
+        setTimeout(function(){
+          if(sc)sc.scrollTop+=(sc.scrollHeight||9999);
+          if(sc0&&sc0!==sc)sc0.scrollTop+=(sc0.scrollHeight||9999);
+          try{if(sfWin)sfWin.scrollBy(0,600);}catch(e){}
+          if(lastRow)lastRow.scrollIntoView({behavior:'instant',block:'start'});
+        },250);
+
+      }else if(strategy===3){
+        /* KEYBOARD: dispatch PageDown on the focused scroll container */
+        try{
+          var target=sc||searchDoc.body;
+          target.focus();
+          ['keydown','keypress','keyup'].forEach(function(etype){
+            target.dispatchEvent(new KeyboardEvent(etype,{key:'PageDown',keyCode:34,which:34,bubbles:true,cancelable:true}));
+          });
+        }catch(e){}
+        if(sc)sc.scrollTop=sc.scrollHeight;
+        if(sc0&&sc0!==sc)sc0.scrollTop=sc0.scrollHeight;
+        if(lastRow)lastRow.scrollIntoView({behavior:'instant',block:'end'});
+
+      }else if(strategy===1){
+        /* CENTER: put last row in center of viewport */
+        if(lastRow)lastRow.scrollIntoView({behavior:'instant',block:'center'});
+        if(sc)sc.scrollTop+=600;
+        if(sc0&&sc0!==sc)sc0.scrollTop+=600;
+
+      }else{
+        /* DEFAULT: push last row to top + big scrollTop bump */
+        if(lastRow)lastRow.scrollIntoView({behavior:'instant',block:'start'});
+        if(sc)sc.scrollTop+=800;
+        if(sc0&&sc0!==sc)sc0.scrollTop+=800;
+        try{if(sfWin)sfWin.scrollBy(0,800);}catch(e){}
+      }
+    }
 
     function batchStep(){
       var prevCount=Object.keys(allRowMap).length;
+      var strategy=stepNum%4;
+      stepNum++;
 
-      /* scroll last visible row to top of viewport → triggers SF to render next batch */
-      try{
-        var trs=dataTable.querySelectorAll('tbody tr');
-        if(trs.length){
-          trs[trs.length-1].scrollIntoView({behavior:'instant',block:'start'});
-        }
-      }catch(e){}
-      /* also push every scroll container and iframe window by 400px */
-      for(var si=0;si<scrollers.length;si++){
-        try{scrollers[si].scrollTop+=400;}catch(e){}
-      }
-      try{
-        var iwin=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):null;
-        if(iwin)iwin.scrollBy(0,400);
-      }catch(e){}
+      doScroll(strategy);
 
+      var delay=(strategy===2)?1400:1100;
       setTimeout(function(){
         collectVisible();
         var newCount=Object.keys(allRowMap).length;
         if(newCount===prevCount)noNewCount++;else noNewCount=0;
 
-        upd('<b>\\u0645\\u0632\\u0627\\u0645\\u0646\\u0629 \\u0631\\u062a\\u0627\\u0644</b><br>\\u062c\\u0627\\u0631\\u064a \\u0627\\u0644\\u062a\\u062d\\u0645\\u064a\\u0644... '+newCount+(totalExpected?' / '+totalExpected:'')+' \\u0635\\u0641<br><small>\\u064a\\u0631\\u062c\\u0649 \\u0627\\u0644\\u0627\\u0646\\u062a\\u0638\\u0627\\u0631</small>');
-        console.log('[retal] collected='+newCount+' noNew='+noNewCount);
+        upd('<b>\\u0645\\u0632\\u0627\\u0645\\u0646\\u0629 \\u0631\\u062a\\u0627\\u0644</b><br>\\u062c\\u0627\\u0631\\u064a \\u0627\\u0644\\u062a\\u062d\\u0645\\u064a\\u0644... '+newCount+(totalExpected?' / '+totalExpected:'')+' \\u0635\\u0641<br><small>strategy='+strategy+' noNew='+noNewCount+'</small>');
+        console.log('[retal] collected='+newCount+' strategy='+strategy+' noNew='+noNewCount);
 
         var done=(totalExpected>0&&newCount>=totalExpected)||noNewCount>=MAX_NO_NEW;
         if(done){
-          /* scroll back to top */
           for(var si2=0;si2<scrollers.length;si2++){try{scrollers[si2].scrollTop=0;}catch(e){}}
-          try{var iw=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):null;if(iw)iw.scrollTo(0,0);}catch(e){}
+          try{if(sfWin)sfWin.scrollTo(0,0);}catch(e){}
           buildAndSend();
         }else{
-          setTimeout(batchStep,1000);
+          setTimeout(batchStep,200);
         }
-      },1000);
+      },delay);
     }
 
     function buildAndSend(){
