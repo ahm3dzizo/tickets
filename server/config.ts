@@ -19,6 +19,7 @@ export const VALID_TYPES = [
   "waterproofing", "grading", "pest_control", "cleaning", "structural",
   "paints", "doors",
   "tank_neck", "tank_cover", "tank_broken",
+  "smells",
 ];
 
 export const CONFLICTING_PAIRS: [string, string][] = [
