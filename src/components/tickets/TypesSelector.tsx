@@ -16,6 +16,8 @@ export const TYPE_LABELS_STATIC: Record<string, string> = {
   tank_cover:      'غطاء خزان',
   tank_broken:     'كسر خزان',
   smells:          'روائح',
+  interlocking:    'انترلوك',
+  gypsum:          'جبس',
   drainage:        'صرف صحي',
   ac_ventilation:  'تكييف وتهوية',
   pumps:           'مضخات',

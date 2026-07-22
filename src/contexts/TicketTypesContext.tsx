@@ -81,6 +81,8 @@ const STATIC_FALLBACKS: Record<string, string> = {
   tank_cover:   'غطاء خزان',
   tank_broken:  'كسر خزان',
   smells:       'روائح',
+  interlocking: 'انترلوك',
+  gypsum:       'جبس',
 };
 
 // ─── Context ───────────────────────────────────────────────────────────────────
