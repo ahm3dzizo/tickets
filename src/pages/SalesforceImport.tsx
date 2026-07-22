@@ -7,14 +7,14 @@ import { cn } from '@/lib/utils';
 function buildBookmarklet(appOrigin: string, token: string): string {
   const fn = `async function(O,T){
   var el=null;
-  var upd=function(html,bg){
-    if(el){el.innerHTML=html;if(bg)el.style.background=bg;}
-    else alert(html.replace(/<[^>]+>/g,''));
+  var upd=function(msg,bg){
+    if(el){el.innerHTML=msg;if(bg)el.style.background=bg;}
+    else alert(msg.replace(/<[^>]+>/g,''));
   };
   try{
     el=document.createElement('div');
     el.setAttribute('style','all:initial;position:fixed!important;top:20px!important;right:20px!important;z-index:2147483647!important;background:#1e293b;color:#e2e8f0;padding:16px 22px;border-radius:14px;font-family:Arial,sans-serif;font-size:12px;line-height:1.8;box-shadow:0 8px 32px rgba(0,0,0,.55);direction:rtl;min-width:260px;max-width:400px;word-break:break-all');
-    el.innerHTML='<b>مزامنة رتال</b><br>جاري البحث عن الجدول...';
+    el.innerHTML='<b>\\u0645\\u0632\\u0627\\u0645\\u0646\\u0629 \\u0631\\u062a\\u0627\\u0644</b><br>\\u062c\\u0627\\u0631\\u064a \\u0627\\u0644\\u0628\\u062d\\u062b \\u0639\\u0646 \\u0627\\u0644\\u062c\\u062f\\u0648\\u0644...';
     (document.body||document.documentElement).appendChild(el);
   }catch(e){el=null;}
 
@@ -32,17 +32,15 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       }
     }catch(e){}
 
-    /* ── read "Total Records: N" — must be LARGE number label, not a filter count ── */
+    /* ── read "Total Records: N" ── */
     var totalExpected=0;
     try{
-      /* Salesforce renders "Total Records\\n85" as a labeled stat block */
       var pageText=(searchDoc.body||document.body).innerText||'';
-      /* Look for the label line then the number on the next line/word */
       var patterns=[
         /Total\\s+Records\\s*[:\\n\\r]\\s*(\\d+)/i,
-        /Total\\s+Records[^\\d]{0,5}(\\d{2,})/i,   /* 2+ digits = not a column count */
+        /Total\\s+Records[^\\d]{0,5}(\\d{2,})/i,
         /(\\d{2,})\\s*\\n?\\s*Total\\s+Records/i,
-        /Showing\\s+\\d+\\s*[-–]\\s*\\d+\\s+of\\s+(\\d+)/i
+        /Showing\\s+\\d+\\s*[-\\u2013]\\s*\\d+\\s+of\\s+(\\d+)/i
       ];
       for(var pi=0;pi<patterns.length;pi++){
         var tm=pageText.match(patterns[pi]);
@@ -55,166 +53,189 @@ function buildBookmarklet(appOrigin: string, token: string): string {
     function getBiggestTable(doc){
       var tables=Array.from(doc.querySelectorAll('table'));
       var best=null,maxR=0;
-      tables.forEach(function(t){var n=t.querySelectorAll('tr').length;if(n>maxR){maxR=n;best=t;}});
+      tables.forEach(function(t){var c=t.querySelectorAll('tr').length;if(c>maxR){maxR=c;best=t;}});
       return{table:best,rows:maxR};
     }
     var res=getBiggestTable(searchDoc);
-    var dataTable=res.table,maxR=res.rows;
-    if(!dataTable||maxR<2){upd('❌ لم يُعثر على جدول','#7f1d1d');setTimeout(function(){if(el)el.remove();},9000);return;}
+    var dataTable=res.table;
+    if(!dataTable||res.rows<2){
+      upd('\\u274c \\u0644\\u0645 \\u064a\\u064f\\u0639\\u062b\\u0631 \\u0639\\u0644\\u0649 \\u062c\\u062f\\u0648\\u0644','#7f1d1d');
+      setTimeout(function(){if(el)el.remove();},9000);return;
+    }
 
-    /* ── collect ALL scrollable ancestors + the iframe window ── */
+    /* ── collect scrollable ancestor containers (deepest = primary) ── */
     var scrollers=[];
     try{
-      var cur=dataTable.parentElement;
+      var cur2=dataTable.parentElement;
       var winRef=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):window;
-      while(cur&&cur!==searchDoc.body){
+      while(cur2&&cur2!==searchDoc.body){
         try{
-          var ov=(winRef&&winRef.getComputedStyle?winRef:window).getComputedStyle(cur).overflowY||'';
-          if(ov==='auto'||ov==='scroll')scrollers.push(cur);
+          var ov=(winRef&&winRef.getComputedStyle?winRef:window).getComputedStyle(cur2).overflowY||'';
+          if(ov==='auto'||ov==='scroll')scrollers.push(cur2);
         }catch(e){}
-        cur=cur.parentElement;
+        cur2=cur2.parentElement;
       }
     }catch(e){}
-    console.log('[retal] scrollers found:',scrollers.length);
+    console.log('[retal] scrollers:',scrollers.length);
 
-    /* ── auto-scroll: hit every container + window on each step ── */
-    function scrollAll(){
-      /* scroll every ancestor container */
-      for(var si=0;si<scrollers.length;si++){
-        try{scrollers[si].scrollTop=scrollers[si].scrollHeight;}catch(e){}
+    /* ── extract column header text ── */
+    function headerText(c){
+      var titled=c.querySelector('span[title]:not([aria-hidden="true"]),a[title]:not([aria-hidden="true"])');
+      if(titled){var t=(titled.getAttribute('title')||'').trim();if(t&&t.length<80)return t;}
+      var dir='';c.childNodes.forEach(function(nd){if(nd.nodeType===3)dir+=nd.textContent;});
+      dir=dir.trim();if(dir)return dir;
+      var kids=Array.from(c.children);
+      for(var ki=0;ki<kids.length;ki++){
+        var k=kids[ki];
+        if(k.tagName==='BUTTON'||k.getAttribute('aria-hidden')==='true')continue;
+        var kt=(k.textContent||'').replace(/[\\u25b2\\u25bc\\u2191\\u2193]/g,'').replace(/\\s+/g,' ').trim();
+        if(kt&&kt.length<80)return kt;
       }
-      /* scroll the iframe window itself (most reliable for SF Lightning) */
-      try{
-        var iwin=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):null;
-        if(iwin)iwin.scrollTo(0,999999);
-      }catch(e){}
-      /* also scroll main window */
-      try{window.scrollTo(0,999999);}catch(e){}
-      /* scrollIntoView on the last visible row — triggers SF IntersectionObserver */
-      try{
-        var rows=dataTable.querySelectorAll('tbody tr');
-        if(rows.length)rows[rows.length-1].scrollIntoView({behavior:'instant',block:'end'});
-      }catch(e){}
+      return(c.textContent||'').replace(/[\\u25b2\\u25bc\\u2191\\u2193]/g,'').replace(/\\s+/g,' ').trim().slice(0,60);
     }
 
-    function scrollAndWait(done){
-      /* if no total known, do a fixed 15-step scroll burst then proceed */
-      var target=totalExpected>0?totalExpected:0;
-      var attempts=0,prevCount=0,staleRuns=0,maxAttempts=target>0?80:15;
-      function step(){
-        scrollAll();
-        setTimeout(function(){
-          var cur=dataTable.querySelectorAll('tbody tr').length;
-          attempts++;
-          upd('<b>مزامنة رتال</b><br>جاري التحميل... '+cur+(target?' / '+target:'')+' صف<br><small>يرجى الانتظار</small>');
-          var done_cond=(target>0&&cur>=target)||(cur===prevCount&&++staleRuns>=6)||attempts>=maxAttempts;
-          if(done_cond){
-            /* scroll back to top */
-            try{for(var si=0;si<scrollers.length;si++)scrollers[si].scrollTop=0;}catch(e){}
-            try{var iw=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):null;if(iw)iw.scrollTo(0,0);}catch(e){}
-            setTimeout(done,400);
-          } else {
-            if(cur>prevCount)staleRuns=0;
-            prevCount=cur;
-            setTimeout(step,500);
-          }
-        },500);
-      }
-      step();
+    /* ── read headers BEFORE scrolling (they're always visible) ── */
+    var headers=[];
+    var hcells=dataTable.querySelectorAll('thead th,thead td');
+    if(!hcells.length)hcells=dataTable.querySelectorAll('tr:first-child th,tr:first-child td');
+    hcells.forEach(function(c){headers.push(headerText(c).toLowerCase().replace(/\\s+/g,' '));});
+    console.log('[retal] headers:',headers);
+
+    /* ── column matching ── */
+    function col(){
+      var keys=Array.prototype.slice.call(arguments);
+      for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i]===keys[j])return i;
+      for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i].indexOf(keys[j])===0)return i;
+      for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i].indexOf(keys[j])>=0)return i;
+      return -1;
     }
+    var unitPat=/^[A-Za-z]{2,6}-\\d+$/;
+    var casePat=/^0*\\d{5,9}$/;
+    var iCase=col('case number','case no','case#','\\u0631\\u0642\\u0645 \\u0627\\u0644\\u062d\\u0627\\u0644\\u0629');
+    var iUnit=col('unit number','unit no','unit','villa','property','\\u0648\\u062d\\u062f\\u0629','\\u0641\\u064a\\u0644\\u0627');
+    var iAcc=col('account name','account','client name','\\u0627\\u0633\\u0645 \\u0627\\u0644\\u0639\\u0645\\u064a\\u0644');
+    var iDate=col('date/time opened','opened date','open date','opened','created','date','\\u062a\\u0627\\u0631\\u064a\\u062e');
+    var iDesc=col('description','subject','\\u0648\\u0635\\u0641');
+    var iStatus=col('status','\\u062d\\u0627\\u0644\\u0629');
+    var iPhone=col('person account: mobile','person account mobile','mobile phone','mobile','phone','\\u062c\\u0648\\u0627\\u0644','\\u0647\\u0627\\u062a\\u0641');
+    console.log('[retal] cols: case='+iCase+' unit='+iUnit+' acc='+iAcc+' date='+iDate+' phone='+iPhone);
 
-    scrollAndWait(function(){
-
-      /* ── re-find biggest table after scroll (rows may have changed) ── */
-      var res2=getBiggestTable(searchDoc);
-      if(res2.rows>maxR){dataTable=res2.table;maxR=res2.rows;}
-
-      /* ── extract column header text ── */
-      function headerText(c){
-        var titled=c.querySelector('span[title]:not([aria-hidden="true"]),a[title]:not([aria-hidden="true"])');
-        if(titled){var t=(titled.getAttribute('title')||'').trim();if(t&&t.length<80)return t;}
-        var dir='';c.childNodes.forEach(function(n){if(n.nodeType===3)dir+=n.textContent;});dir=dir.trim();if(dir)return dir;
-        var kids=Array.from(c.children);
-        for(var ki=0;ki<kids.length;ki++){
-          var k=kids[ki];if(k.tagName==='BUTTON')continue;if(k.getAttribute('aria-hidden')==='true')continue;
-          var kt=(k.textContent||'').replace(/[\\u25b2\\u25bc\\u2191\\u2193]/g,'').replace(/\\s+/g,' ').trim();
-          if(kt&&kt.length<80)return kt;
+    /* ── pattern fallback from first visible rows if headers gave -1 ── */
+    if(iCase<0||iUnit<0){
+      var sample=dataTable.querySelectorAll('tbody tr');
+      for(var ri=0;ri<sample.length;ri++){
+        var cells0=sample[ri].querySelectorAll('td');
+        for(var ci0=0;ci0<cells0.length;ci0++){
+          var tv=(cells0[ci0].textContent||'').trim().replace(/\\s+/g,' ');
+          if(iCase<0&&casePat.test(tv.replace(/\\s/g,'')))iCase=ci0;
+          if(iUnit<0&&unitPat.test(tv))iUnit=ci0;
         }
-        return(c.textContent||'').replace(/[\\u25b2\\u25bc\\u2191\\u2193]/g,'').replace(/\\s+/g,' ').trim().slice(0,60);
+        if(iCase>=0&&iUnit>=0)break;
       }
-      var headers=[];
-      var hcells=dataTable.querySelectorAll('thead th,thead td');
-      if(!hcells.length)hcells=dataTable.querySelectorAll('tr:first-child th,tr:first-child td');
-      hcells.forEach(function(c){headers.push(headerText(c).toLowerCase().replace(/\\s+/g,' '));});
-      console.log('[retal] headers:',headers);
+    }
+    if(iCase<0){
+      upd('\\u274c \\u0639\\u0645\\u0648\\u062f \\u0631\\u0642\\u0645 \\u0627\\u0644\\u062d\\u0627\\u0644\\u0629 \\u063a\\u064a\\u0631 \\u0645\\u0648\\u062c\\u0648\\u062f<br>'+headers.slice(0,6).join(' | '),'#7f1d1d');
+      setTimeout(function(){if(el)el.remove();},12000);return;
+    }
 
-      /* ── column matching ── */
-      function col(){
-        var keys=Array.prototype.slice.call(arguments);
-        for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i]===keys[j])return i;
-        for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i].indexOf(keys[j])===0)return i;
-        for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i].indexOf(keys[j])>=0)return i;
-        return -1;
-      }
-      var unitPat=/^[A-Za-z]{2,6}-\\d+$/;
-      var casePat=/^0*\\d{5,9}$/;
-      var iCase=col('case number','case no','case#','\\u0631\\u0642\\u0645 \\u0627\\u0644\\u062d\\u0627\\u0644\\u0629');
-      var iUnit=col('unit number','unit no','unit','villa','property','\\u0648\\u062d\\u062f\\u0629','\\u0641\\u064a\\u0644\\u0627');
-      var iAcc=col('account name','account','client name','\\u0627\\u0633\\u0645 \\u0627\\u0644\\u0639\\u0645\\u064a\\u0644');
-      var iDate=col('date/time opened','opened date','open date','opened','created','date','\\u062a\\u0627\\u0631\\u064a\\u062e');
-      var iDesc=col('description','subject','\\u0648\\u0635\\u0641');
-      var iStatus=col('status','\\u062d\\u0627\\u0644\\u0629');
-      var iPhone=col('person account: mobile','person account mobile','mobile phone','mobile','phone','\\u062c\\u0648\\u0627\\u0644','\\u0647\\u0627\\u062a\\u0641');
-      console.log('[retal] cols: case='+iCase+' unit='+iUnit+' acc='+iAcc+' date='+iDate+' phone='+iPhone);
+    /* ── BATCH COLLECT ──────────────────────────────────────────────────────────
+       Salesforce Lightning virtual-scrolls: only ~13 rows exist in the DOM at
+       once. Scrolling down replaces old rows with new ones rather than adding to
+       the list. Strategy: collect visible rows → scroll a bit → collect again →
+       deduplicate by case# → repeat until no new rows appear or target reached.
+    ── */
+    var allRowMap={};   /* case# → texts[] — deduplication key */
 
-      /* ── collect all tbody row texts ── */
-      var allRowTexts=[];
+    function collectVisible(){
       dataTable.querySelectorAll('tbody tr').forEach(function(tr){
         var cells=tr.querySelectorAll('td');if(!cells.length)return;
-        var texts=Array.from(cells).map(function(c){return(c.textContent||c.innerText||'').trim().replace(/\\s+/g,' ');});
-        allRowTexts.push(texts);
+        var texts=Array.from(cells).map(function(c){
+          return(c.textContent||c.innerText||'').trim().replace(/\\s+/g,' ');
+        });
+        var key=(iCase>=0&&iCase<texts.length)?texts[iCase].replace(/\\s/g,''):'';
+        if(key&&key!=='-'&&key!=='\\u2014')allRowMap[key]=texts;
       });
-      console.log('[retal] tbody rows after scroll:',allRowTexts.length);
+    }
 
-      /* ── pattern-based fallback if headers gave -1 ── */
-      if(iCase<0||iUnit<0){
-        for(var ri=0;ri<allRowTexts.length;ri++){
-          var rr=allRowTexts[ri];
-          for(var ci2=0;ci2<rr.length;ci2++){
-            if(iCase<0&&casePat.test(rr[ci2].replace(/\\s/g,'')))iCase=ci2;
-            if(iUnit<0&&unitPat.test(rr[ci2]))iUnit=ci2;
-          }
-          if(iCase>=0&&iUnit>=0)break;
+    collectVisible(); /* first pass — grab whatever is already rendered */
+
+    var noNewCount=0;
+    var MAX_NO_NEW=12; /* 12 × 1000ms = 12 s max stall before giving up */
+
+    function batchStep(){
+      var prevCount=Object.keys(allRowMap).length;
+
+      /* scroll last visible row to top of viewport → triggers SF to render next batch */
+      try{
+        var trs=dataTable.querySelectorAll('tbody tr');
+        if(trs.length){
+          trs[trs.length-1].scrollIntoView({behavior:'instant',block:'start'});
         }
+      }catch(e){}
+      /* also push every scroll container and iframe window by 400px */
+      for(var si=0;si<scrollers.length;si++){
+        try{scrollers[si].scrollTop+=400;}catch(e){}
       }
-      if(iCase<0){upd('❌ عمود رقم الحالة غير موجود<br>'+headers.slice(0,5).join(' | '),'#7f1d1d');setTimeout(function(){if(el)el.remove();},12000);return;}
+      try{
+        var iwin=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):null;
+        if(iwin)iwin.scrollBy(0,400);
+      }catch(e){}
 
-      /* ── build rows ── */
+      setTimeout(function(){
+        collectVisible();
+        var newCount=Object.keys(allRowMap).length;
+        if(newCount===prevCount)noNewCount++;else noNewCount=0;
+
+        upd('<b>\\u0645\\u0632\\u0627\\u0645\\u0646\\u0629 \\u0631\\u062a\\u0627\\u0644</b><br>\\u062c\\u0627\\u0631\\u064a \\u0627\\u0644\\u062a\\u062d\\u0645\\u064a\\u0644... '+newCount+(totalExpected?' / '+totalExpected:'')+' \\u0635\\u0641<br><small>\\u064a\\u0631\\u062c\\u0649 \\u0627\\u0644\\u0627\\u0646\\u062a\\u0638\\u0627\\u0631</small>');
+        console.log('[retal] collected='+newCount+' noNew='+noNewCount);
+
+        var done=(totalExpected>0&&newCount>=totalExpected)||noNewCount>=MAX_NO_NEW;
+        if(done){
+          /* scroll back to top */
+          for(var si2=0;si2<scrollers.length;si2++){try{scrollers[si2].scrollTop=0;}catch(e){}}
+          try{var iw=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):null;if(iw)iw.scrollTo(0,0);}catch(e){}
+          buildAndSend();
+        }else{
+          setTimeout(batchStep,1000);
+        }
+      },1000);
+    }
+
+    function buildAndSend(){
+      var allRowTexts=Object.values(allRowMap);
+      console.log('[retal] total collected:',allRowTexts.length);
+
       var rows=[];
       allRowTexts.forEach(function(texts){
         function get(i){return(i>=0&&i<texts.length)?texts[i]:'';}
         var cn=get(iCase);if(!cn||cn==='-'||cn==='\\u2014'||cn==='')return;
         var unitVal=get(iUnit);
-        if(!unitPat.test(unitVal)){for(var ci3=0;ci3<texts.length;ci3++){if(unitPat.test(texts[ci3])){unitVal=texts[ci3];break;}}}
+        if(!unitPat.test(unitVal)){
+          for(var ci3=0;ci3<texts.length;ci3++){if(unitPat.test(texts[ci3])){unitVal=texts[ci3];break;}}
+        }
         rows.push({caseNumber:cn,unit:unitVal,accountName:get(iAcc),openedDate:get(iDate),description:get(iDesc),status:get(iStatus),phone:get(iPhone)});
       });
       console.log('[retal] extracted rows:',rows.length,rows[0]);
 
-      if(!rows.length){upd('⚠️ لا توجد صفوف بيانات<br>case='+iCase+' unit='+iUnit+' scanned='+allRowTexts.length,'#78350f');setTimeout(function(){if(el)el.remove();},12000);return;}
+      if(!rows.length){
+        upd('\\u26a0\\ufe0f \\u0644\\u0627 \\u062a\\u0648\\u062c\\u062f \\u0635\\u0641\\u0648\\u0641 \\u0628\\u064a\\u0627\\u0646\\u0627\\u062a<br>case='+iCase+' unit='+iUnit,'#78350f');
+        setTimeout(function(){if(el)el.remove();},12000);return;
+      }
 
-      /* ── relay via URL hash ── */
       var encoded;
       try{encoded=btoa(unescape(encodeURIComponent(JSON.stringify(rows))));}
-      catch(e){encoded=btoa(JSON.stringify(rows).replace(/[^\\x00-\\x7F]/g,'?'));}
-      upd('✅ تم قراءة <b>'+rows.length+'</b> سجل<br>جاري فتح التطبيق...');
+      catch(e2){encoded=btoa(JSON.stringify(rows).replace(/[^\\x00-\\x7F]/g,'?'));}
+
+      upd('\\u2705 \\u062a\\u0645 \\u0642\\u0631\\u0627\\u0621\\u0629 <b>'+rows.length+'</b> \\u0633\\u062c\\u0644<br>\\u062c\\u0627\\u0631\\u064a \\u0641\\u062a\\u062d \\u0627\\u0644\\u062a\\u0637\\u0628\\u064a\\u0642...');
       window.open(O+'/salesforce-import#sf'+encoded,'_blank');
       setTimeout(function(){if(el)el.remove();},4000);
+    }
 
-    }); /* end scrollAndWait */
+    setTimeout(batchStep,300);
 
   }catch(e){
     console.error('[retal]',e);
-    upd('❌ خطأ: '+e.message,'#7f1d1d');
+    upd('\\u274c \\u062e\\u0637\\u0623: '+e.message,'#7f1d1d');
     setTimeout(function(){if(el)el.remove();},9000);
   }
 }`;
