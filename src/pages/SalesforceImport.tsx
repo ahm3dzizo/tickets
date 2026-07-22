@@ -32,12 +32,22 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       }
     }catch(e){}
 
-    /* ── read "Total Records: N" from page ── */
+    /* ── read "Total Records: N" — must be LARGE number label, not a filter count ── */
     var totalExpected=0;
     try{
+      /* Salesforce renders "Total Records\\n85" as a labeled stat block */
       var pageText=(searchDoc.body||document.body).innerText||'';
-      var tm=pageText.match(/Total Records[\\s\\S]{0,10}(\\d+)/i)||pageText.match(/(\\d+)\\s*records?/i);
-      if(tm)totalExpected=parseInt(tm[1],10);
+      /* Look for the label line then the number on the next line/word */
+      var patterns=[
+        /Total\\s+Records\\s*[:\\n\\r]\\s*(\\d+)/i,
+        /Total\\s+Records[^\\d]{0,5}(\\d{2,})/i,   /* 2+ digits = not a column count */
+        /(\\d{2,})\\s*\\n?\\s*Total\\s+Records/i,
+        /Showing\\s+\\d+\\s*[-–]\\s*\\d+\\s+of\\s+(\\d+)/i
+      ];
+      for(var pi=0;pi<patterns.length;pi++){
+        var tm=pageText.match(patterns[pi]);
+        if(tm){var n=parseInt(tm[1],10);if(n>1){totalExpected=n;break;}}
+      }
     }catch(e){}
     console.log('[retal] totalExpected=',totalExpected);
 
@@ -52,52 +62,63 @@ function buildBookmarklet(appOrigin: string, token: string): string {
     var dataTable=res.table,maxR=res.rows;
     if(!dataTable||maxR<2){upd('❌ لم يُعثر على جدول','#7f1d1d');setTimeout(function(){if(el)el.remove();},9000);return;}
 
-    /* ── find scrollable container for the table ── */
-    function findScroller(node){
-      var cur=node.parentElement;
-      while(cur&&cur!==document.body){
-        var ov=window.getComputedStyle(cur).overflowY||'';
-        if(ov==='auto'||ov==='scroll')return cur;
+    /* ── collect ALL scrollable ancestors + the iframe window ── */
+    var scrollers=[];
+    try{
+      var cur=dataTable.parentElement;
+      var winRef=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):window;
+      while(cur&&cur!==searchDoc.body){
+        try{
+          var ov=(winRef&&winRef.getComputedStyle?winRef:window).getComputedStyle(cur).overflowY||'';
+          if(ov==='auto'||ov==='scroll')scrollers.push(cur);
+        }catch(e){}
         cur=cur.parentElement;
       }
-      return null;
-    }
-    /* try both docs */
-    var scroller=findScroller(dataTable);
-    if(!scroller&&searchDoc!==document){
+    }catch(e){}
+    console.log('[retal] scrollers found:',scrollers.length);
+
+    /* ── auto-scroll: hit every container + window on each step ── */
+    function scrollAll(){
+      /* scroll every ancestor container */
+      for(var si=0;si<scrollers.length;si++){
+        try{scrollers[si].scrollTop=scrollers[si].scrollHeight;}catch(e){}
+      }
+      /* scroll the iframe window itself (most reliable for SF Lightning) */
       try{
-        var win2=searchDoc.defaultView||searchDoc.parentWindow;
-        if(win2&&win2.getComputedStyle){
-          var cur2=dataTable.parentElement;
-          while(cur2&&cur2!==searchDoc.body){
-            var ov2=win2.getComputedStyle(cur2).overflowY||'';
-            if(ov2==='auto'||ov2==='scroll'){scroller=cur2;break;}
-            cur2=cur2.parentElement;
-          }
-        }
+        var iwin=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):null;
+        if(iwin)iwin.scrollTo(0,999999);
+      }catch(e){}
+      /* also scroll main window */
+      try{window.scrollTo(0,999999);}catch(e){}
+      /* scrollIntoView on the last visible row — triggers SF IntersectionObserver */
+      try{
+        var rows=dataTable.querySelectorAll('tbody tr');
+        if(rows.length)rows[rows.length-1].scrollIntoView({behavior:'instant',block:'end'});
       }catch(e){}
     }
-    console.log('[retal] scroller=',scroller?scroller.tagName+'.'+scroller.className.slice(0,30):'none');
 
-    /* ── auto-scroll to load all virtual rows ── */
     function scrollAndWait(done){
-      if(!scroller||!totalExpected){done();return;}
-      var attempts=0,prevCount=0,staleRuns=0;
+      /* if no total known, do a fixed 15-step scroll burst then proceed */
+      var target=totalExpected>0?totalExpected:0;
+      var attempts=0,prevCount=0,staleRuns=0,maxAttempts=target>0?80:15;
       function step(){
-        scroller.scrollTop=scroller.scrollHeight;
+        scrollAll();
         setTimeout(function(){
           var cur=dataTable.querySelectorAll('tbody tr').length;
           attempts++;
-          upd('<b>مزامنة رتال</b><br>جاري التحميل... '+cur+' / '+totalExpected+' صف<br><small>الرجاء الانتظار</small>');
-          if(cur>=totalExpected||attempts>=60||(cur===prevCount&&++staleRuns>=5)){
-            scroller.scrollTop=0;
-            setTimeout(done,300);
+          upd('<b>مزامنة رتال</b><br>جاري التحميل... '+cur+(target?' / '+target:'')+' صف<br><small>يرجى الانتظار</small>');
+          var done_cond=(target>0&&cur>=target)||(cur===prevCount&&++staleRuns>=6)||attempts>=maxAttempts;
+          if(done_cond){
+            /* scroll back to top */
+            try{for(var si=0;si<scrollers.length;si++)scrollers[si].scrollTop=0;}catch(e){}
+            try{var iw=searchDoc!==document?(searchDoc.defaultView||searchDoc.parentWindow):null;if(iw)iw.scrollTo(0,0);}catch(e){}
+            setTimeout(done,400);
           } else {
             if(cur>prevCount)staleRuns=0;
             prevCount=cur;
-            setTimeout(step,400);
+            setTimeout(step,500);
           }
-        },400);
+        },500);
       }
       step();
     }
