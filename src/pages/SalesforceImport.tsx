@@ -14,7 +14,7 @@ function buildBookmarklet(appOrigin: string, token: string): string {
   try{
     el=document.createElement('div');
     el.setAttribute('style','all:initial;position:fixed!important;top:20px!important;right:20px!important;z-index:2147483647!important;background:#1e293b;color:#e2e8f0;padding:16px 22px;border-radius:14px;font-family:Arial,sans-serif;font-size:12px;line-height:1.8;box-shadow:0 8px 32px rgba(0,0,0,.55);direction:rtl;min-width:260px;max-width:400px;word-break:break-all');
-    el.innerHTML='<b>مزامنة رتال</b><br>جاري القراءة...';
+    el.innerHTML='<b>مزامنة رتال</b><br>جاري البحث عن الجدول...';
     (document.body||document.documentElement).appendChild(el);
   }catch(e){el=null;}
 
@@ -32,122 +32,164 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       }
     }catch(e){}
 
+    /* ── read "Total Records: N" from page ── */
+    var totalExpected=0;
+    try{
+      var pageText=(searchDoc.body||document.body).innerText||'';
+      var tm=pageText.match(/Total Records[\\s\\S]{0,10}(\\d+)/i)||pageText.match(/(\\d+)\\s*records?/i);
+      if(tm)totalExpected=parseInt(tm[1],10);
+    }catch(e){}
+    console.log('[retal] totalExpected=',totalExpected);
+
     /* ── pick the biggest table ── */
-    var allTables=Array.from(searchDoc.querySelectorAll('table'));
-    if(!allTables.length)allTables=Array.from(document.querySelectorAll('table'));
-    var dataTable=null,maxR=0;
-    allTables.forEach(function(t){var n=t.querySelectorAll('tr').length;if(n>maxR){maxR=n;dataTable=t;}});
-    if(!dataTable||maxR<2){upd('❌ لم يُعثر على جدول ('+allTables.length+' tables, max '+maxR+' rows)','#7f1d1d');setTimeout(function(){if(el)el.remove();},9000);return;}
-
-    /* ── extract column header text ── */
-    /* Salesforce Lightning grouped reports stuff lots of SR text into th cells.
-       We try 3 strategies per cell, in priority order:
-       1. span[title] attribute (Salesforce uses this for truncated column names)
-       2. Direct text-node children of the th
-       3. Full textContent stripped of sort symbols, capped at 60 chars          */
-    function headerText(c){
-      /* S1: any non-hidden span/a that has a title attribute */
-      var titled=c.querySelector('span[title]:not([aria-hidden="true"]),a[title]:not([aria-hidden="true"])');
-      if(titled){
-        var t=(titled.getAttribute('title')||'').trim();
-        if(t&&t.length>0&&t.length<80)return t;
-      }
-      /* S2: direct text-node children only */
-      var dir='';
-      c.childNodes.forEach(function(n){if(n.nodeType===3)dir+=n.textContent;});
-      dir=dir.trim();
-      if(dir)return dir;
-      /* S3: textContent of first non-button, non-aria-hidden child element */
-      var kids=Array.from(c.children);
-      for(var ki=0;ki<kids.length;ki++){
-        var k=kids[ki];
-        if(k.tagName==='BUTTON')continue;
-        if(k.getAttribute('aria-hidden')==='true')continue;
-        var kt=(k.textContent||'').replace(/[\\u25b2\\u25bc\\u2191\\u2193\\u2b06\\u2b07\\ufe0e\\ufe0f]/g,'').replace(/\\s+/g,' ').trim();
-        if(kt&&kt.length<80)return kt;
-      }
-      /* S4: fallback full textContent */
-      return(c.textContent||'').replace(/[\\u25b2\\u25bc\\u2191\\u2193]/g,'').replace(/\\s+/g,' ').trim().slice(0,60);
+    function getBiggestTable(doc){
+      var tables=Array.from(doc.querySelectorAll('table'));
+      var best=null,maxR=0;
+      tables.forEach(function(t){var n=t.querySelectorAll('tr').length;if(n>maxR){maxR=n;best=t;}});
+      return{table:best,rows:maxR};
     }
+    var res=getBiggestTable(searchDoc);
+    var dataTable=res.table,maxR=res.rows;
+    if(!dataTable||maxR<2){upd('❌ لم يُعثر على جدول','#7f1d1d');setTimeout(function(){if(el)el.remove();},9000);return;}
 
-    var headers=[];
-    var hcells=dataTable.querySelectorAll('thead th,thead td');
-    if(!hcells.length)hcells=dataTable.querySelectorAll('tr:first-child th,tr:first-child td');
-    hcells.forEach(function(c){headers.push(headerText(c).toLowerCase().replace(/\\s+/g,' '));});
-    upd('<b>Headers ('+headers.length+'):</b><br>'+headers.map(function(h,i){return i+':'+h.slice(0,25);}).join(' | '));
-    console.log('[retal] headers:',headers);
-
-    /* ── column matching: exact → starts-with → contains ── */
-    function col(){
-      var keys=Array.prototype.slice.call(arguments);
-      for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i]===keys[j])return i;
-      for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i].indexOf(keys[j])===0)return i;
-      for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i].indexOf(keys[j])>=0)return i;
-      return -1;
+    /* ── find scrollable container for the table ── */
+    function findScroller(node){
+      var cur=node.parentElement;
+      while(cur&&cur!==document.body){
+        var ov=window.getComputedStyle(cur).overflowY||'';
+        if(ov==='auto'||ov==='scroll')return cur;
+        cur=cur.parentElement;
+      }
+      return null;
     }
-
-    var iCase  =col('case number','case no','case#','\\u0631\\u0642\\u0645 \\u0627\\u0644\\u062d\\u0627\\u0644\\u0629');
-    var iUnit  =col('unit number','unit no','unit','villa','property','\\u0648\\u062d\\u062f\\u0629','\\u0641\\u064a\\u0644\\u0627');
-    var iAcc   =col('account name','account','client name','\\u0627\\u0633\\u0645 \\u0627\\u0644\\u0639\\u0645\\u064a\\u0644');
-    var iDate  =col('date/time opened','opened date','open date','opened','created','date','\\u062a\\u0627\\u0631\\u064a\\u062e');
-    var iDesc  =col('description','subject','\\u0648\\u0635\\u0641');
-    var iStatus=col('status','\\u062d\\u0627\\u0644\\u0629');
-    var iPhone =col('person account: mobile','person account mobile','mobile phone','mobile','phone','\\u062c\\u0648\\u0627\\u0644','\\u0647\\u0627\\u062a\\u0641');
-    console.log('[retal] col indices: case='+iCase+' unit='+iUnit+' acc='+iAcc+' date='+iDate+' desc='+iDesc+' phone='+iPhone);
-
-    /* ── patterns for smart detection ── */
-    var unitPat=/^[A-Za-z]{2,6}-\\d+$/;
-    var casePat=/^0*\\d{5,9}$/;
-
-    /* ── collect all tbody row text arrays ── */
-    var allRowTexts=[];
-    dataTable.querySelectorAll('tbody tr').forEach(function(tr){
-      var cells=tr.querySelectorAll('td');
-      if(!cells.length)return;
-      var texts=Array.from(cells).map(function(c){return(c.textContent||c.innerText||'').trim().replace(/\\s+/g,' ');});
-      allRowTexts.push(texts);
-    });
-    console.log('[retal] tbody rows:',allRowTexts.length,'sample:',allRowTexts[0]);
-
-    /* ── pattern-based column fallback (when header extraction missed) ── */
-    if(iCase<0||iUnit<0){
-      for(var ri=0;ri<allRowTexts.length;ri++){
-        var rr=allRowTexts[ri];
-        for(var ci2=0;ci2<rr.length;ci2++){
-          if(iCase<0&&casePat.test(rr[ci2].replace(/\\s/g,'')))iCase=ci2;
-          if(iUnit<0&&unitPat.test(rr[ci2]))iUnit=ci2;
+    /* try both docs */
+    var scroller=findScroller(dataTable);
+    if(!scroller&&searchDoc!==document){
+      try{
+        var win2=searchDoc.defaultView||searchDoc.parentWindow;
+        if(win2&&win2.getComputedStyle){
+          var cur2=dataTable.parentElement;
+          while(cur2&&cur2!==searchDoc.body){
+            var ov2=win2.getComputedStyle(cur2).overflowY||'';
+            if(ov2==='auto'||ov2==='scroll'){scroller=cur2;break;}
+            cur2=cur2.parentElement;
+          }
         }
-        if(iCase>=0&&iUnit>=0)break;
+      }catch(e){}
+    }
+    console.log('[retal] scroller=',scroller?scroller.tagName+'.'+scroller.className.slice(0,30):'none');
+
+    /* ── auto-scroll to load all virtual rows ── */
+    function scrollAndWait(done){
+      if(!scroller||!totalExpected){done();return;}
+      var attempts=0,prevCount=0,staleRuns=0;
+      function step(){
+        scroller.scrollTop=scroller.scrollHeight;
+        setTimeout(function(){
+          var cur=dataTable.querySelectorAll('tbody tr').length;
+          attempts++;
+          upd('<b>مزامنة رتال</b><br>جاري التحميل... '+cur+' / '+totalExpected+' صف<br><small>الرجاء الانتظار</small>');
+          if(cur>=totalExpected||attempts>=60||(cur===prevCount&&++staleRuns>=5)){
+            scroller.scrollTop=0;
+            setTimeout(done,300);
+          } else {
+            if(cur>prevCount)staleRuns=0;
+            prevCount=cur;
+            setTimeout(step,400);
+          }
+        },400);
       }
-      console.log('[retal] after pattern fallback: case='+iCase+' unit='+iUnit);
+      step();
     }
 
-    if(iCase<0){upd('❌ عمود رقم الحالة غير موجود<br>headers: '+headers.join(' | '),'#7f1d1d');setTimeout(function(){if(el)el.remove();},12000);return;}
+    scrollAndWait(function(){
 
-    /* ── build rows ── */
-    var rows=[];
-    allRowTexts.forEach(function(texts){
-      function get(i){return(i>=0&&i<texts.length)?texts[i]:'';}
-      var cn=get(iCase);
-      if(!cn||cn==='-'||cn==='\\u2014'||cn==='')return;
-      /* per-row smart unit */
-      var unitVal=get(iUnit);
-      if(!unitPat.test(unitVal)){
-        for(var ci3=0;ci3<texts.length;ci3++){if(unitPat.test(texts[ci3])){unitVal=texts[ci3];break;}}
+      /* ── re-find biggest table after scroll (rows may have changed) ── */
+      var res2=getBiggestTable(searchDoc);
+      if(res2.rows>maxR){dataTable=res2.table;maxR=res2.rows;}
+
+      /* ── extract column header text ── */
+      function headerText(c){
+        var titled=c.querySelector('span[title]:not([aria-hidden="true"]),a[title]:not([aria-hidden="true"])');
+        if(titled){var t=(titled.getAttribute('title')||'').trim();if(t&&t.length<80)return t;}
+        var dir='';c.childNodes.forEach(function(n){if(n.nodeType===3)dir+=n.textContent;});dir=dir.trim();if(dir)return dir;
+        var kids=Array.from(c.children);
+        for(var ki=0;ki<kids.length;ki++){
+          var k=kids[ki];if(k.tagName==='BUTTON')continue;if(k.getAttribute('aria-hidden')==='true')continue;
+          var kt=(k.textContent||'').replace(/[\\u25b2\\u25bc\\u2191\\u2193]/g,'').replace(/\\s+/g,' ').trim();
+          if(kt&&kt.length<80)return kt;
+        }
+        return(c.textContent||'').replace(/[\\u25b2\\u25bc\\u2191\\u2193]/g,'').replace(/\\s+/g,' ').trim().slice(0,60);
       }
-      rows.push({caseNumber:cn,unit:unitVal,accountName:get(iAcc),openedDate:get(iDate),description:get(iDesc),status:get(iStatus),phone:get(iPhone)});
-    });
-    console.log('[retal] extracted rows:',rows.length,rows[0]);
+      var headers=[];
+      var hcells=dataTable.querySelectorAll('thead th,thead td');
+      if(!hcells.length)hcells=dataTable.querySelectorAll('tr:first-child th,tr:first-child td');
+      hcells.forEach(function(c){headers.push(headerText(c).toLowerCase().replace(/\\s+/g,' '));});
+      console.log('[retal] headers:',headers);
 
-    if(!rows.length){upd('⚠️ لا توجد صفوف بيانات<br>case col='+iCase+' unit col='+iUnit+'<br>rows scanned='+allRowTexts.length,'#78350f');setTimeout(function(){if(el)el.remove();},12000);return;}
+      /* ── column matching ── */
+      function col(){
+        var keys=Array.prototype.slice.call(arguments);
+        for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i]===keys[j])return i;
+        for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i].indexOf(keys[j])===0)return i;
+        for(var j=0;j<keys.length;j++)for(var i=0;i<headers.length;i++)if(headers[i].indexOf(keys[j])>=0)return i;
+        return -1;
+      }
+      var unitPat=/^[A-Za-z]{2,6}-\\d+$/;
+      var casePat=/^0*\\d{5,9}$/;
+      var iCase=col('case number','case no','case#','\\u0631\\u0642\\u0645 \\u0627\\u0644\\u062d\\u0627\\u0644\\u0629');
+      var iUnit=col('unit number','unit no','unit','villa','property','\\u0648\\u062d\\u062f\\u0629','\\u0641\\u064a\\u0644\\u0627');
+      var iAcc=col('account name','account','client name','\\u0627\\u0633\\u0645 \\u0627\\u0644\\u0639\\u0645\\u064a\\u0644');
+      var iDate=col('date/time opened','opened date','open date','opened','created','date','\\u062a\\u0627\\u0631\\u064a\\u062e');
+      var iDesc=col('description','subject','\\u0648\\u0635\\u0641');
+      var iStatus=col('status','\\u062d\\u0627\\u0644\\u0629');
+      var iPhone=col('person account: mobile','person account mobile','mobile phone','mobile','phone','\\u062c\\u0648\\u0627\\u0644','\\u0647\\u0627\\u062a\\u0641');
+      console.log('[retal] cols: case='+iCase+' unit='+iUnit+' acc='+iAcc+' date='+iDate+' phone='+iPhone);
 
-    /* ── relay via URL hash ── */
-    var encoded;
-    try{encoded=btoa(unescape(encodeURIComponent(JSON.stringify(rows))));}
-    catch(e){encoded=btoa(JSON.stringify(rows).replace(/[^\\x00-\\x7F]/g,'?'));}
-    upd('✅ تم قراءة <b>'+rows.length+'</b> سجل<br>جاري فتح التطبيق...');
-    window.open(O+'/salesforce-import#sf'+encoded,'_blank');
-    setTimeout(function(){if(el)el.remove();},4000);
+      /* ── collect all tbody row texts ── */
+      var allRowTexts=[];
+      dataTable.querySelectorAll('tbody tr').forEach(function(tr){
+        var cells=tr.querySelectorAll('td');if(!cells.length)return;
+        var texts=Array.from(cells).map(function(c){return(c.textContent||c.innerText||'').trim().replace(/\\s+/g,' ');});
+        allRowTexts.push(texts);
+      });
+      console.log('[retal] tbody rows after scroll:',allRowTexts.length);
+
+      /* ── pattern-based fallback if headers gave -1 ── */
+      if(iCase<0||iUnit<0){
+        for(var ri=0;ri<allRowTexts.length;ri++){
+          var rr=allRowTexts[ri];
+          for(var ci2=0;ci2<rr.length;ci2++){
+            if(iCase<0&&casePat.test(rr[ci2].replace(/\\s/g,'')))iCase=ci2;
+            if(iUnit<0&&unitPat.test(rr[ci2]))iUnit=ci2;
+          }
+          if(iCase>=0&&iUnit>=0)break;
+        }
+      }
+      if(iCase<0){upd('❌ عمود رقم الحالة غير موجود<br>'+headers.slice(0,5).join(' | '),'#7f1d1d');setTimeout(function(){if(el)el.remove();},12000);return;}
+
+      /* ── build rows ── */
+      var rows=[];
+      allRowTexts.forEach(function(texts){
+        function get(i){return(i>=0&&i<texts.length)?texts[i]:'';}
+        var cn=get(iCase);if(!cn||cn==='-'||cn==='\\u2014'||cn==='')return;
+        var unitVal=get(iUnit);
+        if(!unitPat.test(unitVal)){for(var ci3=0;ci3<texts.length;ci3++){if(unitPat.test(texts[ci3])){unitVal=texts[ci3];break;}}}
+        rows.push({caseNumber:cn,unit:unitVal,accountName:get(iAcc),openedDate:get(iDate),description:get(iDesc),status:get(iStatus),phone:get(iPhone)});
+      });
+      console.log('[retal] extracted rows:',rows.length,rows[0]);
+
+      if(!rows.length){upd('⚠️ لا توجد صفوف بيانات<br>case='+iCase+' unit='+iUnit+' scanned='+allRowTexts.length,'#78350f');setTimeout(function(){if(el)el.remove();},12000);return;}
+
+      /* ── relay via URL hash ── */
+      var encoded;
+      try{encoded=btoa(unescape(encodeURIComponent(JSON.stringify(rows))));}
+      catch(e){encoded=btoa(JSON.stringify(rows).replace(/[^\\x00-\\x7F]/g,'?'));}
+      upd('✅ تم قراءة <b>'+rows.length+'</b> سجل<br>جاري فتح التطبيق...');
+      window.open(O+'/salesforce-import#sf'+encoded,'_blank');
+      setTimeout(function(){if(el)el.remove();},4000);
+
+    }); /* end scrollAndWait */
 
   }catch(e){
     console.error('[retal]',e);
@@ -161,7 +203,6 @@ function buildBookmarklet(appOrigin: string, token: string): string {
 
 type ImportResult = { added: number; updated: number; skipped: number; errors: string[]; total: number };
 
-// ── Page component ─────────────────────────────────────────────────────────────
 export default function SalesforceImport() {
   const [bookmarkletCode, setBookmarkletCode] = useState('');
   const linkRef = useRef<HTMLAnchorElement>(null);
@@ -273,7 +314,7 @@ export default function SalesforceImport() {
             {[
               'اسحب الزرار أدناه إلى شريط المفضلة في Chrome (مرة واحدة فقط)',
               'افتح أي تقرير Salesforce يحتوي على Cases',
-              'اضغط "مزامنة رتال" — يظهر ملخص فوراً بدون أي تدخل',
+              'اضغط "مزامنة رتال" — يسكرول الجدول تلقائياً لتحميل كل الصفوف ثم يفتح التطبيق',
             ].map((step, i) => (
               <div key={i} className="flex items-start gap-2">
                 <span className="text-blue-400 font-bold shrink-0">{i + 1}.</span>
@@ -313,10 +354,10 @@ export default function SalesforceImport() {
 
         <div className="grid gap-3">
           {[
-            { icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" />, title: 'تذاكر جديدة — تُضاف فوراً', desc: 'تتصنف تلقائياً بالكلمات المفتاحية، والـ AI يكمّل التصنيف في الخلفية', color: 'border-emerald-500/20' },
+            { icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" />, title: 'تذاكر جديدة — تُضاف فوراً', desc: 'تتصنف تلقائياً بالكلمات المفتاحية', color: 'border-emerald-500/20' },
             { icon: <ArrowRightLeft className="w-4 h-4 text-blue-400" />, title: 'تذاكر موجودة — تُزامَن الحالة', desc: 'لو أُغلقت في Salesforce وعندنا مفتوحة → تُغلق تلقائياً', color: 'border-blue-500/20' },
             { icon: <SkipForward className="w-4 h-4 text-amber-400" />, title: 'تذاكر متطابقة — تُتخطى', desc: 'مفيش تعديل لو الحالة واحدة في الطرفين', color: 'border-amber-500/20' },
-            { icon: <XCircle className="w-4 h-4 text-red-400" />, title: 'أرقام التذاكر — بدون أصفار يسار', desc: '"00197089" تُحفظ كـ "197089" — نفس منطق الاستيراد العادي', color: 'border-red-500/20' },
+            { icon: <XCircle className="w-4 h-4 text-red-400" />, title: 'أرقام التذاكر — بدون أصفار يسار', desc: '"00197089" تُحفظ كـ "197089"', color: 'border-red-500/20' },
           ].map((item, i) => (
             <div key={i} className={cn('flex items-start gap-3 p-4 bg-muted/20 border rounded-xl', item.color)}>
               <div className="mt-0.5 shrink-0">{item.icon}</div>
