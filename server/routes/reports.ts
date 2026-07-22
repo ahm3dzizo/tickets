@@ -104,13 +104,19 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     ).length;
 
     // ── 5. SLA Breakdown ──────────────────────────────────────────────────────
+    // Bucket by whole elapsed days (Math.floor), matching the "الأيام" column/filter
+    // in the ticket list (date-fns differenceInDays truncates the same way) —
+    // otherwise a ticket showing "1 يوم" there (e.g. 1.8 days, truncated) would
+    // land in a different SLA bucket here (1.8 > 1, so "within3") than what the
+    // list's day-filter suggests.
     const sla = { within1: 0, within3: 0, within7: 0, within14: 0, over14: 0 };
     for (const d of daysArr) {
-      if      (d <= 1)  sla.within1++;
-      else if (d <= 3)  sla.within3++;
-      else if (d <= 7)  sla.within7++;
-      else if (d <= 14) sla.within14++;
-      else              sla.over14++;
+      const dInt = Math.floor(d);
+      if      (dInt <= 1)  sla.within1++;
+      else if (dInt <= 3)  sla.within3++;
+      else if (dInt <= 7)  sla.within7++;
+      else if (dInt <= 14) sla.within14++;
+      else                 sla.over14++;
     }
 
     // ── 6. By Status ──────────────────────────────────────────────────────────
