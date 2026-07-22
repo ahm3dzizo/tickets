@@ -4,6 +4,12 @@ import prisma from '../db.js';
 
 const router = Router();
 
+// Statuses treated as "done/closed" for aggregation purposes — matches the
+// ticket list's own "المغلقة" tab grouping (TicketTable.tsx closedStatuses),
+// so a ticket that counts as closed there also counts as closed here.
+const CLOSED_LIKE = new Set(['closed', 'out_of_scope', 'absent']);
+const isClosedLike = (status: string) => CLOSED_LIKE.has(status);
+
 // Parse issuedAt string → Date, fallback to createdAt
 function parseIssued(issuedAt: string | null | undefined, createdAt: Date): Date {
   if (!issuedAt) return createdAt;
@@ -78,14 +84,16 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     // ── 2. Totals ─────────────────────────────────────────────────────────────
     const total          = filtered.length;
     const openCount      = filtered.filter(t => t.status === 'open').length;
-    const closedCount    = filtered.filter(t => t.status === 'closed').length;
+    const closedCount    = filtered.filter(t => t.status === 'closed').length;       // exact — for the mutually-exclusive status breakdown below
+    const closedLikeCount= filtered.filter(t => isClosedLike(t.status)).length;      // closed + out_of_scope + absent — for KPI/SLA denominators
     const inProgressCount= filtered.filter(t => t.status === 'in_progress').length;
     const pendingCount   = filtered.filter(t => t.status === 'pending').length;
     const waitingCount   = filtered.filter(t => t.status === 'waiting').length;
     const outOfScopeCount= filtered.filter(t => t.status === 'out_of_scope').length;
+    const absentCount    = filtered.filter(t => t.status === 'absent').length;
 
     // ── 3. Avg days to close (issuedAt → closedAt) ────────────────────────────
-    const closedTickets = filtered.filter(t => t.status === 'closed' && t.closedAt);
+    const closedTickets = filtered.filter(t => isClosedLike(t.status) && t.closedAt);
     const daysArr = closedTickets.map(t => {
       const start = parseIssued(t.issuedAt, t.createdAt);
       const end   = t.closedAt!;
@@ -127,6 +135,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
       { key: 'waiting',     nameAr: 'في الانتظار',   count: waitingCount,     color: '#14b8a6' },
       { key: 'closed',      nameAr: 'مغلقة',         count: closedCount,      color: '#22c55e' },
       { key: 'out_of_scope',nameAr: 'خارج النطاق',   count: outOfScopeCount,  color: '#6b7280' },
+      { key: 'absent',      nameAr: 'غائب',          count: absentCount,      color: '#a855f7' },
     ].filter(s => s.count > 0);
 
     // ── 7. By Priority ────────────────────────────────────────────────────────
@@ -149,7 +158,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     const typeCountMap: Record<string,{open:number;closed:number}> = {};
     for (const t of filtered) {
       if (!typeCountMap[t.type]) typeCountMap[t.type] = { open:0, closed:0 };
-      t.status === 'closed' ? typeCountMap[t.type].closed++ : typeCountMap[t.type].open++;
+      isClosedLike(t.status) ? typeCountMap[t.type].closed++ : typeCountMap[t.type].open++;
     }
 
     const byMainType = Object.entries(typeCountMap).map(([key,v]) => ({
@@ -172,7 +181,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     for (const t of filtered) {
       if (!t.subTypeId) continue;
       if (!subTypeCountMap[t.subTypeId]) subTypeCountMap[t.subTypeId] = { open:0, closed:0 };
-      t.status === 'closed' ? subTypeCountMap[t.subTypeId].closed++ : subTypeCountMap[t.subTypeId].open++;
+      isClosedLike(t.status) ? subTypeCountMap[t.subTypeId].closed++ : subTypeCountMap[t.subTypeId].open++;
     }
     const subTypeIds = Object.keys(subTypeCountMap);
     const subTypeRecords = subTypeIds.length
@@ -189,7 +198,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     const projCountMap: Record<string,{open:number;closed:number}> = {};
     for (const t of filtered) {
       if (!projCountMap[t.projectId]) projCountMap[t.projectId] = { open:0, closed:0 };
-      t.status === 'closed' ? projCountMap[t.projectId].closed++ : projCountMap[t.projectId].open++;
+      isClosedLike(t.status) ? projCountMap[t.projectId].closed++ : projCountMap[t.projectId].open++;
     }
     const projectIds = Object.keys(projCountMap);
     const projects = projectIds.length
@@ -209,7 +218,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
       const month = d.toISOString().slice(0,7);
       if (!monthMap[month]) monthMap[month] = { total:0, closed:0 };
       monthMap[month].total++;
-      if (t.status === 'closed') monthMap[month].closed++;
+      if (isClosedLike(t.status)) monthMap[month].closed++;
     }
     const byMonth = Object.entries(monthMap)
       .sort(([a],[b]) => a.localeCompare(b))
@@ -220,7 +229,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     for (const t of filtered) {
       if (!t.assignedSupervisorId) continue;
       if (!supMap[t.assignedSupervisorId]) supMap[t.assignedSupervisorId] = { open:0, closed:0, days:[] };
-      if (t.status === 'closed') {
+      if (isClosedLike(t.status)) {
         supMap[t.assignedSupervisorId].closed++;
         if (t.closedAt) {
           const days = (t.closedAt.getTime() - parseIssued(t.issuedAt, t.createdAt).getTime()) / 86_400_000;
@@ -249,7 +258,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     for (const t of filtered) {
       if (!t.clientId) continue;
       if (!clientMap[t.clientId]) clientMap[t.clientId] = { name:t.clientName, villa:t.villaNumber, open:0, closed:0 };
-      t.status === 'closed' ? clientMap[t.clientId].closed++ : clientMap[t.clientId].open++;
+      isClosedLike(t.status) ? clientMap[t.clientId].closed++ : clientMap[t.clientId].open++;
     }
     const topClients = Object.entries(clientMap)
       .map(([id,v]) => ({ clientId:id, clientName:v.name, villaNumber:v.villa, count:v.open+v.closed, open:v.open, closed:v.closed }))
@@ -258,7 +267,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     // ── 14. Avg Resolution Days by Type ──────────────────────────────────────
     const typeResMap: Record<string,number[]> = {};
     for (const t of filtered) {
-      if (t.status !== 'closed' || !t.closedAt) continue;
+      if (!isClosedLike(t.status) || !t.closedAt) continue;
       const days = (t.closedAt.getTime() - parseIssued(t.issuedAt, t.createdAt).getTime()) / 86_400_000;
       if (days < 0 || days > 3650) continue;
       if (!typeResMap[t.type]) typeResMap[t.type] = [];
@@ -270,7 +279,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
       .sort((a,b) => b.avgDays - a.avgDays);
 
     res.json({
-      totals: { total, open:openCount, closed:closedCount, avgDays, overdueCount, inProgress:inProgressCount, pending:pendingCount },
+      totals: { total, open:openCount, closed:closedLikeCount, avgDays, overdueCount, inProgress:inProgressCount, pending:pendingCount },
       sla, byStatus, byPriority,
       bySpecialty, byMainType, bySubType,
       byProject, byMonth,
