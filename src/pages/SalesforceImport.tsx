@@ -169,7 +169,8 @@ function buildBookmarklet(appOrigin: string, token: string): string {
           return(c.textContent||c.innerText||'').trim().replace(/\\s+/g,' ');
         });
         var key=(iCase>=0&&iCase<texts.length)?texts[iCase].replace(/\\s/g,''):'';
-        if(key&&key!=='-'&&key!=='\\u2014')allRowMap[key]=texts;
+        /* only keep rows where the case# is numeric (SF case IDs are all digits) */
+        if(key&&casePat.test(key))allRowMap[key]=texts;
       });
     }
 
@@ -263,7 +264,9 @@ function buildBookmarklet(appOrigin: string, token: string): string {
       var rows=[];
       allRowTexts.forEach(function(texts){
         function get(i){return(i>=0&&i<texts.length)?texts[i]:'';}
-        var cn=get(iCase);if(!cn||cn==='-'||cn==='\\u2014'||cn==='')return;
+        var cn=get(iCase).replace(/\\s/g,'');
+        /* SF case IDs are all digits — skip unit values (NTF-xxx), totals, headers */
+        if(!cn||!casePat.test(cn))return;
         var unitVal=get(iUnit);
         if(!unitPat.test(unitVal)){
           for(var ci3=0;ci3<texts.length;ci3++){if(unitPat.test(texts[ci3])){unitVal=texts[ci3];break;}}

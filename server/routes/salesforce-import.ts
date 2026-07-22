@@ -90,6 +90,12 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
       const rawId = (row.caseNumber || "").trim();
       if (!rawId) continue;
 
+      // SF case numbers are purely numeric — reject unit values (NTF-xxx), totals, etc.
+      if (!/^\d+$/.test(rawId)) {
+        errors.push(`تجاهل "${rawId}" — ليس رقم تذكرة صحيح`);
+        continue;
+      }
+
       const caseNumber = normalizeCaseId(rawId);
       const sfStatus   = mapSFStatus(row.status ?? "");
 
