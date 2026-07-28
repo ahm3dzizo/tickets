@@ -302,30 +302,24 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // القاعدة: الموعد ينتقل للتذاكر الجديدة فقط لو كان في المستقبل (غداً فصاعداً)
     // الموعد اليوم أو قبله يخص التذاكر القديمة ولا ينتقل
     // الملاحظات (appointmentNotes) لا تنتقل لأن رسالة الواتساب ما بُعتتش للتذكرة الجديدة
-    const activeAppointmentsByVilla = new Map<string, string>();
-    const activeAppointmentsByClient = new Map<string, string>();
-
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    // غداً = اليوم التالي بداية من منتصف الليل
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    const activeAppointmentsByVilla = new Map<string, any>();
+    const activeAppointmentsByClient = new Map<string, any>();
 
     for (const t of existingRows) {
-      if (!t.appointmentTime) continue;
+      if (!t.appointmentTime && t.status !== "waiting") continue;
       if (t.status === "closed" || t.status === "out_of_scope") continue;
 
-      const apptDate = new Date(t.appointmentTime);
-      // فقط المواعيد المستقبلية (غداً فصاعداً) تنتقل للتذاكر الجديدة
-      const isStrictlyFuture = isNaN(apptDate.getTime()) || apptDate >= tomorrowStart;
-      if (!isStrictlyFuture) continue;
+      const inheritedData = {
+        appointmentTime: t.appointmentTime || null,
+        appointmentAwaitingReply: t.appointmentAwaitingReply || false,
+        status: t.status === "waiting" ? "waiting" : null
+      };
 
       if (t.villaNumber) {
-        activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), t.appointmentTime);
+        activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), inheritedData);
       }
       if (t.clientId) {
-        activeAppointmentsByClient.set(t.clientId, t.appointmentTime);
+        activeAppointmentsByClient.set(t.clientId, inheritedData);
       }
     }
 
@@ -464,8 +458,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           continue;
         }
 
-        // ورث الموعد المستقبلي فقط (بدون الملاحظات — رسالة الواتساب ما بُعتتش للتذكرة الجديدة)
-        const inheritedTime: string | null =
+        // ورث المواعيد وحالة الانتظار للتذاكر الجديدة (بدون الملاحظات)
+        const inheritedData: any =
           (cleanVilla && activeAppointmentsByVilla.get(cleanVilla)) ||
           (clientId && activeAppointmentsByClient.get(clientId)) ||
           null;
@@ -491,10 +485,16 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           assignedSupervisorIds: supervisorIds,
           assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
           detectedTypes: finalTypes,
-          appointmentTime: inheritedTime,
-          appointmentNotes: null, // لا نورث الملاحظات — الرسالة لم تُرسل للتذكرة الجديدة
+          appointmentTime: inheritedData ? inheritedData.appointmentTime : null,
+          appointmentNotes: null, // لا نورث الملاحظات
+          appointmentAwaitingReply: inheritedData ? inheritedData.appointmentAwaitingReply : false,
           closedAt: closedAt ? new Date(closedAt) : null,
         });
+
+        // Override status if it was waiting
+        if (inheritedData && inheritedData.status === "waiting") {
+          toCreate[toCreate.length - 1].status = "waiting";
+        }
       } catch (err: any) {
         errors.push(String(err.message));
       }
@@ -507,33 +507,37 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // القاعدة: موعد اليوم أو قبله لا ينتقل — يخص التذاكر القديمة فقط
     // الملاحظات لا تنتقل — رسالة الواتساب لم تُرسل للتذكرة الجديدة
     {
-      const villaApptMap2 = new Map<string, string>();
-      const clientApptMap2 = new Map<string, string>();
+      const villaApptMap2 = new Map<string, any>();
+      const clientApptMap2 = new Map<string, any>();
 
       for (const t of existingRows) {
-        if (!t.appointmentTime) continue;
+        if (!t.appointmentTime && t.status !== "waiting") continue;
         if (t.status === "closed" || t.status === "out_of_scope") continue;
-        const apptDate = new Date(t.appointmentTime);
-        // فقط المواعيد المستقبلية الصارمة (غداً فصاعداً)
-        const isStrictlyFuture = isNaN(apptDate.getTime()) || apptDate >= tomorrowStart;
-        if (!isStrictlyFuture) continue;
+
+        const inheritedData = {
+          appointmentTime: t.appointmentTime || null,
+          appointmentAwaitingReply: t.appointmentAwaitingReply || false,
+          status: t.status === "waiting" ? "waiting" : null
+        };
 
         const vKey = t.villaNumber ? normalizeVillaNumber(String(t.villaNumber)) : "";
-        if (vKey) villaApptMap2.set(vKey, t.appointmentTime);
-        if (t.clientId) clientApptMap2.set(t.clientId, t.appointmentTime);
+        if (vKey) villaApptMap2.set(vKey, inheritedData);
+        if (t.clientId) clientApptMap2.set(t.clientId, inheritedData);
       }
 
       for (const ticket of toCreate) {
         if (ticket.appointmentTime || ticket.status === "closed") continue;
 
         const vKey = ticket.villaNumber ? normalizeVillaNumber(String(ticket.villaNumber)) : "";
-        const inheritedTime =
+        const inheritedData =
           (vKey && villaApptMap2.get(vKey)) ||
           (ticket.clientId && clientApptMap2.get(ticket.clientId)) ||
           null;
 
-        if (inheritedTime) {
-          ticket.appointmentTime = inheritedTime;
+        if (inheritedData) {
+          ticket.appointmentTime = inheritedData.appointmentTime;
+          ticket.appointmentAwaitingReply = inheritedData.appointmentAwaitingReply;
+          if (inheritedData.status === "waiting") ticket.status = "waiting";
           ticket.appointmentNotes = null; // لا نورث الملاحظات
         }
       }

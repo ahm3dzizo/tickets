@@ -107,11 +107,11 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
             { ticketId: rawId },
           ],
         },
-        select: { id: true, status: true },
+        select: { id: true, status: true, appointmentTime: true },
       });
 
       if (existing) {
-        // Status sync: only close tickets that SF says are closed and we haven't
+        // Status sync: only close tickets that SF says are closed and
         if (
           sfStatus === "closed" &&
           !TERMINAL_STATUSES.has(existing.status)
