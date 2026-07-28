@@ -637,7 +637,7 @@ export default function Appointments() {
           </div>
 
           {/* ── Carousel Hero UI ── */}
-          <div className="relative w-full h-[calc(100dvh-220px)] min-h-[340px] max-h-[950px] flex justify-center items-center overflow-hidden py-2">
+          <div className="relative w-full h-[calc(100dvh-160px)] min-h-[420px] max-h-[950px] flex justify-center items-center overflow-hidden py-4">
             {displayedDays.map((day, idx) => {
               const ds = dateStr(day);
               const groups = groupedByDay[ds] || [];
@@ -647,7 +647,7 @@ export default function Appointments() {
               const isCenter = idx === 1;
               const isLeft   = idx === 2;
 
-              const cardClass = "absolute inset-x-0 top-2 bottom-2 sm:top-4 sm:bottom-4 mx-auto transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden border w-full max-w-[94%] sm:max-w-[90%] md:max-w-[750px] lg:max-w-[850px]";
+              const cardClass = "absolute inset-x-0 top-8 bottom-8 sm:top-10 sm:bottom-10 mx-auto transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col rounded-[2rem] overflow-hidden border w-full max-w-[94%] sm:max-w-[90%] md:max-w-[750px] lg:max-w-[850px]";
 
               let posClass = "";
               let interactiveClass = "";

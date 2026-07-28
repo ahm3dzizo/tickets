@@ -345,21 +345,49 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }
 
   try {
-    const appointment = await prisma.appointment.create({
-      data: {
-        projectId,
-        villaNumber,
-        clientId: clientId || null,
-        clientName,
-        clientPhone: clientPhone || null,
-        date,
-        time: time || null,
-        notes: notes || null,
-        supervisorIds: supervisorIds || [],
-        supervisors: supervisors || [],
-        types: types || [],
-      },
+    let appointment = await prisma.appointment.findFirst({
+      where: { projectId, villaNumber, date }
     });
+
+    if (appointment) {
+      const updatedTypes = Array.from(new Set([...(appointment.types as string[] || []), ...(types || [])]));
+      const updatedSupIds = Array.from(new Set([...(appointment.supervisorIds as string[] || []), ...(supervisorIds || [])]));
+      
+      const existingSups = (appointment.supervisors as any[]) || [];
+      const newSups = (supervisors as any[]) || [];
+      const mergedSupsMap = new Map();
+      existingSups.forEach(s => mergedSupsMap.set(s.id, s));
+      newSups.forEach(s => mergedSupsMap.set(s.id, s));
+      const updatedSups = Array.from(mergedSupsMap.values());
+
+      appointment = await prisma.appointment.update({
+        where: { id: appointment.id },
+        data: {
+          time: time || appointment.time,
+          notes: notes ? (appointment.notes ? `${appointment.notes}\n${notes}` : notes) : appointment.notes,
+          types: updatedTypes,
+          supervisorIds: updatedSupIds,
+          supervisors: updatedSups,
+          clientPhone: clientPhone || appointment.clientPhone,
+        }
+      });
+    } else {
+      appointment = await prisma.appointment.create({
+        data: {
+          projectId,
+          villaNumber,
+          clientId: clientId || null,
+          clientName,
+          clientPhone: clientPhone || null,
+          date,
+          time: time || null,
+          notes: notes || null,
+          supervisorIds: supervisorIds || [],
+          supervisors: supervisors || [],
+          types: types || [],
+        },
+      });
+    }
 
     // Sync linked tickets
     if (ticketIds && ticketIds.length > 0) {
@@ -381,9 +409,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
               appointmentNotes: notes || null,
               appointmentAwaitingReply: false,
               isDirectAppointment: true,
-              assignedSupervisorIds: supervisorIds || [],
-              assignedSupervisorId: supervisorIds?.[0] || null,
-              assignedSupervisors: supervisors || [],
               ...(t.status !== "closed" ? { status: "pending" } : {}),
             },
           })
@@ -432,9 +457,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       data: {
         appointmentTime,
         appointmentNotes: notes || null,
-        assignedSupervisorIds: supervisorIds || [],
-        assignedSupervisorId: supervisorIds?.[0] || null,
-        assignedSupervisors: supervisors || [],
       },
     });
 
