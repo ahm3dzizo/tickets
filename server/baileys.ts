@@ -315,41 +315,69 @@ export async function pairWACode(userId: string, phone: string): Promise<string>
   reconnectAttempts.delete(userId);
   await stopWA(userId, true);
 
-  // دالة المحاولة — بتستدعي requestPairingCode مباشرة بعد ما يتصل الـ WebSocket
-  // في Baileys، requestPairingCode لازم يُستدعى خلال أول 2-3 ثواني من إنشاء الـ socket
-  // انتظار أطول بيخلي الـ socket يموت قبل الاستدعاء → 428 Connection Closed
-  const attemptPairing = async (attempt: number): Promise<string> => {
-    if (attempt > 3) {
-      throw new Error('تعذر توليد كود الربط: تعذر الاتصال بخوادم واتساب');
-    }
+  return new Promise<string>(async (resolve, reject) => {
+    let done = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 3;
 
-    await startWA(userId);
-
-    // انتظار قصير لإتمام الـ WebSocket handshake (عادةً 300-800ms)
-    await new Promise(r => setTimeout(r, 1800));
-
-    const sock = sessions.get(userId);
-    if (!sock) {
-      // الـ socket مات وراح يتعمله reconnect — استنّى شوية وحاول تاني
-      console.warn(`[WA] Socket not available for pairing (attempt ${attempt}) — waiting for reconnect`);
-      await new Promise(r => setTimeout(r, 3000));
+    const tryPair = async () => {
+      if (done || attempts >= MAX_ATTEMPTS) {
+        if (!done) {
+          done = true;
+          reject(new Error('تعذر توليد كود الربط: فشل الاتصال بخوادم واتساب'));
+        }
+        return;
+      }
+      attempts++;
       reconnectAttempts.delete(userId);
-      return attemptPairing(attempt + 1);
-    }
 
-    try {
-      console.log(`[WA] Requesting pairing code for ${userId} (attempt ${attempt})`);
-      return await sock.requestPairingCode(d);
-    } catch (err: any) {
-      console.warn(`[WA] Pairing attempt ${attempt} failed: ${err?.message}`);
-      await stopWA(userId, true);
-      reconnectAttempts.delete(userId);
-      await new Promise(r => setTimeout(r, 2000));
-      return attemptPairing(attempt + 1);
-    }
-  };
+      await startWA(userId);
+      const sock = sessions.get(userId);
+      if (!sock) {
+        setTimeout(tryPair, 2000);
+        return;
+      }
 
-  return attemptPairing(1);
+      // الطريقة الصحيحة: نستخدم waitForSocketOpen ثم نستدعي requestPairingCode فوراً
+      // بدون أي delay إضافي — الـ delay بيخلي الـ WS يموت قبل ما نطلب الكود
+      try {
+        if (typeof (sock as any).waitForSocketOpen === 'function') {
+          await (sock as any).waitForSocketOpen();
+        } else {
+          // fallback: انتظر 600ms بس — مجرد handshake noise
+          await new Promise(r => setTimeout(r, 600));
+        }
+
+        // تأكد إن الـ socket لسه في الـ sessions (مش اتمسح خلال الانتظار)
+        const currentSock = sessions.get(userId);
+        if (!currentSock || done) return;
+
+        console.log(`[WA] Requesting pairing code for ${userId} (attempt ${attempts})`);
+        const code = await currentSock.requestPairingCode(d);
+        if (!done) {
+          done = true;
+          resolve(code);
+        }
+      } catch (err: any) {
+        console.warn(`[WA] Pairing attempt ${attempts} failed: ${err?.message}`);
+        if (!done) {
+          await stopWA(userId, true);
+          reconnectAttempts.delete(userId);
+          setTimeout(tryPair, 2000);
+        }
+      }
+    };
+
+    tryPair();
+
+    // Timeout شامل: 60 ثانية
+    setTimeout(() => {
+      if (!done) {
+        done = true;
+        reject(new Error('تعذر توليد كود الربط: انتهت مهلة الاتصال'));
+      }
+    }, 60000);
+  });
 }
 
 
