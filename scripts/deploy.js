@@ -91,6 +91,8 @@ const remoteLines = [
   `npx prisma db push --accept-data-loss`,
   `echo "▶  نقل بيانات المواعيد القديمة..."`,
   `node scripts/migrate-appointments.js`,
+  `echo "▶  تحديث بيانات الضمان من ملف الإكسيل..."`,
+  `npx tsx scripts/import_warranty.ts`,
   `echo "▶  npm run build (frontend + backend)..."`,
   `rm -rf dist`,
   `rm -rf node_modules/.vite`,
