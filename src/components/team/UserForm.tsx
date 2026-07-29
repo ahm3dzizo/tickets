@@ -35,6 +35,7 @@ import { usersApi, projectsApi } from '@/lib/api';
 import { Project, UserRole } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UserFormProps {
   trigger?: React.ReactNode;
@@ -61,6 +62,8 @@ export function UserForm({
   allowedRoles,
   lockedProjectIds,
 }: UserFormProps) {
+  const { user: currentUser } = useAuth();
+  
   // Support both controlled and uncontrolled open state
   const isControlled  = controlledOpen !== undefined;
   const [internalOpen, setInternalOpen] = useState(false);
@@ -626,6 +629,31 @@ function FormBody({
         )}
 
         <DialogFooter className="pt-4 gap-3">
+          {editingUser && currentUser?.role === 'admin' && currentUser?.uid !== (editingUser.id ?? editingUser.uid) && (
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={loading}
+              onClick={async () => {
+                if (!window.confirm('هل أنت متأكد من حذف هذا العضو؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+                setLoading(true);
+                try {
+                  await usersApi.delete(editingUser.id ?? editingUser.uid);
+                  toast.success('تم حذف العضو بنجاح');
+                  setOpen(false);
+                  onSaved?.();
+                } catch {
+                  toast.error('حدث خطأ أثناء الحذف');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="px-4 rounded-xl h-12 flex-shrink-0 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20"
+              title="حذف العضو"
+            >
+              حذف
+            </Button>
+          )}
           <Button
             type="submit"
             disabled={loading}

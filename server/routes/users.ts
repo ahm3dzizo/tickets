@@ -531,4 +531,28 @@ router.post("/claim-pending", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// DELETE /api/users/:uid — Delete a user
+router.delete("/:uid", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const { uid } = req.params;
+    
+    // Prevent admin from deleting themselves
+    if (uid === req.uid) {
+      res.status(400).json({ error: "لا يمكنك حذف حسابك الخاص" });
+      return;
+    }
+    
+    const existing = await prisma.user.findUnique({ where: { uid } });
+    if (!existing) {
+      res.status(404).json({ error: "المستخدم غير موجود" });
+      return;
+    }
+    
+    await prisma.user.delete({ where: { uid } });
+    res.json({ ok: true, message: "تم حذف المستخدم بنجاح" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
