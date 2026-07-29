@@ -116,34 +116,32 @@ export function WhatsAppBanner() {
   return (
     <>
       {/* ── Banner ─────────────────────────────────────────────────────── */}
-      <div className="fixed top-0 inset-x-0 z-50 bg-emerald-600/95 backdrop-blur-sm border-b border-emerald-500/40 shadow-lg shadow-emerald-900/30">
-        <div className="max-w-[1400px] mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
-          {/* Left: dismiss */}
-          <button
-            onClick={dismiss}
-            className="text-emerald-200 hover:text-white transition-colors shrink-0 p-1"
-            aria-label="إغلاق"
-          >
-            <X className="w-4 h-4" />
-          </button>
+      <div className="mb-4 sm:mb-6 rounded-2xl bg-emerald-600/90 backdrop-blur-sm border border-emerald-500/40 shadow-lg shadow-emerald-950/20 px-4 py-3 flex items-center justify-between gap-3 shrink-0 print:hidden">
+        {/* Dismiss */}
+        <button
+          onClick={dismiss}
+          className="text-emerald-100 hover:text-white hover:bg-emerald-500/30 rounded-lg p-1.5 transition-colors shrink-0"
+          aria-label="إغلاق"
+        >
+          <X className="w-4 h-4" />
+        </button>
 
-          {/* Center: message */}
-          <div className="flex items-center gap-2 flex-1 justify-center text-center">
-            <MessageSquare className="w-4 h-4 text-emerald-200 shrink-0" />
-            <span className="text-white text-sm font-bold">
-              واتسابك غير مرتبط — الرسائل التلقائية لن ترسل حتى تقوم بالربط
-            </span>
-          </div>
-
-          {/* Right: CTA */}
-          <Button
-            size="sm"
-            onClick={openDialog}
-            className="bg-white text-emerald-700 hover:bg-emerald-50 font-bold rounded-xl h-8 px-4 text-xs shrink-0 shadow-sm"
-          >
-            ربط الآن
-          </Button>
+        {/* Center: message */}
+        <div className="flex items-center gap-2.5 flex-1 justify-center text-center">
+          <MessageSquare className="w-4 h-4 text-emerald-100 shrink-0" />
+          <span className="text-white text-xs sm:text-sm font-bold">
+            واتسابك غير مرتبط — الرسائل التلقائية لن ترسل حتى تقوم بالربط
+          </span>
         </div>
+
+        {/* CTA */}
+        <Button
+          size="sm"
+          onClick={openDialog}
+          className="bg-white text-emerald-700 hover:bg-emerald-50 font-bold rounded-xl h-8 px-4 text-xs shrink-0 shadow-sm transition-all"
+        >
+          ربط الآن
+        </Button>
       </div>
 
       {/* ── Dialog ─────────────────────────────────────────────────────── */}

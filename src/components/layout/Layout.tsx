@@ -28,7 +28,6 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-dvh bg-background text-foreground font-sans selection:bg-primary/25">
-      <WhatsAppBanner />
       <Navbar />
       {/* Desktop: right padding for sidebar (w-60 = 240px = 15rem)
           Mobile:  top padding for top bar + bottom padding for bottom nav */}
@@ -40,6 +39,7 @@ export function Layout({ children }: LayoutProps) {
         min-h-dvh
       ">
         <div className="max-w-[1400px] py-6 lg:py-8 print:py-0 print:max-w-none page-in">
+          <WhatsAppBanner />
           {children}
         </div>
       </main>
