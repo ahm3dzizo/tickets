@@ -153,6 +153,10 @@ function AppContent() {
             path="/salesforce-import"
             element={user && !requiresProfileCompletion ? <SalesforceImport /> : <Navigate to="/login" />}
           />
+          <Route
+            path="/warranties"
+            element={user && !requiresProfileCompletion ? <Warranties /> : <Navigate to="/login" />}
+          />
           {/* ⛔️ تمت إزالة Route /register */}
         </Routes>
         <Toaster position="top-right" />
