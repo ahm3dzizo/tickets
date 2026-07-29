@@ -78,8 +78,11 @@ export async function startWA(userId: string) {
         const sessionFiles = fs.readdirSync(SESSION_DIR);
         if (sessionFiles.length > 200) {
           console.warn(`[WA] Session dir for ${userId} has ${sessionFiles.length} files — cleaning up to prevent server freeze`);
-          fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-          fs.mkdirSync(SESSION_DIR, { recursive: true });
+          for (const file of sessionFiles) {
+            if (file !== 'creds.json') {
+              fs.rmSync(path.join(SESSION_DIR, file), { recursive: true, force: true });
+            }
+          }
         }
       } catch (cleanErr) {
         console.error(`[WA] Failed to clean session dir for ${userId}:`, cleanErr);
