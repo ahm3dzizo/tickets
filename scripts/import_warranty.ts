@@ -19,7 +19,10 @@ async function main() {
   for (let i = 1; i < data.length; i++) {
     const row = data[i] as any[];
     if (!row || row.length < 5) continue;
-    const unitNumber = String(row[2]).trim();
+    let unitNumber = String(row[2]).trim();
+    if (unitNumber.toUpperCase().startsWith('NTF-')) {
+      unitNumber = unitNumber.substring(4);
+    }
     const handoverSerial = row[4];
     
     if (unitNumber && handoverSerial) {
