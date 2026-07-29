@@ -775,13 +775,8 @@ export default function Appointments() {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 h-max pb-2">
                         {[...groups].sort((a, b) => {
-                          const clientKeyA = a.villaNumber + '_' + (a.projectId || '');
-                          const totalOpenA = openTicketsMap[clientKeyA] || 0;
-                          const clientKeyB = b.villaNumber + '_' + (b.projectId || '');
-                          const totalOpenB = openTicketsMap[clientKeyB] || 0;
-                          
-                          const isCompletedA = totalOpenA === 0;
-                          const isCompletedB = totalOpenB === 0;
+                          const isCompletedA = a.status === 'completed';
+                          const isCompletedB = b.status === 'completed';
 
                           if (isCompletedA !== isCompletedB) {
                             return isCompletedA ? 1 : -1;
@@ -795,7 +790,7 @@ export default function Appointments() {
                           const time = (group.appointmentTime || '').split(' ')[1] || '---';
                           const clientKey = group.villaNumber + '_' + (group.projectId || '');
                           const totalOpen = openTicketsMap[clientKey] || 0;
-                          const isCompleted = totalOpen === 0;
+                          const isCompleted = group.status === 'completed';
 
                           return (
                             <div
@@ -815,24 +810,32 @@ export default function Appointments() {
                                     <h4 className="font-black text-foreground text-base truncate flex items-center gap-2">
                                       {t.villa} {group.villaNumber} {totalOpen > 0 ? (
                                         <span className="text-amber-600 dark:text-amber-500 font-bold text-xs bg-amber-500/10 px-2 py-0.5 rounded-full">({totalOpen} مفتوحة)</span>
-                                      ) : (
+                                      )}
+                                      {isCompleted && (
                                         <span className="text-emerald-500 font-bold text-xs bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> تم الانتهاء</span>
                                       )}
                                     </h4>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  {isCenter && totalOpen > 0 && (
+                                  {isCenter && !isCompleted && (
                                     <button
                                       onClick={async (e) => {
                                         e.stopPropagation();
-                                        if (!window.confirm('هل أنت متأكد من إنهاء الموعد؟ (سيتم إغلاق التذاكر المفتوحة)')) return;
+                                        if (!window.confirm('هل أنت متأكد من إنهاء الموعد؟')) return;
                                         try {
-                                          const openTks = group.tickets.filter((t: any) => !['closed', 'completed', 'out_of_scope'].includes(t.status));
-                                          await Promise.all(openTks.map((t: any) => ticketsApi.update(t.id, { status: 'completed' })));
+                                          await appointmentsApi.update(group.id, {
+                                            date: group.date,
+                                            time: group.time,
+                                            notes: group.notes,
+                                            supervisorIds: group.supervisorIds,
+                                            supervisors: group.supervisors,
+                                            types: group.types,
+                                            clientPhone: group.clientPhone,
+                                            status: 'completed'
+                                          });
                                           toast.success('تم إنهاء الموعد بنجاح');
                                           loadAppointments();
-                                          loadOpenTicketsCount();
                                         } catch {
                                           toast.error('حدث خطأ أثناء إنهاء الموعد');
                                         }
