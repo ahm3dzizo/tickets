@@ -249,7 +249,18 @@ export default function Settings() {
         setWaQR(d.qr.startsWith('data:') ? d.qr : `data:image/png;base64,${d.qr}`);
       } else {
         setWaQR(null);
-        toast.info('رمز QR غير جاهز بعد، يرجى الانتظار بضع ثوانٍ وتكرار المحاولة');
+        let attempts = 0;
+        const timer = setInterval(async () => {
+          attempts++;
+          try {
+            const res = await whatsappApi.getQR();
+            if (res?.qr && typeof res.qr === 'string') {
+              setWaQR(res.qr.startsWith('data:') ? res.qr : `data:image/png;base64,${res.qr}`);
+              clearInterval(timer);
+            }
+          } catch {}
+          if (attempts >= 10) clearInterval(timer);
+        }, 1500);
       }
     } catch (err: any) { toast.error(err?.message ?? 'تعذّر جلب رمز QR'); }
     finally { setLoadingQR(false); }
@@ -327,7 +338,18 @@ export default function Settings() {
         setBotQR(d.qr.startsWith('data:') ? d.qr : `data:image/png;base64,${d.qr}`);
       } else {
         setBotQR(null);
-        toast.info('رمز QR للبوت غير جاهز بعد، يرجى الانتظار بضع ثوانٍ وتكرار المحاولة');
+        let attempts = 0;
+        const timer = setInterval(async () => {
+          attempts++;
+          try {
+            const res = await whatsappBotApi.getQR();
+            if (res?.qr && typeof res.qr === 'string') {
+              setBotQR(res.qr.startsWith('data:') ? res.qr : `data:image/png;base64,${res.qr}`);
+              clearInterval(timer);
+            }
+          } catch {}
+          if (attempts >= 10) clearInterval(timer);
+        }, 1500);
       }
     } catch (err: any) { toast.error(err?.message ?? 'تعذّر جلب رمز QR'); }
     finally { setLoadingBotQR(false); }

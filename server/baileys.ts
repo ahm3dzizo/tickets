@@ -81,9 +81,14 @@ export async function startWA(userId: string) {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      qrCodes.set(userId, qr);
       statuses.set(userId, 'WAITING_AUTH');
-      getIO()?.emit(`wa-status-${userId}`, { running: true, connected: false, state: 'WAITING_AUTH', qr });
+      qrcode.toDataURL(qr).then((dataUrl) => {
+        qrCodes.set(userId, dataUrl);
+        getIO()?.emit(`wa-status-${userId}`, { running: true, connected: false, state: 'WAITING_AUTH', qr: dataUrl });
+      }).catch(() => {
+        qrCodes.set(userId, qr);
+        getIO()?.emit(`wa-status-${userId}`, { running: true, connected: false, state: 'WAITING_AUTH', qr });
+      });
     }
 
     if (connection === 'close') {

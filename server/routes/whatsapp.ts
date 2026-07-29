@@ -40,7 +40,7 @@ router.get('/qr', requireAuth, async (req: AuthRequest, res) => {
   }
   
   try {
-    const dataUrl = await qrcode.toDataURL(qrCodeStr);
+    const dataUrl = qrCodeStr.startsWith('data:') ? qrCodeStr : await qrcode.toDataURL(qrCodeStr);
     res.json({ qr: dataUrl, state: 'WAITING_AUTH' });
   } catch (err) {
     res.status(500).json({ error: 'فشل توليد صورة QR' });

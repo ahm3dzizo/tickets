@@ -58,16 +58,15 @@ export function WhatsAppConnectPrompt() {
       const qr = data?.qr;
       if (qr && typeof qr === 'string') {
         setWaQR(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`);
-        startPolling();
       } else {
         setWaQR(null);
-        toast.info('رمز QR جاري تجهيزه... يرجى الانتظار بضع ثوانٍ ثم المحاولة مجدداً');
       }
     } catch (err: any) {
       toast.error(err?.message ?? 'تعذّر جلب رمز QR');
     } finally {
       setLoadingQR(false);
     }
+    startPolling();
   }
 
   function startPolling() {
@@ -76,6 +75,11 @@ export function WhatsAppConnectPrompt() {
     pollRef.current = setInterval(async () => {
       count++;
       try {
+        const data = await whatsappApi.getQR();
+        if (data?.qr && typeof data.qr === 'string') {
+          const qr = data.qr;
+          setWaQR(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`);
+        }
         const s = await whatsappApi.getStatus();
         if (s.connected) {
           stopPolling();
@@ -84,8 +88,8 @@ export function WhatsAppConnectPrompt() {
           setTimeout(() => setPhase('hidden'), 2500);
         }
       } catch {}
-      if (count >= 20) stopPolling(); // give up after 60 s
-    }, 3000);
+      if (count >= 30) stopPolling(); // give up after 60 s
+    }, 2000);
   }
 
   function dismiss() {
