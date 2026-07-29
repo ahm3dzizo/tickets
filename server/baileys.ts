@@ -46,6 +46,12 @@ export async function initAllSessions() {
   for (const dir of dirs) {
     if (dir.startsWith('auth_')) {
       const userId = dir.replace('auth_', '');
+      // فقط شغّل الجلسات اللي عندها creds.json فعلية — الفولدرات الفاضية = ربط ناقص
+      const credsPath = path.join(BASE_SESSIONS, dir, 'creds.json');
+      if (!fs.existsSync(credsPath)) {
+        console.log(`[WA] Skipping empty session for: ${userId} (no creds.json)`);
+        continue;
+      }
       console.log(`[WA] Auto-starting session for user: ${userId}`);
       startWA(userId).catch(() => {});
     }
