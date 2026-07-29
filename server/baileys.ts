@@ -94,7 +94,7 @@ export async function startWA(userId: string) {
       linkedPhones.delete(userId);
 
       if (shouldReconnect) {
-        startWA(userId);
+        setTimeout(() => startWA(userId), 3000);
       } else {
         if (fs.existsSync(SESSION_DIR)) {
           fs.rmSync(SESSION_DIR, { recursive: true, force: true });
@@ -256,30 +256,45 @@ function normalizePhone(phone: string): string {
 }
 
 export async function pairWACode(userId: string, phone: string): Promise<string> {
-  let sock = sessions.get(userId);
-  if (!sock) {
-    await startWA(userId);
-    sock = sessions.get(userId);
-  }
-  if (!sock) {
-    throw new Error('تعذر تهيئة خدمة الواتساب.');
-  }
+  const d = cleanPhone(phone);
+  if (!d) throw new Error('رقم الهاتف غير صالح.');
+
   if (getWAStatus(userId) === 'CONNECTED') {
     throw new Error('واتساب مرتبط بالفعل.');
   }
+
+  // إعادة تهيئة تنظيفية للجلسة لضمان فتح كلاس جديد بدون جلسات قديمة معطلة
+  await stopWA(userId, true);
+  await startWA(userId);
+
+  const sock = sessions.get(userId);
+  if (!sock) {
+    throw new Error('تعذر تهيئة خدمة الواتساب.');
+  }
+
   try {
-    const d = cleanPhone(phone);
-    
     if (sock.waitForSocketOpen) {
       await sock.waitForSocketOpen();
     }
-    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds safety buffer
-
-    const code = await sock.requestPairingCode(d);
-    return code;
+    await new Promise(resolve => setTimeout(resolve, 2500)); // buffer for socket handshake
+    return await sock.requestPairingCode(d);
   } catch (err: any) {
-    console.error('Pairing code error:', err);
-    throw new Error('تعذر توليد كود الربط: ' + err.message);
+    console.warn(`[WA] Initial pairing attempt failed for ${userId}: ${err?.message}. Retrying with fresh session...`);
+    try {
+      await stopWA(userId, true);
+      await startWA(userId);
+      const retrySock = sessions.get(userId);
+      if (retrySock) {
+        if (retrySock.waitForSocketOpen) {
+          await retrySock.waitForSocketOpen();
+        }
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        return await retrySock.requestPairingCode(d);
+      }
+    } catch (retryErr: any) {
+      console.error('[WA] Pairing code retry error:', retryErr);
+    }
+    throw new Error('تعذر توليد كود الربط: ' + (err.message || 'Connection closed'));
   }
 }
 
