@@ -281,7 +281,7 @@ export async function pairWACode(userId: string, phone: string): Promise<string>
     throw new Error('واتساب مرتبط بالفعل.');
   }
 
-  // إعادة تهيئة تنظيفية للجلسة لضمان فتح كلاس جديد بدون جلسات قديمة معطلة
+  // تنظيف وإعادة تهيئة كاملة للجلسة
   await stopWA(userId, true);
   await startWA(userId);
 
@@ -290,27 +290,43 @@ export async function pairWACode(userId: string, phone: string): Promise<string>
     throw new Error('تعذر تهيئة خدمة الواتساب.');
   }
 
+  // انتظار حتى يصبح الـ socket في حالة WAITING_AUTH (يعني متصل بسيرفرات واتساب وجاهز)
+  // بدلاً من waitForSocketOpen() غير الموثوقة، نستخدم polling على الـ status
+  const waitForReady = (): Promise<void> => new Promise((resolve, reject) => {
+    let attempts = 0;
+    const check = setInterval(() => {
+      attempts++;
+      const status = getWAStatus(userId);
+      if (status === 'WAITING_AUTH' || qrCodes.get(userId)) {
+        clearInterval(check);
+        resolve();
+      } else if (status === 'DISCONNECTED' && attempts > 3) {
+        clearInterval(check);
+        reject(new Error('فشل الاتصال بخوادم واتساب'));
+      } else if (attempts >= 20) { // max 10 seconds
+        clearInterval(check);
+        resolve(); // try anyway
+      }
+    }, 500);
+  });
+
   try {
-    if (sock.waitForSocketOpen) {
-      await sock.waitForSocketOpen();
-    }
-    await new Promise(resolve => setTimeout(resolve, 2500)); // buffer for socket handshake
+    await waitForReady();
+    console.log(`[WA] Socket ready for pairing (status: ${getWAStatus(userId)})`);
     return await sock.requestPairingCode(d);
   } catch (err: any) {
-    console.warn(`[WA] Initial pairing attempt failed for ${userId}: ${err?.message}. Retrying with fresh session...`);
+    console.warn(`[WA] Pairing attempt failed for ${userId}: ${err?.message}. Retrying...`);
     try {
       await stopWA(userId, true);
       await startWA(userId);
       const retrySock = sessions.get(userId);
       if (retrySock) {
-        if (retrySock.waitForSocketOpen) {
-          await retrySock.waitForSocketOpen();
-        }
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await waitForReady();
         return await retrySock.requestPairingCode(d);
       }
     } catch (retryErr: any) {
       console.error('[WA] Pairing code retry error:', retryErr);
+      throw new Error('تعذر توليد كود الربط: ' + (retryErr.message || 'Connection closed'));
     }
     throw new Error('تعذر توليد كود الربط: ' + (err.message || 'Connection closed'));
   }
