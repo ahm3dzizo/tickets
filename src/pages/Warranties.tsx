@@ -149,8 +149,8 @@ export default function Warranties() {
 
           <div className="md:col-span-3">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="w-full h-12 rounded-2xl justify-between px-4 bg-card shadow-sm">
+              <DropdownMenuTrigger>
+                <div className="flex w-full h-12 items-center justify-between rounded-2xl border border-input bg-card px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground cursor-pointer">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-muted-foreground" />
                     <span className="truncate">
@@ -158,7 +158,7 @@ export default function Warranties() {
                     </span>
                   </div>
                   <Filter className="w-4 h-4 text-muted-foreground opacity-50" />
-                </Button>
+                </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" dir="rtl">
                 {projects.map(p => (
