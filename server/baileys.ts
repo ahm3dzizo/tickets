@@ -1,4 +1,4 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import path from 'path';
 import pino from 'pino';
@@ -88,12 +88,19 @@ export async function startWA(userId: string) {
 
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
 
+  // جلب أحدث إصدار من واتساب ويب — إصدارات قديمة بتتسبب في رفض الاتصال
+  const { version } = await fetchLatestBaileysVersion();
+  console.log(`[WA] Using WA version: ${version.join('.')} for ${userId}`);
+
   const sock = makeWASocket({
+    version,
     auth: state,
     printQRInTerminal: false,
     logger,
-    browser: ['Ubuntu', 'Chrome', '20.0.04'],
+    browser: Browsers.ubuntu('Chrome'),
     markOnlineOnConnect: false,
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 60000,
   });
 
   sessions.set(userId, sock);
