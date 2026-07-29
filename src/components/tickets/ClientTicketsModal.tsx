@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { ticketsApi } from '@/lib/api';
+import { ticketsApi, clientsApi, projectsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { Loader2, Save, FileImage, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -49,18 +49,29 @@ export function ClientTicketsModal({
   const [notes, setNotes]       = useState(initialNotes);
   const [ticketToClose, setTicketToClose] = useState<any | null>(null);
 
+  const [clients, setClients] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any>({});
+
   const fetchTickets = () => {
     if (!open || !villaNumber) return;
     setFetching(true);
-    ticketsApi
-      .getAll({ projectId, includeDirectAppts: true })
-      .then(res => {
-        const tks = res.filter(
+    Promise.all([
+      ticketsApi.getAll({ projectId, includeDirectAppts: true }),
+      clientsApi.getAll(),
+      projectsApi.getAll()
+    ]).then(([resTickets, resClients, resProjects]) => {
+        const tks = resTickets.filter(
           (t: any) =>
             String(t.villaNumber || '').trim() === String(villaNumber || '').trim() &&
             !['closed', 'out_of_scope', 'completed'].includes(t.status),
         );
         setTickets(tks);
+        setClients(resClients);
+        
+        const projMap: any = {};
+        resProjects.forEach((p: any) => { projMap[p.id] = p; });
+        setProjects(projMap);
+
         if (!initialNotes && tks.length > 0 && tks[0].appointmentNotes) {
           setNotes(tks[0].appointmentNotes);
         }
@@ -207,9 +218,11 @@ export function ClientTicketsModal({
 
       {ticketToClose && (
         <CloseTicketDialog
-          ticket={ticketToClose}
           open={!!ticketToClose}
           onOpenChange={(v) => !v && setTicketToClose(null)}
+          selectedTickets={[ticketToClose]}
+          clients={clients}
+          projects={projects}
           onSuccess={() => {
             setTicketToClose(null);
             fetchTickets();

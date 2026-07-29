@@ -33,6 +33,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       projectId:   primaryUnit?.projectId  || null,
       villaNumber: primaryUnit?.unitNumber  || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
+      handoverDate: primaryUnit?.handoverDate || null,
+      warrantyExpiryDate: primaryUnit?.warrantyExpiryDate || null,
     };
   });
 
@@ -81,6 +83,8 @@ router.get("/by-project/:projectId", requireAuth, async (req, res) => {
       projectId:   primaryUnit?.projectId  || null,
       villaNumber: primaryUnit?.unitNumber  || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
+      handoverDate: primaryUnit?.handoverDate || null,
+      warrantyExpiryDate: primaryUnit?.warrantyExpiryDate || null,
     };
   });
 

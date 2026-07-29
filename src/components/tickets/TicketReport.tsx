@@ -131,13 +131,16 @@ export const TicketReport = React.forwardRef<HTMLDivElement, TicketReportProps>(
             <th style={thStyle}>حالة البطاقة</th>
             <td style={tdStyle}>تم</td>
           </tr>
-          {/* Row 4 – 5 cells to match old layout */}
           <tr>
-            <th style={{ ...thStyle, width: '20%' }}>رقم الوحدة</th>
-            <th style={{ ...thStyle, width: '15%' }}>{priorityLabel}</th>
-            <td style={{ ...tdStyle, width: '10%' }}></td>
-            <th style={{ ...thStyle, width: '15%' }}>{projectAbbr}</th>
-            <td style={{ ...tdStyle, width: '40%', fontWeight: 'bold', fontSize: 14 }}>{villaNumber}</td>
+            <th style={thStyle}>رقم الوحدة</th>
+            <td style={{ padding: 0, border: BORDER, textAlign: 'center', verticalAlign: 'middle' }}>
+              <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+                <div style={{ flex: 1, padding: '6px 8px', borderLeft: BORDER, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{projectAbbr}</div>
+                <div style={{ flex: 1, padding: '6px 8px', fontWeight: 'bold', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{villaNumber}</div>
+              </div>
+            </td>
+            <th style={thStyle}>الأولوية</th>
+            <td style={tdStyle}>{priorityLabel}</td>
           </tr>
           <tr>
             <th style={thStyle}>تاريخ التسليم</th>
