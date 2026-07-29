@@ -209,7 +209,7 @@ def generate_close_report(ticket_num, villa, customer_name, phone,
                            maint_items, notes="",
                            block="", project="نساج تاون – الفرسان",
                            status="تم", ticket_date="", nhc="",
-                           priority="الأولوية"):
+                           priority="الأولوية", handover_date="", warranty_expiry_date=""):
     """Generate close ticket report as JPG. Returns jpg_path."""
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
@@ -302,11 +302,11 @@ def generate_close_report(ticket_num, villa, customer_name, phone,
     draw_cell(c, right - label_w, y - row_h, label_w, row_h,
               "تاريخ التسليم", FONT_B, 11, "center", fill=LABEL_FILL)
     draw_cell(c, right - label_w - val_w, y - row_h, val_w, row_h,
-              "", FONT, 11, "center")
+              handover_date, FONT, 11, "center")
     draw_cell(c, left + val_w, y - row_h, label_w, row_h,
               "تاريخ انتهاء الضمان", FONT_B, 9, "center", fill=LABEL_FILL)
     draw_cell(c, left, y - row_h, val_w, row_h,
-              "", FONT, 11, "center")
+              warranty_expiry_date, FONT, 11, "center")
     y -= row_h
 
     # Outer border for entire ticket info table

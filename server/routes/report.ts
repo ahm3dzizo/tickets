@@ -24,7 +24,13 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
             { refNumber: firstTicketId },
           ],
         },
-        select: { projectAbbr: true, projectId: true },
+        select: { 
+          projectAbbr: true, 
+          projectId: true,
+          unit: {
+            select: { handoverDate: true, warrantyExpiryDate: true }
+          }
+        },
       });
       if (ticket?.projectAbbr) {
         body.nhc = ticket.projectAbbr;
@@ -34,6 +40,11 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
           select: { abbreviation: true },
         });
         if (project?.abbreviation) body.nhc = project.abbreviation;
+      }
+
+      if (ticket?.unit) {
+        body.handover_date = ticket.unit.handoverDate || "";
+        body.warranty_expiry_date = ticket.unit.warrantyExpiryDate || "";
       }
     } catch {
       // Silent fallback
