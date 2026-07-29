@@ -29,7 +29,8 @@ router.get('/status', async (_req: AuthRequest, res) => {
 router.get('/qr', async (_req: AuthRequest, res) => {
   const status = getWAStatus(BOT_USER_ID);
   if (status === 'DISCONNECTED') {
-    res.status(503).json({ error: 'جلسة البوت غير مشغلة. اضغط تشغيل أولاً.' });
+    startWA(BOT_USER_ID);
+    res.json({ qr: null, state: 'STARTING' });
     return;
   }
   if (status === 'CONNECTED') {

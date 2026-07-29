@@ -24,7 +24,8 @@ router.get('/qr', requireAuth, async (req: AuthRequest, res) => {
   const status = getWAStatus(uid);
 
   if (status === 'DISCONNECTED') {
-    res.status(503).json({ error: 'خدمة الواتساب غير مشغلة. اضغط تشغيل أولاً.' });
+    startWA(uid);
+    res.json({ qr: null, state: 'STARTING' });
     return;
   }
   if (status === 'CONNECTED') {
