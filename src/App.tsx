@@ -25,6 +25,7 @@ import ClientDetail from '@/pages/ClientDetail';
 import ContractorDetail from '@/pages/ContractorDetail';
 import SalesforceImport from '@/pages/SalesforceImport';
 import UnitDetail from '@/pages/UnitDetail';
+import Warranties from '@/pages/Warranties';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';

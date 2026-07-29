@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Ticket, Users, Settings, LogOut, Bell,
   Briefcase, UserCheck, HardHat, CalendarClock, ClipboardList,
-  CheckCheck, Moon, Sun, Settings2, BarChart3, X, CloudLightning,
+  CheckCheck, Moon, Sun, Settings2, BarChart3, X, CloudLightning, ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ const allNavItems = [
   { icon: LayoutDashboard, label: 'لوحة التحكم', path: '/',              roles: ['admin', 'engineer', 'supervisor'] },
   { icon: Briefcase,       label: 'المشاريع',    path: '/projects',      roles: ['admin', 'engineer', 'supervisor'] },
   { icon: UserCheck,       label: 'العملاء',     path: '/clients',       roles: ['admin', 'engineer', 'supervisor'] },
+  { icon: ShieldCheck,     label: 'الضمانات',    path: '/warranties',    roles: ['admin', 'engineer', 'supervisor'] },
   { icon: Ticket,          label: 'التذاكر',     path: '/tickets',       roles: ['admin', 'engineer', 'supervisor'] },
   { icon: HardHat,         label: 'المقاولون',   path: '/contractors',   roles: ['admin', 'engineer', 'supervisor'] },
   { icon: CalendarClock,   label: 'المواعيد',    path: '/appointments',  roles: ['admin', 'supervisor', 'engineer'] },
@@ -40,7 +41,7 @@ const allNavItems = [
 
 /* nav group structure for sidebar */
 const NAV_GROUPS = [
-  { label: null,        paths: ['/', '/projects', '/clients', '/tickets'] },
+  { label: null,        paths: ['/', '/projects', '/clients', '/warranties', '/tickets'] },
   { label: 'العمليات', paths: ['/contractors', '/appointments', '/reports'] },
   { label: 'الفريق',   paths: ['/technicians', '/team', '/ticket-types', '/salesforce-import'] },
   { label: 'النظام',   paths: ['/settings'] },
