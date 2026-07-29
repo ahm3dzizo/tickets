@@ -3,6 +3,7 @@ import { Boom } from '@hapi/boom';
 import path from 'path';
 import pino from 'pino';
 import fs from 'fs';
+import qrcode from 'qrcode';
 import prisma from './db.js';
 import { getIO } from './socket.js';
 import { BOT_USER_ID, handleBotMessage, isDuplicateMessage, getBotGroup, setBotGroup } from './whatsappBot.js';
