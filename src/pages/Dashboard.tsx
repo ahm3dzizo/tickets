@@ -268,9 +268,9 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* ── Today's Appointments + Overdue + Trend ──────────── */}
+        {/* ── Today's Appointments + Overdue + Trend + Warranties ──────────── */}
         {kpi && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" dir="rtl">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4" dir="rtl">
 
             {/* Overdue */}
             <div className="bg-card border border-red-500/20 rounded-2xl overflow-hidden">
@@ -290,6 +290,27 @@ export default function Dashboard() {
                       </div>
                       <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded" dir="ltr">+{t.daysOpen}ي</span>
                     </Link>
+                  ))}
+              </div>
+            </div>
+
+            {/* Expiring Warranties */}
+            <div className="bg-card border border-amber-500/20 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <Badge variant="secondary" className="text-[10px] text-amber-500">{kpi.expiringWarranties?.length || 0}</Badge>
+                <h3 className="font-bold text-sm flex items-center gap-1.5 text-amber-500"><Clock className="w-3.5 h-3.5" /> انتهاء الضمان قريباً</h3>
+              </div>
+              <div className="divide-y divide-border/50 max-h-52 overflow-y-auto">
+                {!kpi.expiringWarranties || kpi.expiringWarranties.length === 0
+                  ? <p className="text-center text-muted-foreground text-xs py-6">لا يوجد ضمانات تقارب الانتهاء</p>
+                  : kpi.expiringWarranties.map((u: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors">
+                      <div className="text-right">
+                        <p className="text-xs font-semibold text-foreground">{u.clientName} — {u.unitNumber}</p>
+                        <p className="text-[10px] text-muted-foreground" dir="ltr">{u.clientPhone}</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded" dir="ltr">{u.warrantyExpiryDate}</span>
+                    </div>
                   ))}
               </div>
             </div>

@@ -180,6 +180,47 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       .map(uid => ({ uid, name: supNameMap[uid]?.displayName ?? uid, specialty: supNameMap[uid]?.specialty ?? "", ...supMap[uid], total: supMap[uid].open + supMap[uid].inProgress + supMap[uid].pending }))
       .sort((a, b) => b.total - a.total).slice(0, 10);
 
+    const nextMonth = new Date(now.getTime() + 30 * 86_400_000);
+    const nextMonthStr = nextMonth.toISOString().split("T")[0];
+
+    const unitWhere: any = {
+      warrantyExpiryDate: { gte: todayStr, lte: nextMonthStr }
+    };
+    if (user.role !== 'admin') {
+      if (projectId) {
+        unitWhere.projectId = projectIds.includes(projectId) ? projectId : { in: [] };
+      } else if (projectIds.length > 0) {
+        unitWhere.projectId = { in: projectIds };
+      } else {
+        unitWhere.projectId = { in: [] };
+      }
+    } else if (projectId) {
+      unitWhere.projectId = projectId;
+    }
+
+    const rawWarranties = await prisma.unit.findMany({
+      where: unitWhere,
+      select: { 
+        id: true, 
+        unitNumber: true, 
+        warrantyExpiryDate: true, 
+        projectId: true,
+        clients: {
+          include: { client: { select: { name: true, phone: true } } }
+        }
+      },
+      orderBy: { warrantyExpiryDate: 'asc' },
+      take: 10
+    });
+    
+    const expiringWarranties = rawWarranties.map(u => ({
+      unitNumber: u.unitNumber,
+      warrantyExpiryDate: u.warrantyExpiryDate,
+      projectId: u.projectId,
+      clientName: u.clients?.[0]?.client?.name || 'غير معروف',
+      clientPhone: u.clients?.[0]?.client?.phone || '',
+    }));
+
     res.json({
       totals: { total, open: openCount, closed: closedCount, overdue: overdueCount, closedToday, unclassified },
       todayAppts,
@@ -189,6 +230,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       })),
       trend7Days: recentActivity,
       bySupervisor,
+      expiringWarranties,
     });
   } catch (err: any) {
     console.error("[Dashboard]", err);
