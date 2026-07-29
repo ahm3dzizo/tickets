@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
   Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search, FileImage,
-  Phone, MessageCircle
+  Phone, MessageCircle, CheckCircle2
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -798,8 +798,12 @@ export default function Appointments() {
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex-1 min-w-0 pr-1">
                                   <div className="flex items-center gap-2">
-                                    <h4 className="font-black text-foreground text-base truncate">
-                                      {t.villa} {group.villaNumber} {totalOpen > 0 && <span className="text-amber-600 dark:text-amber-500 font-bold text-xs">({totalOpen})</span>}
+                                    <h4 className="font-black text-foreground text-base truncate flex items-center gap-2">
+                                      {t.villa} {group.villaNumber} {totalOpen > 0 ? (
+                                        <span className="text-amber-600 dark:text-amber-500 font-bold text-xs bg-amber-500/10 px-2 py-0.5 rounded-full">({totalOpen} مفتوحة)</span>
+                                      ) : (
+                                        <span className="text-emerald-500 font-bold text-xs bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> تم الانتهاء</span>
+                                      )}
                                     </h4>
                                   </div>
                                 </div>

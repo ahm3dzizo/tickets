@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ticketsApi } from '@/lib/api';
 import { toast } from 'sonner';
-import { Loader2, Save, FileImage, ExternalLink, Wrench } from 'lucide-react';
+import { Loader2, Save, FileImage, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 
 interface ClientTicketsModalProps {
   open: boolean;
@@ -46,10 +47,10 @@ export function ClientTicketsModal({
   const [tickets, setTickets]   = useState<any[]>([]);
   const [fetching, setFetching] = useState(false);
   const [notes, setNotes]       = useState(initialNotes);
+  const [ticketToClose, setTicketToClose] = useState<any | null>(null);
 
-  useEffect(() => {
+  const fetchTickets = () => {
     if (!open || !villaNumber) return;
-    setNotes(initialNotes);
     setFetching(true);
     ticketsApi
       .getAll({ projectId, includeDirectAppts: true })
@@ -66,6 +67,11 @@ export function ClientTicketsModal({
       })
       .catch(() => {})
       .finally(() => setFetching(false));
+  };
+
+  useEffect(() => {
+    setNotes(initialNotes || '');
+    fetchTickets();
   }, [open, villaNumber, projectId]);
 
   const handleSaveNotes = async () => {
@@ -139,10 +145,20 @@ export function ClientTicketsModal({
                           مرفقات
                         </span>
                       )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTicketToClose(t);
+                        }}
+                        className="mr-auto flex items-center gap-1 text-[11px] text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg font-bold transition-colors"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        إغلاق التذكرة
+                      </button>
                       <Link
                         to={`/tickets/${t.id}`}
                         onClick={() => onOpenChange(false)}
-                        className="mr-auto flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-400 font-bold transition-colors"
+                        className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-400 font-bold transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         التفاصيل
@@ -188,6 +204,19 @@ export function ClientTicketsModal({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {ticketToClose && (
+        <CloseTicketDialog
+          ticket={ticketToClose}
+          open={!!ticketToClose}
+          onOpenChange={(v) => !v && setTicketToClose(null)}
+          onSuccess={() => {
+            setTicketToClose(null);
+            fetchTickets();
+            onSuccess?.();
+          }}
+        />
+      )}
     </Dialog>
   );
 }
