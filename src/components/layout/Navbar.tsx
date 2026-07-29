@@ -35,7 +35,7 @@ const allNavItems = [
   { icon: HardHat,         label: 'الفنيين',     path: '/technicians',   roles: ['admin', 'supervisor'] },
   { icon: Users,           label: 'الفريق',      path: '/team',          roles: ['admin', 'engineer'] },
   { icon: Settings2,       label: 'أنواع التذاكر', path: '/ticket-types', roles: ['admin'] },
-  { icon: CloudLightning,  label: 'Salesforce',  path: '/salesforce-import', roles: ['admin', 'engineer'] },
+
   { icon: Settings,        label: 'الإعدادات',   path: '/settings',      roles: ['admin', 'engineer', 'supervisor'] },
 ];
 
@@ -43,7 +43,7 @@ const allNavItems = [
 const NAV_GROUPS = [
   { label: null,        paths: ['/', '/projects', '/clients', '/warranties', '/tickets'] },
   { label: 'العمليات', paths: ['/contractors', '/appointments', '/reports'] },
-  { label: 'الفريق',   paths: ['/technicians', '/team', '/ticket-types', '/salesforce-import'] },
+  { label: 'الفريق',   paths: ['/technicians', '/team', '/ticket-types'] },
   { label: 'النظام',   paths: ['/settings'] },
 ];
 

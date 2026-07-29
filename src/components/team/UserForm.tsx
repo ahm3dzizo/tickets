@@ -138,6 +138,7 @@ export function UserForm({
         toast.error('يرجى اختيار مشروع واحد على الأقل'); return;
       }
     } else {
+      if (!displayName.trim()) { toast.error('يرجى إدخال الاسم الكامل'); return; }
       if (!phoneNumber.trim()) {
         toast.error('رقم الهاتف مطلوب — يُستخدم لتسجيل الدخول وإرسال رسالة الترحيب'); return;
       }
@@ -150,7 +151,7 @@ export function UserForm({
     try {
       if (editingUser) {
         await usersApi.update(editingUser.id ?? editingUser.uid, {
-          displayName,
+          displayName: displayName.trim(),
           employeeId,
           phoneNumber,
           idNumber: idNumber || null,
@@ -370,8 +371,24 @@ function FormBody({
           <div className="space-y-3">
             <div className="flex items-center gap-2 p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl">
               <Info className="w-4 h-4 text-blue-400 shrink-0" />
-              <p className="text-xs text-blue-300 text-right">رقم الهاتف <span className="font-bold text-blue-200">مطلوب</span> — يُستخدم لتسجيل الدخول وتُرسل عليه رسالة الترحيب. الرقم الوظيفي اختياري.</p>
+              <p className="text-xs text-blue-300 text-right">رقم الهاتف والاسم <span className="font-bold text-blue-200">مطلوبان</span> — يُستخدمان لتسجيل الدخول وتُرسل رسالة الترحيب باسم العضو. الرقم الوظيفي اختياري.</p>
             </div>
+            
+            <div className="space-y-1.5">
+              <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
+                الاسم <span className="text-red-400">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  placeholder="مثال: أحمد علي"
+                  className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-10"
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                />
+                <UserIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">الرقم الوظيفي <span className="text-slate-600 normal-case">(اختياري)</span></Label>

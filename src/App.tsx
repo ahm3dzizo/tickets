@@ -23,7 +23,7 @@ import Appointments from '@/pages/Appointments';
 import Contractors from '@/pages/Contractors';
 import ClientDetail from '@/pages/ClientDetail';
 import ContractorDetail from '@/pages/ContractorDetail';
-import SalesforceImport from '@/pages/SalesforceImport';
+
 import UnitDetail from '@/pages/UnitDetail';
 import Warranties from '@/pages/Warranties';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -149,10 +149,7 @@ function AppContent() {
             path="/units/:id"
             element={user && !requiresProfileCompletion ? <UnitDetail /> : <Navigate to="/login" />}
           />
-          <Route
-            path="/salesforce-import"
-            element={user && !requiresProfileCompletion ? <SalesforceImport /> : <Navigate to="/login" />}
-          />
+
           <Route
             path="/warranties"
             element={user && !requiresProfileCompletion ? <Warranties /> : <Navigate to="/login" />}
