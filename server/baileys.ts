@@ -17,8 +17,9 @@ const sessions = new Map<string, ReturnType<typeof makeWASocket>>();
 const statuses = new Map<string, WAStatus>();
 const qrCodes = new Map<string, string | null>();
 const linkedPhones = new Map<string, string | null>();
+const reconnectAttempts = new Map<string, number>(); // عداد محاولات إعادة الاتصال
 
-const logger = pino({ level: 'info' });
+const logger = pino({ level: 'silent' }); // نخفّت اللوجز — rc13 verbose جداً
 
 export function getWAStatus(userId: string): WAStatus {
   return statuses.get(userId) || 'DISCONNECTED';
@@ -106,17 +107,35 @@ export async function startWA(userId: string) {
     }
 
     if (connection === 'close') {
-      const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
       sessions.delete(userId);
       statuses.set(userId, 'DISCONNECTED');
       qrCodes.set(userId, null);
       linkedPhones.delete(userId);
 
-      if (shouldReconnect) {
-        setTimeout(() => startWA(userId), 3000);
-      } else {
+      if (isLoggedOut) {
+        // حُذفت الجلسة من الهاتف — امسح الملفات
         if (fs.existsSync(SESSION_DIR)) {
           fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+        }
+        reconnectAttempts.delete(userId);
+      } else {
+        // هل عندنا credentials محفوظة؟
+        const hasCreds = fs.existsSync(path.join(SESSION_DIR, 'creds.json'));
+        const attempts = (reconnectAttempts.get(userId) || 0) + 1;
+        reconnectAttempts.set(userId, attempts);
+
+        // لو ما عندناش creds (جلسة جديدة للـ pairing)، وقف بعد 3 محاولات
+        // لو عندنا creds (جلسة موجودة بتتعافى)، أعد المحاولة مع backoff
+        const maxAttempts = hasCreds ? 10 : 3;
+        if (attempts <= maxAttempts) {
+          const delay = Math.min(3000 * Math.pow(1.5, attempts - 1), 30000); // max 30s
+          console.log(`[WA] Reconnecting ${userId} (attempt ${attempts}/${maxAttempts}) in ${Math.round(delay/1000)}s`);
+          setTimeout(() => startWA(userId), delay);
+        } else {
+          console.warn(`[WA] Max reconnect attempts reached for ${userId} — stopping`);
+          reconnectAttempts.delete(userId);
         }
       }
       getIO()?.emit(`wa-status-${userId}`, { running: false, connected: false, state: 'DISCONNECTED' });
@@ -281,6 +300,9 @@ export async function pairWACode(userId: string, phone: string): Promise<string>
   if (getWAStatus(userId) === 'CONNECTED') {
     throw new Error('واتساب مرتبط بالفعل.');
   }
+
+  // إعادة ضبط عداد المحاولات — المستخدم طلب صراحةً إعادة الربط
+  reconnectAttempts.delete(userId);
 
   // تنظيف وإعادة تهيئة كاملة للجلسة
   await stopWA(userId, true);
