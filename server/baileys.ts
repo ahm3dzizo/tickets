@@ -63,6 +63,19 @@ export async function startWA(userId: string) {
     const SESSION_DIR = path.join(BASE_SESSIONS, `auth_${userId}`);
     if (!fs.existsSync(SESSION_DIR)) {
       fs.mkdirSync(SESSION_DIR, { recursive: true });
+    } else {
+      // تنظيف تلقائي: لو ملفات الجلسة تجاوزت 200 ملف، امسحها وابدأ من أول
+      // ده بيحصل لما الجلسة تنكسر كتير وتتراكم الملفات وتثقّل السيرفر
+      try {
+        const sessionFiles = fs.readdirSync(SESSION_DIR);
+        if (sessionFiles.length > 200) {
+          console.warn(`[WA] Session dir for ${userId} has ${sessionFiles.length} files — cleaning up to prevent server freeze`);
+          fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+          fs.mkdirSync(SESSION_DIR, { recursive: true });
+        }
+      } catch (cleanErr) {
+        console.error(`[WA] Failed to clean session dir for ${userId}:`, cleanErr);
+      }
     }
 
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
