@@ -296,64 +296,49 @@ function normalizePhone(phone: string): string {
 export async function pairWACode(userId: string, phone: string): Promise<string> {
   const d = cleanPhone(phone);
   if (!d) throw new Error('رقم الهاتف غير صالح.');
-
-  if (getWAStatus(userId) === 'CONNECTED') {
-    throw new Error('واتساب مرتبط بالفعل.');
-  }
+  if (getWAStatus(userId) === 'CONNECTED') throw new Error('واتساب مرتبط بالفعل.');
 
   // إعادة ضبط عداد المحاولات — المستخدم طلب صراحةً إعادة الربط
   reconnectAttempts.delete(userId);
-
-  // تنظيف وإعادة تهيئة كاملة للجلسة
   await stopWA(userId, true);
-  await startWA(userId);
 
-  const sock = sessions.get(userId);
-  if (!sock) {
-    throw new Error('تعذر تهيئة خدمة الواتساب.');
-  }
-
-  // انتظار حتى يصبح الـ socket في حالة WAITING_AUTH (يعني متصل بسيرفرات واتساب وجاهز)
-  // بدلاً من waitForSocketOpen() غير الموثوقة، نستخدم polling على الـ status
-  const waitForReady = (): Promise<void> => new Promise((resolve, reject) => {
-    let attempts = 0;
-    const check = setInterval(() => {
-      attempts++;
-      const status = getWAStatus(userId);
-      if (status === 'WAITING_AUTH' || qrCodes.get(userId)) {
-        clearInterval(check);
-        resolve();
-      } else if (status === 'DISCONNECTED' && attempts > 3) {
-        clearInterval(check);
-        reject(new Error('فشل الاتصال بخوادم واتساب'));
-      } else if (attempts >= 20) { // max 10 seconds
-        clearInterval(check);
-        resolve(); // try anyway
-      }
-    }, 500);
-  });
-
-  try {
-    await waitForReady();
-    console.log(`[WA] Socket ready for pairing (status: ${getWAStatus(userId)})`);
-    return await sock.requestPairingCode(d);
-  } catch (err: any) {
-    console.warn(`[WA] Pairing attempt failed for ${userId}: ${err?.message}. Retrying...`);
-    try {
-      await stopWA(userId, true);
-      await startWA(userId);
-      const retrySock = sessions.get(userId);
-      if (retrySock) {
-        await waitForReady();
-        return await retrySock.requestPairingCode(d);
-      }
-    } catch (retryErr: any) {
-      console.error('[WA] Pairing code retry error:', retryErr);
-      throw new Error('تعذر توليد كود الربط: ' + (retryErr.message || 'Connection closed'));
+  // دالة المحاولة — بتستدعي requestPairingCode مباشرة بعد ما يتصل الـ WebSocket
+  // في Baileys، requestPairingCode لازم يُستدعى خلال أول 2-3 ثواني من إنشاء الـ socket
+  // انتظار أطول بيخلي الـ socket يموت قبل الاستدعاء → 428 Connection Closed
+  const attemptPairing = async (attempt: number): Promise<string> => {
+    if (attempt > 3) {
+      throw new Error('تعذر توليد كود الربط: تعذر الاتصال بخوادم واتساب');
     }
-    throw new Error('تعذر توليد كود الربط: ' + (err.message || 'Connection closed'));
-  }
+
+    await startWA(userId);
+
+    // انتظار قصير لإتمام الـ WebSocket handshake (عادةً 300-800ms)
+    await new Promise(r => setTimeout(r, 1800));
+
+    const sock = sessions.get(userId);
+    if (!sock) {
+      // الـ socket مات وراح يتعمله reconnect — استنّى شوية وحاول تاني
+      console.warn(`[WA] Socket not available for pairing (attempt ${attempt}) — waiting for reconnect`);
+      await new Promise(r => setTimeout(r, 3000));
+      reconnectAttempts.delete(userId);
+      return attemptPairing(attempt + 1);
+    }
+
+    try {
+      console.log(`[WA] Requesting pairing code for ${userId} (attempt ${attempt})`);
+      return await sock.requestPairingCode(d);
+    } catch (err: any) {
+      console.warn(`[WA] Pairing attempt ${attempt} failed: ${err?.message}`);
+      await stopWA(userId, true);
+      reconnectAttempts.delete(userId);
+      await new Promise(r => setTimeout(r, 2000));
+      return attemptPairing(attempt + 1);
+    }
+  };
+
+  return attemptPairing(1);
 }
+
 
 // ─── ربط جروب بوت الأوامر عن طريق رابط الدعوة ────────────────────────────────
 function extractGroupInviteCode(inviteLink: string): string {
