@@ -808,7 +808,7 @@ export default function Appointments() {
                                 <div className="flex-1 min-w-0 pr-1">
                                   <div className="flex items-center gap-2">
                                     <h4 className="font-black text-foreground text-base truncate flex items-center gap-2">
-                                      {t.villa} {group.villaNumber} {totalOpen > 0 ? (
+                                      {t.villa} {group.villaNumber} {totalOpen > 0 && (
                                         <span className="text-amber-600 dark:text-amber-500 font-bold text-xs bg-amber-500/10 px-2 py-0.5 rounded-full">({totalOpen} مفتوحة)</span>
                                       )}
                                       {isCompleted && (
