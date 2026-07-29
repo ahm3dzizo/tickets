@@ -34,7 +34,7 @@ export default function Warranties() {
   );
 
   return (
-    <Layout title="إدارة الضمانات">
+    <Layout>
       <div className="max-w-6xl mx-auto space-y-6" dir="rtl">
         <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
