@@ -55,9 +55,14 @@ export function WhatsAppConnectPrompt() {
     setLoadingQR(true);
     try {
       const data = await whatsappApi.getQR();
-      const qr = data.qr;
-      setWaQR(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`);
-      startPolling();
+      const qr = data?.qr;
+      if (qr && typeof qr === 'string') {
+        setWaQR(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`);
+        startPolling();
+      } else {
+        setWaQR(null);
+        toast.info('رمز QR جاري تجهيزه... يرجى الانتظار بضع ثوانٍ ثم المحاولة مجدداً');
+      }
     } catch (err: any) {
       toast.error(err?.message ?? 'تعذّر جلب رمز QR');
     } finally {

@@ -235,6 +235,7 @@ export async function closeAllSessions() {
 }
 
 function cleanPhone(phone: string): string {
+  if (!phone) return '';
   let d = phone.replace(/\D/g, '');
   if (d.startsWith('00')) d = d.slice(2);
   

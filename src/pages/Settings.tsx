@@ -199,9 +199,9 @@ export default function Settings() {
     const socket = io(window.location.origin, { auth: { token: localStorage.getItem('retal_auth_token') } });
     socket.on(`wa-status-${user.uid}`, (s: any) => {
       setWaStatus(prev => ({ ...prev, running: s.running, connected: s.connected, state: s.state, linkedPhone: s.linkedPhone }));
-      if (s.qr) {
+      if (s?.qr && typeof s.qr === 'string') {
         setWaQR(s.qr.startsWith('data:') ? s.qr : `data:image/png;base64,${s.qr}`);
-      } else if (s.connected) {
+      } else if (s?.connected) {
         setWaQR(null);
         toast.success('تم ربط واتساب بنجاح ✅');
       }
@@ -245,7 +245,12 @@ export default function Settings() {
     setLoadingQR(true);
     try {
       const d = await whatsappApi.getQR();
-      setWaQR(d.qr.startsWith('data:') ? d.qr : `data:image/png;base64,${d.qr}`);
+      if (d?.qr && typeof d.qr === 'string') {
+        setWaQR(d.qr.startsWith('data:') ? d.qr : `data:image/png;base64,${d.qr}`);
+      } else {
+        setWaQR(null);
+        toast.info('رمز QR غير جاهز بعد، يرجى الانتظار بضع ثوانٍ وتكرار المحاولة');
+      }
     } catch (err: any) { toast.error(err?.message ?? 'تعذّر جلب رمز QR'); }
     finally { setLoadingQR(false); }
   };
@@ -270,9 +275,9 @@ export default function Settings() {
     const socket = io(window.location.origin, { auth: { token: localStorage.getItem('retal_auth_token') } });
     socket.on('wa-status-whatsapp-bot', (s: any) => {
       setBotStatus(prev => ({ ...(prev ?? { enabled: true }), running: s.running, connected: s.connected, state: s.state, linkedPhone: s.linkedPhone }));
-      if (s.qr) {
+      if (s?.qr && typeof s.qr === 'string') {
         setBotQR(s.qr.startsWith('data:') ? s.qr : `data:image/png;base64,${s.qr}`);
-      } else if (s.connected) {
+      } else if (s?.connected) {
         setBotQR(null);
         toast.success('تم ربط رقم بوت الأوامر بنجاح ✅');
       }
@@ -318,7 +323,12 @@ export default function Settings() {
     setLoadingBotQR(true);
     try {
       const d = await whatsappBotApi.getQR();
-      if (d.qr) setBotQR(d.qr.startsWith('data:') ? d.qr : `data:image/png;base64,${d.qr}`);
+      if (d?.qr && typeof d.qr === 'string') {
+        setBotQR(d.qr.startsWith('data:') ? d.qr : `data:image/png;base64,${d.qr}`);
+      } else {
+        setBotQR(null);
+        toast.info('رمز QR للبوت غير جاهز بعد، يرجى الانتظار بضع ثوانٍ وتكرار المحاولة');
+      }
     } catch (err: any) { toast.error(err?.message ?? 'تعذّر جلب رمز QR'); }
     finally { setLoadingBotQR(false); }
   };

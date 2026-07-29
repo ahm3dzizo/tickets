@@ -88,7 +88,7 @@ export async function findSupervisorsDB(projectId: string, requiredSpecialties: 
     },
   });
 
-  const activeUsers = allUsers.filter((u: any) => !u.uid.startsWith("pending_") && !u.disabled && !u.onLeave);
+  const activeUsers = allUsers.filter((u: any) => u.uid && !u.uid.startsWith("pending_") && !u.disabled && !u.onLeave);
 
   let projectSups = activeUsers.filter(
     (u: any) => u.projects && u.projects.some((p: any) => p.id === projectId)
