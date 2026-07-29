@@ -775,6 +775,18 @@ export default function Appointments() {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 h-max pb-2">
                         {[...groups].sort((a, b) => {
+                          const clientKeyA = a.villaNumber + '_' + (a.projectId || '');
+                          const totalOpenA = openTicketsMap[clientKeyA] || 0;
+                          const clientKeyB = b.villaNumber + '_' + (b.projectId || '');
+                          const totalOpenB = openTicketsMap[clientKeyB] || 0;
+                          
+                          const isCompletedA = totalOpenA === 0;
+                          const isCompletedB = totalOpenB === 0;
+
+                          if (isCompletedA !== isCompletedB) {
+                            return isCompletedA ? 1 : -1;
+                          }
+
                           const ta = (a.appointmentTime || '').split(' ')[1] || '00:00';
                           const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
                           return ta.localeCompare(tb);
@@ -783,13 +795,15 @@ export default function Appointments() {
                           const time = (group.appointmentTime || '').split(' ')[1] || '---';
                           const clientKey = group.villaNumber + '_' + (group.projectId || '');
                           const totalOpen = openTicketsMap[clientKey] || 0;
+                          const isCompleted = totalOpen === 0;
 
                           return (
                             <div
                               key={idx}
                               className={cn(
                                 "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-muted",
-                                isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50"
+                                isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50",
+                                isCompleted ? "opacity-60 grayscale-[20%]" : ""
                               )}
                               onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
                             >
@@ -808,6 +822,27 @@ export default function Appointments() {
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1">
+                                  {isCenter && totalOpen > 0 && (
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (!window.confirm('هل أنت متأكد من إنهاء الموعد؟ (سيتم إغلاق التذاكر المفتوحة)')) return;
+                                        try {
+                                          const openTks = group.tickets.filter((t: any) => !['closed', 'completed', 'out_of_scope'].includes(t.status));
+                                          await Promise.all(openTks.map((t: any) => ticketsApi.update(t.id, { status: 'completed' })));
+                                          toast.success('تم إنهاء الموعد بنجاح');
+                                          loadAppointments();
+                                          loadOpenTicketsCount();
+                                        } catch {
+                                          toast.error('حدث خطأ أثناء إنهاء الموعد');
+                                        }
+                                      }}
+                                      className="flex items-center justify-center bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl h-8 px-2 transition-colors"
+                                      title="إنهاء الموعد"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                   {isCenter && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); setEditApptGroup(group); }}
