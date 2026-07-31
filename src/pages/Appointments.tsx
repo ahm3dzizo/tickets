@@ -341,7 +341,7 @@ export default function Appointments() {
       const dtStart = `${year}${month}${day}T${hour}${minute}00`;
       const dtEnd   = `${year}${month}${day}T${endHour}${minute}00`;
       const types   = Array.from(group.types).map((t: any) => mergedTypes[t] || t).join(' - ');
-      const note    = group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
+      const note    = group.notes || group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
       const phone   = group.clientPhone ? `هاتف: ${group.clientPhone}` : '';
       const desc    = [note ? `ملاحظات: ${note}` : '', phone].filter(Boolean).join('\n');
 
@@ -494,7 +494,7 @@ export default function Appointments() {
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
           {sorted.map((g, i) => {
             const tA = (g.appointmentTime || '').split(' ')[1] || '---';
-            const note = g.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || tr.noAdditionalNotes;
+            const note = g.notes || g.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || tr.noAdditionalNotes;
             const imageUrls: string[] = withImages
               ? g.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || [])
               : [];
@@ -786,7 +786,7 @@ export default function Appointments() {
                           const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
                           return ta.localeCompare(tb);
                         }).map((group, idx) => {
-                          const note = group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
+                          const note = group.notes || group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
                           const time = (group.appointmentTime || '').split(' ')[1] || '---';
                           const clientKey = group.villaNumber + '_' + (group.projectId || '');
                           const totalOpen = openTicketsMap[clientKey] || 0;
@@ -824,13 +824,14 @@ export default function Appointments() {
                                         e.stopPropagation();
                                         if (!window.confirm('هل أنت متأكد من إنهاء الموعد؟')) return;
                                         try {
-                                          await appointmentsApi.update(group.id, {
-                                            date: group.date,
-                                            time: group.time,
+                                          const [dPart, tPart] = (group.appointmentTime || '').split(' ');
+                                          await appointmentsApi.update(group.appointmentId, {
+                                            date: dPart,
+                                            time: tPart || '',
                                             notes: group.notes,
-                                            supervisorIds: group.supervisorIds,
+                                            supervisorIds: Array.from(group.sups),
                                             supervisors: group.supervisors,
-                                            types: group.types,
+                                            types: Array.from(group.types),
                                             clientPhone: group.clientPhone,
                                             status: 'completed'
                                           });

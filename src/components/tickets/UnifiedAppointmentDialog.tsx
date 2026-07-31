@@ -218,8 +218,11 @@ export function UnifiedAppointmentDialog({
 
   const activeTickets: any[] = isCalendarMode ? loadedTickets : (tickets ?? []);
   const hasExistingTickets = activeTickets.length > 0;
-  const hasConflict = isCalendarMode && !!dateStr
-    && loadedTickets.some(t => !!t.appointmentTime && t.appointmentTime.startsWith(dateStr));
+  const checkDate = isCalendarMode ? dateStr : (canSendWhatsApp ? startDate : date);
+  const hasConflict = !!checkDate && loadedTickets.some(t => {
+    if (isTicketMode && tickets?.some(sel => sel.id === t.id)) return false;
+    return !!t.appointmentTime && t.appointmentTime.startsWith(checkDate);
+  });
 
   // ── Click-outside (calendar dropdown) ─────────────────────────────────────
 
@@ -324,27 +327,36 @@ export function UnifiedAppointmentDialog({
     if (!canSendWhatsApp) setStartDate(date);
   }, [date, canSendWhatsApp]);
 
-  // ── Load tickets in calendar mode ──────────────────────────────────────────
+  // ── Load tickets for conflict checking ─────────────────────────────────────
 
   useEffect(() => {
-    if (!isCalendarMode || !selectedClientId || !selectedVilla) return;
+    const pId = isCalendarMode ? projectId : primaryTicket?.projectId;
+    const vNum = isCalendarMode ? selectedVilla : primaryTicket?.villaNumber;
+
+    if (!pId || !vNum) {
+      if (isCalendarMode) setLoadedTickets([]);
+      return;
+    }
+    
     setFetchingTickets(true);
-    ticketsApi.getAll({ projectId, includeDirectAppts: true })
+    ticketsApi.getAll({ projectId: pId, includeDirectAppts: true })
       .then((res: any[]) => {
         const tks = res.filter(
           (t: any) =>
-            String(t.villaNumber) === String(selectedVilla) &&
+            String(t.villaNumber) === String(vNum) &&
             !['closed', 'out-of-scope', 'completed'].includes(t.status),
         );
         setLoadedTickets(tks);
-        const supIds = new Set<string>();
-        tks.forEach((t: any) => (t.assignedSupervisorIds ?? []).forEach((s: string) => supIds.add(s)));
-        setSelectedSupIds(Array.from(supIds));
+        if (isCalendarMode) {
+          const supIds = new Set<string>();
+          tks.forEach((t: any) => (t.assignedSupervisorIds ?? []).forEach((s: string) => supIds.add(s)));
+          setSelectedSupIds(Array.from(supIds));
+        }
       })
       .catch(() => {})
       .finally(() => setFetchingTickets(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClientId, selectedVilla, projectId]);
+  }, [isCalendarMode, projectId, selectedVilla, primaryTicket?.projectId, primaryTicket?.villaNumber]);
 
   // ── Conflict check ─────────────────────────────────────────────────────────
 
@@ -574,7 +586,7 @@ export function UnifiedAppointmentDialog({
     isEditMode
       ? (!!date && selectedTypes.length > 0)
       : isTicketMode
-      ? !!(canSendWhatsApp ? startDate : date)
+      ? (!!(canSendWhatsApp ? startDate : date) && !hasConflict)
       : isCalendarMode
       ? (!!selectedClientId && !hasConflict && (hasExistingTickets || newTicketTypes.length > 0))
       : false
@@ -699,11 +711,11 @@ export function UnifiedAppointmentDialog({
             </div>
           )}
 
-          {/* ── CALENDAR MODE: conflict / tickets info ── */}
-          {isCalendarMode && hasConflict && (
+          {/* ── Conflict / tickets info ── */}
+          {hasConflict && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-right">
               <p className="text-sm text-red-500 font-bold mb-1">تنبيه: العميل لديه موعد مسبق اليوم</p>
-              <p className="text-xs text-red-500/70">لا يمكن إنشاء موعد مكرر في نفس اليوم.</p>
+              <p className="text-xs text-red-500/70">لا يمكن إنشاء موعد مكرر لنفس الفيلا في نفس اليوم.</p>
             </div>
           )}
           {isCalendarMode && fetchingTickets && (
@@ -1038,7 +1050,7 @@ export function UnifiedAppointmentDialog({
             {canSendWhatsApp && (
               <Button
                 onClick={handleSendWhatsApp}
-                disabled={isBusy || !startDate}
+                disabled={isBusy || !startDate || hasConflict}
                 className="flex-1 rounded-xl h-12 font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20"
               >
                 {sending
