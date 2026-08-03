@@ -46,8 +46,8 @@ export default defineConfig(({ mode }) => {
         workbox: {
           skipWaiting: true,
           clientsClaim: true,
-          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MiB
-          globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff2}'],
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
