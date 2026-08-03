@@ -14,9 +14,9 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: ['logo.jpg', 'logo-192.png', 'logo-512.png'],
         manifest: {
-          name: 'Retal Maintenance System',
-          short_name: 'Retal',
-          description: 'نظام صيانة ريتال',
+          name: 'Tickets — نظام إدارة الصيانة',
+          short_name: 'Tickets',
+          description: 'نظام إدارة تذاكر الصيانة والمواعيد',
           theme_color: '#18181b',
           background_color: '#18181b',
           display: 'standalone',

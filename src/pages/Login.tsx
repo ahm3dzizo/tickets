@@ -104,14 +104,14 @@ export default function Login() {
         <div className="flex flex-col items-center text-center space-y-3">
           <div className="relative">
             <div className="w-20 h-20 rounded-[1.75rem] bg-white dark:bg-card border border-border shadow-xl shadow-primary/10 p-3 backdrop-blur-sm">
-              <img src="/logo.jpg" alt="Retal" className="w-full h-full object-contain rounded-2xl" />
+              <img src="/logo.jpg" alt="Tickets" className="w-full h-full object-contain rounded-2xl" />
             </div>
             <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
               <div className="w-2 h-2 rounded-full bg-white" />
             </div>
           </div>
           <div>
-            <h1 className="text-2xl font-black text-foreground tracking-tight">نظام ريتال</h1>
+            <h1 className="text-2xl font-black text-foreground tracking-tight">Tickets</h1>
             <p className="text-muted-foreground text-sm mt-0.5 font-medium">إدارة تذاكر الصيانة</p>
           </div>
         </div>
@@ -318,7 +318,7 @@ export default function Login() {
         )}
 
         <p className="text-center text-[10px] text-muted-foreground/60 font-bold uppercase tracking-[0.2em]">
-          &copy; 2026 Retal Maintenance System
+          &copy; 2026 Tickets Maintenance System
         </p>
       </div>
     </div>

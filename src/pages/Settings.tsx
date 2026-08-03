@@ -6,7 +6,7 @@ import {
   User, Lock, Bell, Shield, LogOut, X,
   Camera, Save, Eye, EyeOff, CheckCircle2, Loader2, Check,
   MessageSquare, RefreshCw, Wifi, WifiOff, Download, Clock,
-  Bot, Link2, ScrollText,
+  Bot, Link2, ScrollText, Phone, QrCode, Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -190,11 +190,16 @@ export default function Settings() {
   const [waStatus, setWaStatus] = useState<{
     running: boolean; connected: boolean; state?: string; linkedPhone?: string | null;
   } | null>(null);
-  const [waQR,          setWaQR]          = useState<string | null>(null);
-  const [loadingWA,     setLoadingWA]     = useState(false);
-  const [loadingQR,     setLoadingQR]     = useState(false);
-  const [startingWA,    setStartingWA]    = useState(false);
-  const [restartingWA,  setRestartingWA]  = useState(false);
+  const [waQR,            setWaQR]            = useState<string | null>(null);
+  const [waPairMethod,    setWaPairMethod]    = useState<'code' | 'qr'>('code');
+  const [waPhone,         setWaPhone]         = useState('');
+  const [waPairingCode,   setWaPairingCode]   = useState<string | null>(null);
+  const [requestingWaCode,setRequestingWaCode]= useState(false);
+  const [copiedWaCode,    setCopiedWaCode]    = useState(false);
+  const [loadingWA,       setLoadingWA]       = useState(false);
+  const [loadingQR,       setLoadingQR]       = useState(false);
+  const [startingWA,      setStartingWA]      = useState(false);
+  const [restartingWA,    setRestartingWA]    = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -203,8 +208,11 @@ export default function Settings() {
       setWaStatus(prev => ({ ...prev, running: s.running, connected: s.connected, state: s.state, linkedPhone: s.linkedPhone }));
       if (s?.qr && typeof s.qr === 'string') {
         setWaQR(s.qr.startsWith('data:') ? s.qr : `data:image/png;base64,${s.qr}`);
+      } else if (s?.pairingCode) {
+        setWaPairingCode(s.pairingCode);
       } else if (s?.connected) {
         setWaQR(null);
+        setWaPairingCode(null);
         toast.success('تم ربط واتساب بنجاح ✅');
       }
     });
@@ -228,6 +236,7 @@ export default function Settings() {
       const d = await whatsappApi.restart();
       toast.success(d.message || 'تمت إعادة تهيئة الخدمة');
       setWaQR(null);
+      setWaPairingCode(null);
       setTimeout(checkWAStatus, 5000);
     } catch (err: any) { toast.error(err?.message ?? 'تعذّر إعادة تهيئة الخدمة'); }
     finally { setRestartingWA(false); }
@@ -238,7 +247,9 @@ export default function Settings() {
     try {
       const s = await whatsappApi.getStatus();
       setWaStatus(s);
-      if (s.running && !s.connected) setWaQR(null);
+      if (s.running && !s.connected) {
+        setWaQR(null);
+      }
     } catch { setWaStatus({ running: false, connected: false }); }
     finally { setLoadingWA(false); }
   }, []);
@@ -268,20 +279,50 @@ export default function Settings() {
     finally { setLoadingQR(false); }
   };
 
+  const requestWaPairCode = async () => {
+    if (!waPhone.trim()) {
+      toast.error('يرجى إدخال رقم الهاتف أولاً');
+      return;
+    }
+    setRequestingWaCode(true);
+    try {
+      const d = await whatsappApi.pairByPhone(waPhone.trim());
+      setWaPairingCode(d.code);
+      toast.success('تم توليد كود الربط بنجاح!');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'تعذّر طلب كود الربط — تأكد من صحة الرقم وتشغيل الخدمة');
+    } finally {
+      setRequestingWaCode(false);
+    }
+  };
+
+  const copyWaCode = () => {
+    if (!waPairingCode) return;
+    navigator.clipboard.writeText(waPairingCode);
+    setCopiedWaCode(true);
+    setTimeout(() => setCopiedWaCode(false), 2000);
+    toast.success('تم نسخ كود الربط');
+  };
+
   // ── WhatsApp Bot (أدمن فقط) ─────────────────────────────────────────────────
   const [botStatus, setBotStatus] = useState<{
     running: boolean; connected: boolean; state?: string; linkedPhone?: string | null; enabled: boolean;
   } | null>(null);
-  const [botQR,        setBotQR]        = useState<string | null>(null);
-  const [loadingBot,   setLoadingBot]   = useState(false);
-  const [loadingBotQR, setLoadingBotQR] = useState(false);
-  const [startingBot,  setStartingBot]  = useState(false);
-  const [stoppingBot,  setStoppingBot]  = useState(false);
-  const [togglingBot,  setTogglingBot]  = useState(false);
-  const [botGroup,     setBotGroup]     = useState<{ jid: string; subject: string | null } | null>(null);
-  const [groupLink,    setGroupLink]    = useState('');
-  const [joiningGroup, setJoiningGroup] = useState(false);
-  const [leavingGroup, setLeavingGroup] = useState(false);
+  const [botQR,             setBotQR]             = useState<string | null>(null);
+  const [botPairMethod,     setBotPairMethod]     = useState<'code' | 'qr'>('code');
+  const [botPhone,          setBotPhone]          = useState('');
+  const [botPairingCode,    setBotPairingCode]    = useState<string | null>(null);
+  const [requestingBotCode, setRequestingBotCode] = useState(false);
+  const [copiedBotCode,     setCopiedBotCode]     = useState(false);
+  const [loadingBot,        setLoadingBot]        = useState(false);
+  const [loadingBotQR,      setLoadingBotQR]      = useState(false);
+  const [startingBot,       setStartingBot]       = useState(false);
+  const [stoppingBot,       setStoppingBot]       = useState(false);
+  const [togglingBot,       setTogglingBot]       = useState(false);
+  const [botGroup,          setBotGroup]          = useState<{ jid: string; subject: string | null } | null>(null);
+  const [groupLink,         setGroupLink]         = useState('');
+  const [joiningGroup,      setJoiningGroup]      = useState(false);
+  const [leavingGroup,      setLeavingGroup]      = useState(false);
 
   useEffect(() => {
     if (user?.role !== 'admin') return;
@@ -290,8 +331,11 @@ export default function Settings() {
       setBotStatus(prev => ({ ...(prev ?? { enabled: true }), running: s.running, connected: s.connected, state: s.state, linkedPhone: s.linkedPhone }));
       if (s?.qr && typeof s.qr === 'string') {
         setBotQR(s.qr.startsWith('data:') ? s.qr : `data:image/png;base64,${s.qr}`);
+      } else if (s?.pairingCode) {
+        setBotPairingCode(s.pairingCode);
       } else if (s?.connected) {
         setBotQR(null);
+        setBotPairingCode(null);
         toast.success('تم ربط رقم بوت الأوامر بنجاح ✅');
       }
     });
@@ -327,6 +371,7 @@ export default function Settings() {
       await whatsappBotApi.stop(true);
       toast.success('تم إعادة تهيئة الجلسة');
       setBotQR(null);
+      setBotPairingCode(null);
       setTimeout(checkBotStatus, 5000);
     } catch (err: any) { toast.error(err?.message ?? 'تعذّر إعادة التهيئة'); }
     finally { setStoppingBot(false); }
@@ -355,6 +400,31 @@ export default function Settings() {
       }
     } catch (err: any) { toast.error(err?.message ?? 'تعذّر جلب رمز QR'); }
     finally { setLoadingBotQR(false); }
+  };
+
+  const requestBotPairCode = async () => {
+    if (!botPhone.trim()) {
+      toast.error('يرجى إدخال رقم هاتف البوت أولاً');
+      return;
+    }
+    setRequestingBotCode(true);
+    try {
+      const d = await whatsappBotApi.pairByPhone(botPhone.trim());
+      setBotPairingCode(d.code);
+      toast.success('تم توليد كود ربط البوت بنجاح!');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'تعذّر طلب كود ربط البوت — تأكد من صحة الرقم وتشغيل الجلسة');
+    } finally {
+      setRequestingBotCode(false);
+    }
+  };
+
+  const copyBotCode = () => {
+    if (!botPairingCode) return;
+    navigator.clipboard.writeText(botPairingCode);
+    setCopiedBotCode(true);
+    setTimeout(() => setCopiedBotCode(false), 2000);
+    toast.success('تم نسخ كود الربط');
   };
 
   const toggleBotEnabled = async (enabled: boolean) => {
@@ -754,35 +824,149 @@ export default function Settings() {
               <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl px-5 py-4 justify-start">
                 <MessageSquare className="w-5 h-5 text-blue-400 shrink-0" />
                 <div className="text-right">
-                  <p className="text-blue-400 font-bold text-sm">في انتظار الربط</p>
-                  <p className="text-muted-foreground text-xs mt-0.5">امسح رمز QR من واتساب على هاتفك</p>
+                  <p className="text-blue-400 font-bold text-sm">في انتظار ربط الحساب</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">اختر طريقة الربط المناسبة: كود الربط برقم الهاتف أو مسح QR</p>
                 </div>
               </div>
-              {waQR ? (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="bg-white p-3 rounded-2xl shadow-lg">
-                    <img src={waQR} alt="QR Code" className="w-48 h-48 object-contain" />
-                  </div>
-                  <p className="text-muted-foreground text-xs text-center">افتح واتساب ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-3 py-4">
-                  <div className="w-48 h-48 bg-muted/60 rounded-2xl border border-border flex items-center justify-center">
-                    <MessageSquare className="w-12 h-12 text-muted-foreground/40" />
-                  </div>
-                  <p className="text-muted-foreground text-xs text-center">اضغط الزر لتوليد رمز QR</p>
+
+              {/* تبويب طريقة الربط */}
+              <div className="grid grid-cols-2 gap-2 bg-muted/40 p-1.5 rounded-2xl border border-border">
+                <button
+                  type="button"
+                  onClick={() => setWaPairMethod('code')}
+                  className={cn(
+                    "flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all",
+                    waPairMethod === 'code'
+                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-950/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  )}
+                >
+                  <Phone className="w-4 h-4" />
+                  كود الربط برقم الهاتف (موصى به)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWaPairMethod('qr');
+                    if (!waQR) fetchQR();
+                  }}
+                  className={cn(
+                    "flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all",
+                    waPairMethod === 'qr'
+                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-950/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  )}
+                >
+                  <QrCode className="w-4 h-4" />
+                  مسح رمز QR
+                </button>
+              </div>
+
+              {/* محتوى كود الربط */}
+              {waPairMethod === 'code' && (
+                <div className="space-y-4 bg-muted/20 border border-border/60 rounded-2xl p-4">
+                  {!waPairingCode ? (
+                    <div className="space-y-3">
+                      <div className="text-right">
+                        <Label className="text-foreground text-xs font-bold block mb-1.5">رقم الهاتف المرتبط بواتساب</Label>
+                        <Input
+                          value={waPhone}
+                          onChange={e => setWaPhone(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && requestWaPairCode()}
+                          placeholder="05xxxxxxxx أو 01xxxxxxxxx أو مع كود الدولة"
+                          dir="ltr"
+                          className="bg-card border-border/80 rounded-xl h-11 text-foreground text-left font-mono"
+                        />
+                        <p className="text-muted-foreground text-[11px] mt-1">مثال: 0501234567 أو 01012345678 أو 966501234567</p>
+                      </div>
+                      <Button
+                        onClick={requestWaPairCode}
+                        disabled={requestingWaCode || !waPhone.trim()}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 font-bold gap-2 text-sm shadow-md"
+                      >
+                        {requestingWaCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
+                        طلب كود الربط
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-center space-y-2">
+                        <p className="text-emerald-400 text-xs font-bold">كود الربط الخاص بك</p>
+                        <div className="flex items-center justify-center gap-3">
+                          <button
+                            onClick={copyWaCode}
+                            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 p-2 rounded-xl transition-all"
+                            title="نسخ الكود"
+                          >
+                            {copiedWaCode ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
+                          </button>
+                          <span className="font-mono text-3xl font-black text-foreground tracking-[0.25em] select-all bg-card/60 px-4 py-1.5 rounded-xl border border-emerald-500/30">
+                            {waPairingCode.length === 8 ? `${waPairingCode.slice(0, 4)} - ${waPairingCode.slice(4)}` : waPairingCode}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-card border border-border/80 rounded-2xl p-4 space-y-2 text-right text-xs">
+                        <p className="text-foreground font-bold text-sm">خطوات الربط على الهاتف:</p>
+                        <ol className="text-muted-foreground space-y-1.5 list-decimal list-inside leading-relaxed">
+                          <li>افتح تطبيق واتساب على هاتفك.</li>
+                          <li>اضغط على القائمة (⋮) أو الإعدادات ← <strong className="text-foreground">الأجهزة المرتبطة (Linked Devices)</strong>.</li>
+                          <li>اضغط <strong className="text-foreground">ربط جهاز</strong> ثم اختر <strong className="text-foreground">«الربط باستخدام رقم الهاتف بدلاً من ذلك»</strong>.</li>
+                          <li>أدخل الكود الموضح أعلاه في هاتفك.</li>
+                        </ol>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setWaPairingCode(null)}
+                          className="flex-1 rounded-xl h-9 text-xs"
+                        >
+                          طلب كود لرقم آخر
+                        </Button>
+                        <Button
+                          onClick={checkWAStatus}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-9 font-bold text-xs"
+                        >
+                          تحقق من الاتصال
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-              <div className="flex gap-3">
-                <Button onClick={checkWAStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={loadingQR || restartingWA}>
-                  <RefreshCw className="w-4 h-4" />فحص
-                </Button>
-                <Button onClick={fetchQR} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 gap-2 text-sm font-bold" disabled={loadingQR || restartingWA}>
-                  {loadingQR ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                  {waQR ? 'تحديث QR' : 'توليد QR'}
-                </Button>
-              </div>
-              <Button onClick={restartWAService} variant="ghost" className="w-full text-xs text-red-400 hover:bg-red-500/5 rounded-xl h-8" disabled={loadingQR || restartingWA}>
+
+              {/* محتوى مسح الـ QR */}
+              {waPairMethod === 'qr' && (
+                <div className="space-y-4">
+                  {waQR ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="bg-white p-3 rounded-2xl shadow-lg">
+                        <img src={waQR} alt="QR Code" className="w-48 h-48 object-contain" />
+                      </div>
+                      <p className="text-muted-foreground text-xs text-center">افتح واتساب ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 py-4">
+                      <div className="w-48 h-48 bg-muted/60 rounded-2xl border border-border flex items-center justify-center">
+                        <QrCode className="w-12 h-12 text-muted-foreground/40" />
+                      </div>
+                      <p className="text-muted-foreground text-xs text-center">اضغط الزر لتوليد رمز QR</p>
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <Button onClick={checkWAStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={loadingQR || restartingWA}>
+                      <RefreshCw className="w-4 h-4" />فحص
+                    </Button>
+                    <Button onClick={fetchQR} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 gap-2 text-sm font-bold" disabled={loadingQR || restartingWA}>
+                      {loadingQR ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+                      {waQR ? 'تحديث QR' : 'توليد QR'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <Button onClick={restartWAService} variant="ghost" className="w-full text-xs text-red-400 hover:bg-red-500/5 rounded-xl h-8" disabled={loadingQR || restartingWA || requestingWaCode}>
                 إعادة تهيئة الجلسة بالكامل
               </Button>
             </div>
@@ -856,34 +1040,148 @@ export default function Settings() {
                 <Bot className="w-5 h-5 text-blue-400 shrink-0" />
                 <div className="text-right">
                   <p className="text-blue-400 font-bold text-sm">في انتظار ربط رقم البوت</p>
-                  <p className="text-muted-foreground text-xs mt-0.5">امسح رمز QR من واتساب الرقم المخصص للبوت</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">اختر طريقة الربط المناسبة لرقم البوت: كود أو مسح QR</p>
                 </div>
               </div>
-              {botQR ? (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="bg-white p-3 rounded-2xl shadow-lg">
-                    <img src={botQR} alt="QR Code" className="w-48 h-48 object-contain" />
-                  </div>
-                  <p className="text-muted-foreground text-xs text-center">افتح واتساب على رقم البوت ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-3 py-4">
-                  <div className="w-48 h-48 bg-muted/60 rounded-2xl border border-border flex items-center justify-center">
-                    <Bot className="w-12 h-12 text-muted-foreground/40" />
-                  </div>
-                  <p className="text-muted-foreground text-xs text-center">اضغط الزر لتوليد رمز QR</p>
+
+              {/* تبويب طريقة الربط للبوت */}
+              <div className="grid grid-cols-2 gap-2 bg-muted/40 p-1.5 rounded-2xl border border-border">
+                <button
+                  type="button"
+                  onClick={() => setBotPairMethod('code')}
+                  className={cn(
+                    "flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all",
+                    botPairMethod === 'code'
+                      ? "bg-purple-600 text-white shadow-md shadow-purple-950/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  )}
+                >
+                  <Phone className="w-4 h-4" />
+                  كود الربط برقم الهاتف (موصى به)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBotPairMethod('qr');
+                    if (!botQR) fetchBotQR();
+                  }}
+                  className={cn(
+                    "flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all",
+                    botPairMethod === 'qr'
+                      ? "bg-purple-600 text-white shadow-md shadow-purple-950/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  )}
+                >
+                  <QrCode className="w-4 h-4" />
+                  مسح رمز QR
+                </button>
+              </div>
+
+              {/* محتوى كود ربط البوت */}
+              {botPairMethod === 'code' && (
+                <div className="space-y-4 bg-muted/20 border border-border/60 rounded-2xl p-4">
+                  {!botPairingCode ? (
+                    <div className="space-y-3">
+                      <div className="text-right">
+                        <Label className="text-foreground text-xs font-bold block mb-1.5">رقم هاتف البوت</Label>
+                        <Input
+                          value={botPhone}
+                          onChange={e => setBotPhone(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && requestBotPairCode()}
+                          placeholder="05xxxxxxxx أو 01xxxxxxxxx أو مع كود الدولة"
+                          dir="ltr"
+                          className="bg-card border-border/80 rounded-xl h-11 text-foreground text-left font-mono"
+                        />
+                        <p className="text-muted-foreground text-[11px] mt-1">أدخل رقم الهاتف المخصص للبوت لاستقبال كود الربط</p>
+                      </div>
+                      <Button
+                        onClick={requestBotPairCode}
+                        disabled={requestingBotCode || !botPhone.trim()}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-11 font-bold gap-2 text-sm shadow-md"
+                      >
+                        {requestingBotCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+                        طلب كود ربط البوت
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4 text-center space-y-2">
+                        <p className="text-purple-400 text-xs font-bold">كود ربط البوت</p>
+                        <div className="flex items-center justify-center gap-3">
+                          <button
+                            onClick={copyBotCode}
+                            className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 p-2 rounded-xl transition-all"
+                            title="نسخ الكود"
+                          >
+                            {copiedBotCode ? <Check className="w-5 h-5 text-purple-400" /> : <Copy className="w-5 h-5" />}
+                          </button>
+                          <span className="font-mono text-3xl font-black text-foreground tracking-[0.25em] select-all bg-card/60 px-4 py-1.5 rounded-xl border border-purple-500/30">
+                            {botPairingCode.length === 8 ? `${botPairingCode.slice(0, 4)} - ${botPairingCode.slice(4)}` : botPairingCode}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-card border border-border/80 rounded-2xl p-4 space-y-2 text-right text-xs">
+                        <p className="text-foreground font-bold text-sm">خطوات الربط على هاتف البوت:</p>
+                        <ol className="text-muted-foreground space-y-1.5 list-decimal list-inside leading-relaxed">
+                          <li>افتح تطبيق واتساب على الهاتف المخصص للبوت.</li>
+                          <li>اضغط على القائمة (⋮) أو الإعدادات ← <strong className="text-foreground">الأجهزة المرتبطة (Linked Devices)</strong>.</li>
+                          <li>اضغط <strong className="text-foreground">ربط جهاز</strong> ثم اختر <strong className="text-foreground">«الربط باستخدام رقم الهاتف بدلاً من ذلك»</strong>.</li>
+                          <li>أدخل الكود الموضح أعلاه في الهاتف.</li>
+                        </ol>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setBotPairingCode(null)}
+                          className="flex-1 rounded-xl h-9 text-xs"
+                        >
+                          طلب كود لرقم آخر
+                        </Button>
+                        <Button
+                          onClick={checkBotStatus}
+                          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-9 font-bold text-xs"
+                        >
+                          تحقق من الاتصال
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-              <div className="flex gap-3">
-                <Button onClick={checkBotStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={loadingBotQR || stoppingBot}>
-                  <RefreshCw className="w-4 h-4" />فحص
-                </Button>
-                <Button onClick={fetchBotQR} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-10 gap-2 text-sm font-bold" disabled={loadingBotQR || stoppingBot}>
-                  {loadingBotQR ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-                  {botQR ? 'تحديث QR' : 'توليد QR'}
-                </Button>
-              </div>
-              <Button onClick={stopBotService} variant="ghost" className="w-full text-xs text-red-400 hover:bg-red-500/5 rounded-xl h-8" disabled={loadingBotQR || stoppingBot}>
+
+              {/* محتوى مسح الـ QR للبوت */}
+              {botPairMethod === 'qr' && (
+                <div className="space-y-4">
+                  {botQR ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="bg-white p-3 rounded-2xl shadow-lg">
+                        <img src={botQR} alt="QR Code" className="w-48 h-48 object-contain" />
+                      </div>
+                      <p className="text-muted-foreground text-xs text-center">افتح واتساب على رقم البوت ← الأجهزة المرتبطة ← ربط جهاز ← امسح الرمز</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 py-4">
+                      <div className="w-48 h-48 bg-muted/60 rounded-2xl border border-border flex items-center justify-center">
+                        <Bot className="w-12 h-12 text-muted-foreground/40" />
+                      </div>
+                      <p className="text-muted-foreground text-xs text-center">اضغط الزر لتوليد رمز QR</p>
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <Button onClick={checkBotStatus} variant="outline" className="flex-1 rounded-xl h-10 gap-2 text-sm" disabled={loadingBotQR || stoppingBot}>
+                      <RefreshCw className="w-4 h-4" />فحص
+                    </Button>
+                    <Button onClick={fetchBotQR} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-10 gap-2 text-sm font-bold" disabled={loadingBotQR || stoppingBot}>
+                      {loadingBotQR ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+                      {botQR ? 'تحديث QR' : 'توليد QR'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <Button onClick={stopBotService} variant="ghost" className="w-full text-xs text-red-400 hover:bg-red-500/5 rounded-xl h-8" disabled={loadingBotQR || stoppingBot || requestingBotCode}>
                 إعادة تهيئة الجلسة بالكامل
               </Button>
             </div>
@@ -1343,7 +1641,7 @@ export default function Settings() {
         </motion.div>
 
         <p className="text-center text-muted-foreground/70 text-[10px] font-bold uppercase tracking-[0.3em] pb-4">
-          Retal Maintenance System Build 2026.4.17
+          Tickets Maintenance System Build 2026.8
         </p>
 
           </div>{/* end LEFT main content */}

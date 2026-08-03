@@ -30,6 +30,9 @@ _FONTS_CANDIDATES = [
 FONTS_DIR = next((p for p in _FONTS_CANDIDATES if os.path.exists(os.path.join(p, "Tajawal-Regular.ttf"))), os.path.join(SCRIPT_DIR, "fonts"))
 # Check multiple locations for logo
 _LOGO_CANDIDATES = [
+    os.path.join(SCRIPT_DIR, "retal-logo.jpg"),
+    os.path.join(SCRIPT_DIR, "public", "retal-logo.jpg"),
+    os.path.join(SCRIPT_DIR, "..", "public", "retal-logo.jpg"),
     os.path.join(SCRIPT_DIR, "logo.jpg"),
     os.path.join(SCRIPT_DIR, "public", "logo.jpg"),
     os.path.join(SCRIPT_DIR, "public", "logo.png"),

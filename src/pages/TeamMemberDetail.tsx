@@ -89,7 +89,7 @@ export default function TeamMemberDetail() {
     if (!window.confirm(`هل أنت متأكد من حذف العضو "${member.displayName}"؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
     setDeleting(true);
     try {
-      await usersApi.delete(member.id);
+      await usersApi.delete(member.uid || member.id);
       toast.success('تم حذف العضو بنجاح');
       navigate('/team');
     } catch {

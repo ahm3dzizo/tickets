@@ -178,7 +178,7 @@ export function PWAInstallPrompt() {
       {/* Header */}
       <div className="flex items-center gap-3 mt-3 mb-4">
         <img
-          src="/logo.jpg" alt="Retal"
+          src="/logo.jpg" alt="Tickets"
           className="w-10 h-10 object-contain shrink-0 rounded-xl shadow-sm border border-border/40"
         />
         <div className="flex-1 text-right">

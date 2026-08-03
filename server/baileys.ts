@@ -264,8 +264,12 @@ export async function startWA(userId: string) {
 export async function stopWA(userId: string, cleanSession = false) {
   const sock = sessions.get(userId);
   if (sock) {
-    sock.logout().catch(() => {});
-    sock.end(undefined);
+    try {
+      sock.ev.removeAllListeners('connection.update');
+      sock.ev.removeAllListeners('creds.update');
+      sock.ev.removeAllListeners('messages.upsert');
+      sock.end(undefined);
+    } catch {}
     sessions.delete(userId);
   }
   statuses.set(userId, 'DISCONNECTED');
@@ -274,7 +278,11 @@ export async function stopWA(userId: string, cleanSession = false) {
 
   const SESSION_DIR = path.join(BASE_SESSIONS, `auth_${userId}`);
   if (cleanSession && fs.existsSync(SESSION_DIR)) {
-    fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+    try {
+      fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+    } catch (e) {
+      console.warn(`[WA] Could not remove session dir for ${userId}:`, e);
+    }
   }
 }
 
@@ -288,98 +296,139 @@ export async function closeAllSessions() {
   }
 }
 
-function cleanPhone(phone: string): string {
+export function cleanPhone(phone: string): string {
   if (!phone) return '';
   let d = phone.replace(/\D/g, '');
   if (d.startsWith('00')) d = d.slice(2);
   
-  // Egyptian: 01xxxxxxxxx (11 digits) -> 201xxxxxxxxx
-  if (d.length === 11 && d.startsWith('01')) {
-    d = '2' + d;
+  // Saudi without country code or 0: 5xxxxxxxx (9 digits) -> 9665xxxxxxxx
+  if (d.length === 9 && d.startsWith('5')) {
+    d = '966' + d;
   }
-  // Saudi: 05xxxxxxxx (10 digits) -> 9665xxxxxxxx
+  // Saudi with 0: 05xxxxxxxx (10 digits) -> 9665xxxxxxxx
   else if (d.length === 10 && d.startsWith('05')) {
     d = '966' + d.substring(1);
+  }
+  // Egypt without country code or 0: 1xxxxxxxxx (10 digits starting with 1) -> 201xxxxxxxxx
+  else if (d.length === 10 && d.startsWith('1')) {
+    d = '20' + d;
+  }
+  // Egypt with 0: 01xxxxxxxxx (11 digits starting with 01) -> 201xxxxxxxxx
+  else if (d.length === 11 && d.startsWith('01')) {
+    d = '2' + d;
   }
   
   return d;
 }
 
-function normalizePhone(phone: string): string {
+export function normalizePhone(phone: string): string {
   return `${cleanPhone(phone)}@s.whatsapp.net`;
 }
 
 export async function pairWACode(userId: string, phone: string): Promise<string> {
   const d = cleanPhone(phone);
-  if (!d) throw new Error('رقم الهاتف غير صالح.');
-  if (getWAStatus(userId) === 'CONNECTED') throw new Error('واتساب مرتبط بالفعل.');
+  if (!d || d.length < 8) {
+    throw new Error('رقم الهاتف غير صالح. يرجى إدخال رقم صحيح يبدأ بـ 05 أو مع كود الدولة.');
+  }
+  if (getWAStatus(userId) === 'CONNECTED') {
+    throw new Error('واتساب مرتبط بالفعل.');
+  }
 
-  // إعادة ضبط عداد المحاولات — المستخدم طلب صراحةً إعادة الربط
+  // إعادة ضبط عداد المحاولات
   reconnectAttempts.delete(userId);
-  await stopWA(userId, true);
 
-  return new Promise<string>(async (resolve, reject) => {
-    let done = false;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 3;
+  // إذا لم تكن هناك جلسة أو كان السوكيت مغلقاً، نبدأ جلسة جديدة
+  let sock = sessions.get(userId);
+  if (!sock) {
+    await stopWA(userId, true);
+    await startWA(userId);
+    sock = sessions.get(userId);
+  }
 
-    const tryPair = async () => {
-      if (done || attempts >= MAX_ATTEMPTS) {
-        if (!done) {
-          done = true;
-          reject(new Error('تعذر توليد كود الربط: فشل الاتصال بخوادم واتساب'));
-        }
-        return;
+  if (!sock) {
+    throw new Error('تعذر بدء جلسة واتساب. حاول مجدداً.');
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    let resolved = false;
+
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        reject(new Error('انتهت مهلة استلام كود الربط من واتساب. تأكد من اتصال الإنترنت وصحة الرقم ثم أعد المحاولة.'));
       }
-      attempts++;
-      reconnectAttempts.delete(userId);
+    }, 45000);
 
-      await startWA(userId);
-      const sock = sessions.get(userId);
-      if (!sock) {
-        setTimeout(tryPair, 2000);
-        return;
-      }
-
-      // الطريقة الصحيحة: نستخدم waitForSocketOpen ثم نستدعي requestPairingCode فوراً
-      // بدون أي delay إضافي — الـ delay بيخلي الـ WS يموت قبل ما نطلب الكود
+    const executeRequest = async (targetSock: any) => {
+      if (resolved) return;
       try {
-        if (typeof (sock as any).waitForSocketOpen === 'function') {
-          await (sock as any).waitForSocketOpen();
-        } else {
-          // fallback: انتظر 600ms بس — مجرد handshake noise
-          await new Promise(r => setTimeout(r, 600));
-        }
-
-        // تأكد إن الـ socket لسه في الـ sessions (مش اتمسح خلال الانتظار)
-        const currentSock = sessions.get(userId);
-        if (!currentSock || done) return;
-
-        console.log(`[WA] Requesting pairing code for ${userId} (attempt ${attempts})`);
-        const code = await currentSock.requestPairingCode(d);
-        if (!done) {
-          done = true;
+        console.log(`[WA] Requesting pairing code for ${userId} (Phone: ${d})...`);
+        const code = await targetSock.requestPairingCode(d);
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          console.log(`[WA] Pairing code successfully received for ${userId}: ${code}`);
+          getIO()?.emit(`wa-status-${userId}`, { running: true, connected: false, state: 'WAITING_AUTH', pairingCode: code });
           resolve(code);
         }
       } catch (err: any) {
-        console.warn(`[WA] Pairing attempt ${attempts} failed: ${err?.message}`);
-        if (!done) {
-          await stopWA(userId, true);
-          reconnectAttempts.delete(userId);
-          setTimeout(tryPair, 2000);
+        console.warn(`[WA] Pairing code request error for ${userId}: ${err?.message}`);
+        if (!resolved) {
+          // إعادة محاولة سريعة بعد 2.5 ثانية إذا كانت الجلسة قيد التهيئة
+          setTimeout(async () => {
+            if (resolved) return;
+            try {
+              const retrySock = sessions.get(userId);
+              if (retrySock) {
+                const retryCode = await retrySock.requestPairingCode(d);
+                if (!resolved) {
+                  resolved = true;
+                  clearTimeout(timeout);
+                  console.log(`[WA] Pairing code generated on retry for ${userId}: ${retryCode}`);
+                  getIO()?.emit(`wa-status-${userId}`, { running: true, connected: false, state: 'WAITING_AUTH', pairingCode: retryCode });
+                  resolve(retryCode);
+                }
+              }
+            } catch (retryErr: any) {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                reject(new Error(retryErr?.message || 'فشل توليد كود الربط من واتساب. تأكد من صحة الرقم.'));
+              }
+            }
+          }, 2500);
         }
       }
     };
 
-    tryPair();
+    // إذا كان السوكيت قد أنتج QR بالفعل، فهذا يعني أن Noise Handshake اكتمل والسيرفر جاهز للربط فوراً
+    if (qrCodes.get(userId)) {
+      setTimeout(() => {
+        const currentSock = sessions.get(userId);
+        if (currentSock) executeRequest(currentSock);
+      }, 500);
+    } else {
+      // ننتظر أول إشعار جاهزية من السوكيت
+      const connListener = (update: any) => {
+        if (update.qr || update.connection === 'open') {
+          sock?.ev.off('connection.update', connListener);
+          setTimeout(() => {
+            const currentSock = sessions.get(userId);
+            if (currentSock) executeRequest(currentSock);
+          }, 1000);
+        }
+      };
 
-    // Timeout شامل: 60 ثانية
-    setTimeout(() => {
-      if (!done) {
-        done = true;
-        reject(new Error('تعذر توليد كود الربط: انتهت مهلة الاتصال'));
-      }
-    }, 60000);
+      sock.ev.on('connection.update', connListener);
+
+      // صمام أمان في حال عدم وصول الحدث
+      setTimeout(() => {
+        if (!resolved) {
+          const currentSock = sessions.get(userId);
+          if (currentSock) executeRequest(currentSock);
+        }
+      }, 3500);
+    }
   });
 }
 
@@ -627,7 +676,7 @@ export async function sendRatingRequest(
       `*3* — جيد\n` +
       `*2* — مقبول\n` +
       `*1* — ضعيف\n\n` +
-      `فريق ريتال للصيانة`;
+      `فريق الصيانة — Tickets`;
     await sock.sendMessage(jid, { text });
     return { sent: true, fallback: false };
   } catch (err) {

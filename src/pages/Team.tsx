@@ -265,7 +265,7 @@ export default function Team() {
                                 onClick={async () => {
                                   if (!window.confirm(`هل أنت متأكد من حذف العضو "${t.displayName}"؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
                                   try {
-                                    await usersApi.delete(t.id);
+                                    await usersApi.delete(t.uid || t.id);
                                     toast.success('تم حذف العضو بنجاح');
                                     loadData();
                                   } catch {

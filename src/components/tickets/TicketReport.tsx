@@ -98,7 +98,7 @@ export const TicketReport = React.forwardRef<HTMLDivElement, TicketReportProps>(
         </div>
         <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
           <img
-            src="/logo.jpg"
+            src="/retal-logo.jpg"
             alt="Logo"
             crossOrigin="anonymous"
             style={{ height: 80, objectFit: 'contain' }}

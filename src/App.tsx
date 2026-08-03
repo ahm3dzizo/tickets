@@ -58,7 +58,7 @@ function AppContent() {
       <div className="flex items-center justify-center h-screen bg-background">
         <img
           src="/logo.jpg"
-          alt="Retal"
+          alt="Tickets"
           className="w-40 h-40 object-contain animate-pulse"
         />
       </div>

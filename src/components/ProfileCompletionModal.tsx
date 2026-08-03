@@ -66,7 +66,7 @@ export function ProfileCompletionModal({ open, pendingUser, onComplete }: Profil
         <div className="flex flex-col items-center text-center mb-6 space-y-3">
           <div className="relative">
             <div className="w-16 h-16 rounded-[1.5rem] bg-white dark:bg-card border border-border shadow-xl p-2.5">
-              <img src="/logo.jpg" alt="Retal" className="w-full h-full object-contain rounded-xl" />
+              <img src="/logo.jpg" alt="Tickets" className="w-full h-full object-contain rounded-xl" />
             </div>
             <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg">
               <CheckCircle2 className="w-3.5 h-3.5 text-white" />

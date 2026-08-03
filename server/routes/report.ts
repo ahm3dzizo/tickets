@@ -102,7 +102,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
         const notes: string        = body.notes || '';
         const ticketNum: string    = (body.ticket_num || '').split('،')[0].trim();
 
-        sendWAImage(uid, phone, jpgData, whatsappMessage || '📊 تقرير الصيانة — فريق ريتال')
+        sendWAImage(uid, phone, jpgData, whatsappMessage || '📊 تقرير الصيانة — Tickets')
           .then((r: any) => {
             console.log('[WA] report image sent:', r);
           })

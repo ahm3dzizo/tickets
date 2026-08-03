@@ -184,16 +184,16 @@ export function WhatsAppBanner() {
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && requestCode()}
-                    placeholder="01xxxxxxxxx أو 201xxxxxxxxx"
+                    placeholder="05xxxxxxxx أو 01xxxxxxxxx أو مع كود الدولة"
                     dir="ltr"
-                    className="bg-muted/50 border-transparent focus:border-emerald-500/40 rounded-xl h-11 text-foreground text-left"
+                    className="bg-muted/50 border-transparent focus:border-emerald-500/40 rounded-xl h-11 text-foreground text-left font-mono"
                   />
                 </div>
 
                 <Button
                   onClick={requestCode}
                   disabled={loading || !phone.trim()}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 font-bold gap-2"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 font-bold gap-2 shadow-md"
                 >
                   {loading
                     ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -207,17 +207,17 @@ export function WhatsAppBanner() {
             {step === 'code' && (
               <div className="space-y-4">
                 <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-center space-y-2">
-                  <p className="text-emerald-400 text-xs font-bold">كود الربط</p>
-                  <div className="flex items-center justify-center gap-2">
+                  <p className="text-emerald-400 text-xs font-bold">كود الربط المخصص لهاتفك</p>
+                  <div className="flex items-center justify-center gap-3">
                     <button
                       onClick={copyCode}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                      title="نسخ"
+                      className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 p-2 rounded-xl transition-all"
+                      title="نسخ الكود"
                     >
-                      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
                     </button>
-                    <span className="font-mono text-3xl font-black text-foreground tracking-[0.25em]">
-                      {pairingCode}
+                    <span className="font-mono text-3xl font-black text-foreground tracking-[0.25em] select-all bg-card/60 px-4 py-1.5 rounded-xl border border-emerald-500/30">
+                      {pairingCode.length === 8 ? `${pairingCode.slice(0, 4)} - ${pairingCode.slice(4)}` : pairingCode}
                     </span>
                   </div>
                 </div>
