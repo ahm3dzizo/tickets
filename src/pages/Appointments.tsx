@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
   Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search, FileImage,
-  Phone, MessageCircle, CheckCircle2, RotateCcw
+  Phone, MessageCircle, CheckCircle2, RotateCcw, Building2
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -232,6 +232,12 @@ export default function Appointments() {
     return () => { sessionStorage.setItem('appointmentsScrollY', String(window.scrollY)); };
   }, []);
 
+  const projectsMap = useMemo(() => {
+    const map = new Map<string, any>();
+    projects.forEach((p: any) => map.set(p.id, p));
+    return map;
+  }, [projects]);
+
   const groupedByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const day of displayedDays) {
@@ -282,11 +288,17 @@ export default function Appointments() {
 
       if (searchQuery) {
         const sq = searchQuery.toLowerCase();
-        groups = groups.filter(g =>
-          (g.villaNumber && String(g.villaNumber).toLowerCase().includes(sq)) ||
-          (g.clientName && String(g.clientName).toLowerCase().includes(sq)) ||
-          (g.tickets.some((t: any) => t.ticketId && String(t.ticketId).toLowerCase().includes(sq)))
-        );
+        groups = groups.filter(g => {
+          const pName = projectsMap.get(g.projectId)?.name || '';
+          const pCode = projectsMap.get(g.projectId)?.code || '';
+          return (
+            (g.villaNumber && String(g.villaNumber).toLowerCase().includes(sq)) ||
+            (g.clientName && String(g.clientName).toLowerCase().includes(sq)) ||
+            (pName && pName.toLowerCase().includes(sq)) ||
+            (pCode && pCode.toLowerCase().includes(sq)) ||
+            (g.tickets.some((t: any) => t.ticketId && String(t.ticketId).toLowerCase().includes(sq)))
+          );
+        });
       }
 
       groups.sort((a, b) => {
@@ -298,7 +310,7 @@ export default function Appointments() {
       map[d] = groups;
     }
     return map;
-  }, [appointments, displayedDays, filterSup, user, searchQuery]);
+  }, [appointments, displayedDays, filterSup, user, searchQuery, projectsMap]);
 
   const prevDay = () => {
     const d = new Date(refDate);
@@ -507,7 +519,9 @@ export default function Appointments() {
                 className={`border border-black rounded-lg p-2 flex flex-col gap-1.5 break-inside-avoid overflow-hidden ${hasImages ? 'col-span-2' : 'col-span-1 min-h-[80px] justify-center'}`}
               >
                 <div className="flex justify-between items-center border-b border-black/30 pb-1">
-                  <h3 className="font-bold text-sm leading-tight">{tr.villa} {g.villaNumber} <span className="font-normal text-xs text-gray-700">({g.clientPhone || tr.noPhone})</span></h3>
+                  <h3 className="font-bold text-sm leading-tight">
+                    {tr.villa} {g.villaNumber} {projectsMap.get(g.projectId)?.name ? `• ${projectsMap.get(g.projectId).name}` : ''} <span className="font-normal text-xs text-gray-700">({g.clientPhone || tr.noPhone})</span>
+                  </h3>
                   <span className="font-black text-sm leading-tight tabular-nums">{tA}</span>
                 </div>
                 {hasImages ? (
@@ -812,7 +826,7 @@ export default function Appointments() {
                                 {/* Top Row: Villa & Time */}
                                 <div className="flex justify-between items-start gap-2">
                                   <div className="flex-1 min-w-0 pr-1">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                       <h4 className="font-black text-foreground text-base truncate flex items-center gap-2">
                                         {t.villa} {group.villaNumber} {totalOpen > 0 && (
                                           <span className="text-amber-600 dark:text-amber-500 font-bold text-xs bg-amber-500/10 px-2 py-0.5 rounded-full">({totalOpen} مفتوحة)</span>
@@ -821,6 +835,22 @@ export default function Appointments() {
                                           <span className="text-emerald-500 font-bold text-xs bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> تم الانتهاء</span>
                                         )}
                                       </h4>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground flex-wrap">
+                                      {group.clientName && (
+                                        <span className="font-semibold text-foreground/90 truncate max-w-[150px]">{group.clientName}</span>
+                                      )}
+                                      {(() => {
+                                        const pObj = projectsMap.get(group.projectId);
+                                        const pName = pObj?.name || pObj?.code;
+                                        if (!pName) return null;
+                                        return (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shadow-sm">
+                                            <Building2 className="w-3 h-3 text-blue-500 shrink-0" />
+                                            <span className="truncate max-w-[120px]">{pName}</span>
+                                          </span>
+                                        );
+                                      })()}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1">
@@ -1062,6 +1092,7 @@ export default function Appointments() {
           open={!!directApptDate}
           onOpenChange={(v) => !v && setDirectApptDate(null)}
           dateStr={directApptDate}
+          initialProjectId={filterProject || undefined}
           onSuccess={() => {
             loadAppointments();
             loadOpenTicketsCount();

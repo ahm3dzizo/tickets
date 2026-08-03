@@ -2,8 +2,49 @@ import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, requireAdmin, getRequesterRole } from "../auth.js";
 import { getIO } from "../socket.js";
+import { DEFAULT_WORK_HOURS, autoCorrectMins, type WorkHoursSettings } from "./settings.js";
 
 const router = Router();
+
+async function validateAndCorrectAppointmentTime(
+  projectId: string | null | undefined,
+  timeStr: string | null | undefined
+): Promise<{ time: string | null; error?: string }> {
+  if (!timeStr) return { time: null };
+
+  const timeClean = timeStr.trim();
+  const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timeClean);
+  if (!timeMatch) return { time: timeClean };
+
+  const whSetting = await prisma.systemSetting.findUnique({ where: { key: "work_hours" } });
+  const whAll = (whSetting?.value as unknown as WorkHoursSettings) || DEFAULT_WORK_HOURS;
+  const cfg = (projectId && whAll.byProject?.[projectId]) || whAll.default || DEFAULT_WORK_HOURS.default;
+
+  if (!cfg?.enabled) {
+    return { time: timeClean };
+  }
+
+  const rawMins = parseInt(timeMatch[1], 10) * 60 + parseInt(timeMatch[2], 10);
+  const correctedMins = autoCorrectMins(rawMins, cfg);
+
+  if (correctedMins === null) {
+    const periods: Array<{ start: string; end: string }> = [];
+    if (cfg.hasMorning !== false && cfg.morning) periods.push(cfg.morning);
+    if (cfg.hasAfternoon !== false && cfg.afternoon) periods.push(cfg.afternoon);
+    const rangeStr = periods.length > 0
+      ? periods.map(p => `${p.start}–${p.end}`).join(" و ")
+      : "غير محددة";
+    return {
+      time: timeClean,
+      error: `الموعد خارج أوقات الدوام المحددة — المواعيد المتاحة: ${rangeStr}`
+    };
+  }
+
+  const h = Math.floor(correctedMins / 60);
+  const m = correctedMins % 60;
+  const corrected = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  return { time: corrected };
+}
 
 // ─── GET /api/appointments/conflicts ──────────────────────────────────────────
 router.get("/conflicts", requireAuth, async (req: AuthRequest, res) => {
@@ -345,6 +386,16 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }
 
   try {
+    let finalTime = time || null;
+    if (finalTime) {
+      const check = await validateAndCorrectAppointmentTime(projectId, finalTime);
+      if (check.error) {
+        res.status(400).json({ error: check.error });
+        return;
+      }
+      finalTime = check.time || finalTime;
+    }
+
     let appointment = await prisma.appointment.findFirst({
       where: { projectId, villaNumber, date }
     });
@@ -363,7 +414,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       appointment = await prisma.appointment.update({
         where: { id: appointment.id },
         data: {
-          time: time || appointment.time,
+          time: finalTime || appointment.time,
           notes: notes ? (appointment.notes ? `${appointment.notes}\n${notes}` : notes) : appointment.notes,
           types: updatedTypes,
           supervisorIds: updatedSupIds,
@@ -380,7 +431,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
           clientName,
           clientPhone: clientPhone || null,
           date,
-          time: time || null,
+          time: finalTime || null,
           notes: notes || null,
           supervisorIds: supervisorIds || [],
           supervisors: supervisors || [],
@@ -391,7 +442,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 
     // Sync linked tickets
     if (ticketIds && ticketIds.length > 0) {
-      const appointmentTime = `${date} ${time || ""}`.trim();
+      const appointmentTime = `${date} ${finalTime || ""}`.trim();
 
       // Fetch tickets to conditionally update status
       const tickets = await prisma.ticket.findMany({
@@ -438,11 +489,25 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   };
 
   try {
+    let finalTime = time;
+    if (finalTime) {
+      const existing = await prisma.appointment.findUnique({
+        where: { id },
+        select: { projectId: true }
+      });
+      const check = await validateAndCorrectAppointmentTime(existing?.projectId, finalTime);
+      if (check.error) {
+        res.status(400).json({ error: check.error });
+        return;
+      }
+      finalTime = check.time || finalTime;
+    }
+
     const appointment = await prisma.appointment.update({
       where: { id },
       data: {
         date,
-        time: time || null,
+        time: finalTime !== undefined ? (finalTime || null) : undefined,
         notes: notes || null,
         supervisorIds: supervisorIds || [],
         supervisors: supervisors || [],
@@ -453,7 +518,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     });
 
     // Sync all linked tickets
-    const appointmentTime = `${date} ${time || ""}`.trim();
+    const appointmentTime = `${date} ${finalTime || ""}`.trim();
     await prisma.ticket.updateMany({
       where: { appointmentId: id },
       data: {

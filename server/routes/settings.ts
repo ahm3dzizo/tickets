@@ -41,21 +41,31 @@ export const DEFAULT_WORK_HOURS: WorkHoursSettings = {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 export function toMins(hhmm: string): number {
+  if (!hhmm) return 0;
   const [h, m] = hhmm.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
 }
 
 export function inPeriod(mins: number, p: TimePeriod): boolean {
   if (!p || !p.start || !p.end) return false;
-  return mins >= toMins(p.start) && mins < toMins(p.end);
+  return mins >= toMins(p.start) && mins <= toMins(p.end);
 }
 
 export function inWorkHours(mins: number, cfg: WorkHoursConfig): boolean {
   if (!cfg.enabled) return true;
   const hasMorning = cfg.hasMorning !== false;
+  const hasBreak = cfg.hasBreak !== false;
   const hasAfternoon = cfg.hasAfternoon !== false;
-  if (hasMorning && inPeriod(mins, cfg.morning)) return true;
-  if (hasAfternoon && inPeriod(mins, cfg.afternoon)) return true;
+
+  // If time falls in break interval, it is not within work hours
+  if (hasBreak && cfg.break && cfg.break.start && cfg.break.end) {
+    const bs = toMins(cfg.break.start);
+    const be = toMins(cfg.break.end);
+    if (mins >= bs && mins < be) return false;
+  }
+
+  if (hasMorning && cfg.morning && inPeriod(mins, cfg.morning)) return true;
+  if (hasAfternoon && cfg.afternoon && inPeriod(mins, cfg.afternoon)) return true;
   return false;
 }
 
@@ -65,6 +75,9 @@ export function autoCorrectMins(mins: number, cfg: WorkHoursConfig): number | nu
   if (hour >= 1 && hour <= 11) {
     const pm = mins + 12 * 60;
     if (inWorkHours(pm, cfg)) return pm;
+  } else if (hour >= 13 && hour <= 23) {
+    const am = mins - 12 * 60;
+    if (inWorkHours(am, cfg)) return am;
   }
   return null;
 }

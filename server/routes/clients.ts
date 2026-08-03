@@ -21,7 +21,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     where,
     orderBy: { createdAt: "asc" },
     include: {
-      units: { include: { unit: { include: { block: true } } } }
+      units: { include: { unit: { include: { block: true, project: true } } } }
     }
   });
   
@@ -31,6 +31,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       ...c,
       unitId:      primaryUnit?.id         || null,
       projectId:   primaryUnit?.projectId  || null,
+      projectName: primaryUnit?.project?.name || null,
+      projectCode: primaryUnit?.project?.code || null,
       villaNumber: primaryUnit?.unitNumber  || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
       handoverDate: primaryUnit?.handoverDate || null,
@@ -71,7 +73,7 @@ router.get("/by-project/:projectId", requireAuth, async (req, res) => {
     where: { units: { some: { unit: { projectId: req.params.projectId } } } },
     orderBy: { name: "asc" },
     include: {
-      units: { include: { unit: { include: { block: true } } } }
+      units: { include: { unit: { include: { block: true, project: true } } } }
     }
   });
 
@@ -81,6 +83,8 @@ router.get("/by-project/:projectId", requireAuth, async (req, res) => {
       ...c,
       unitId:      primaryUnit?.id         || null,
       projectId:   primaryUnit?.projectId  || null,
+      projectName: primaryUnit?.project?.name || null,
+      projectCode: primaryUnit?.project?.code || null,
       villaNumber: primaryUnit?.unitNumber  || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
       handoverDate: primaryUnit?.handoverDate || null,

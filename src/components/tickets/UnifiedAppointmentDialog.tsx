@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  CalendarDays, Clock, AlertTriangle, CheckCircle2, Eye, Send, Save,
-  Loader2, ChevronDown, Search, Home, CalendarPlus, CalendarClock,
+  CalendarDays, Clock, AlertTriangle, AlertCircle, CheckCircle2, Eye, Send, Save,
+  Loader2, ChevronDown, Search, Home, Building2, CalendarPlus, CalendarClock,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { appointmentsApi, whatsappApi, usersApi, ticketsApi, clientsApi, settingsApi } from '@/lib/api';
+import { appointmentsApi, whatsappApi, usersApi, ticketsApi, clientsApi, projectsApi, settingsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { renderTableDescription } from './TicketTable';
@@ -55,6 +55,7 @@ export interface UnifiedAppointmentDialogProps {
   clientPhone?: string;
   // Calendar add mode: date pre-selected, no tickets, client search shown
   dateStr?: string;
+  initialProjectId?: string;
   // Edit mode: edit an existing appointment group from the calendar page
   editGroup?: any;
   editSupervisors?: any[];
@@ -104,10 +105,70 @@ function formatDateAr(ds: string): string {
 }
 
 function fmtTime(hhmm: string): string {
+  if (!hhmm) return '';
   const [h, m] = hhmm.split(':').map(Number);
   const period = h < 12 ? 'ص' : 'م';
   const h12 = h % 12 || 12;
   return m === 0 ? `${h12} ${period}` : `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+function toMins(hhmm: string): number {
+  if (!hhmm) return 0;
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function minsToHhmm(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function inPeriod(mins: number, p: { start: string; end: string }): boolean {
+  if (!p || !p.start || !p.end) return false;
+  return mins >= toMins(p.start) && mins <= toMins(p.end);
+}
+
+function inWorkHours(mins: number, cfg: WorkHoursConfig): boolean {
+  if (!cfg.enabled) return true;
+  const hasMorning = cfg.hasMorning !== false;
+  const hasBreak = cfg.hasBreak !== false;
+  const hasAfternoon = cfg.hasAfternoon !== false;
+
+  if (hasBreak && cfg.break && cfg.break.start && cfg.break.end) {
+    const bs = toMins(cfg.break.start);
+    const be = toMins(cfg.break.end);
+    if (mins >= bs && mins < be) return false;
+  }
+
+  if (hasMorning && cfg.morning && inPeriod(mins, cfg.morning)) return true;
+  if (hasAfternoon && cfg.afternoon && inPeriod(mins, cfg.afternoon)) return true;
+  return false;
+}
+
+function autoCorrectMins(mins: number, cfg: WorkHoursConfig): number | null {
+  if (inWorkHours(mins, cfg)) return mins;
+  const hour = Math.floor(mins / 60);
+  if (hour >= 1 && hour <= 11) {
+    const pm = mins + 12 * 60;
+    if (inWorkHours(pm, cfg)) return pm;
+  } else if (hour >= 13 && hour <= 23) {
+    const am = mins - 12 * 60;
+    if (inWorkHours(am, cfg)) return am;
+  }
+  return null;
+}
+
+function getWorkHoursSummary(cfg: WorkHoursConfig): string {
+  if (!cfg.enabled) return 'مفتوح (بدون قيود)';
+  const parts: string[] = [];
+  if (cfg.hasMorning !== false && cfg.morning) {
+    parts.push(`صباحاً (${fmtTime(cfg.morning.start)} - ${fmtTime(cfg.morning.end)})`);
+  }
+  if (cfg.hasAfternoon !== false && cfg.afternoon) {
+    parts.push(`مساءً (${fmtTime(cfg.afternoon.start)} - ${fmtTime(cfg.afternoon.end)})`);
+  }
+  return parts.join(' و ') || 'غير محددة';
 }
 
 function buildTimeOptions(wh: WorkHoursConfig): TimeOption[] {
@@ -138,6 +199,7 @@ export function UnifiedAppointmentDialog({
   tickets,
   clientPhone,
   dateStr,
+  initialProjectId,
   editGroup,
   editSupervisors = [],
   onSuccess,
@@ -159,7 +221,7 @@ export function UnifiedAppointmentDialog({
 
   // ── State ──────────────────────────────────────────────────────────────────
 
-  const [workHours, setWorkHours] = useState<WorkHoursConfig>(DEFAULT_WH);
+  const [allWorkHours, setAllWorkHours] = useState<any>(null);
 
   // Common
   const [notes, setNotes] = useState('');
@@ -186,20 +248,53 @@ export function UnifiedAppointmentDialog({
   // Edit mode — type selection
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
-  // Calendar mode — client search
+  // Calendar mode — client search & project selection
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [projectFilter, setProjectFilter] = useState<string>(initialProjectId || '');
   const [clients, setClients] = useState<any[]>([]);
   const [clientSearch, setClientSearch] = useState('');
   const [isClientFocused, setIsClientFocused] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedVilla, setSelectedVilla] = useState('');
-  const [projectId, setProjectId] = useState('');
+  const [projectId, setProjectId] = useState(initialProjectId || '');
   const [clientName, setClientName] = useState('');
   const [loadedTickets, setLoadedTickets] = useState<any[]>([]);
+  const [existingUnitAppointments, setExistingUnitAppointments] = useState<any[]>([]);
   const [fetchingTickets, setFetchingTickets] = useState(false);
   const [newTicketTypes, setNewTicketTypes] = useState<string[]>([]);
 
   // ── Derived ────────────────────────────────────────────────────────────────
+
+  const projectsMap = useMemo(() => {
+    const map = new Map<string, any>();
+    projects.forEach(p => map.set(p.id, p));
+    return map;
+  }, [projects]);
+
+  const activeTickets: any[] = isCalendarMode ? loadedTickets : (tickets ?? []);
+  const hasExistingTickets = activeTickets.length > 0;
+
+  const currentProjectId = useMemo(() => {
+    if (isTicketMode) {
+      return primaryTicket?.projectId || tickets?.[0]?.projectId || '';
+    }
+    if (isEditMode) {
+      return editGroup?.tickets?.[0]?.projectId || editGroup?.projectId || primaryTicket?.projectId || '';
+    }
+    if (isCalendarMode) {
+      return (hasExistingTickets ? activeTickets[0]?.projectId : (projectId || projectFilter)) || '';
+    }
+    return '';
+  }, [isTicketMode, isEditMode, isCalendarMode, primaryTicket, tickets, editGroup, hasExistingTickets, activeTickets, projectId, projectFilter]);
+
+  const workHours = useMemo<WorkHoursConfig>(() => {
+    if (!allWorkHours) return DEFAULT_WH;
+    if (currentProjectId && allWorkHours.byProject?.[currentProjectId]) {
+      return allWorkHours.byProject[currentProjectId];
+    }
+    return allWorkHours.default || DEFAULT_WH;
+  }, [allWorkHours, currentProjectId]);
 
   const timeOptions = useMemo(() => buildTimeOptions(workHours), [workHours]);
   const endDate = addDays(startDate, rangeDays - 1);
@@ -213,6 +308,15 @@ export function UnifiedAppointmentDialog({
     ? customTime
     : (timeOptions.find(o => o.value === timeMode)?.startTime ?? '');
 
+  const effectiveTime = timeMode === 'custom' ? customTime : (finalTime || customTime);
+  const effectiveMins = useMemo(() => toMins(effectiveTime), [effectiveTime]);
+  const isInsideWorkHours = useMemo(() => inWorkHours(effectiveMins, workHours), [effectiveMins, workHours]);
+  const suggestedCorrectionMins = useMemo(() => {
+    if (isInsideWorkHours || !workHours.enabled) return null;
+    return autoCorrectMins(effectiveMins, workHours);
+  }, [isInsideWorkHours, effectiveMins, workHours]);
+  const isTimeDisallowed = workHours.enabled && !isInsideWorkHours && suggestedCorrectionMins === null;
+
   const mergedTypes: Record<string, string> = {
     electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات',
     ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية',
@@ -224,26 +328,26 @@ export function UnifiedAppointmentDialog({
     ...subTypeTranslations,
   };
 
-  const activeTickets: any[] = isCalendarMode ? loadedTickets : (tickets ?? []);
-  const hasExistingTickets = activeTickets.length > 0;
   const checkDate = isCalendarMode ? dateStr : (canSendWhatsApp ? startDate : date);
-  const hasConflict = !!checkDate && loadedTickets.some(t => {
-    if (isTicketMode && tickets?.some(sel => sel.id === t.id)) return false;
-    return !!t.appointmentTime && t.appointmentTime.startsWith(checkDate);
-  });
+  const hasConflict = useMemo(() => {
+    if (!checkDate) return false;
 
-  const currentProjectId = useMemo(() => {
-    if (isTicketMode) {
-      return primaryTicket?.projectId || tickets?.[0]?.projectId || '';
-    }
-    if (isEditMode) {
-      return editGroup?.tickets?.[0]?.projectId || editGroup?.projectId || primaryTicket?.projectId || '';
-    }
-    if (isCalendarMode) {
-      return (hasExistingTickets ? activeTickets[0]?.projectId : projectId) || '';
-    }
-    return '';
-  }, [isTicketMode, isEditMode, isCalendarMode, primaryTicket, tickets, editGroup, hasExistingTickets, activeTickets, projectId]);
+    // Check open tickets for this villa
+    const ticketConflict = loadedTickets.some(t => {
+      if (isTicketMode && tickets?.some(sel => sel.id === t.id)) return false;
+      return !!t.appointmentTime && t.appointmentTime.startsWith(checkDate);
+    });
+    if (ticketConflict) return true;
+
+    // Check appointments for this villa
+    const apptConflict = existingUnitAppointments.some(a => {
+      if (isEditMode && editGroup?.appointmentId === a.id) return false;
+      if (isTicketMode && tickets?.some(t => t.appointmentId === a.id)) return false;
+      return a.date === checkDate && a.status !== 'cancelled' && a.status !== 'completed';
+    });
+
+    return apptConflict;
+  }, [checkDate, loadedTickets, existingUnitAppointments, isTicketMode, tickets, isEditMode, editGroup]);
 
   const activeSupervisorsList = useMemo(() => {
     return isEditMode && editSupervisors && editSupervisors.length > 0 ? editSupervisors : supervisors;
@@ -275,24 +379,9 @@ export function UnifiedAppointmentDialog({
   useEffect(() => {
     if (!open) return;
 
-    // Load work hours (project-specific if available)
+    // Load work hours
     settingsApi.getWorkHours().then((wh: any) => {
-      const pid = isTicketMode
-        ? (primaryTicket?.projectId || tickets?.[0]?.projectId)
-        : isEditMode
-        ? (editGroup?.tickets?.[0]?.projectId || editGroup?.projectId || primaryTicket?.projectId)
-        : (hasExistingTickets ? activeTickets[0]?.projectId : projectId);
-      const cfg: WorkHoursConfig =
-        (pid && wh.byProject?.[pid]) ? wh.byProject[pid] : (wh.default ?? DEFAULT_WH);
-      setWorkHours(cfg);
-
-      if (!isEditMode && !primaryTicket?.appointmentTime) {
-        if (cfg.hasMorning === false && cfg.hasAfternoon !== false) {
-          setTimeMode('afternoon');
-        } else if (cfg.hasMorning === false && cfg.hasAfternoon === false) {
-          setTimeMode('custom');
-        }
-      }
+      setAllWorkHours(wh);
     }).catch(() => {});
 
     // Load supervisors
@@ -357,20 +446,33 @@ export function UnifiedAppointmentDialog({
       setCustomTime('09:00');
       setNotes('');
       setSelectedClientId(''); setSelectedVilla('');
-      setProjectId(''); setClientName('');
+      setProjectId(initialProjectId || '');
+      setProjectFilter(initialProjectId || '');
+      setClientName('');
       setClientSearch(''); setLoadedTickets([]);
       setNewTicketTypes([]); setSelectedSupIds([]);
+      projectsApi.getAll().then(setProjects).catch(() => {});
       clientsApi.getAll().then(setClients).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Adjust timeMode if morning is disabled
+  useEffect(() => {
+    if (!open || isEditMode || primaryTicket?.appointmentTime) return;
+    if (workHours.hasMorning === false && workHours.hasAfternoon !== false) {
+      setTimeMode('afternoon');
+    } else if (workHours.hasMorning === false && workHours.hasAfternoon === false) {
+      setTimeMode('custom');
+    }
+  }, [open, isEditMode, primaryTicket?.appointmentTime, workHours]);
 
   // Keep startDate in sync with date when WhatsApp mode is off
   useEffect(() => {
     if (!canSendWhatsApp) setStartDate(date);
   }, [date, canSendWhatsApp]);
 
-  // ── Load tickets for conflict checking ─────────────────────────────────────
+  // ── Load tickets & appointments for conflict checking ───────────────────────
 
   useEffect(() => {
     const pId = isCalendarMode ? projectId : primaryTicket?.projectId;
@@ -378,6 +480,7 @@ export function UnifiedAppointmentDialog({
 
     if (!pId || !vNum) {
       if (isCalendarMode) setLoadedTickets([]);
+      setExistingUnitAppointments([]);
       return;
     }
     
@@ -398,6 +501,14 @@ export function UnifiedAppointmentDialog({
       })
       .catch(() => {})
       .finally(() => setFetchingTickets(false));
+
+    appointmentsApi.getByUnit(pId, vNum)
+      .then((res: any[]) => {
+        setExistingUnitAppointments(res || []);
+      })
+      .catch(() => {
+        setExistingUnitAppointments([]);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCalendarMode, projectId, selectedVilla, primaryTicket?.projectId, primaryTicket?.villaNumber]);
 
@@ -458,7 +569,17 @@ export function UnifiedAppointmentDialog({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const saveTime = timeMode === 'custom' ? customTime : (finalTime || undefined);
+      let saveTime = timeMode === 'custom' ? customTime : (finalTime || undefined);
+      if (saveTime && workHours.enabled) {
+        const mins = toMins(saveTime);
+        if (!inWorkHours(mins, workHours)) {
+          const corrected = autoCorrectMins(mins, workHours);
+          if (corrected !== null) {
+            saveTime = minsToHhmm(corrected);
+          }
+        }
+      }
+
       const resolvedClientPhone: string | undefined = isEditMode
         ? (editGroup?.clientPhone || undefined)
         : isTicketMode
@@ -562,9 +683,6 @@ export function UnifiedAppointmentDialog({
           }
         } else {
           // No open ticket for this villa — save the appointment on its own
-          // instead of manufacturing a placeholder "ticket" just to hang it
-          // off of. The Appointment record already carries everything
-          // (villa, client, types, supervisors, notes) needed to display it.
           await appointmentsApi.create({
             projectId, villaNumber: selectedVilla,
             clientId: selectedClientId || undefined, clientName,
@@ -580,8 +698,9 @@ export function UnifiedAppointmentDialog({
 
       onSuccess?.();
       onOpenChange(false);
-    } catch {
-      toast.error('فشل حفظ الموعد');
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.error || err?.message || 'فشل حفظ الموعد';
+      toast.error(errMsg);
     } finally {
       setSaving(false);
     }
@@ -619,7 +738,7 @@ export function UnifiedAppointmentDialog({
   // ── Can save ───────────────────────────────────────────────────────────────
 
   const isBusy = saving || sending;
-  const canSave = !isBusy && (
+  const canSave = !isBusy && !isTimeDisallowed && (
     isEditMode
       ? (!!date && selectedTypes.length > 0)
       : isTicketMode
@@ -689,58 +808,177 @@ export function UnifiedAppointmentDialog({
 
           {/* ── CLIENT SEARCH (calendar mode) ───────────────────────────── */}
           {isCalendarMode && (
-            <div className="space-y-2 relative" ref={dropdownRef}>
-              <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
-                العميل أو الفيلا
-              </Label>
-              <div className="relative">
-                <Search className="w-4 h-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2" />
-                <Input
-                  placeholder="ابحث بالاسم أو رقم الفيلا..."
-                  value={isClientFocused ? clientSearch : (selectedClientId ? `${clientName} - فيلا ${selectedVilla}` : clientSearch)}
-                  onChange={e => {
-                    setClientSearch(e.target.value);
-                    setIsClientFocused(true);
-                    if (selectedClientId) {
-                      setSelectedClientId(''); setSelectedVilla('');
-                      setProjectId(''); setClientName(''); setLoadedTickets([]);
-                    }
-                  }}
-                  onFocus={() => setIsClientFocused(true)}
-                  className="w-full bg-background border border-input rounded-xl h-12 pr-10 pl-3 text-foreground text-sm text-right"
-                />
+            <div className="space-y-3 relative" ref={dropdownRef}>
+              {/* فلتر المشروع إذا وُجد أكثر من مشروع */}
+              {projects.length > 1 && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
+                      المشروع
+                    </Label>
+                    {projectFilter && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProjectFilter('');
+                          if (!selectedClientId) setProjectId('');
+                        }}
+                        className="text-[11px] text-blue-500 hover:underline font-medium"
+                      >
+                        عرض كل المشاريع
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={projectFilter}
+                    onChange={e => {
+                      const pId = e.target.value;
+                      setProjectFilter(pId);
+                      setSelectedClientId('');
+                      setSelectedVilla('');
+                      setProjectId(pId);
+                      setClientName('');
+                      setLoadedTickets([]);
+                    }}
+                    className="w-full bg-background border border-input rounded-xl h-10 px-3 text-foreground text-xs text-right font-medium cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">جميع المشاريع</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} {p.code ? `(${p.code})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
+                  العميل أو الفيلا
+                </Label>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    placeholder="ابحث بالاسم، رقم الفيلا، أو اسم المشروع..."
+                    value={isClientFocused ? clientSearch : (selectedClientId ? `${clientName} - فيلا ${selectedVilla}` : clientSearch)}
+                    onChange={e => {
+                      setClientSearch(e.target.value);
+                      setIsClientFocused(true);
+                      if (selectedClientId) {
+                        setSelectedClientId(''); setSelectedVilla('');
+                        setProjectId(projectFilter || ''); setClientName(''); setLoadedTickets([]);
+                      }
+                    }}
+                    onFocus={() => setIsClientFocused(true)}
+                    className="w-full bg-background border border-input rounded-xl h-12 pr-10 pl-3 text-foreground text-sm text-right"
+                  />
+                </div>
               </div>
+
+              {/* Selected client card preview */}
+              {selectedClientId && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3 flex items-center justify-between gap-3 text-right">
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-foreground truncate">{clientName}</p>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-700 dark:text-blue-300">
+                        <Home className="w-3.5 h-3.5" />
+                        فيلا {selectedVilla}
+                      </span>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-1 font-medium text-foreground/80">
+                        <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                        {clients.find(c => c.id === selectedClientId)?.projectName || projectsMap.get(projectId)?.name || 'المشروع'}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-foreground h-8 px-2.5 shrink-0"
+                    onClick={() => {
+                      setSelectedClientId('');
+                      setSelectedVilla('');
+                      setProjectId(projectFilter || '');
+                      setClientName('');
+                      setClientSearch('');
+                      setLoadedTickets([]);
+                    }}
+                  >
+                    تغيير
+                  </Button>
+                </div>
+              )}
+
+              {/* Search dropdown results */}
               {isClientFocused && (
-                <div className="absolute top-[100%] left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 max-h-[250px] overflow-y-auto no-scrollbar">
+                <div className="absolute top-[100%] left-0 right-0 mt-1 bg-card border border-border rounded-2xl shadow-2xl z-50 max-h-[280px] overflow-y-auto no-scrollbar">
                   {clients.length === 0
                     ? <div className="p-4 text-sm text-muted-foreground text-center">جارٍ التحميل...</div>
                     : (() => {
-                        const s = clientSearch.toLowerCase();
-                        const filtered = clients.filter(c =>
-                          (c.name && String(c.name).toLowerCase().includes(s)) ||
-                          (c.villaNumber != null && String(c.villaNumber).toLowerCase().includes(s))
-                        ).slice(0, 50);
+                        const s = clientSearch.trim().toLowerCase();
+                        const filtered = clients.filter(c => {
+                          if (projectFilter && c.projectId && c.projectId !== projectFilter) {
+                            return false;
+                          }
+                          if (!s) return true;
+                          const pName = c.projectName || projectsMap.get(c.projectId)?.name || '';
+                          const pCode = c.projectCode || projectsMap.get(c.projectId)?.code || '';
+                          const nameMatch = c.name && String(c.name).toLowerCase().includes(s);
+                          const villaMatch = c.villaNumber != null && String(c.villaNumber).toLowerCase().includes(s);
+                          const phoneMatch = c.phone && String(c.phone).toLowerCase().includes(s);
+                          const projMatch = pName.toLowerCase().includes(s) || pCode.toLowerCase().includes(s);
+                          return nameMatch || villaMatch || phoneMatch || projMatch;
+                        }).slice(0, 50);
+
                         if (!filtered.length)
-                          return <div className="p-4 text-sm text-muted-foreground text-center">لا يوجد نتائج</div>;
-                        return filtered.map(c => (
-                          <div
-                            key={c.id}
-                            className="px-4 py-3 hover:bg-muted cursor-pointer text-sm text-right transition-colors border-b border-border/50 last:border-0"
-                            onClick={() => {
-                              setSelectedClientId(c.id);
-                              setSelectedVilla(c.villaNumber);
-                              setProjectId(c.projectId);
-                              setClientName(c.name);
-                              setClientSearch('');
-                              setIsClientFocused(false);
-                            }}
-                          >
-                            <span className="font-bold text-foreground block">{c.name}</span>
-                            <span className="text-muted-foreground text-xs mt-0.5 block">
-                              <Home className="w-3 h-3 inline ml-1" />فيلا {c.villaNumber}
-                            </span>
-                          </div>
-                        ));
+                          return <div className="p-4 text-sm text-muted-foreground text-center">لا يوجد نتائج تطابق البحث</div>;
+
+                        return filtered.map(c => {
+                          const pObj = projectsMap.get(c.projectId);
+                          const projDisplayName = c.projectName || pObj?.name || (c.projectId ? `مشروع #${c.projectId.slice(0, 6)}` : 'بدون مشروع');
+
+                          return (
+                            <div
+                              key={`${c.id}-${c.projectId || ''}-${c.villaNumber || ''}`}
+                              className="px-4 py-3 hover:bg-muted/70 cursor-pointer text-sm text-right transition-colors border-b border-border/50 last:border-0 flex items-center justify-between gap-3"
+                              onClick={() => {
+                                setSelectedClientId(c.id);
+                                setSelectedVilla(c.villaNumber);
+                                setProjectId(c.projectId);
+                                setClientName(c.name);
+                                setClientSearch('');
+                                setIsClientFocused(false);
+                              }}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <span className="font-bold text-foreground block text-sm">{c.name}</span>
+                                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
+                                  <span className="inline-flex items-center gap-1 font-semibold text-foreground/90 bg-muted/90 px-2 py-0.5 rounded-md">
+                                    <Home className="w-3.5 h-3.5 text-blue-500" />
+                                    فيلا {c.villaNumber}
+                                  </span>
+                                  {c.blockNumber && (
+                                    <span className="text-[11px] text-muted-foreground">
+                                      بلوك {c.blockNumber}
+                                    </span>
+                                  )}
+                                  {c.phone && (
+                                    <span className="text-[11px] text-muted-foreground/80 font-mono">
+                                      {c.phone}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {/* اسم المشروع في شارة واضحة ومميزة */}
+                              <div className="shrink-0 text-left">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 max-w-[150px] truncate shadow-sm">
+                                  <Building2 className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                                  <span className="truncate">{projDisplayName}</span>
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        });
                       })()
                   }
                 </div>
@@ -957,9 +1195,48 @@ export function UnifiedAppointmentDialog({
                 type="time"
                 value={timeMode === 'custom' ? customTime : (finalTime || customTime)}
                 onChange={e => { setCustomTime(e.target.value); setTimeMode('custom'); }}
-                className="w-full bg-background border border-input rounded-xl h-11 px-3 text-foreground text-sm"
+                className={cn(
+                  "w-full bg-background border rounded-xl h-11 px-3 text-foreground text-sm transition-colors",
+                  workHours.enabled && !isInsideWorkHours
+                    ? (suggestedCorrectionMins !== null ? "border-amber-500/60 focus:border-amber-500" : "border-red-500/60 focus:border-red-500")
+                    : "border-input"
+                )}
               />
             </div>
+
+            {/* تنبيه وقيود أوقات الدوام */}
+            {workHours.enabled && !isInsideWorkHours && (
+              <div className="pt-1">
+                {suggestedCorrectionMins !== null ? (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-amber-700 dark:text-amber-300">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                      <span className="truncate">يبدو أنك تقصد الفترة المسائية ({fmtTime(minsToHhmm(suggestedCorrectionMins))})</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomTime(minsToHhmm(suggestedCorrectionMins));
+                        setTimeMode('custom');
+                      }}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-colors shrink-0 shadow-sm"
+                    >
+                      تصحيح تلقائي
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+                    <div>
+                      <p className="font-bold">الوقت المحدد ({fmtTime(effectiveTime)}) خارج أوقات الدوام المعتمدة</p>
+                      <p className="text-[11px] text-red-600/80 dark:text-red-400/80 mt-0.5 leading-normal">
+                        أوقات العمل المتاحة: {getWorkHoursSummary(workHours)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── EDIT MODE: type selector ────────────────────────────────── */}
