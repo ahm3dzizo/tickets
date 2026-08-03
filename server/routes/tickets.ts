@@ -722,9 +722,12 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 
             const correctedMins = autoCorrectMins(rawMins, cfg);
             if (correctedMins === null) {
-              const periods = [cfg.morning];
-              if (cfg.hasBreak) periods.push(cfg.afternoon);
-              const rangeStr = periods.map(p => `${p.start}–${p.end}`).join(' و ');
+              const periods: Array<{ start: string; end: string }> = [];
+              if (cfg.hasMorning !== false && cfg.morning) periods.push(cfg.morning);
+              if (cfg.hasAfternoon !== false && cfg.afternoon) periods.push(cfg.afternoon);
+              const rangeStr = periods.length > 0
+                ? periods.map(p => `${p.start}–${p.end}`).join(' و ')
+                : 'غير محددة';
               res.status(400).json({ error: `الموعد خارج أوقات الدوام — المواعيد متاحة: ${rangeStr}` });
               return;
             }

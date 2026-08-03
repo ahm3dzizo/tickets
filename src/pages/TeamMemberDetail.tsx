@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import { UserForm } from '@/components/team/UserForm';
 import { TicketTable } from '@/components/tickets/TicketTable';
 import { usersApi, projectsApi, ticketsApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   Shield, Mail, Phone, Hash, Calendar,
   Ticket as TicketIcon, CheckCircle2, Clock, AlertCircle,
   Loader2, UserX, UserCheck, Edit2, ArrowRight,
-  ClipboardList, ChevronRight
+  ClipboardList, ChevronRight, Trash2
 } from 'lucide-react';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -42,11 +43,14 @@ const specialtyColor: Record<string, string> = {
 export default function TeamMemberDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'admin';
 
   const [member, setMember] = useState<any>(null);
   const [tickets, setTickets] = useState<any[]>([]);
   const [projects, setProjects] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
   // Fetch member
@@ -78,6 +82,20 @@ export default function TeamMemberDetail() {
       toast.success(member.disabled ? 'تم تفعيل الحساب' : 'تم تعطيل الحساب');
       loadData();
     } catch { toast.error('فشل تحديث الحساب'); }
+  };
+
+  const handleDelete = async () => {
+    if (!member) return;
+    if (!window.confirm(`هل أنت متأكد من حذف العضو "${member.displayName}"؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+    setDeleting(true);
+    try {
+      await usersApi.delete(member.id);
+      toast.success('تم حذف العضو بنجاح');
+      navigate('/team');
+    } catch {
+      toast.error('حدث خطأ أثناء الحذف');
+      setDeleting(false);
+    }
   };
 
   // ── derived stats ──────────────────────────────────────────────────────────
@@ -178,6 +196,17 @@ export default function TeamMemberDetail() {
               {member.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
               {member.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب'}
             </Button>
+            {isAdmin && currentUser?.uid !== member.id && (
+              <Button
+                variant="outline"
+                disabled={deleting}
+                className="gap-2 border-red-500/30 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                onClick={handleDelete}
+              >
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                حذف العضو
+              </Button>
+            )}
           </div>
         </div>
 

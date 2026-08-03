@@ -253,10 +253,27 @@ export default function Team() {
                             {isAdmin && (
                               <DropdownMenuItem
                                 className={cn('hover:bg-muted cursor-pointer text-start justify-start rounded-xl mx-1 my-0.5',
-                                  t.disabled ? 'text-emerald-500' : 'text-red-500')}
+                                  t.disabled ? 'text-emerald-500' : 'text-amber-500')}
                                 onClick={() => handleToggleStatus(t)}
                               >
                                 {t.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب'}
+                              </DropdownMenuItem>
+                            )}
+                            {isAdmin && currentUser?.uid !== t.id && (
+                              <DropdownMenuItem
+                                className="hover:bg-red-500/10 text-red-500 cursor-pointer text-start justify-start rounded-xl mx-1 my-0.5"
+                                onClick={async () => {
+                                  if (!window.confirm(`هل أنت متأكد من حذف العضو "${t.displayName}"؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+                                  try {
+                                    await usersApi.delete(t.id);
+                                    toast.success('تم حذف العضو بنجاح');
+                                    loadData();
+                                  } catch {
+                                    toast.error('حدث خطأ أثناء الحذف');
+                                  }
+                                }}
+                              >
+                                حذف العضو
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>

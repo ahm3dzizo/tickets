@@ -44,6 +44,7 @@ export function UnifiedImportModal({
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [skipDateFilter, setSkipDateFilter] = useState(false);
   const closeMissing = true; // دايمًا نغلق المفقودة تلقائياً
 
   // لو المستخدم مسنودله مشروع واحد بس، اختاره تلقائي عند فتح المودال
@@ -59,7 +60,7 @@ export function UnifiedImportModal({
     setLoading(true);
     setProgress(0.1);
     try {
-      const result = await ticketsApi.importExcel(file, selectedProjectId, closeMissing, (p) => setProgress(p));
+      const result = await ticketsApi.importExcel(file, selectedProjectId, closeMissing, (p) => setProgress(p), skipDateFilter);
       setProgress(1);
       const parts = [];
       if (result.skippedByDateFilter > 0) parts.push(`⏳ تم تجاهل ${result.skippedByDateFilter} تذكرة قديمة (مغلقة مسبقاً)`);
@@ -73,14 +74,14 @@ export function UnifiedImportModal({
       toast.success(parts.join('\n'));
       setOpen(false);
       setSelectedProjectId('');
-      onImportSuccess();
+      onImportSuccess?.();
     } catch (err: any) {
       toast.error('فشل الاستيراد: ' + err.message);
     } finally {
       setLoading(false);
       setProgress(0);
     }
-  }, [selectedProjectId]);
+  }, [selectedProjectId, skipDateFilter, onImportSuccess]);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
   const hasClientsInProject = selectedProjectId && clients.some(c => c.projectId === selectedProjectId);
@@ -111,7 +112,19 @@ export function UnifiedImportModal({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            
+          </div>
+
+          <div className="flex items-center justify-end gap-2 px-1">
+            <label htmlFor="skipDateFilter" className="text-xs text-slate-300 cursor-pointer select-none">
+              استيراد جميع التذاكر (بما في ذلك التذاكر المغلقة القديمة)
+            </label>
+            <input
+              id="skipDateFilter"
+              type="checkbox"
+              checked={skipDateFilter}
+              onChange={e => setSkipDateFilter(e.target.checked)}
+              className="w-4 h-4 rounded border-border bg-white/5 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
           </div>
 
           <div>

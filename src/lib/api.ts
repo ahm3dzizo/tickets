@@ -154,12 +154,15 @@ export const ticketsApi = {
   getNextId:    (projectId: string)                    => get<{ nextId: string }>(`/tickets/next-id?projectId=${projectId}`).then(res => res.nextId),
   getTicketIds: (projectId: string)                    => get<{ ticketId: string; id: string; type: string; status: string; closedAt: string | null }[]>(`/tickets/ticketids?projectId=${projectId}`),
   autoLink:     ()                                     => post<{ count: number; message: string }>('/tickets/auto-link', {}),
-  importExcel: async (file: File, projectId: string, closeMissingTickets: boolean = false, onProgress?: (p: number) => void) => {
+  importExcel: async (file: File, projectId: string, closeMissingTickets: boolean = false, onProgress?: (p: number) => void, skipDateFilter: boolean = false) => {
     const form = new FormData();
     form.append('file', file);
     form.append('projectId', projectId);
     if (closeMissingTickets) {
       form.append('closeMissingTickets', 'true');
+    }
+    if (skipDateFilter) {
+      form.append('skipDateFilter', 'true');
     }
     const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
     
@@ -270,11 +273,13 @@ export const whatsappBotApi = {
 type WaTemplates = { openingMsg: string; closingMsg: string; absentMsg?: string; outOfScopeMsg?: string };
 export type TimePeriod = { start: string; end: string };
 export type WorkHoursConfig = {
-  enabled:   boolean;
-  morning:   TimePeriod;
-  hasBreak:  boolean;
-  break:     TimePeriod;
-  afternoon: TimePeriod;
+  enabled:       boolean;
+  hasMorning?:   boolean;
+  morning:       TimePeriod;
+  hasBreak?:     boolean;
+  break:         TimePeriod;
+  hasAfternoon?: boolean;
+  afternoon:     TimePeriod;
 };
 export type WorkHoursSettings = {
   default:   WorkHoursConfig;

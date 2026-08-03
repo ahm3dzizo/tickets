@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
   Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search, FileImage,
-  Phone, MessageCircle, CheckCircle2
+  Phone, MessageCircle, CheckCircle2, RotateCcw
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -256,6 +256,7 @@ export default function Appointments() {
 
       map[d].push({
         appointmentId: appt.id,
+        status: appt.status || 'scheduled',
         clientId: appt.clientId,
         clientName: appt.clientName,
         clientPhone,
@@ -769,180 +770,247 @@ export default function Appointments() {
                   </div>
 
                   {/* Clients List */}
-                  <div className="overflow-y-auto flex-1 p-2 sm:p-3 no-scrollbar">
+                  <div className="overflow-y-auto flex-1 p-2 sm:p-3 no-scrollbar space-y-4">
                     {loading && appointments.length === 0 && isCenter ? (
                       <div className="flex justify-center py-20"><RefreshCw className="w-8 h-8 animate-spin text-slate-500" /></div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 h-max pb-2">
-                        {[...groups].sort((a, b) => {
-                          const isCompletedA = a.status === 'completed';
-                          const isCompletedB = b.status === 'completed';
+                      <>
+                        {(() => {
+                          const activeGroups = groups.filter(g => g.status !== 'completed');
+                          const completedGroups = groups.filter(g => g.status === 'completed');
 
-                          if (isCompletedA !== isCompletedB) {
-                            return isCompletedA ? 1 : -1;
-                          }
+                          const sortedActive = [...activeGroups].sort((a, b) => {
+                            const ta = (a.appointmentTime || '').split(' ')[1] || '00:00';
+                            const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
+                            return ta.localeCompare(tb);
+                          });
 
-                          const ta = (a.appointmentTime || '').split(' ')[1] || '00:00';
-                          const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
-                          return ta.localeCompare(tb);
-                        }).map((group, idx) => {
-                          const note = group.notes || group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
-                          const time = (group.appointmentTime || '').split(' ')[1] || '---';
-                          const clientKey = group.villaNumber + '_' + (group.projectId || '');
-                          const totalOpen = openTicketsMap[clientKey] || 0;
-                          const isCompleted = group.status === 'completed';
+                          const sortedCompleted = [...completedGroups].sort((a, b) => {
+                            const ta = (a.appointmentTime || '').split(' ')[1] || '00:00';
+                            const tb = (b.appointmentTime || '').split(' ')[1] || '00:00';
+                            return ta.localeCompare(tb);
+                          });
+
+                          const renderCard = (group: any, key: any) => {
+                            const note = group.notes || group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
+                            const time = (group.appointmentTime || '').split(' ')[1] || '---';
+                            const clientKey = group.villaNumber + '_' + (group.projectId || '');
+                            const totalOpen = openTicketsMap[clientKey] || 0;
+                            const isCompleted = group.status === 'completed';
+                            const apptId = group.appointmentId || group.tickets?.find((t: any) => t.appointmentId)?.appointmentId;
+
+                            return (
+                              <div
+                                key={key}
+                                className={cn(
+                                  "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-muted",
+                                  isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50",
+                                  isCompleted ? "opacity-60 bg-muted/40 border-dashed border-emerald-500/30" : ""
+                                )}
+                                onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
+                              >
+                                {/* Top Row: Villa & Time */}
+                                <div className="flex justify-between items-start gap-2">
+                                  <div className="flex-1 min-w-0 pr-1">
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-black text-foreground text-base truncate flex items-center gap-2">
+                                        {t.villa} {group.villaNumber} {totalOpen > 0 && (
+                                          <span className="text-amber-600 dark:text-amber-500 font-bold text-xs bg-amber-500/10 px-2 py-0.5 rounded-full">({totalOpen} مفتوحة)</span>
+                                        )}
+                                        {isCompleted && (
+                                          <span className="text-emerald-500 font-bold text-xs bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> تم الانتهاء</span>
+                                        )}
+                                      </h4>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    {isCenter && !isCompleted && (
+                                      <button
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          if (!apptId) {
+                                            toast.error('معرف الموعد غير متوفر');
+                                            return;
+                                          }
+                                          if (!window.confirm('هل أنت متأكد من إنهاء الموعد؟')) return;
+                                          try {
+                                            const [dPart, tPart] = (group.appointmentTime || '').split(' ');
+                                            await appointmentsApi.update(apptId, {
+                                              date: dPart,
+                                              time: tPart || '',
+                                              notes: group.notes,
+                                              supervisorIds: Array.from(group.sups),
+                                              supervisors: group.supervisors,
+                                              types: Array.from(group.types),
+                                              clientPhone: group.clientPhone,
+                                              status: 'completed'
+                                            });
+                                            toast.success('تم إنهاء الموعد بنجاح');
+                                            loadAppointments();
+                                          } catch {
+                                            toast.error('حدث خطأ أثناء إنهاء الموعد');
+                                          }
+                                        }}
+                                        className="flex items-center justify-center bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl h-8 px-2 transition-colors"
+                                        title="إنهاء الموعد"
+                                      >
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                    {isCenter && isCompleted && (
+                                      <button
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          if (!apptId) {
+                                            toast.error('معرف الموعد غير متوفر');
+                                            return;
+                                          }
+                                          if (!window.confirm('هل تريد إعادة تنشيط الموعد؟')) return;
+                                          try {
+                                            const [dPart, tPart] = (group.appointmentTime || '').split(' ');
+                                            await appointmentsApi.update(apptId, {
+                                              date: dPart,
+                                              time: tPart || '',
+                                              notes: group.notes,
+                                              supervisorIds: Array.from(group.sups),
+                                              supervisors: group.supervisors,
+                                              types: Array.from(group.types),
+                                              clientPhone: group.clientPhone,
+                                              status: 'scheduled'
+                                            });
+                                            toast.success('تمت إعادة تنشيط الموعد');
+                                            loadAppointments();
+                                          } catch {
+                                            toast.error('حدث خطأ أثناء إعادة تنشيط الموعد');
+                                          }
+                                        }}
+                                        className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl h-8 px-2 transition-colors"
+                                        title="إعادة تنشيط الموعد"
+                                      >
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                    {isCenter && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setEditApptGroup(group); }}
+                                        className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl h-8 px-2 transition-colors"
+                                        title="تعديل وتأجيل الموعد"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                    {isCenter && group.clientPhone && (
+                                      <>
+                                        <a
+                                          href={`tel:${group.clientPhone}`}
+                                          onClick={e => e.stopPropagation()}
+                                          className="flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-500 rounded-xl h-8 px-2 transition-colors"
+                                          title="اتصال"
+                                        >
+                                          <Phone className="w-3.5 h-3.5" />
+                                        </a>
+                                        <a
+                                          href={`https://wa.me/${group.clientPhone.replace(/\D/g, '')}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={e => e.stopPropagation()}
+                                          className="flex items-center justify-center bg-[#25D366]/10 hover:bg-[#25D366]/25 border border-[#25D366]/30 text-[#25D366] rounded-xl h-8 px-2 transition-colors"
+                                          title="واتساب"
+                                        >
+                                          <MessageCircle className="w-3.5 h-3.5" />
+                                        </a>
+                                      </>
+                                    )}
+                                    <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1 min-w-[65px] shrink-0 shadow-inner">
+                                      <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 mb-0.5" />
+                                      <span className="text-emerald-700 dark:text-emerald-300 font-black tabular-nums text-sm">{time}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Specialties Tags */}
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
+                                  {Array.from(group.types).map(t => (
+                                    <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-muted text-foreground border-border shadow-sm">
+                                      <TranslatedText text={mergedTypes[t as string] || t as string} lang={lang} />
+                                    </span>
+                                  ))}
+                                  <button
+                                    onClick={(e) => handleOpenAddSpecialty(group, e)}
+                                    className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 hover:bg-muted transition-all flex items-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    {t.addSpecialty}
+                                  </button>
+                                </div>
+
+                                {/* Notes */}
+                                {note && (<div className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded-lg mt-0.5 border border-input flex gap-1.5"><span className="font-bold shrink-0 text-foreground/70">{t.noteLabel}</span><span className="line-clamp-2 leading-snug"><TranslatedText text={note} lang={lang} /></span></div>)}
+
+                                {/* Supervisors */}
+                                {group.sups && group.sups.size > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
+                                    <span className="text-[10px] font-bold text-muted-foreground">{t.supsLabel}</span>
+                                    {Array.from(group.sups).map(sId => {
+                                      const sup = supervisors.find(s => s.uid === sId || s.id === sId);
+                                      return (
+                                        <span key={sId as string} className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800">
+                                          {sup ? (sup.displayName || sup.name) : 'غير معروف'}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* Attachments */}
+                                {(() => {
+                                  const urls = group.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []);
+                                  if (urls.length === 0) return null;
+                                  return (
+                                    <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
+                                      <span className="text-[10px] font-bold text-muted-foreground shrink-0"><FileImage className="w-3 h-3 inline mr-1"/>{t.attachLabel}</span>
+                                      {urls.map((url: string, idx: number) => (
+                                        <img
+                                          key={idx}
+                                          src={url}
+                                          alt="مرفق"
+                                          className="w-14 h-14 rounded-lg object-cover border border-border cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
+                                          onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
+                                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            );
+                          };
 
                           return (
-                            <div
-                              key={idx}
-                              className={cn(
-                                "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-muted",
-                                isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50",
-                                isCompleted ? "opacity-60 grayscale-[20%]" : ""
-                              )}
-                              onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
-                            >
-
-                              {/* Top Row: Villa & Time */}
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="flex-1 min-w-0 pr-1">
-                                  <div className="flex items-center gap-2">
-                                    <h4 className="font-black text-foreground text-base truncate flex items-center gap-2">
-                                      {t.villa} {group.villaNumber} {totalOpen > 0 && (
-                                        <span className="text-amber-600 dark:text-amber-500 font-bold text-xs bg-amber-500/10 px-2 py-0.5 rounded-full">({totalOpen} مفتوحة)</span>
-                                      )}
-                                      {isCompleted && (
-                                        <span className="text-emerald-500 font-bold text-xs bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> تم الانتهاء</span>
-                                      )}
-                                    </h4>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  {isCenter && !isCompleted && (
-                                    <button
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        if (!window.confirm('هل أنت متأكد من إنهاء الموعد؟')) return;
-                                        try {
-                                          const [dPart, tPart] = (group.appointmentTime || '').split(' ');
-                                          await appointmentsApi.update(group.appointmentId, {
-                                            date: dPart,
-                                            time: tPart || '',
-                                            notes: group.notes,
-                                            supervisorIds: Array.from(group.sups),
-                                            supervisors: group.supervisors,
-                                            types: Array.from(group.types),
-                                            clientPhone: group.clientPhone,
-                                            status: 'completed'
-                                          });
-                                          toast.success('تم إنهاء الموعد بنجاح');
-                                          loadAppointments();
-                                        } catch {
-                                          toast.error('حدث خطأ أثناء إنهاء الموعد');
-                                        }
-                                      }}
-                                      className="flex items-center justify-center bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl h-8 px-2 transition-colors"
-                                      title="إنهاء الموعد"
-                                    >
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                  {isCenter && (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); setEditApptGroup(group); }}
-                                      className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl h-8 px-2 transition-colors"
-                                      title="تعديل وتأجيل الموعد"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                  {isCenter && group.clientPhone && (
-                                    <>
-                                      <a
-                                        href={`tel:${group.clientPhone}`}
-                                        onClick={e => e.stopPropagation()}
-                                        className="flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-500 rounded-xl h-8 px-2 transition-colors"
-                                        title="اتصال"
-                                      >
-                                        <Phone className="w-3.5 h-3.5" />
-                                      </a>
-                                      <a
-                                        href={`https://wa.me/${group.clientPhone.replace(/\D/g, '')}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={e => e.stopPropagation()}
-                                        className="flex items-center justify-center bg-[#25D366]/10 hover:bg-[#25D366]/25 border border-[#25D366]/30 text-[#25D366] rounded-xl h-8 px-2 transition-colors"
-                                        title="واتساب"
-                                      >
-                                        <MessageCircle className="w-3.5 h-3.5" />
-                                      </a>
-                                    </>
-                                  )}
-                                  <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1 min-w-[65px] shrink-0 shadow-inner">
-                                    <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 mb-0.5" />
-                                    <span className="text-emerald-700 dark:text-emerald-300 font-black tabular-nums text-sm">{time}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Specialties Tags */}
-                              <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
-                                {Array.from(group.types).map(t => (
-                                  <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-muted text-foreground border-border shadow-sm">
-                                    <TranslatedText text={mergedTypes[t as string] || t as string} lang={lang} />
-                                  </span>
-                                ))}
-                                <button
-                                  onClick={(e) => handleOpenAddSpecialty(group, e)}
-                                  className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 hover:bg-muted transition-all flex items-center gap-1"
-                                >
-                                  <Plus className="w-3 h-3" />
-                                  {t.addSpecialty}
-                                </button>
-                              </div>
-
-                              {/* Notes */}
-                              {note && (<div className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded-lg mt-0.5 border border-input flex gap-1.5"><span className="font-bold shrink-0 text-foreground/70">{t.noteLabel}</span><span className="line-clamp-2 leading-snug"><TranslatedText text={note} lang={lang} /></span></div>)}
-
-                              {/* Supervisors */}
-                              {group.sups && group.sups.size > 0 && (
-                                <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
-                                  <span className="text-[10px] font-bold text-muted-foreground">{t.supsLabel}</span>
-                                  {Array.from(group.sups).map(sId => {
-                                    const sup = supervisors.find(s => s.uid === sId || s.id === sId);
-                                    return (
-                                      <span key={sId as string} className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800">
-                                        {sup ? (sup.displayName || sup.name) : 'غير معروف'}
-                                      </span>
-                                    );
-                                  })}
+                            <>
+                              {sortedActive.length > 0 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 h-max pb-2">
+                                  {sortedActive.map((group, idx) => renderCard(group, `active-${idx}`))}
                                 </div>
                               )}
 
-                              {/* Attachments */}
-                              {(() => {
-                                const urls = group.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []);
-                                if (urls.length === 0) return null;
-                                return (
-                                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
-                                    <span className="text-[10px] font-bold text-muted-foreground shrink-0"><FileImage className="w-3 h-3 inline mr-1"/>{t.attachLabel}</span>
-                                    {urls.map((url: string, idx: number) => (
-                                      <img
-                                        key={idx}
-                                        src={url}
-                                        alt="مرفق"
-                                        className="w-14 h-14 rounded-lg object-cover border border-border cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
-                                        onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
-                                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                                      />
-                                    ))}
+                              {sortedCompleted.length > 0 && (
+                                <div className="pt-3 border-t border-border/80">
+                                  <div className="flex items-center gap-2 mb-2.5 px-1">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                    <span className="text-xs font-black text-muted-foreground">
+                                      المواعيد المنتهية ({sortedCompleted.length})
+                                    </span>
                                   </div>
-                                );
-                              })()}
-                            </div>
-                          )
-                        })}
-                      </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 h-max pb-2">
+                                    {sortedCompleted.map((group, idx) => renderCard(group, `completed-${idx}`))}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </>
                     )}
                     {groups.length === 0 && !loading && isCenter && (
                       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-60">

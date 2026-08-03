@@ -33,9 +33,11 @@ interface TicketLike {
 
 interface WorkHoursConfig {
   enabled: boolean;
+  hasMorning?: boolean;
   morning: { start: string; end: string };
-  hasBreak: boolean;
+  hasBreak?: boolean;
   break: { start: string; end: string };
+  hasAfternoon?: boolean;
   afternoon: { start: string; end: string };
 }
 
@@ -70,9 +72,11 @@ const RANGE_PRESETS = [
 
 const DEFAULT_WH: WorkHoursConfig = {
   enabled: true,
+  hasMorning: true,
   morning: { start: '08:00', end: '12:00' },
   hasBreak: true,
   break: { start: '12:00', end: '13:00' },
+  hasAfternoon: true,
   afternoon: { start: '13:00', end: '16:00' },
 };
 
@@ -107,19 +111,23 @@ function fmtTime(hhmm: string): string {
 }
 
 function buildTimeOptions(wh: WorkHoursConfig): TimeOption[] {
-  return [
-    {
+  const opts: TimeOption[] = [];
+  if (wh.hasMorning !== false && wh.morning) {
+    opts.push({
       label: `الصباح (${fmtTime(wh.morning.start)} - ${fmtTime(wh.morning.end)})`,
       value: 'morning',
       startTime: wh.morning.start,
-    },
-    {
+    });
+  }
+  if (wh.hasAfternoon !== false && wh.afternoon) {
+    opts.push({
       label: `بعد الظهر (${fmtTime(wh.afternoon.start)} - ${fmtTime(wh.afternoon.end)})`,
       value: 'afternoon',
       startTime: wh.afternoon.start,
-    },
-    { label: 'وقت محدد', value: 'custom', startTime: null },
-  ];
+    });
+  }
+  opts.push({ label: 'وقت محدد', value: 'custom', startTime: null });
+  return opts;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -224,6 +232,32 @@ export function UnifiedAppointmentDialog({
     return !!t.appointmentTime && t.appointmentTime.startsWith(checkDate);
   });
 
+  const currentProjectId = useMemo(() => {
+    if (isTicketMode) {
+      return primaryTicket?.projectId || tickets?.[0]?.projectId || '';
+    }
+    if (isEditMode) {
+      return editGroup?.tickets?.[0]?.projectId || editGroup?.projectId || primaryTicket?.projectId || '';
+    }
+    if (isCalendarMode) {
+      return (hasExistingTickets ? activeTickets[0]?.projectId : projectId) || '';
+    }
+    return '';
+  }, [isTicketMode, isEditMode, isCalendarMode, primaryTicket, tickets, editGroup, hasExistingTickets, activeTickets, projectId]);
+
+  const activeSupervisorsList = useMemo(() => {
+    return isEditMode && editSupervisors && editSupervisors.length > 0 ? editSupervisors : supervisors;
+  }, [isEditMode, editSupervisors, supervisors]);
+
+  const availableSupervisors = useMemo(() => {
+    if (!currentProjectId) return activeSupervisorsList;
+    return activeSupervisorsList.filter((s: any) => {
+      const pIds: string[] = s.projectIds || s.projects?.map((p: any) => p.id) || [];
+      if (!pIds || pIds.length === 0) return true;
+      return pIds.includes(currentProjectId);
+    });
+  }, [activeSupervisorsList, currentProjectId]);
+
   // ── Click-outside (calendar dropdown) ─────────────────────────────────────
 
   useEffect(() => {
@@ -241,15 +275,24 @@ export function UnifiedAppointmentDialog({
   useEffect(() => {
     if (!open) return;
 
-    // Load work hours (project-specific if available). Resolves asynchronously,
-    // after the mode-specific blocks below already set the correct initial
-    // timeMode (e.g. 'custom' with the existing time in edit mode) — so it
-    // must NOT touch timeMode itself, or it clobbers that with 'morning'.
+    // Load work hours (project-specific if available)
     settingsApi.getWorkHours().then((wh: any) => {
-      const pid = primaryTicket?.projectId;
+      const pid = isTicketMode
+        ? (primaryTicket?.projectId || tickets?.[0]?.projectId)
+        : isEditMode
+        ? (editGroup?.tickets?.[0]?.projectId || editGroup?.projectId || primaryTicket?.projectId)
+        : (hasExistingTickets ? activeTickets[0]?.projectId : projectId);
       const cfg: WorkHoursConfig =
         (pid && wh.byProject?.[pid]) ? wh.byProject[pid] : (wh.default ?? DEFAULT_WH);
       setWorkHours(cfg);
+
+      if (!isEditMode && !primaryTicket?.appointmentTime) {
+        if (cfg.hasMorning === false && cfg.hasAfternoon !== false) {
+          setTimeMode('afternoon');
+        } else if (cfg.hasMorning === false && cfg.hasAfternoon === false) {
+          setTimeMode('custom');
+        }
+      }
     }).catch(() => {});
 
     // Load supervisors
@@ -422,11 +465,11 @@ export function UnifiedAppointmentDialog({
         ? (clientPhone || undefined)
         : (clients.find(c => c.id === selectedClientId)?.phone || undefined);
 
-      if (isEditMode) {
-        const assignedSupervisors = editSupervisors
-          .filter(s => selectedSupIds.includes(s.uid || s.id))
-          .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
+      const assignedSupervisors = activeSupervisorsList
+        .filter((s: any) => selectedSupIds.includes(s.uid || s.id))
+        .map((s: any) => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
 
+      if (isEditMode) {
         if (editGroup.appointmentId) {
           await appointmentsApi.update(editGroup.appointmentId, {
             date,
@@ -454,9 +497,6 @@ export function UnifiedAppointmentDialog({
         toast.success('تم تعديل الموعد بنجاح');
 
       } else if (isTicketMode) {
-        const assignedSupervisors = supervisors
-          .filter(s => selectedSupIds.includes(s.uid || s.id))
-          .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
         const allTypes = new Set<string>();
         tickets?.forEach(t => {
           if (t.type) allTypes.add(t.type);
@@ -492,9 +532,6 @@ export function UnifiedAppointmentDialog({
 
       } else if (isCalendarMode) {
         const effectiveDate = dateStr ?? date;
-        const assignedSupervisors = supervisors
-          .filter(s => selectedSupIds.includes(s.uid || s.id))
-          .map(s => ({ id: s.uid || s.id, name: s.displayName || s.name, specialty: 'general' }));
 
         if (hasExistingTickets) {
           const existingApptId: string | undefined = activeTickets.find((t: any) => t.appointmentId)?.appointmentId;
@@ -891,11 +928,15 @@ export function UnifiedAppointmentDialog({
             <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
               {canSendWhatsApp ? 'الوقت المفضل للعميل' : 'وقت الموعد'}
             </Label>
-            {showWorkHoursShortcuts && (
-              <div className="grid grid-cols-2 gap-2">
+            {showWorkHoursShortcuts && timeOptions.filter(opt => opt.value !== 'custom').length > 0 && (
+              <div className={cn(
+                "grid gap-2",
+                timeOptions.filter(opt => opt.value !== 'custom').length > 1 ? "grid-cols-2" : "grid-cols-1"
+              )}>
                 {timeOptions.filter(opt => opt.value !== 'custom').map(opt => (
                   <button
                     key={opt.value}
+                    type="button"
                     onClick={() => setTimeMode(opt.value)}
                     className={cn(
                       'h-10 rounded-xl text-xs font-bold border transition-all px-2',
@@ -958,7 +999,7 @@ export function UnifiedAppointmentDialog({
               المشرفين
             </Label>
             <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto no-scrollbar">
-              {(isEditMode ? editSupervisors : supervisors).map((s: any) => {
+              {availableSupervisors.map((s: any) => {
                 const sId = s.uid || s.id;
                 const sName = s.displayName || s.name;
                 const isSel = selectedSupIds.includes(sId);
@@ -984,8 +1025,8 @@ export function UnifiedAppointmentDialog({
                   </button>
                 );
               })}
-              {(isEditMode ? editSupervisors : supervisors).length === 0 && (
-                <div className="text-xs text-muted-foreground">جاري تحميل المشرفين...</div>
+              {availableSupervisors.length === 0 && (
+                <div className="text-xs text-muted-foreground">لا يوجد مشرفين مسندين لهذا المشروع</div>
               )}
             </div>
           </div>

@@ -10,11 +10,13 @@ export interface TimePeriod {
 }
 
 export interface WorkHoursConfig {
-  enabled:    boolean;
-  morning:    TimePeriod;
-  hasBreak:   boolean;
-  break:      TimePeriod;
-  afternoon:  TimePeriod;
+  enabled:       boolean;
+  hasMorning?:   boolean;
+  morning:       TimePeriod;
+  hasBreak?:     boolean;
+  break:         TimePeriod;
+  hasAfternoon?: boolean;
+  afternoon:     TimePeriod;
 }
 
 export interface WorkHoursSettings {
@@ -23,11 +25,13 @@ export interface WorkHoursSettings {
 }
 
 const DEFAULT_WH_CONFIG: WorkHoursConfig = {
-  enabled:   true,
-  morning:   { start: '08:00', end: '12:00' },
-  hasBreak:  true,
-  break:     { start: '12:00', end: '13:00' },
-  afternoon: { start: '13:00', end: '16:00' },
+  enabled:      true,
+  hasMorning:   true,
+  morning:      { start: '08:00', end: '12:00' },
+  hasBreak:     true,
+  break:        { start: '12:00', end: '13:00' },
+  hasAfternoon: true,
+  afternoon:    { start: '13:00', end: '16:00' },
 };
 
 export const DEFAULT_WORK_HOURS: WorkHoursSettings = {
@@ -42,12 +46,16 @@ export function toMins(hhmm: string): number {
 }
 
 export function inPeriod(mins: number, p: TimePeriod): boolean {
+  if (!p || !p.start || !p.end) return false;
   return mins >= toMins(p.start) && mins < toMins(p.end);
 }
 
 export function inWorkHours(mins: number, cfg: WorkHoursConfig): boolean {
-  if (inPeriod(mins, cfg.morning)) return true;
-  if (cfg.hasBreak && inPeriod(mins, cfg.afternoon)) return true;
+  if (!cfg.enabled) return true;
+  const hasMorning = cfg.hasMorning !== false;
+  const hasAfternoon = cfg.hasAfternoon !== false;
+  if (hasMorning && inPeriod(mins, cfg.morning)) return true;
+  if (hasAfternoon && inPeriod(mins, cfg.afternoon)) return true;
   return false;
 }
 

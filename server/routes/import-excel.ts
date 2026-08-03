@@ -19,7 +19,11 @@ import { buildTypeToSpecialtyMap } from "../classifier/db-helpers.js";
 // جوه الكود كانت بتتفسر غلط، وملف الـ worker المؤقت في /tmp مكانش قادر يلاقي
 // حزمة xlsx أصلاً — فالاستيراد كان بيفشل. التحليل نفسه سريع جداً حتى لآلاف
 // الصفوف، فمفيش داعي لتعقيد الـ worker thread من الأساس.)
-function parseExcelAndDetectHeaders(buffer: Buffer, fieldAliases: Record<string, string[]>): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number } {
+function parseExcelAndDetectHeaders(
+  buffer: Buffer, 
+  fieldAliases: Record<string, string[]>, 
+  skipDateFilter: boolean = false
+): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number } {
   const wb = XLSX.read(buffer, { type: "buffer", cellFormula: false, cellHTML: false, cellStyles: false, cellNF: false, sheetStubs: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
@@ -49,7 +53,7 @@ function parseExcelAndDetectHeaders(buffer: Buffer, fieldAliases: Record<string,
   }
 
   let maxTime = 0;
-  if (mapping["createdAt"]) {
+  if (!skipDateFilter && mapping["createdAt"]) {
     for (const row of allData) {
       const rawDate = row[mapping["createdAt"]];
       const dStr = normalizeDate(rawDate);
@@ -60,7 +64,7 @@ function parseExcelAndDetectHeaders(buffer: Buffer, fieldAliases: Record<string,
     }
   }
 
-  const cutoffTime = maxTime > 0 ? maxTime - 35 * 24 * 60 * 60 * 1000 : 0;
+  const cutoffTime = (!skipDateFilter && maxTime > 0) ? maxTime - 35 * 24 * 60 * 60 * 1000 : 0;
   let skippedByDateFilter = 0;
 
   const NEEDED_COLS = Object.values(mapping).filter(Boolean);
@@ -230,16 +234,21 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
   try {
     // ── 1. Load project info ─────────────────────────────────────────────────
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, name: true, abbreviation: true },
-    });
+    const [project, existingTicketsCount] = await Promise.all([
+      prisma.project.findUnique({
+        where: { id: projectId },
+        select: { id: true, name: true, abbreviation: true },
+      }),
+      prisma.ticket.count({ where: { projectId } }),
+    ]);
     if (!project) {
       fs.unlinkSync(filePath);
       res.write(JSON.stringify({ error: "المشروع غير موجود" }) + "\n");
       return res.end();
     }
     const projectAbbr = (project.abbreviation || "").toUpperCase();
+    const isFirstImport = existingTicketsCount === 0;
+    const shouldSkipDateFilter = isFirstImport || req.body.skipDateFilter === "true" || req.body.skipDateFilter === true;
 
     // ── 2 & 3. Parse Excel + detect headers ──────────────────────────────────
     const buffer = fs.readFileSync(filePath);
@@ -255,7 +264,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       excelType:   ["تصنيف التذاكر", "التصنيف", "نوع التذاكر", "نوع المشكلة"],
     };
 
-    const { allData, mapping, skippedByDateFilter } = parseExcelAndDetectHeaders(buffer, fieldAliases);
+    const { allData, mapping, skippedByDateFilter } = parseExcelAndDetectHeaders(buffer, fieldAliases, shouldSkipDateFilter);
 
     if (allData.length === 0) {
       res.write(JSON.stringify({ error: "الملف فارغ أو لا يحتوي على بيانات" }) + "\n");

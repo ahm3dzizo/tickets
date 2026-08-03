@@ -33,11 +33,13 @@ const specialtyLabels: Record<string, string> = {
 };
 
 const DEFAULT_WH_CONFIG: WorkHoursConfig = {
-  enabled:   true,
-  morning:   { start: '08:00', end: '12:00' },
-  hasBreak:  true,
-  break:     { start: '12:00', end: '13:00' },
-  afternoon: { start: '13:00', end: '16:00' },
+  enabled:      true,
+  hasMorning:   true,
+  morning:      { start: '08:00', end: '12:00' },
+  hasBreak:     true,
+  break:        { start: '12:00', end: '13:00' },
+  hasAfternoon: true,
+  afternoon:    { start: '13:00', end: '16:00' },
 };
 
 type SectionMeta = { key: string; title: string; desc: string; icon: React.ElementType; accent: string };
@@ -1040,16 +1042,17 @@ export default function Settings() {
                   <div className="relative h-10 rounded-xl bg-muted/50 overflow-hidden border border-border/40 flex items-center" dir="ltr">
                     {(() => {
                       const total = 24 * 60;
-                      const p = (t: string) => t.split(':').map(Number).reduce((h,m)=>h*60+m,0);
-                      const ms = p(currentWH.morning.start), me = p(currentWH.morning.end);
-                      const bs = currentWH.hasBreak ? p(currentWH.break.start) : me;
-                      const be = currentWH.hasBreak ? p(currentWH.break.end)   : me;
-                      const as2 = currentWH.hasBreak ? be : me;
-                      const ae = p(currentWH.afternoon.end);
+                      const p = (t: string) => t ? t.split(':').map(Number).reduce((h,m)=>h*60+m,0) : 0;
+                      const hasM = currentWH.hasMorning !== false;
+                      const hasB = currentWH.hasBreak !== false;
+                      const hasA = currentWH.hasAfternoon !== false;
+                      const ms = p(currentWH.morning?.start || '08:00'), me = p(currentWH.morning?.end || '12:00');
+                      const bs = p(currentWH.break?.start || '12:00'),   be = p(currentWH.break?.end || '13:00');
+                      const as2 = p(currentWH.afternoon?.start || '13:00'), ae = p(currentWH.afternoon?.end || '16:00');
                       return (<>
-                        <div className="absolute inset-y-0 bg-amber-500/30 border-r border-amber-500/50" style={{ left: `${ms/total*100}%`, width: `${(me-ms)/total*100}%` }} />
-                        {currentWH.hasBreak && <div className="absolute inset-y-0 bg-red-500/20 border-x border-red-500/30" style={{ left: `${bs/total*100}%`, width: `${(be-bs)/total*100}%` }} />}
-                        {currentWH.hasBreak && <div className="absolute inset-y-0 bg-amber-500/30 border-l border-amber-500/50" style={{ left: `${as2/total*100}%`, width: `${(ae-as2)/total*100}%` }} />}
+                        {hasM && <div className="absolute inset-y-0 bg-amber-500/30 border-r border-amber-500/50" style={{ left: `${ms/total*100}%`, width: `${(me-ms)/total*100}%` }} />}
+                        {hasB && <div className="absolute inset-y-0 bg-red-500/20 border-x border-red-500/30" style={{ left: `${bs/total*100}%`, width: `${(be-bs)/total*100}%` }} />}
+                        {hasA && <div className="absolute inset-y-0 bg-amber-500/30 border-l border-amber-500/50" style={{ left: `${as2/total*100}%`, width: `${(ae-as2)/total*100}%` }} />}
                         <div className="absolute inset-0 flex items-center justify-around px-2 pointer-events-none">
                           {[0,3,6,9,12,15,18,21].map(h => <span key={h} className="text-[9px] text-muted-foreground/50 font-mono">{h}</span>)}
                         </div>
@@ -1058,30 +1061,36 @@ export default function Settings() {
                   </div>
 
                   {[
-                    { label: 'الفترة الصباحية', field: 'morning' as const, color: 'amber' },
-                    ...(currentWH.hasBreak ? [{ label: 'فترة الراحة', field: 'break' as const, color: 'red' }] : []),
-                    ...(currentWH.hasBreak ? [{ label: 'الفترة المسائية', field: 'afternoon' as const, color: 'amber' }] : []),
-                  ].map(({ label, field, color }) => (
-                    <div key={field} className="bg-card border border-border/60 rounded-2xl p-4 space-y-3">
-                      <div className={cn('flex items-center gap-2', field === 'break' ? 'justify-between' : 'justify-end')}>
-                        {field === 'break' && (
-                          <Toggle checked={currentWH.hasBreak} onChange={v => setCurrentWH({ ...currentWH, hasBreak: v })} />
-                        )}
+                    { label: 'الفترة الصباحية', field: 'morning' as const, toggleField: 'hasMorning' as const, enabled: currentWH.hasMorning !== false, color: 'amber' },
+                    { label: 'فترة الراحة (البريك)', field: 'break' as const, toggleField: 'hasBreak' as const, enabled: currentWH.hasBreak !== false, color: 'red' },
+                    { label: 'الفترة المسائية', field: 'afternoon' as const, toggleField: 'hasAfternoon' as const, enabled: currentWH.hasAfternoon !== false, color: 'amber' },
+                  ].map(({ label, field, toggleField, enabled, color }) => (
+                    <div key={field} className={cn("bg-card border rounded-2xl p-4 space-y-3 transition-all", enabled ? "border-border/60" : "border-border/30 opacity-60")}>
+                      <div className="flex items-center justify-between">
+                        <Toggle
+                          checked={enabled}
+                          onChange={v => setCurrentWH({ ...currentWH, [toggleField]: v })}
+                        />
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold text-foreground">{label}</p>
-                          <span className={`w-3 h-3 rounded-full bg-${color}-${color === 'red' ? '400/60' : '500/70'}`} />
+                          <span className={cn(
+                            "w-3 h-3 rounded-full",
+                            color === 'red' ? (enabled ? "bg-red-400/60" : "bg-muted") : (enabled ? "bg-amber-500/70" : "bg-muted")
+                          )} />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {(['end', 'start'] as const).map(side => (
-                          <div key={side} className="space-y-1">
-                            <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">{side === 'end' ? 'إلى' : 'من'}</label>
-                            <input type="time" value={currentWH[field][side]}
-                              onChange={e => setCurrentWH({ ...currentWH, [field]: { ...currentWH[field], [side]: e.target.value } })}
-                              className={`w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-${color}-500/50 font-mono text-sm`} />
-                          </div>
-                        ))}
-                      </div>
+                      {enabled && (
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          {(['end', 'start'] as const).map(side => (
+                            <div key={side} className="space-y-1">
+                              <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">{side === 'end' ? 'إلى' : 'من'}</label>
+                              <input type="time" value={currentWH[field]?.[side] || ''}
+                                onChange={e => setCurrentWH({ ...currentWH, [field]: { ...(currentWH[field] || {}), [side]: e.target.value } })}
+                                className={`w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-${color}-500/50 font-mono text-sm`} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
 
@@ -1090,9 +1099,12 @@ export default function Settings() {
                       <p className="text-amber-400 text-xs font-bold">ملخص أوقات الدوام</p>
                       <Clock className="w-3.5 h-3.5 text-amber-400" />
                     </div>
-                    <p className="text-foreground text-sm">🌅 الصباح: {fmtTime(currentWH.morning.start)} — {fmtTime(currentWH.morning.end)}</p>
-                    {currentWH.hasBreak && <p className="text-muted-foreground text-xs">☕ الراحة: {fmtTime(currentWH.break.start)} — {fmtTime(currentWH.break.end)}</p>}
-                    {currentWH.hasBreak && <p className="text-foreground text-sm">🌆 المساء: {fmtTime(currentWH.afternoon.start)} — {fmtTime(currentWH.afternoon.end)}</p>}
+                    {currentWH.hasMorning !== false && <p className="text-foreground text-sm">🌅 الصباح: {fmtTime(currentWH.morning?.start || '08:00')} — {fmtTime(currentWH.morning?.end || '12:00')}</p>}
+                    {currentWH.hasBreak !== false && <p className="text-muted-foreground text-xs">☕ الراحة: {fmtTime(currentWH.break?.start || '12:00')} — {fmtTime(currentWH.break?.end || '13:00')}</p>}
+                    {currentWH.hasAfternoon !== false && <p className="text-foreground text-sm">🌆 المساء: {fmtTime(currentWH.afternoon?.start || '13:00')} — {fmtTime(currentWH.afternoon?.end || '16:00')}</p>}
+                    {currentWH.hasMorning === false && currentWH.hasAfternoon === false && (
+                      <p className="text-muted-foreground text-xs">لا توجد فترات عمل محددة (متاح وقت مخصص فقط)</p>
+                    )}
                   </div>
                 </div>
               </div>
