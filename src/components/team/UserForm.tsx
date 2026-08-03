@@ -230,6 +230,7 @@ export function UserForm({
             loading={loading}
             onSubmit={handleSubmit}
             onCancel={() => setOpen(false)}
+            onSaved={onSaved}
             allowedRoles={allowedRoles}
             lockedProjectIds={lockedProjectIds}
           />
@@ -271,6 +272,7 @@ export function UserForm({
           loading={loading}
           onSubmit={handleSubmit}
           onCancel={() => setOpen(false)}
+          onSaved={onSaved}
           allowedRoles={allowedRoles}
           lockedProjectIds={lockedProjectIds}
         />
@@ -301,6 +303,7 @@ interface FormBodyProps {
   loading: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  onSaved?: () => void;
   allowedRoles?: UserRole[];
   lockedProjectIds?: string[];
 }
@@ -317,8 +320,10 @@ function FormBody({
   selectedProjects, toggleProject, projects,
   onLeave, setOnLeave, substituteUid, setSubstituteUid, allUsers,
   loading, onSubmit, onCancel,
-  allowedRoles, lockedProjectIds,
+  allowedRoles, lockedProjectIds, onSaved,
 }: FormBodyProps) {
+  const { user: currentUser } = useAuth();
+  const [deleting, setDeleting] = useState(false);
   const visibleRoles = allowedRoles ?? (['admin', 'engineer', 'supervisor'] as UserRole[]);
   const visibleProjects = lockedProjectIds
     ? projects.filter(p => lockedProjectIds.includes(p.id))
@@ -633,19 +638,19 @@ function FormBody({
             <Button
               type="button"
               variant="destructive"
-              disabled={loading}
+              disabled={loading || deleting}
               onClick={async () => {
                 if (!window.confirm('هل أنت متأكد من حذف هذا العضو؟ لا يمكن التراجع عن هذا الإجراء.')) return;
-                setLoading(true);
+                setDeleting(true);
                 try {
                   await usersApi.delete(editingUser.id ?? editingUser.uid);
                   toast.success('تم حذف العضو بنجاح');
-                  setOpen(false);
+                  onCancel();
                   onSaved?.();
                 } catch {
                   toast.error('حدث خطأ أثناء الحذف');
                 } finally {
-                  setLoading(false);
+                  setDeleting(false);
                 }
               }}
               className="px-4 rounded-xl h-12 flex-shrink-0 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20"
