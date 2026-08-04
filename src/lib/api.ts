@@ -377,9 +377,31 @@ export const appointmentsApi = {
   deleteAppointment: (id: string) => del<any>(`/appointments/${id}`),
   migrate: () => post<{ ok: boolean; created: number }>('/appointments/migrate', {}),
   getByClient: (clientId: string) => get<any[]>(`/appointments/by-client/${clientId}`),
-  getByUnit: (projectId: string, villaNumber: string) =>
-    get<any[]>(`/appointments/by-unit?projectId=${encodeURIComponent(projectId)}&villaNumber=${encodeURIComponent(villaNumber)}`),
+  getByUnit: (projectId: string, villaNumber: string) => get<any[]>(`/appointments/by-unit/${projectId}/${villaNumber}`),
 };
+
+// ── Warranties ────────────────────────────────────────────────────────────────
+export const warrantiesApi = {
+  getAll: () => get<any[]>('/warranties'),
+  import: async (file: File, projectId?: string) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (projectId) form.append('projectId', projectId);
+    
+    const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
+    const res = await fetch('/api/warranties/import', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<{ success: boolean; updated: number; errors: string[] }>;
+  },
+};
+
 
 // ── Learned Keywords ──────────────────────────────────────────────────────────
 export interface LearnedKeyword { id?: string; keyword: string; type: string; confidence: number; usageCount: number; }

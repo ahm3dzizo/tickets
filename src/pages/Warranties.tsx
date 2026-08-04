@@ -24,6 +24,8 @@ export default function Warranties() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expiring' | 'expired'>('all');
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadData();
@@ -113,6 +115,28 @@ export default function Warranties() {
     XLSX.writeFile(wb, `warranties_export.xlsx`);
   };
 
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      const res = await warrantiesApi.import(file);
+      if (res.success) {
+        toast.success(`تم التحديث: ${res.updated} وحدة بنجاح`);
+        if (res.errors && res.errors.length > 0) {
+          toast.warning(`تم التحديث ببعض الأخطاء: \n${res.errors.slice(0, 5).join('\\n')}`);
+        }
+        loadData();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'فشل استيراد الضمانات');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <Layout>
       <div className="max-w-7xl mx-auto space-y-6" dir="rtl">
@@ -130,9 +154,27 @@ export default function Warranties() {
             </div>
           </div>
           
-          <Button onClick={exportExcel} variant="outline" className="gap-2 w-full md:w-auto border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-500 transition-colors">
-            <FileSpreadsheet className="w-4 h-4" /> تصدير Excel
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept=".xlsx,.xls,.csv" 
+              onChange={handleImportExcel} 
+            />
+            <Button 
+              onClick={() => fileInputRef.current?.click()} 
+              variant="outline" 
+              disabled={importing}
+              className="gap-2 border-indigo-500/20 hover:bg-indigo-500/10 hover:text-indigo-500 transition-colors"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> 
+              {importing ? 'جاري الاستيراد...' : 'استيراد Excel'}
+            </Button>
+            <Button onClick={exportExcel} variant="outline" className="gap-2 border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-500 transition-colors">
+              <Download className="w-4 h-4" /> تصدير Excel
+            </Button>
+          </div>
         </div>
 
         {/* Filters Section */}
