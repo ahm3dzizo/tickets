@@ -44,7 +44,8 @@ export async function loadKeywordsFromDB(force = false): Promise<KeywordData[]> 
         subType:    r.subType?.nameAr  || null,
         subTypeId:  r.subType?.id      || null,
         weight:     r.weight,
-      }));
+      }))
+      .filter((k: any) => k.keyword.length > 0);
     _kwCacheTime = Date.now();
     return _kwCache;
   })();
