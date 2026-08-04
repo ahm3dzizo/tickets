@@ -26,14 +26,14 @@ async function main() {
 
   // Load keywords manually
   const { loadKeywordsFromDB, classifyFromKeywordsDB } = await import("../server/classifier/keywords.js");
-  await loadKeywordsFromDB();
+  const keywords = await loadKeywordsFromDB();
 
   for (const t of tickets) {
     try {
       if (!t.description) continue;
       
-      const classification = await classifyFromKeywordsDB(t.description);
-      const allTypes = Array.from(classification);
+      const classification = await classifyFromKeywordsDB(t.description, keywords);
+      const allTypes = classification.allTypes;
       const requiredSpecialties = [...new Set(allTypes.map((type: string) => typeToSpecialty[type] || "general"))];
       
       const supervisors = await findSupervisorsDB(project.id, requiredSpecialties);
