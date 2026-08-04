@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['logo.jpg', 'logo-192.png', 'logo-512.png'],
+        includeAssets: ['logo-192.png', 'logo-512.png'],
         manifest: {
           name: 'Tickets — نظام إدارة الصيانة',
           short_name: 'Tickets',

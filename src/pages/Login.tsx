@@ -104,7 +104,7 @@ export default function Login() {
         <div className="flex flex-col items-center text-center space-y-3">
           <div className="relative">
             <div className="w-20 h-20 rounded-[1.75rem] bg-white dark:bg-card border border-border shadow-xl shadow-primary/10 p-3 backdrop-blur-sm">
-              <img src="/logo.jpg" alt="Tickets" className="w-full h-full object-contain rounded-2xl" />
+              <img src="/logo.png" alt="Tickets" className="w-full h-full object-contain rounded-2xl" />
             </div>
             <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
               <div className="w-2 h-2 rounded-full bg-white" />
