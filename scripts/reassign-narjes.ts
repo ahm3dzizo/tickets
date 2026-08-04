@@ -24,12 +24,17 @@ async function main() {
   const typeToSpecialty = await buildTypeToSpecialtyMap();
   let updated = 0;
 
+  // Load keywords manually
+  const { loadKeywordsFromDB, classifyFromKeywordsDB } = await import("../server/classifier/keywords.js");
+  await loadKeywordsFromDB();
+
   for (const t of tickets) {
     try {
       if (!t.description) continue;
       
-      const classification = await classifyTicket(t.description, project.id);
-      const requiredSpecialties = [...new Set(classification.allTypes.map((type: string) => typeToSpecialty[type] || "general"))];
+      const classification = await classifyFromKeywordsDB(t.description);
+      const allTypes = Array.from(classification);
+      const requiredSpecialties = [...new Set(allTypes.map((type: string) => typeToSpecialty[type] || "general"))];
       
       const supervisors = await findSupervisorsDB(project.id, requiredSpecialties);
       
@@ -39,7 +44,7 @@ async function main() {
           data: {
             assignedSupervisorId: supervisors[0].id,
             assignedSupervisorIds: supervisors.map(s => s.id),
-            detectedTypes: classification.allTypes,
+            detectedTypes: allTypes,
           }
         });
         updated++;
