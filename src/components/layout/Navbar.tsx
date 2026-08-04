@@ -220,7 +220,7 @@ export function Navbar() {
         {/* Center: Logo */}
         <Link to="/" className="flex items-center gap-2 flex-1 min-w-0">
           <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/15 flex items-center justify-center p-1 shrink-0">
-            <img src="/logo.png" alt="Tickets" className="w-full h-full object-contain rounded-lg" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+            <img src="/icon.png" alt="Tickets" className="w-full h-full object-contain rounded-lg" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
           </div>
           <div className="min-w-0 leading-none">
             <span className="font-extrabold text-sm text-foreground tracking-tight block">Tickets</span>
@@ -366,7 +366,7 @@ export function Navbar() {
           <Link to="/" className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/15 flex items-center justify-center p-1.5 shrink-0 shadow-md shadow-primary/10 transition-shadow group-hover:shadow-primary/20">
               <img
-                src="/logo.png"
+                src="/icon.png"
                 alt="Tickets"
                 className="w-full h-full object-contain rounded-xl"
                 onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
