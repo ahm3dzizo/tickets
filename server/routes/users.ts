@@ -42,7 +42,7 @@ async function sendWelcomeMessage(senderUid: string, newUser: { displayName: str
 
   const message =
     `السلام عليكم *${newUser.displayName}* 👋\n\n` +
-    `تم إضافتك في *نظام صيانة رتال* كـ *${roleLabel}*.\n\n` +
+    `تم إضافتك في *نظام Tickets* كـ *${roleLabel}*.\n\n` +
     `لإكمال تسجيلك، اتبع الخطوات:\n\n` +
     `1️⃣ افتح التطبيق:\n${appUrl}\n\n` +
     `2️⃣ اضغط *"تسجيل الدخول"*\n\n` +
