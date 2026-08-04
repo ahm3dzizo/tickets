@@ -174,12 +174,20 @@ export async function classifyWithGemini(
 
       let parsed: { items?: { type: string; subType?: string | null }[]; confidence?: number };
       try {
-        const stripped = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
-        const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error("No JSON object found");
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch {
-        console.error(`[${provider.label}] Failed to parse response:`, text.slice(0, 120));
+        if (!text) throw new Error("Empty text returned from API");
+        
+        // Find the first { and extract until the last }
+        const firstIdx = text.indexOf('{');
+        const lastIdx = text.lastIndexOf('}');
+        if (firstIdx === -1 || lastIdx === -1 || lastIdx < firstIdx) {
+          throw new Error("No JSON object found in response");
+        }
+        const jsonStr = text.substring(firstIdx, lastIdx + 1);
+        let cleanStr = stripJsonComments(jsonStr).replace(/,\s*([\}\]])/g, '$1');
+        parsed = JSON.parse(cleanStr);
+      } catch (err: any) {
+        console.error(`[${provider.label}] Failed to parse response:`, err.message);
+        console.error(`[${provider.label}] Raw data:`, JSON.stringify(data).slice(0, 500));
         return null;
       }
 
@@ -265,14 +273,23 @@ export async function classifyBatchWithGemini(
       const data = await callProvider(provider, messages, false);
       const text = data.choices?.[0]?.message?.content?.trim() || "";
 
-      const stripped = stripJsonComments(text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim());
-      const arrMatch = stripped.match(/\[[\s\S]*\]/);
-      if (!arrMatch) {
-        console.error(`[${provider.label} batch] No JSON array:`, text.slice(0, 120));
+      let parsed: { i: number; items?: { type: string; subType?: string | null }[]; confidence?: number }[];
+      try {
+        if (!text) throw new Error("Empty text returned from API");
+        
+        const firstIdx = text.indexOf('[');
+        const lastIdx = text.lastIndexOf(']');
+        if (firstIdx === -1 || lastIdx === -1 || lastIdx < firstIdx) {
+          throw new Error("No JSON array found in response");
+        }
+        const jsonStr = text.substring(firstIdx, lastIdx + 1);
+        let cleanStr = stripJsonComments(jsonStr).replace(/,\s*([\}\]])/g, '$1');
+        parsed = JSON.parse(cleanStr);
+      } catch (err: any) {
+        console.error(`[${provider.label} batch] Failed to parse response:`, err.message);
+        console.error(`[${provider.label} batch] Raw data:`, JSON.stringify(data).slice(0, 500));
         return [];
       }
-
-      const parsed: { i: number; items?: { type: string; subType?: string | null }[]; confidence?: number }[] = JSON.parse(arrMatch[0]);
       const validTypeKeys = new Set(types.map((t) => t.key));
 
       console.log(`[${provider.label} batch] classified ${parsed.length}/${items.length} tickets`);
