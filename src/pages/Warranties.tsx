@@ -55,10 +55,11 @@ export default function Warranties() {
       // 1. Search term
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
+        const isShortNumber = /^\d{1,4}$/.test(term);
         const match = 
           (w.unitNumber || '').toLowerCase().includes(term) ||
           (w.clientName || '').toLowerCase().includes(term) ||
-          (w.clientPhone || '').includes(term);
+          (!isShortNumber && (w.clientPhone || '').includes(term));
         if (!match) return false;
       }
 

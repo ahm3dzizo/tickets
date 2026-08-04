@@ -921,12 +921,16 @@ export function UnifiedAppointmentDialog({
                             return false;
                           }
                           if (!s) return true;
+                          
+                          const isShortNumber = /^\d{1,4}$/.test(s);
+                          
                           const pName = c.projectName || projectsMap.get(c.projectId)?.name || '';
                           const pCode = c.projectCode || projectsMap.get(c.projectId)?.code || '';
                           const nameMatch = c.name && String(c.name).toLowerCase().includes(s);
                           const villaMatch = c.villaNumber != null && String(c.villaNumber).toLowerCase().includes(s);
-                          const phoneMatch = c.phone && String(c.phone).toLowerCase().includes(s);
+                          const phoneMatch = c.phone && !isShortNumber && String(c.phone).toLowerCase().includes(s);
                           const projMatch = pName.toLowerCase().includes(s) || pCode.toLowerCase().includes(s);
+                          
                           return nameMatch || villaMatch || phoneMatch || projMatch;
                         }).slice(0, 50);
 
