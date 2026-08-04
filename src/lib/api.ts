@@ -410,8 +410,4 @@ export const learnedKeywordsApi = {
   learn: (keyword: string, type: string) => post<any>('/learned-keywords/learn', { keyword, type }),
   bulkLearn: (items: any[]) => post<any>('/learned-keywords/bulk', { items }),
 };
-
-// ── Warranties ────────────────────────────────────────────────────────────────
-export const warrantiesApi = {
-  getAll: () => get<any[]>('/warranties'),
-};
+
