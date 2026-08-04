@@ -519,12 +519,22 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     // Sync all linked tickets
     const appointmentTime = `${date} ${finalTime || ""}`.trim();
+    const ticketData: any = {
+      appointmentTime,
+      appointmentNotes: notes || null,
+    };
+    
+    // If appointment is marked as completed, close all associated tickets
+    if (status === 'completed') {
+      ticketData.status = 'closed';
+      ticketData.closedAt = new Date();
+    } else if (status === 'cancelled') {
+      ticketData.status = 'open'; // Revert to open if cancelled
+    }
+    
     await prisma.ticket.updateMany({
       where: { appointmentId: id },
-      data: {
-        appointmentTime,
-        appointmentNotes: notes || null,
-      },
+      data: ticketData,
     });
 
     getIO()?.emit("appointment:updated", appointment);
