@@ -23,7 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { projectsApi, techniciansApi } from '@/lib/api';
+import { projectsApi, techniciansApi, attendanceApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays } from 'date-fns';
@@ -111,18 +111,12 @@ export function AttendanceReportView({ initialProjectId }: AttendanceReportViewP
   const loadReport = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token') || '';
-      const params = new URLSearchParams();
-      if (fromDate) params.append('from', fromDate);
-      if (toDate) params.append('to', toDate);
-      if (selectedProject && selectedProject !== 'all') params.append('projectId', selectedProject);
-      if (selectedTech && selectedTech !== 'all') params.append('technicianId', selectedTech);
-
-      const res = await fetch(`/api/attendance/report?${params.toString()}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const data = await attendanceApi.getReport({
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        projectId: selectedProject,
+        technicianId: selectedTech,
       });
-      if (!res.ok) throw new Error('فشل جلب تقرير الحضور');
-      const data = await res.json();
       setShifts(data.shifts || []);
       setSummary(data.summary || {});
     } catch (err: any) {
@@ -160,22 +154,13 @@ export function AttendanceReportView({ initialProjectId }: AttendanceReportViewP
     if (!overrideShift) return;
     setOverrideLoading(true);
     try {
-      const token = localStorage.getItem('token') || '';
-      const res = await fetch('/api/attendance/override', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          shiftLogId: overrideShift.id,
-          clockInAt: overrideClockIn ? new Date(overrideClockIn).toISOString() : undefined,
-          clockOutAt: overrideClockOut ? new Date(overrideClockOut).toISOString() : undefined,
-          reason: overrideReason
-        })
+      await attendanceApi.override({
+        shiftLogId: overrideShift.id,
+        clockInAt: overrideClockIn ? new Date(overrideClockIn).toISOString() : undefined,
+        clockOutAt: overrideClockOut ? new Date(overrideClockOut).toISOString() : undefined,
+        reason: overrideReason
       });
 
-      if (!res.ok) throw new Error('فشل تعديل البصمة');
       toast.success('تم تعديل سجل البصمة بنجاح');
       setOverrideModalOpen(false);
       loadReport();

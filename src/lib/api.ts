@@ -334,6 +334,29 @@ export const techniciansApi = {
   create: (data: any)                => post<any>('/technicians', data),
   update: (id: string, data: any)    => put<any>(`/technicians/${id}`, data),
   delete: (id: string)               => del<any>(`/technicians/${id}`),
+  invite: (data: { name: string; phoneNumber: string; projectId?: string | null; supervisorId?: string | null }) =>
+    post<{ technician: any; tempPassword?: string }>('/tech/invite', data),
+};
+
+// ── Attendance (Supervisor) ───────────────────────────────────────────────────
+export const attendanceApi = {
+  getLive: () => get<any[]>('/attendance/live'),
+  getDaily: (params?: { date?: string; projectId?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.date) q.append('date', params.date);
+    if (params?.projectId && params.projectId !== 'all') q.append('projectId', params.projectId);
+    return get<any[]>(`/attendance/daily?${q.toString()}`);
+  },
+  getReport: (params?: { from?: string; to?: string; projectId?: string; technicianId?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.append('from', params.from);
+    if (params?.to) q.append('to', params.to);
+    if (params?.projectId && params.projectId !== 'all') q.append('projectId', params.projectId);
+    if (params?.technicianId && params.technicianId !== 'all') q.append('technicianId', params.technicianId);
+    return get<{ shifts: any[]; summary: any }>(`/attendance/report?${q.toString()}`);
+  },
+  override: (data: { shiftLogId: string; clockInAt?: string; clockOutAt?: string; reason?: string }) =>
+    patch<any>('/attendance/override', data),
 };
 
 // ── Appointments ──────────────────────────────────────────────────────────────

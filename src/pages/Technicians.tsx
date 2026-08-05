@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { techniciansApi } from '@/lib/api';
+import { techniciansApi, attendanceApi } from '@/lib/api';
 import { 
   HardHat, Phone, Search, MoreHorizontal, Clock, 
   Activity, CheckCircle2, Coffee, AlertTriangle, 
@@ -61,14 +61,8 @@ export default function Technicians() {
   const loadLiveAttendance = async () => {
     setLiveLoading(true);
     try {
-      const token = localStorage.getItem('token') || '';
-      const res = await fetch('/api/attendance/live', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLiveAttendance(data);
-      }
+      const data = await attendanceApi.getLive();
+      setLiveAttendance(data || []);
     } catch {
       toast.error('فشل تحميل بيانات الحضور المباشر');
     } finally {

@@ -113,27 +113,13 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved }: T
         toast.success('تم تحديث بيانات الفني بنجاح');
       } else {
         // Use invite endpoint to generate temp PIN and credentials
-        const token = localStorage.getItem('token') || '';
-        const res = await fetch('/api/tech/invite', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            name,
-            phoneNumber: phone,
-            projectId,
-            supervisorId
-          })
+        const data = await techniciansApi.invite({
+          name,
+          phoneNumber: phone,
+          projectId,
+          supervisorId
         });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || 'فشل إضافة الفني');
-        }
-
-        const data = await res.json();
         toast.success(`تم إنشاء حساب الفني! كلمة المرور المؤقتة: ${data.tempPassword}`, {
           duration: 10000
         });
