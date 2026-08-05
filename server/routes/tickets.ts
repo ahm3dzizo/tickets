@@ -772,6 +772,13 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       }
     }
 
+    // ── Learn from manual classification ─────────────────────────────────────
+    if (data.type && oldTicket?.type && data.type !== oldTicket.type && ticket.description) {
+      import('../classifier/gemini.js').then(m => {
+        m.learnFromGeminiResult(ticket.description!, [data.type!]).catch(() => {});
+      }).catch(() => {});
+    }
+
     const closingStatuses = ['closed', 'completed'];
     if (data.status && closingStatuses.includes(data.status) && req.uid) {
       // autoSendClosing(req.uid, ticket).catch(() => {});
