@@ -1,0 +1,1 @@
+﻿import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function run() { const kw = await prisma.learnedKeyword.findMany({ select: { keyword: true, type: true, confidence: true, usageCount: true } }); console.log(JSON.stringify(kw, null, 2)); } run().finally(() => prisma.$disconnect());
