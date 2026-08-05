@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   Briefcase,
@@ -42,6 +42,7 @@ export function ProjectForm({ trigger, nativeButton }: ProjectFormProps) {
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const [abbreviation, setAbbreviation] = useState('');
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [selectedEngineers, setSelectedEngineers] = useState<string[]>([]);
   
   const [engineers, setEngineers] = useState<User[]>([]);
@@ -67,10 +68,11 @@ export function ProjectForm({ trigger, nativeButton }: ProjectFormProps) {
         name,
         location,
         abbreviation,
+        googleMapsUrl,
         engineerIds: selectedEngineers,
         supervisorIds: [],
         createdAt: new Date().toISOString()
-      });
+      } as any);
       toast.success('تم إنشاء المشروع بنجاح');
       setOpen(false);
       resetForm();
@@ -87,6 +89,7 @@ export function ProjectForm({ trigger, nativeButton }: ProjectFormProps) {
     setName('');
     setLocation('');
     setAbbreviation('');
+    setGoogleMapsUrl('');
     setSelectedEngineers([]);
   };
 
@@ -155,6 +158,21 @@ export function ProjectForm({ trigger, nativeButton }: ProjectFormProps) {
                 />
                 <Hash className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
+              موقع مكتب المشروع (بصمة الحضور - رابط خرائط جوجل أو إحداثيات)
+            </Label>
+            <div className="relative">
+              <Input 
+                placeholder="مثال: 24.7136, 46.6753 أو رابط Google Maps" 
+                className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12 font-mono text-xs"
+                value={googleMapsUrl}
+                onChange={(e) => setGoogleMapsUrl(e.target.value)}
+              />
+              <MapPin className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-400" />
             </div>
           </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { reportsApi, projectsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -9,7 +10,7 @@ import {
 import {
   BarChart3, TrendingUp, CheckCircle2, Clock, Timer, Layers,
   ChevronDown, RefreshCw, AlertTriangle, Users, Star, Target, Zap, Activity,
-  Download, Maximize2, X, Printer, Filter,
+  Download, Maximize2, X, Printer, Filter, FileSpreadsheet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -326,7 +327,13 @@ export default function Reports() {
             </h1>
             <p className="text-muted-foreground text-sm mt-0.5">تحليل شامل — جاهز للتقديم للإدارة</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/technicians?tab=reports">
+              <Button variant="outline" size="sm" className="gap-2 border-emerald-500/30 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                تقرير حضور الفنيين
+              </Button>
+            </Link>
             <Button variant="outline" size="sm" onClick={exportPDF} disabled={loading || !data} className="gap-2">
               <Download className="w-3.5 h-3.5" />
               تصدير PDF

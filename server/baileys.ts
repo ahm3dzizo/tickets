@@ -100,7 +100,7 @@ export async function startWA(userId: string) {
     auth: state,
     printQRInTerminal: false,
     logger,
-    browser: Browsers.ubuntu('Chrome'),
+    browser: ['Ubuntu', 'Chrome', '20.0.04'],
     markOnlineOnConnect: false,
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 60000,
@@ -123,7 +123,10 @@ export async function startWA(userId: string) {
     }
 
     if (connection === 'close') {
-      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+      const error = lastDisconnect?.error;
+      const statusCode = (error as any)?.output?.statusCode;
+      console.log(`[WA] Connection closed for ${userId}. Reason: ${error?.message || error} (Code: ${statusCode})`);
+      
       const isLoggedOut = statusCode === DisconnectReason.loggedOut;
       sessions.delete(userId);
       statuses.set(userId, 'DISCONNECTED');

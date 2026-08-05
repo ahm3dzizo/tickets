@@ -4,6 +4,16 @@ import { AuthRequest, requireAuth, requireAdmin, getRequesterRole } from "../aut
 
 const router = Router();
 
+function parseCoords(input: any): { lat: number; lng: number } | null {
+  if (!input) return null;
+  const str = String(input).trim();
+  const match = str.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+  if (match) {
+    return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+  }
+  return null;
+}
+
 // GET /api/projects
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const role = await getRequesterRole(req.uid!);
@@ -86,11 +96,25 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
   const data = req.body;
   const combinedUserIds = [...(data.engineerIds || []), ...(data.supervisorIds || [])];
   
+  let officeLat = data.officeLat !== undefined ? (data.officeLat ? parseFloat(data.officeLat) : null) : null;
+  let officeLng = data.officeLng !== undefined ? (data.officeLng ? parseFloat(data.officeLng) : null) : null;
+  
+  if (data.googleMapsUrl) {
+    const coords = parseCoords(data.googleMapsUrl);
+    if (coords) {
+      officeLat = coords.lat;
+      officeLng = coords.lng;
+    }
+  }
+
   const project = await prisma.project.create({
     data: {
-      name:         data.name,
-      location:     data.location,
-      abbreviation: data.abbreviation,
+      name:          data.name,
+      location:      data.location,
+      abbreviation:  data.abbreviation,
+      officeLat,
+      officeLng,
+      officeAddress: data.officeAddress || null,
       users: { connect: combinedUserIds.map(uid => ({ uid })) },
     },
     include: { users: true }
@@ -124,12 +148,26 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
     connectData.users = { set: combined.map(uid => ({ uid })) };
   }
 
+  let officeLat = data.officeLat !== undefined ? (data.officeLat ? parseFloat(data.officeLat) : null) : undefined;
+  let officeLng = data.officeLng !== undefined ? (data.officeLng ? parseFloat(data.officeLng) : null) : undefined;
+
+  if (data.googleMapsUrl) {
+    const coords = parseCoords(data.googleMapsUrl);
+    if (coords) {
+      officeLat = coords.lat;
+      officeLng = coords.lng;
+    }
+  }
+
   const project = await prisma.project.update({
     where: { id: req.params.id },
     data: {
       name:          data.name          ?? undefined,
       location:      data.location      ?? undefined,
       abbreviation:  data.abbreviation  ?? undefined,
+      officeLat,
+      officeLng,
+      officeAddress: data.officeAddress ?? undefined,
       ...connectData
     },
     include: { users: true }

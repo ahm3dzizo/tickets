@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
   Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search, FileImage,
-  Phone, MessageCircle, CheckCircle2, RotateCcw, Building2
+  Phone, MessageCircle, CheckCircle2, RotateCcw, Building2, Wrench, Home, UserCheck
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { appointmentsApi, projectsApi, usersApi, ticketsApi } from '@/lib/api';
+import { appointmentsApi, projectsApi, usersApi, ticketsApi, techniciansApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
@@ -150,6 +150,15 @@ export default function Appointments() {
   const [lang, setLang] = useState<'ar' | 'ur' | 'hi'>('ar');
   const t = TRANSLATIONS[lang];
 
+  const [technicians, setTechnicians] = useState<any[]>([]);
+  const [assignTechModal, setAssignTechModal] = useState<{
+    isOpen: boolean;
+    appointmentId: string;
+    currentTechId: string | null;
+    projectId?: string;
+    villaNumber?: string;
+  } | null>(null);
+
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportWithImagesMode, setExportWithImagesMode] = useState(false);
   const [exportLangs, setExportLangs] = useState<Record<string, boolean>>({ ar: true, ur: true, hi: true });
@@ -157,6 +166,22 @@ export default function Appointments() {
 
   const [addSpecOpen, setAddSpecOpen] = useState(false);
   const [addSpecData, setAddSpecData] = useState<any>(null);
+
+  const handleAssignTechnician = async (appointmentId: string, technicianId: string | null) => {
+    try {
+      const techObj = technicians.find(t => t.id === technicianId);
+      await appointmentsApi.assignTechnician(appointmentId, {
+        technicianId: technicianId || null,
+        technicianIds: technicianId ? [technicianId] : [],
+        technicians: techObj ? [techObj] : []
+      });
+      toast.success(technicianId ? 'تم إسناد الفني للموعد بنجاح' : 'تم إلغاء إسناد الفني');
+      setAssignTechModal(null);
+      loadAppointments();
+    } catch (err: any) {
+      toast.error(err.message || 'فشل إسناد الفني');
+    }
+  };
 
   const loadAppointments = async () => {
     setLoading(true);
@@ -212,6 +237,11 @@ export default function Appointments() {
     if (user.role === 'admin' || user.role === 'supervisor' || user.role === 'engineer') {
       usersApi.getAll().then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor'))).catch(() => { });
     }
+
+    techniciansApi.getAll().then((t: any[]) => {
+      setTechnicians(t || []);
+    }).catch(() => { });
+
     loadOpenTicketsCount();
   }, [user]);
 
@@ -273,6 +303,10 @@ export default function Appointments() {
         types,
         sups,
         supervisors: appt.supervisors,
+        technicianId: appt.technicianId,
+        technicianIds: appt.technicianIds || (appt.technicianId ? [appt.technicianId] : []),
+        technician: appt.technician,
+        technicians: appt.technicians,
         tickets: appt.tickets || [],
       });
     }
@@ -817,201 +851,315 @@ export default function Appointments() {
                               <div
                                 key={key}
                                 className={cn(
-                                  "bg-card/80 border rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2 relative transition-all duration-300 shadow-sm cursor-pointer hover:bg-muted",
-                                  isCenter ? "hover:border-slate-500 hover:shadow-lg hover:-translate-y-1" : "border-border/50",
-                                  isCompleted ? "opacity-60 bg-muted/40 border-dashed border-emerald-500/30" : ""
+                                  "group relative overflow-hidden rounded-2xl border bg-card/90 backdrop-blur-sm transition-all duration-300 shadow-sm hover:shadow-md cursor-pointer flex flex-col",
+                                  isCenter ? "hover:border-primary/40 hover:-translate-y-0.5" : "border-border/60",
+                                  isCompleted ? "opacity-75 bg-muted/40 border-dashed border-emerald-500/30" : "border-border"
                                 )}
-                                onClick={e => { if (isCenter) { e.stopPropagation(); setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note }); } }}
+                                onClick={e => {
+                                  if (isCenter) {
+                                    e.stopPropagation();
+                                    setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note });
+                                  }
+                                }}
                               >
-                                {/* Top Row: Villa & Time */}
-                                <div className="flex justify-between items-start gap-2">
-                                  <div className="flex-1 min-w-0 pr-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className="font-black text-foreground text-base truncate flex items-center gap-2">
-                                        {t.villa} {group.villaNumber} {totalOpen > 0 && (
-                                          <span className="text-amber-600 dark:text-amber-500 font-bold text-xs bg-amber-500/10 px-2 py-0.5 rounded-full">({totalOpen} مفتوحة)</span>
+                                {/* Top Header: Villa, Project, Time */}
+                                <div className="p-3 pb-2.5 flex items-start justify-between gap-2 border-b border-border/40 bg-muted/20">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className={cn(
+                                      "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm font-black text-sm",
+                                      isCompleted
+                                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                                        : "bg-primary/10 text-primary border border-primary/20"
+                                    )}>
+                                      <Home className="w-4 h-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-black text-base text-foreground tracking-tight">
+                                          {t.villa} {group.villaNumber}
+                                        </span>
+                                        {totalOpen > 0 && (
+                                          <span className="text-[10px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 px-1.5 py-0.5 rounded-md">
+                                            {totalOpen} مفتوحة
+                                          </span>
                                         )}
                                         {isCompleted && (
-                                          <span className="text-emerald-500 font-bold text-xs bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> تم الانتهاء</span>
-                                        )}
-                                      </h4>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground flex-wrap">
-                                      {group.clientName && (
-                                        <span className="font-semibold text-foreground/90 truncate max-w-[150px]">{group.clientName}</span>
-                                      )}
-                                      {(() => {
-                                        const pObj = projectsMap.get(group.projectId);
-                                        const pName = pObj?.name || pObj?.code;
-                                        if (!pName) return null;
-                                        return (
-                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shadow-sm">
-                                            <Building2 className="w-3 h-3 text-blue-500 shrink-0" />
-                                            <span className="truncate max-w-[120px]">{pName}</span>
+                                          <span className="text-[10px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3" /> تم الانتهاء
                                           </span>
+                                        )}
+                                      </div>
+                                      {group.clientName && (
+                                        <div className="text-xs font-semibold text-muted-foreground truncate mt-0.5">
+                                          {group.clientName}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Time Badge & Project Name */}
+                                  <div className="flex flex-col items-end shrink-0">
+                                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl font-mono font-black text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shadow-inner">
+                                      <Clock className="w-3.5 h-3.5" />
+                                      <span>{time}</span>
+                                    </div>
+                                    {(() => {
+                                      const pObj = projectsMap.get(group.projectId);
+                                      const pName = pObj?.name || pObj?.code;
+                                      if (!pName) return null;
+                                      return (
+                                        <span className="text-[10px] font-bold text-muted-foreground/80 truncate max-w-[110px] mt-1 text-left" dir="ltr">
+                                          {pName}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
+                                </div>
+
+                                {/* Body: Specialties, Notes, Supervisors & Technician */}
+                                <div className="p-3 py-2.5 flex flex-col gap-2 text-xs">
+                                  {/* Specialties */}
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {Array.from(group.types).map(tName => (
+                                      <span key={tName as string} className="text-[11px] font-bold px-2 py-0.5 rounded-lg border bg-muted/60 text-foreground border-border/80 shadow-xs">
+                                        <TranslatedText text={mergedTypes[tName as string] || tName as string} lang={lang} />
+                                      </span>
+                                    ))}
+                                    <button
+                                      onClick={(e) => handleOpenAddSpecialty(group, e)}
+                                      className="text-[10px] font-bold px-2 py-0.5 rounded-lg border border-dashed border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 hover:bg-muted transition-all flex items-center gap-1"
+                                    >
+                                      <Plus className="w-2.5 h-2.5" />
+                                      {t.addSpecialty}
+                                    </button>
+                                  </div>
+
+                                  {/* Notes */}
+                                  {note && (
+                                    <div className="text-[11px] text-muted-foreground bg-muted/40 p-2 rounded-xl border border-input/60 flex items-start gap-1.5 leading-relaxed">
+                                      <span className="font-bold shrink-0 text-foreground/80">{t.noteLabel}</span>
+                                      <span className="line-clamp-2"><TranslatedText text={note} lang={lang} /></span>
+                                    </div>
+                                  )}
+
+                                  {/* Supervisor & Technician Badges */}
+                                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 text-[11px]">
+                                    {/* Supervisor */}
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      <span className="text-[10px] font-bold text-muted-foreground shrink-0">المشرف:</span>
+                                      {group.sups && group.sups.size > 0 ? (
+                                        Array.from(group.sups).map(sId => {
+                                          const sup = supervisors.find(s => s.uid === sId || s.id === sId);
+                                          return (
+                                            <span key={sId as string} className="font-bold px-1.5 py-0.5 rounded-md border bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 truncate max-w-[110px]">
+                                              {sup ? (sup.displayName || sup.name) : 'مشرف'}
+                                            </span>
+                                          );
+                                        })
+                                      ) : (
+                                        <span className="text-muted-foreground text-[10px]">غير محدد</span>
+                                      )}
+                                    </div>
+
+                                    {/* Technician Badge */}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <span className="text-[10px] font-bold text-muted-foreground shrink-0">الفني:</span>
+                                      {(() => {
+                                        const techId = group.technicianId || (group.technicianIds && group.technicianIds[0]);
+                                        const tech = group.technician || technicians.find(t => t.id === techId);
+                                        if (tech) {
+                                          return (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setAssignTechModal({
+                                                  isOpen: true,
+                                                  appointmentId: apptId,
+                                                  currentTechId: tech.id,
+                                                  projectId: group.projectId,
+                                                  villaNumber: group.villaNumber
+                                                });
+                                              }}
+                                              className="font-bold px-2 py-0.5 rounded-md border bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border-indigo-500/25 flex items-center gap-1 transition-colors"
+                                              title="تغيير الفني"
+                                            >
+                                              <Wrench className="w-2.5 h-2.5" />
+                                              <span className="truncate max-w-[100px]">{tech.name}</span>
+                                            </button>
+                                          );
+                                        }
+                                        return (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setAssignTechModal({
+                                                isOpen: true,
+                                                appointmentId: apptId,
+                                                currentTechId: null,
+                                                projectId: group.projectId,
+                                                villaNumber: group.villaNumber
+                                              });
+                                            }}
+                                            className="text-[10px] font-bold px-2 py-0.5 rounded-md border border-dashed border-indigo-500/30 text-indigo-500 hover:bg-indigo-500/10 transition-colors flex items-center gap-1"
+                                          >
+                                            <Plus className="w-2.5 h-2.5" />
+                                            تعيين فني
+                                          </button>
                                         );
                                       })()}
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    {isCenter && !isCompleted && (
+
+                                  {/* Attachments */}
+                                  {(() => {
+                                    const urls = group.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []);
+                                    if (urls.length === 0) return null;
+                                    return (
+                                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border/40">
+                                        <span className="text-[10px] font-bold text-muted-foreground shrink-0"><FileImage className="w-3 h-3 inline mr-1"/>{t.attachLabel}</span>
+                                        {urls.map((url: string, idx: number) => (
+                                          <img
+                                            key={idx}
+                                            src={url}
+                                            alt="مرفق"
+                                            className="w-12 h-12 rounded-lg object-cover border border-border cursor-pointer hover:opacity-80 transition-opacity shadow-xs"
+                                            onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
+                                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                          />
+                                        ))}
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+
+                                {/* Footer / Actions Toolbar */}
+                                {isCenter && (
+                                  <div className="p-2 pt-2 border-t border-border/40 bg-muted/15 flex items-center justify-between gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+                                    {/* Communication Buttons */}
+                                    <div className="flex items-center gap-1.5">
+                                      {group.clientPhone && (
+                                        <>
+                                          <a
+                                            href={`https://wa.me/${group.clientPhone.replace(/\D/g, '')}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="h-8 px-2.5 rounded-xl font-bold text-xs bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 text-[#25D366] flex items-center gap-1 transition-all"
+                                            title="واتساب"
+                                          >
+                                            <MessageCircle className="w-3.5 h-3.5" />
+                                            <span className="hidden xs:inline text-[11px]">واتساب</span>
+                                          </a>
+                                          <a
+                                            href={`tel:${group.clientPhone}`}
+                                            className="h-8 px-2 rounded-xl font-bold text-xs bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-500 flex items-center justify-center transition-all"
+                                            title="اتصال"
+                                          >
+                                            <Phone className="w-3.5 h-3.5" />
+                                          </a>
+                                        </>
+                                      )}
+
                                       <button
-                                        onClick={async (e) => {
-                                          e.stopPropagation();
-                                          if (!apptId) {
-                                            toast.error('معرف الموعد غير متوفر');
-                                            return;
-                                          }
-                                          if (!window.confirm('هل أنت متأكد من إنهاء الموعد؟')) return;
-                                          try {
-                                            const [dPart, tPart] = (group.appointmentTime || '').split(' ');
-                                            await appointmentsApi.update(apptId, {
-                                              date: dPart,
-                                              time: tPart || '',
-                                              notes: group.notes,
-                                              supervisorIds: Array.from(group.sups),
-                                              supervisors: group.supervisors,
-                                              types: Array.from(group.types),
-                                              clientPhone: group.clientPhone,
-                                              status: 'completed'
-                                            });
-                                            toast.success('تم إنهاء الموعد بنجاح');
-                                            loadAppointments();
-                                          } catch {
-                                            toast.error('حدث خطأ أثناء إنهاء الموعد');
-                                          }
+                                        onClick={() => {
+                                          setAssignTechModal({
+                                            isOpen: true,
+                                            appointmentId: apptId,
+                                            currentTechId: group.technicianId || (group.technicianIds && group.technicianIds[0]) || null,
+                                            projectId: group.projectId,
+                                            villaNumber: group.villaNumber
+                                          });
                                         }}
-                                        className="flex items-center justify-center bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl h-8 px-2 transition-colors"
-                                        title="إنهاء الموعد"
+                                        className="h-8 px-2.5 rounded-xl font-bold text-xs bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-600 dark:text-indigo-400 flex items-center gap-1 transition-all"
+                                        title="تعيين أو تغيير الفني"
                                       >
-                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <Wrench className="w-3.5 h-3.5" />
+                                        <span className="text-[11px]">الفني</span>
                                       </button>
-                                    )}
-                                    {isCenter && isCompleted && (
+                                    </div>
+
+                                    {/* Control Buttons */}
+                                    <div className="flex items-center gap-1.5 mr-auto">
                                       <button
-                                        onClick={async (e) => {
-                                          e.stopPropagation();
-                                          if (!apptId) {
-                                            toast.error('معرف الموعد غير متوفر');
-                                            return;
-                                          }
-                                          if (!window.confirm('هل تريد إعادة تنشيط الموعد؟')) return;
-                                          try {
-                                            const [dPart, tPart] = (group.appointmentTime || '').split(' ');
-                                            await appointmentsApi.update(apptId, {
-                                              date: dPart,
-                                              time: tPart || '',
-                                              notes: group.notes,
-                                              supervisorIds: Array.from(group.sups),
-                                              supervisors: group.supervisors,
-                                              types: Array.from(group.types),
-                                              clientPhone: group.clientPhone,
-                                              status: 'scheduled'
-                                            });
-                                            toast.success('تمت إعادة تنشيط الموعد');
-                                            loadAppointments();
-                                          } catch {
-                                            toast.error('حدث خطأ أثناء إعادة تنشيط الموعد');
-                                          }
-                                        }}
-                                        className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl h-8 px-2 transition-colors"
-                                        title="إعادة تنشيط الموعد"
-                                      >
-                                        <RotateCcw className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                    {isCenter && (
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); setEditApptGroup(group); }}
-                                        className="flex items-center justify-center bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl h-8 px-2 transition-colors"
+                                        onClick={() => setEditApptGroup(group)}
+                                        className="h-8 px-2.5 rounded-xl font-bold text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-600 dark:text-amber-400 flex items-center gap-1 transition-all"
                                         title="تعديل وتأجيل الموعد"
                                       >
                                         <Pencil className="w-3.5 h-3.5" />
+                                        <span className="text-[11px]">تعديل</span>
                                       </button>
-                                    )}
-                                    {isCenter && group.clientPhone && (
-                                      <>
-                                        <a
-                                          href={`tel:${group.clientPhone}`}
-                                          onClick={e => e.stopPropagation()}
-                                          className="flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-500 rounded-xl h-8 px-2 transition-colors"
-                                          title="اتصال"
+
+                                      {!isCompleted ? (
+                                        <button
+                                          onClick={async () => {
+                                            if (!apptId) {
+                                              toast.error('معرف الموعد غير متوفر');
+                                              return;
+                                            }
+                                            if (!window.confirm('هل أنت متأكد من إنهاء الموعد؟')) return;
+                                            try {
+                                              const [dPart, tPart] = (group.appointmentTime || '').split(' ');
+                                              await appointmentsApi.update(apptId, {
+                                                date: dPart,
+                                                time: tPart || '',
+                                                notes: group.notes,
+                                                supervisorIds: Array.from(group.sups),
+                                                supervisors: group.supervisors,
+                                                technicianId: group.technicianId || null,
+                                                technicianIds: group.technicianIds || [],
+                                                types: Array.from(group.types),
+                                                clientPhone: group.clientPhone,
+                                                status: 'completed'
+                                              });
+                                              toast.success('تم إنهاء الموعد بنجاح');
+                                              loadAppointments();
+                                            } catch {
+                                              toast.error('حدث خطأ أثناء إنهاء الموعد');
+                                            }
+                                          }}
+                                          className="h-8 px-2.5 rounded-xl font-bold text-xs bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 text-blue-600 dark:text-blue-400 flex items-center gap-1 transition-all"
+                                          title="إنهاء الموعد"
                                         >
-                                          <Phone className="w-3.5 h-3.5" />
-                                        </a>
-                                        <a
-                                          href={`https://wa.me/${group.clientPhone.replace(/\D/g, '')}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={e => e.stopPropagation()}
-                                          className="flex items-center justify-center bg-[#25D366]/10 hover:bg-[#25D366]/25 border border-[#25D366]/30 text-[#25D366] rounded-xl h-8 px-2 transition-colors"
-                                          title="واتساب"
+                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                          <span className="text-[11px]">إنهاء</span>
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={async () => {
+                                            if (!apptId) {
+                                              toast.error('معرف الموعد غير متوفر');
+                                              return;
+                                            }
+                                            if (!window.confirm('هل تريد إعادة تنشيط الموعد؟')) return;
+                                            try {
+                                              const [dPart, tPart] = (group.appointmentTime || '').split(' ');
+                                              await appointmentsApi.update(apptId, {
+                                                date: dPart,
+                                                time: tPart || '',
+                                                notes: group.notes,
+                                                supervisorIds: Array.from(group.sups),
+                                                supervisors: group.supervisors,
+                                                technicianId: group.technicianId || null,
+                                                technicianIds: group.technicianIds || [],
+                                                types: Array.from(group.types),
+                                                clientPhone: group.clientPhone,
+                                                status: 'scheduled'
+                                              });
+                                              toast.success('تمت إعادة تنشيط الموعد');
+                                              loadAppointments();
+                                            } catch {
+                                              toast.error('حدث خطأ أثناء إعادة تنشيط الموعد');
+                                            }
+                                          }}
+                                          className="h-8 px-2.5 rounded-xl font-bold text-xs bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 flex items-center gap-1 transition-all"
+                                          title="إعادة تنشيط الموعد"
                                         >
-                                          <MessageCircle className="w-3.5 h-3.5" />
-                                        </a>
-                                      </>
-                                    )}
-                                    <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1 min-w-[65px] shrink-0 shadow-inner">
-                                      <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 mb-0.5" />
-                                      <span className="text-emerald-700 dark:text-emerald-300 font-black tabular-nums text-sm">{time}</span>
+                                          <RotateCcw className="w-3.5 h-3.5" />
+                                          <span className="text-[11px]">تنشيط</span>
+                                        </button>
+                                      )}
                                     </div>
-                                  </div>
-                                </div>
-
-                                {/* Specialties Tags */}
-                                <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
-                                  {Array.from(group.types).map(t => (
-                                    <span key={t as string} className="text-[11px] font-bold px-2 py-1 rounded-lg border bg-muted text-foreground border-border shadow-sm">
-                                      <TranslatedText text={mergedTypes[t as string] || t as string} lang={lang} />
-                                    </span>
-                                  ))}
-                                  <button
-                                    onClick={(e) => handleOpenAddSpecialty(group, e)}
-                                    className="text-[11px] font-bold px-2 py-1 rounded-lg border border-dashed border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 hover:bg-muted transition-all flex items-center gap-1"
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                    {t.addSpecialty}
-                                  </button>
-                                </div>
-
-                                {/* Notes */}
-                                {note && (<div className="text-[11px] text-muted-foreground bg-muted/50 p-1.5 rounded-lg mt-0.5 border border-input flex gap-1.5"><span className="font-bold shrink-0 text-foreground/70">{t.noteLabel}</span><span className="line-clamp-2 leading-snug"><TranslatedText text={note} lang={lang} /></span></div>)}
-
-                                {/* Supervisors */}
-                                {group.sups && group.sups.size > 0 && (
-                                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
-                                    <span className="text-[10px] font-bold text-muted-foreground">{t.supsLabel}</span>
-                                    {Array.from(group.sups).map(sId => {
-                                      const sup = supervisors.find(s => s.uid === sId || s.id === sId);
-                                      return (
-                                        <span key={sId as string} className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800">
-                                          {sup ? (sup.displayName || sup.name) : 'غير معروف'}
-                                        </span>
-                                      );
-                                    })}
                                   </div>
                                 )}
-
-                                {/* Attachments */}
-                                {(() => {
-                                  const urls = group.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || []);
-                                  if (urls.length === 0) return null;
-                                  return (
-                                    <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/50">
-                                      <span className="text-[10px] font-bold text-muted-foreground shrink-0"><FileImage className="w-3 h-3 inline mr-1"/>{t.attachLabel}</span>
-                                      {urls.map((url: string, idx: number) => (
-                                        <img
-                                          key={idx}
-                                          src={url}
-                                          alt="مرفق"
-                                          className="w-14 h-14 rounded-lg object-cover border border-border cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
-                                          onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
-                                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                                        />
-                                      ))}
-                                    </div>
-                                  );
-                                })()}
                               </div>
                             );
                           };
@@ -1117,6 +1265,86 @@ export default function Appointments() {
           editSupervisors={supervisors}
           onSuccess={() => { setEditApptGroup(null); loadAppointments(); }}
         />
+      )}
+
+      {/* Assign Technician Modal */}
+      {assignTechModal && (
+        <Dialog open={assignTechModal.isOpen} onOpenChange={(open) => !open && setAssignTechModal(null)}>
+          <DialogContent className="max-w-md w-[95vw] rounded-2xl p-5" dir="rtl">
+            <DialogHeader className="pb-3 border-b border-border">
+              <DialogTitle className="flex items-center gap-2 text-base font-black">
+                <Wrench className="w-5 h-5 text-indigo-500" />
+                تعيين فني للفيلا {assignTechModal.villaNumber || ''}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-3">
+              <p className="text-xs text-muted-foreground">
+                اختر الفني المسؤول عن تنفيذ موعد هذه الفيلا. سيتمكن الفني من رؤية تفاصيل الموعد وبدء العمل من تطبيقه:
+              </p>
+
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                <button
+                  type="button"
+                  onClick={() => handleAssignTechnician(assignTechModal.appointmentId, null)}
+                  className={cn(
+                    "w-full text-right p-3 rounded-xl border transition-all text-xs flex items-center justify-between",
+                    !assignTechModal.currentTechId
+                      ? "border-primary bg-primary/10 text-primary font-bold shadow-xs"
+                      : "border-border hover:bg-muted/60 text-muted-foreground"
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full border border-current" />
+                    بدون فني محدد (عام للمشرف)
+                  </span>
+                  {!assignTechModal.currentTechId && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                </button>
+
+                {technicians
+                  .filter(tech => !assignTechModal.projectId || !tech.projectId || tech.projectId === assignTechModal.projectId)
+                  .map((tech) => {
+                    const isSelected = assignTechModal.currentTechId === tech.id;
+                    return (
+                      <button
+                        key={tech.id}
+                        type="button"
+                        onClick={() => handleAssignTechnician(assignTechModal.appointmentId, tech.id)}
+                        className={cn(
+                          "w-full text-right p-3 rounded-xl border transition-all text-xs flex items-center justify-between",
+                          isSelected
+                            ? "border-indigo-500 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold shadow-xs"
+                            : "border-border hover:bg-muted/60 text-foreground"
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0",
+                            isSelected ? "bg-indigo-500 text-white" : "bg-muted text-muted-foreground"
+                          )}>
+                            {tech.name.slice(0, 1)}
+                          </div>
+                          <div>
+                            <div className="font-bold text-sm text-foreground">{tech.name}</div>
+                            <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                              {tech.specialty && <span>{tech.specialty}</span>}
+                              {tech.phoneNumber && <span dir="ltr">{tech.phoneNumber}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        {isSelected && <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />}
+                      </button>
+                    );
+                  })}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <Button variant="outline" size="sm" onClick={() => setAssignTechModal(null)}>
+                  إغلاق
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Export Dialog */}

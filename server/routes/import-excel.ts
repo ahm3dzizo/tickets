@@ -23,7 +23,7 @@ function parseExcelAndDetectHeaders(
   buffer: Buffer, 
   fieldAliases: Record<string, string[]>, 
   skipDateFilter: boolean = false
-): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number } {
+): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: "DD/MM/YYYY" | "MM/DD/YYYY" } {
   const wb = XLSX.read(buffer, { type: "buffer", cellFormula: false, cellHTML: false, cellStyles: false, cellNF: false, sheetStubs: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
@@ -52,11 +52,33 @@ function parseExcelAndDetectHeaders(
     mapping[key] = autoMatch(cols, aliases);
   }
 
+  // Detect Date Format
+  let detectedFormat: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY";
+  if (mapping["createdAt"]) {
+    let maxFirstPart = 0;
+    let maxSecondPart = 0;
+    for (const row of allData) {
+      const rawDate = row[mapping["createdAt"]];
+      if (typeof rawDate === "string" && rawDate.includes("/")) {
+        const parts = rawDate.split("/");
+        if (parts.length >= 2) {
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          if (!isNaN(p0) && p0 > maxFirstPart) maxFirstPart = p0;
+          if (!isNaN(p1) && p1 > maxSecondPart) maxSecondPart = p1;
+        }
+      }
+    }
+    if (maxFirstPart > 12) detectedFormat = "MM/DD/YYYY";
+    else if (maxSecondPart > 12) detectedFormat = "DD/MM/YYYY";
+    else detectedFormat = "DD/MM/YYYY"; // Default to Saudi Arabia standard
+  }
+
   let maxTime = 0;
   if (!skipDateFilter && mapping["createdAt"]) {
     for (const row of allData) {
       const rawDate = row[mapping["createdAt"]];
-      const dStr = normalizeDate(rawDate);
+      const dStr = normalizeDate(rawDate, detectedFormat);
       if (dStr) {
         const t = new Date(dStr).getTime();
         if (t > maxTime) maxTime = t;
@@ -76,7 +98,7 @@ function parseExcelAndDetectHeaders(
       const status = normalizeStatus(rawStatus);
       if (status === "closed") {
         const rawDate = row[mapping["createdAt"]];
-        const dStr = normalizeDate(rawDate);
+        const dStr = normalizeDate(rawDate, detectedFormat);
         const t = dStr ? new Date(dStr).getTime() : 0;
         if (t > 0 && t < cutoffTime) {
           skippedByDateFilter++;
@@ -89,7 +111,7 @@ function parseExcelAndDetectHeaders(
     rows.push(r);
   }
 
-  return { allData: rows, mapping, skippedByDateFilter };
+  return { allData: rows, mapping, skippedByDateFilter, detectedFormat };
 }
 
 const router = Router();
@@ -149,7 +171,7 @@ function excelSerialToDate(serial: number): Date {
   return new Date((serial - 25569) * 86400 * 1000);
 }
 
-function normalizeDate(raw: unknown): string {
+function normalizeDate(raw: unknown, formatHint: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY"): string {
   if (!raw) return new Date().toISOString().split("T")[0];
   if (raw instanceof Date && !isNaN(raw.getTime())) return raw.toISOString().split("T")[0];
   if (typeof raw === "number" && raw > 1000 && raw < 100000) {
@@ -158,26 +180,31 @@ function normalizeDate(raw: unknown): string {
   }
   const str = String(raw).trim();
   
-  // Try native parse first (handles M/D/YYYY like 6/18/2026)
-  const nativeDate = new Date(str);
-  if (!isNaN(nativeDate.getTime())) {
-    return nativeDate.toISOString().split("T")[0];
-  }
-
-  // Fallback for DD/MM/YYYY
   const parts = str.split("/");
   if (parts.length === 3) {
-    let [day, month, year] = parts;
+    let day, month, year;
+    if (formatHint === "DD/MM/YYYY") {
+      day = parts[0]; month = parts[1]; year = parts[2];
+    } else {
+      month = parts[0]; day = parts[1]; year = parts[2];
+    }
     if (year.length === 2) year = `20${year}`;
     const fallback = new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T12:00:00Z`);
     if (!isNaN(fallback.getTime())) {
       return fallback.toISOString().split("T")[0];
     }
   }
+
+  // Fallback to native parse
+  const nativeDate = new Date(str);
+  if (!isNaN(nativeDate.getTime())) {
+    return nativeDate.toISOString().split("T")[0];
+  }
+
   return str.split("T")[0] || new Date().toISOString().split("T")[0];
 }
 
-function normalizeClosedAt(raw: unknown, issuedAt: string): string | null {
+function normalizeClosedAt(raw: unknown, issuedAt: string, formatHint: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY"): string | null {
   if (raw === null || raw === undefined || String(raw).trim() === "") return null;
   if (raw instanceof Date && !isNaN(raw.getTime())) return raw.toISOString();
   if (typeof raw === "number" && raw > 40000) {
@@ -186,7 +213,7 @@ function normalizeClosedAt(raw: unknown, issuedAt: string): string | null {
   }
   const str = String(raw);
   if (str) {
-    const d = new Date(normalizeDate(str));
+    const d = new Date(normalizeDate(str, formatHint));
     if (!isNaN(d.getTime())) return d.toISOString();
   }
   return issuedAt ? new Date(issuedAt).toISOString() : new Date().toISOString();
@@ -264,7 +291,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       excelType:   ["تصنيف التذاكر", "التصنيف", "نوع التذاكر", "نوع المشكلة"],
     };
 
-    const { allData, mapping, skippedByDateFilter } = parseExcelAndDetectHeaders(buffer, fieldAliases, shouldSkipDateFilter);
+    const { allData, mapping, skippedByDateFilter, detectedFormat } = parseExcelAndDetectHeaders(buffer, fieldAliases, shouldSkipDateFilter);
 
     if (allData.length === 0) {
       res.write(JSON.stringify({ error: "الملف فارغ أو لا يحتوي على بيانات" }) + "\n");
@@ -397,10 +424,10 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
         const rawStatus = get("status");
         const status = normalizeStatus(rawStatus);
-        const issuedAt = normalizeDate(get("createdAt"));
+        const issuedAt = normalizeDate(get("createdAt"), detectedFormat);
         const closedAt = status === "closed"
-          ? (normalizeClosedAt(get("closedAt"), issuedAt) ?? new Date(issuedAt).toISOString())
-          : normalizeClosedAt(get("closedAt"), issuedAt);
+          ? (normalizeClosedAt(get("closedAt"), issuedAt, detectedFormat) ?? new Date(issuedAt).toISOString())
+          : normalizeClosedAt(get("closedAt"), issuedAt, detectedFormat);
 
         const rawExcelType = String(get("excelType") || "").trim();
         const excelTypes = resolveExcelTypes(rawExcelType, typeNameMap);

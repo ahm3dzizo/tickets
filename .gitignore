@@ -11,3 +11,10 @@ coverage/
 .claude/
 wa-sessions/
 open-wa-session.*
+Downloads/
+*.exe
+*.mov
+*.mp4
+*.xlsx
+*.xlsm
+*.mjs

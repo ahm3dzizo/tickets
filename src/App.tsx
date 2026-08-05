@@ -26,6 +26,10 @@ import ContractorDetail from '@/pages/ContractorDetail';
 
 import UnitDetail from '@/pages/UnitDetail';
 import Warranties from '@/pages/Warranties';
+import TechLogin from '@/pages/tech/TechLogin';
+import TechSetup from '@/pages/tech/TechSetup';
+import TechApp from '@/pages/tech/TechApp';
+import TechTicketDetail from '@/pages/tech/TechTicketDetail';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -154,6 +158,11 @@ function AppContent() {
             path="/warranties"
             element={user && !requiresProfileCompletion ? <Warranties /> : <Navigate to="/login" />}
           />
+          {/* ⚡ Technician PWA Routes — independent auth */}
+          <Route path="/tech/login" element={<TechLogin />} />
+          <Route path="/tech/setup" element={<TechSetup />} />
+          <Route path="/tech/ticket/:id" element={<TechTicketDetail />} />
+          <Route path="/tech" element={<TechApp />} />
           {/* ⛔️ تمت إزالة Route /register */}
         </Routes>
         <Toaster position="top-right" />

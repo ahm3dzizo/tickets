@@ -112,8 +112,38 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved }: T
         await techniciansApi.update(technician.id, payload);
         toast.success('تم تحديث بيانات الفني بنجاح');
       } else {
-        await techniciansApi.create(payload);
-        toast.success('تم إضافة الفني بنجاح');
+        // Use invite endpoint to generate temp PIN and credentials
+        const token = localStorage.getItem('token') || '';
+        const res = await fetch('/api/tech/invite', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            name,
+            phoneNumber: phone,
+            projectId,
+            supervisorId
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'فشل إضافة الفني');
+        }
+
+        const data = await res.json();
+        toast.success(`تم إنشاء حساب الفني! كلمة المرور المؤقتة: ${data.tempPassword}`, {
+          duration: 10000
+        });
+
+        // WhatsApp invite link
+        const cleanPhone = phone.replace(/[^0-9]/g, '');
+        const origin = window.location.origin;
+        const msg = `Hello ${name} 👋,\nWelcome to Retal Maintenance Team!\n\nYour Technician Portal Login:\n🔗 ${origin}/tech/login\n👤 Username: ${phone}\n🔑 Temp PIN: ${data.tempPassword}\n\nPlease login and complete your profile setup.`;
+        const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+        window.open(waUrl, '_blank');
       }
 
       setOpen(false);

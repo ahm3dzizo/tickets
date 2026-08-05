@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   CalendarDays, Clock, AlertTriangle, AlertCircle, CheckCircle2, Eye, Send, Save,
-  Loader2, ChevronDown, Search, Home, Building2, CalendarPlus, CalendarClock,
+  Loader2, ChevronDown, Search, Home, Building2, CalendarPlus, CalendarClock, Wrench,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { appointmentsApi, whatsappApi, usersApi, ticketsApi, clientsApi, projectsApi, settingsApi } from '@/lib/api';
+import { appointmentsApi, whatsappApi, usersApi, ticketsApi, clientsApi, projectsApi, settingsApi, techniciansApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { renderTableDescription } from './TicketTable';
@@ -227,6 +227,8 @@ export function UnifiedAppointmentDialog({
   const [notes, setNotes] = useState('');
   const [supervisors, setSupervisors] = useState<any[]>([]);
   const [selectedSupIds, setSelectedSupIds] = useState<string[]>([]);
+  const [technicians, setTechnicians] = useState<any[]>([]);
+  const [selectedTechId, setSelectedTechId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -362,6 +364,11 @@ export function UnifiedAppointmentDialog({
     });
   }, [activeSupervisorsList, currentProjectId]);
 
+  const availableTechnicians = useMemo(() => {
+    if (!currentProjectId) return technicians;
+    return technicians.filter((tech: any) => !tech.projectId || tech.projectId === currentProjectId);
+  }, [technicians, currentProjectId]);
+
   // ── Click-outside (calendar dropdown) ─────────────────────────────────────
 
   useEffect(() => {
@@ -387,6 +394,11 @@ export function UnifiedAppointmentDialog({
     // Load supervisors
     usersApi.getAll()
       .then((u: any[]) => setSupervisors(u.filter((x: any) => x.role === 'supervisor')))
+      .catch(() => {});
+
+    // Load technicians
+    techniciansApi.getAll()
+      .then((t: any[]) => setTechnicians(t || []))
       .catch(() => {});
 
     if (isEditMode && editGroup) {
@@ -417,6 +429,7 @@ export function UnifiedAppointmentDialog({
         });
       }
       setSelectedSupIds(Array.from(supsSet));
+      setSelectedTechId(editGroup.technicianId || editGroup.technician?.id || null);
 
     } else if (isTicketMode && primaryTicket) {
       const existing = primaryTicket.appointmentTime;
@@ -439,6 +452,7 @@ export function UnifiedAppointmentDialog({
       setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length
         ? [...primaryTicket.assignedSupervisorIds]
         : []);
+      setSelectedTechId(null);
 
     } else if (isCalendarMode) {
       setDate(dateStr || todayStr());
@@ -451,6 +465,7 @@ export function UnifiedAppointmentDialog({
       setClientName('');
       setClientSearch(''); setLoadedTickets([]);
       setNewTicketTypes([]); setSelectedSupIds([]);
+      setSelectedTechId(null);
       projectsApi.getAll().then(setProjects).catch(() => {});
       clientsApi.getAll().then(setClients).catch(() => {});
     }
@@ -598,6 +613,8 @@ export function UnifiedAppointmentDialog({
             notes: notes || undefined,
             supervisorIds: selectedSupIds,
             supervisors: assignedSupervisors,
+            technicianId: selectedTechId || null,
+            technicianIds: selectedTechId ? [selectedTechId] : [],
             types: selectedTypes,
             clientPhone: resolvedClientPhone,
           });
@@ -631,6 +648,8 @@ export function UnifiedAppointmentDialog({
             date: saveDate, time: saveTime,
             notes: notes || undefined,
             supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
+            technicianId: selectedTechId || null,
+            technicianIds: selectedTechId ? [selectedTechId] : [],
             types: Array.from(allTypes),
             clientPhone: resolvedClientPhone,
           });
@@ -645,6 +664,8 @@ export function UnifiedAppointmentDialog({
             date: saveDate, time: saveTime,
             notes: notes || undefined,
             supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
+            technicianId: selectedTechId || null,
+            technicianIds: selectedTechId ? [selectedTechId] : [],
             types: Array.from(allTypes),
             ticketIds: tickets!.map(t => t.id),
           });
@@ -666,6 +687,8 @@ export function UnifiedAppointmentDialog({
               date: effectiveDate, time: saveTime,
               notes: notes || undefined,
               supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
+              technicianId: selectedTechId || null,
+              technicianIds: selectedTechId ? [selectedTechId] : [],
               types: Array.from(allTypes),
               clientPhone: resolvedClientPhone,
             });
@@ -677,6 +700,8 @@ export function UnifiedAppointmentDialog({
               date: effectiveDate, time: saveTime,
               notes: notes || undefined,
               supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
+              technicianId: selectedTechId || null,
+              technicianIds: selectedTechId ? [selectedTechId] : [],
               types: Array.from(allTypes),
               ticketIds: activeTickets.map((t: any) => t.id),
             });
@@ -690,6 +715,8 @@ export function UnifiedAppointmentDialog({
             date: effectiveDate, time: saveTime,
             notes: notes || undefined,
             supervisorIds: selectedSupIds, supervisors: assignedSupervisors,
+            technicianId: selectedTechId || null,
+            technicianIds: selectedTechId ? [selectedTechId] : [],
             types: newTicketTypes,
           });
         }
@@ -1308,6 +1335,52 @@ export function UnifiedAppointmentDialog({
               })}
               {availableSupervisors.length === 0 && (
                 <div className="text-xs text-muted-foreground">لا يوجد مشرفين مسندين لهذا المشروع</div>
+              )}
+            </div>
+          </div>
+
+          {/* ── TECHNICIAN (ALL MODES) ─────────────────────────────────── */}
+          <div className="space-y-2">
+            <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
+              الفني المسؤول (اختياري)
+            </Label>
+            <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setSelectedTechId(null)}
+                className={cn(
+                  'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
+                  !selectedTechId
+                    ? 'bg-slate-500/15 border-slate-500/30 text-foreground shadow-sm'
+                    : 'bg-muted/30 border-border text-muted-foreground hover:border-slate-400 hover:bg-muted/80'
+                )}
+              >
+                بدون فني محدد
+              </button>
+              {availableTechnicians.map((tech: any) => {
+                const isSel = selectedTechId === tech.id;
+                return (
+                  <button
+                    key={tech.id}
+                    type="button"
+                    onClick={() => setSelectedTechId(isSel ? null : tech.id)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
+                      isSel
+                        ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-600 dark:text-indigo-400 shadow-sm font-black'
+                        : 'bg-muted/30 border-border text-muted-foreground hover:border-slate-400 hover:bg-muted/80'
+                    )}
+                  >
+                    <Wrench className="w-3 h-3 text-indigo-500 shrink-0" />
+                    <span>{tech.name}</span>
+                    {tech.specialty && (
+                      <span className="text-[10px] opacity-75">({tech.specialty})</span>
+                    )}
+                  </button>
+                );
+              })}
+              {availableTechnicians.length === 0 && (
+                <div className="text-xs text-muted-foreground">لا يوجد فنيين مسجلين لهذا المشروع</div>
               )}
             </div>
           </div>

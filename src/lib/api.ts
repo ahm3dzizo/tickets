@@ -368,16 +368,151 @@ export const appointmentsApi = {
   create: (data: {
     projectId: string; villaNumber: string; clientId?: string; clientName: string;
     clientPhone?: string; date: string; time?: string; notes?: string;
-    supervisorIds?: string[]; supervisors?: any[]; types?: string[]; ticketIds?: string[];
+    supervisorIds?: string[]; supervisors?: any[]; technicianId?: string | null; technicianIds?: string[];
+    technicians?: any[]; types?: string[]; ticketIds?: string[];
   }) => post<any>('/appointments', data),
   update: (id: string, data: {
     date: string; time?: string; notes?: string; clientPhone?: string;
-    supervisorIds?: string[]; supervisors?: any[]; types?: string[]; status?: string;
+    supervisorIds?: string[]; supervisors?: any[]; technicianId?: string | null; technicianIds?: string[];
+    technicians?: any[]; types?: string[]; status?: string;
   }) => put<any>(`/appointments/${id}`, data),
+  assignTechnician: (id: string, data: { technicianId?: string | null; technicianIds?: string[]; technicians?: any[] }) =>
+    fetch(`/api/appointments/${id}/assign-technician`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || ''}`
+      },
+      body: JSON.stringify(data)
+    }).then(async r => {
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ error: r.statusText }));
+        throw new Error(err.error || `HTTP ${r.status}`);
+      }
+      return r.json();
+    }),
   deleteAppointment: (id: string) => del<any>(`/appointments/${id}`),
   migrate: () => post<{ ok: boolean; created: number }>('/appointments/migrate', {}),
   getByClient: (clientId: string) => get<any[]>(`/appointments/by-client/${clientId}`),
   getByUnit: (projectId: string, villaNumber: string) => get<any[]>(`/appointments/by-unit/${projectId}/${villaNumber}`),
+};
+
+// ── Technician API ─────────────────────────────────────────────────────────────
+export const techApi = {
+  getAppointments: async (params?: { date?: string; from?: string; to?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.date) q.set('date', params.date);
+    if (params?.from) q.set('from', params.from);
+    if (params?.to) q.set('to', params.to);
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch(`/api/tech/appointments?${q.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<any[]>;
+  },
+  getTodayShift: async () => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch('/api/shift/today', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return null;
+    return res.json();
+  },
+  clockIn: async (data: { lat?: number; lng?: number; accuracy?: number; projectId?: string }) => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch('/api/shift/clock-in', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  clockOut: async (data?: { lat?: number; lng?: number; note?: string }) => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch('/api/shift/clock-out', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data || {})
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  startBreak: async (breakType?: string) => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch('/api/shift/break/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ breakType: breakType || 'MEAL' })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  endBreak: async () => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch('/api/shift/break/end', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({})
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  startTravel: async (ticketId: string) => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch('/api/ticket-session/travel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ticketId })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  arrive: async (ticketId: string, location?: { lat: number; lng: number; accuracy?: number }) => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch('/api/ticket-session/arrive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ticketId, ...location })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  completeTicket: async (ticketId: string, notes?: string) => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch('/api/ticket-session/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ticketId, notes })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
 };
 
 // ── Warranties ────────────────────────────────────────────────────────────────

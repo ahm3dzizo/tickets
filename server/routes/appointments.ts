@@ -239,6 +239,15 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
     const appointments = await prisma.appointment.findMany({
       where,
       include: {
+        technician: {
+          select: {
+            id: true,
+            name: true,
+            employeeId: true,
+            phoneNumber: true,
+            specialty: true,
+          },
+        },
         tickets: {
           select: {
             id: true,
@@ -363,6 +372,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     notes,
     supervisorIds,
     supervisors,
+    technicianId,
+    technicianIds,
+    technicians,
     types,
     ticketIds,
   } = req.body as {
@@ -376,6 +388,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     notes?: string;
     supervisorIds?: string[];
     supervisors?: any[];
+    technicianId?: string;
+    technicianIds?: string[];
+    technicians?: any[];
     types?: string[];
     ticketIds?: string[];
   };
@@ -419,7 +434,14 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
           types: updatedTypes,
           supervisorIds: updatedSupIds,
           supervisors: updatedSups,
+          technicianId: technicianId !== undefined ? (technicianId || null) : appointment.technicianId,
+          technicianIds: technicianIds !== undefined ? technicianIds : appointment.technicianIds,
+          technicians: technicians !== undefined ? technicians : appointment.technicians,
           clientPhone: clientPhone || appointment.clientPhone,
+        },
+        include: {
+          technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
+          tickets: { select: { id: true, ticketId: true, status: true, type: true } }
         }
       });
     } else {
@@ -435,8 +457,15 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
           notes: notes || null,
           supervisorIds: supervisorIds || [],
           supervisors: supervisors || [],
+          technicianId: technicianId || null,
+          technicianIds: technicianIds || (technicianId ? [technicianId] : []),
+          technicians: technicians || [],
           types: types || [],
         },
+        include: {
+          technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
+          tickets: { select: { id: true, ticketId: true, status: true, type: true } }
+        }
       });
     }
 
@@ -477,12 +506,27 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 // ─── PUT /api/appointments/:id ────────────────────────────────────────────────
 router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   const { id } = req.params;
-  const { date, time, notes, supervisorIds, supervisors, types, clientPhone, status } = req.body as {
+  const {
+    date,
+    time,
+    notes,
+    supervisorIds,
+    supervisors,
+    technicianId,
+    technicianIds,
+    technicians,
+    types,
+    clientPhone,
+    status
+  } = req.body as {
     date: string;
     time?: string;
     notes?: string;
     supervisorIds?: string[];
     supervisors?: any[];
+    technicianId?: string | null;
+    technicianIds?: string[];
+    technicians?: any[];
     types?: string[];
     clientPhone?: string;
     status?: string;
@@ -511,10 +555,17 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         notes: notes || null,
         supervisorIds: supervisorIds || [],
         supervisors: supervisors || [],
+        ...(technicianId !== undefined ? { technicianId: technicianId || null } : {}),
+        ...(technicianIds !== undefined ? { technicianIds } : {}),
+        ...(technicians !== undefined ? { technicians } : {}),
         types: types || [],
         ...(clientPhone ? { clientPhone } : {}),
         ...(status ? { status } : {}),
       },
+      include: {
+        technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
+        tickets: { select: { id: true, ticketId: true, status: true, type: true } }
+      }
     });
 
     // Sync all linked tickets
@@ -529,6 +580,36 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     getIO()?.emit("appointment:updated", appointment);
     res.json(appointment);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PATCH /api/appointments/:id/assign-technician ─────────────────────────────
+router.patch("/:id/assign-technician", requireAuth, async (req: AuthRequest, res) => {
+  const { id } = req.params;
+  const { technicianId, technicianIds, technicians } = req.body as {
+    technicianId?: string | null;
+    technicianIds?: string[];
+    technicians?: any[];
+  };
+
+  try {
+    const updated = await prisma.appointment.update({
+      where: { id },
+      data: {
+        technicianId: technicianId || null,
+        technicianIds: technicianIds || (technicianId ? [technicianId] : []),
+        ...(technicians !== undefined ? { technicians } : {}),
+      },
+      include: {
+        technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
+        tickets: { select: { id: true, ticketId: true, status: true, type: true } }
+      }
+    });
+
+    getIO()?.emit("appointment:updated", updated);
+    res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
