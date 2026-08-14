@@ -33,8 +33,8 @@ export function useTechAuth() {
         
         if (res.ok) {
           const data = await res.json();
-          setProfile(data);
-          localStorage.setItem('tech_profile', JSON.stringify(data));
+          setProfile(data.profile);
+          localStorage.setItem('tech_profile', JSON.stringify(data.profile));
         } else {
           // Token invalid
           logout();
@@ -55,7 +55,7 @@ export function useTechAuth() {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ username: phone, password: pin })
+      body: JSON.stringify({ phone, pin })
     });
     
     if (!res.ok) {
@@ -64,9 +64,9 @@ export function useTechAuth() {
     
     const data = await res.json();
     setToken(data.token);
-    setProfile(data.technician);
+    setProfile(data.profile);
     localStorage.setItem('tech_token', data.token);
-    localStorage.setItem('tech_profile', JSON.stringify(data.technician));
+    localStorage.setItem('tech_profile', JSON.stringify(data.profile));
     
     return data;
   };

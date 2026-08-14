@@ -53,6 +53,11 @@ router.post('/shift/clock-in', requireTechAuth, async (req: TechAuthRequest, res
         projectId,
         status: 'ACTIVE',
         clockInAt: new Date(),
+        shiftDate: (() => {
+          const d = new Date();
+          d.setHours(0, 0, 0, 0);
+          return d;
+        })(),
         clockInDistanceM: distance,
         isFlagged,
         flagReason

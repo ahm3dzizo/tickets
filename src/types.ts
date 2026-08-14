@@ -28,6 +28,10 @@ export interface Project {
   engineerIds: string[];
   supervisorIds: string[];
   createdAt: string;
+  googleMapsUrl?: string;
+  officeLat?: number;
+  officeLng?: number;
+  officeAddress?: string;
 }
 
 export interface Client {

@@ -18,3 +18,20 @@ Downloads/
 *.xlsx
 *.xlsm
 *.mjs
+# ===== Local / Production data =====
+dist_bak/
+db-backups/
+uploads/
+logs/
+.node-persist/
+scratch/
+
+# ===== Database backups =====
+*.dump
+
+# ===== Backup / temporary files =====
+*.bak
+*.tmp
+
+# ===== Local Firebase configuration =====
+firebase-applet-config.json

@@ -55,6 +55,7 @@ model Project {
   officeLat    Float?
   officeLng    Float?
   officeAddress String?
+  googleMapsUrl String?
   createdAt    DateTime @default(now())
 
   blocks                Block[]

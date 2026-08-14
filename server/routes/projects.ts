@@ -115,6 +115,7 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
       officeLat,
       officeLng,
       officeAddress: data.officeAddress || null,
+      googleMapsUrl: data.googleMapsUrl || null,
       users: { connect: combinedUserIds.map(uid => ({ uid })) },
     },
     include: { users: true }
@@ -168,6 +169,7 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
       officeLat,
       officeLng,
       officeAddress: data.officeAddress ?? undefined,
+      googleMapsUrl: data.googleMapsUrl !== undefined ? (data.googleMapsUrl || null) : undefined,
       ...connectData
     },
     include: { users: true }

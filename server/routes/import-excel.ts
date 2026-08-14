@@ -69,8 +69,8 @@ function parseExcelAndDetectHeaders(
         }
       }
     }
-    if (maxFirstPart > 12) detectedFormat = "MM/DD/YYYY";
-    else if (maxSecondPart > 12) detectedFormat = "DD/MM/YYYY";
+    if (maxFirstPart > 12) detectedFormat = "DD/MM/YYYY";   // أول رقم > 12 → لازم يكون يوم → DD/MM/YYYY
+    else if (maxSecondPart > 12) detectedFormat = "MM/DD/YYYY"; // تاني رقم > 12 → لازم يكون يوم → MM/DD/YYYY
     else detectedFormat = "DD/MM/YYYY"; // Default to Saudi Arabia standard
   }
 

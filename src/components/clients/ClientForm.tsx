@@ -109,22 +109,35 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton,
 
   const handleImportClients = async (data: any[]) => {
     if (!projectId) { toast.error('اختر المشروع أولاً'); return; }
-    const rows = data.map(item => {
+    let success = 0;
+    let failed = 0;
+    // نشغّل كل صف بالتسلسل عشان نتجنب race condition على clientUnit upsert
+    for (const item of data) {
       const keys = Object.keys(item);
       const byIndex = (i: number) => String(item[keys[i]] ?? '').trim();
       const villaNumber    = String(item.villaNumber    || item['رقم الفيلا']    || item['فيلا']        || (keys.length > 0 ? byIndex(0) : '')).trim();
       const blockNumber    = String(item.blockNumber    || item['رقم البلوك']    || item['البلوك']      || item['رقم القطعة'] || (keys.length > 1 ? byIndex(1) : '')).trim();
       const name           = String(item.name           || item['الاسم']         || item['اسم العميل']  || (keys.length > 2 ? byIndex(2) : '')).trim();
       const phone          = String(item.phone          || item['الجوال']        || item['رقم الجوال']  || item['الهاتف']     || (keys.length > 3 ? byIndex(3) : '')).trim();
-      return clientsApi.create(projectId, {
-        name, phone, villaNumber, blockNumber,
-        handoverDate: item.handoverDate || item['تاريخ الاستلام'] || '',
-        warrantyExpiryDate: item.warrantyExpiryDate || item['انتهاء الضمان'] || '',
-        projectId,
-        createdAt: new Date().toISOString()
-      });
-    });
-    await Promise.all(rows);
+      try {
+        await clientsApi.create(projectId, {
+          name, phone, villaNumber, blockNumber,
+          handoverDate: item.handoverDate || item['تاريخ الاستلام'] || '',
+          warrantyExpiryDate: item.warrantyExpiryDate || item['انتهاء الضمان'] || '',
+          projectId,
+          createdAt: new Date().toISOString()
+        });
+        success++;
+      } catch (err: any) {
+        failed++;
+        console.warn(`[importClients] فشل استيراد الصف — فيلا: ${villaNumber}, جوال: ${phone}`, err?.message || err);
+      }
+    }
+    if (failed > 0) {
+      toast.warning(`تم استيراد ${success} عميل بنجاح، وفشل ${failed} صف — راجع الـ console للتفاصيل`);
+    } else {
+      toast.success(`تم استيراد ${success} عميل بنجاح`);
+    }
     setOpen(false);
     onSuccess?.();
   };
