@@ -43,8 +43,8 @@ export default function Login() {
       // ── 2. لو فشل جرّب الـ tech auth ───────────────────────────
       try {
         const data = await techLogin(id, pwd);
-        console.info('[Login] tech auth success', data?.profile?.name);
-        if (data?.profile?.profileCompleted) {
+        console.info('[Login] tech auth success', data?.technician?.name);
+        if (data?.technician?.profileCompleted === true) {
           navigate('/tech');
         } else {
           navigate('/tech/setup');

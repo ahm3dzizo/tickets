@@ -35,6 +35,10 @@ export function useTechAuth() {
           const data = await res.json();
           setProfile(data);
           localStorage.setItem('tech_profile', JSON.stringify(data));
+
+          if (data.language) {
+            localStorage.setItem('tech_language', data.language);
+          }
         } else {
           // Token invalid
           logout();
@@ -67,6 +71,10 @@ export function useTechAuth() {
     setProfile(data.technician);
     localStorage.setItem('tech_token', data.token);
     localStorage.setItem('tech_profile', JSON.stringify(data.technician));
+
+    if (data.technician?.language) {
+      localStorage.setItem('tech_language', data.technician.language);
+    }
     
     return data;
   };

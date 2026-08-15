@@ -21,7 +21,9 @@ export default function TechSetup() {
   const { token, setProfile } = useTechAuth();
   const navigate = useNavigate();
   
-  const [lang, setLang] = useState<TechLang>('ar');
+  const [lang, setLang] = useState<TechLang>(() => {
+    return (localStorage.getItem('tech_language') as TechLang) || 'ar';
+  });
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
@@ -30,7 +32,7 @@ export default function TechSetup() {
     specialty: SPECIALTIES[0],
     clothingSize: CLOTHING_SIZES[2],
     shoeSize: SHOE_SIZES[4],
-    preferredLang: 'ar' as TechLang
+    preferredLang: ((localStorage.getItem('tech_language') as TechLang) || 'ar')
   });
   
   const [idPhoto, setIdPhoto] = useState<File | null>(null);
@@ -91,6 +93,7 @@ export default function TechSetup() {
 
       const data = await res.json();
       setProfile(data.profile);
+      localStorage.setItem('tech_language', formData.preferredLang);
       navigate('/tech');
       toast.success('Profile completed successfully');
       
@@ -115,8 +118,10 @@ export default function TechSetup() {
               type="button"
               className={`lang-btn ${lang === l.code ? 'active' : ''}`}
               onClick={() => {
-                setLang(l.code as TechLang);
-                setFormData(prev => ({ ...prev, preferredLang: l.code as TechLang }));
+                const newLang = l.code as TechLang;
+                setLang(newLang);
+                localStorage.setItem('tech_language', newLang);
+                setFormData(prev => ({ ...prev, preferredLang: newLang }));
               }}
             >
               {l.label}

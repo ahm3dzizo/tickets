@@ -636,13 +636,7 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
   try {
     const technician = await prisma.technician.findUnique({
       where: { id: req.technicianId! },
-      select: {
-        id: true,
-        supervisorId: true,
-        projectId: true,
-        specialty: true,
-        name: true
-      }
+      select: { id: true, supervisorId: true, projectId: true, specialty: true, name: true }
     });
 
     if (!technician) {
@@ -650,22 +644,15 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
       return;
     }
 
-    const { from, to, date } = req.query as {
-      from?: string;
-      to?: string;
-      date?: string;
-    };
+    const { from, to, date } = req.query as { from?: string; to?: string; date?: string };
 
     const orConditions: any[] = [
       { technicianId: technician.id },
       { technicianIds: { has: technician.id } }
     ];
 
-    // كل مواعيد المشرف تظهر للفنيين التابعين له
     if (technician.supervisorId) {
-      orConditions.push({
-        supervisorIds: { has: technician.supervisorId }
-      });
+      orConditions.push({ supervisorIds: { has: technician.supervisorId } });
     }
 
     const where: any = {
@@ -673,7 +660,6 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
       OR: orConditions
     };
 
-    // المواعيد يجب أن تكون في نفس مشروع الفني
     if (technician.projectId) {
       where.projectId = technician.projectId;
     }
@@ -681,26 +667,22 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
     if (date) {
       where.date = date;
     } else if (from && to) {
-      where.date = {
-        gte: from,
-        lte: to
-      };
+      where.date = { gte: from, lte: to };
     }
 
     const appointments = await prisma.appointment.findMany({
       where,
-
       include: {
         project: {
           select: {
             id: true,
             name: true,
+            code: true,
             officeLat: true,
             officeLng: true,
             officeAddress: true
           }
         },
-
         technician: {
           select: {
             id: true,
@@ -709,7 +691,6 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
             phoneNumber: true
           }
         },
-
         tickets: {
           select: {
             id: true,
@@ -724,89 +705,20 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
             priority: true,
             appointmentTime: true,
             appointmentNotes: true,
-
             techSessions: {
-              where: {
-                technicianId: technician.id
-              },
-              orderBy: {
-                createdAt: 'desc'
-              },
+              where: { technicianId: technician.id },
+              orderBy: { createdAt: 'desc' },
               take: 1
             }
           }
         }
       },
-
-      orderBy: [
-        { date: 'asc' },
-        { time: 'asc' }
-      ]
+      orderBy: [{ date: 'asc' }, { time: 'asc' }]
     });
 
-    console.log('========== TECH APPOINTMENTS DEBUG ==========');
-    console.log('TECHNICIAN:', {
-      id: technician.id,
-      name: technician.name,
-      supervisorId: technician.supervisorId,
-      projectId: technician.projectId
-    });
-    console.log('APPOINTMENTS COUNT:', appointments.length);
-    console.log('APPOINTMENTS:', appointments.map((a: any) => ({
-      id: a.id,
-      date: a.date,
-      time: a.time,
-      projectId: a.projectId,
-      technicianId: a.technicianId,
-      technicianIds: a.technicianIds,
-      supervisorIds: a.supervisorIds,
-      status: a.status,
-      ticketsCount: Array.isArray(a.tickets) ? a.tickets.length : 0
-    })));
-    console.log('=============================================');
-
-    const enrichedAppointments = appointments.map((appointment: any) => {
-      const isAssignedToMe =
-        appointment.technicianId === technician.id ||
-        (
-          Array.isArray(appointment.technicianIds) &&
-          appointment.technicianIds.includes(technician.id)
-        );
-
-      const isSupervisorAppointment =
-        !!technician.supervisorId &&
-        Array.isArray(appointment.supervisorIds) &&
-        appointment.supervisorIds.includes(technician.supervisorId);
-
-      return {
-        ...appointment,
-        isAssignedToMe,
-        isSupervisorAppointment,
-        appointmentPriority: isAssignedToMe ? 1 : 2
-      };
-    });
-
-    // المواعيد المخصصة للفني أولاً، ثم مواعيد المشرف
-    enrichedAppointments.sort((a: any, b: any) => {
-      if (a.appointmentPriority !== b.appointmentPriority) {
-        return a.appointmentPriority - b.appointmentPriority;
-      }
-
-      if (a.date !== b.date) {
-        return String(a.date).localeCompare(String(b.date));
-      }
-
-      return String(a.time || '').localeCompare(String(b.time || ''));
-    });
-
-    res.json(enrichedAppointments);
-
+    res.json(appointments);
   } catch (err: any) {
-    console.error('GET /tech/appointments error:', err);
-
-    res.status(500).json({
-      error: err.message
-    });
+    res.status(500).json({ error: err.message });
   }
 });
 

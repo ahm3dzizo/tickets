@@ -695,6 +695,7 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
           select: {
             id: true,
             name: true,
+            code: true,
             officeLat: true,
             officeLng: true,
             officeAddress: true

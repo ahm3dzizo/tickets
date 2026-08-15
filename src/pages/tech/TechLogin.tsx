@@ -14,7 +14,9 @@ const LANGUAGES = [
 ];
 
 export default function TechLogin() {
-  const [lang, setLang] = useState<TechLang>('ar');
+  const [lang, setLang] = useState<TechLang>(() => {
+    return (localStorage.getItem('tech_language') as TechLang) || 'ar';
+  });
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
@@ -33,8 +35,19 @@ export default function TechLogin() {
     setLoading(true);
     try {
       const data = await login(phone, pin);
+
+      // Use the language selected on the login screen.
+      // It will be persisted to the technician profile after setup,
+      // and immediately used by the technician app.
+      const selectedLang =
+        (localStorage.getItem('tech_language') as TechLang) ||
+        (data.technician?.language as TechLang) ||
+        'ar';
+
+      localStorage.setItem('tech_language', selectedLang);
+
       // Profile completion check
-      if (data.profile?.profileCompleted) {
+      if (data.technician?.profileCompleted === true) {
         navigate('/tech');
       } else {
         navigate('/tech/setup');
@@ -63,7 +76,11 @@ export default function TechLogin() {
               key={l.code}
               type="button"
               className={`lang-btn ${lang === l.code ? 'active' : ''}`}
-              onClick={() => setLang(l.code as TechLang)}
+              onClick={() => {
+                const newLang = l.code as TechLang;
+                setLang(newLang);
+                localStorage.setItem('tech_language', newLang);
+              }}
             >
               {l.label}
             </button>
