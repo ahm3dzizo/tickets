@@ -149,8 +149,44 @@ function autoMatch(columns: string[], aliases: string[]): string {
 
 function normalizeVillaNumber(raw: string): string {
   if (!raw) return "";
-  const cleaned = raw.replace(/[^0-9]/g, "").replace(/^0+/, "");
-  return cleaned || raw.trim();
+
+  const value = String(raw).trim();
+  if (!value) return "";
+
+  // IMPORTANT:
+  // Do NOT remove every non-digit character.
+  // Example: "ES2-1863" must become "1863", NOT "21863".
+  //
+  // If the value has a project/prefix followed by "-" and digits,
+  // use only the trailing unit number.
+  const prefixed = value.match(/^[A-Za-z]+\d+[-_/ ]+(\d+)$/);
+  if (prefixed) {
+    return String(parseInt(prefixed[1], 10));
+  }
+
+  // Also support values such as:
+  // "Villa 1863", "Unit 1863", "الوحدة 1863"
+  const labeled = value.match(/^(?:villa|unit|الوحدة|فيلا)\s*[-:/#]?\s*(\d+)$/i);
+  if (labeled) {
+    return String(parseInt(labeled[1], 10));
+  }
+
+  // Pure numeric values: only remove leading zeros.
+  // "001863" -> "1863"
+  // "21863"  -> "21863" (DO NOT change it)
+  if (/^\d+$/.test(value)) {
+    return String(parseInt(value, 10));
+  }
+
+  // If there is a trailing numeric part after a separator,
+  // use that number rather than concatenating prefix digits.
+  const trailing = value.match(/[-_/ ]+(\d+)$/);
+  if (trailing) {
+    return String(parseInt(trailing[1], 10));
+  }
+
+  // Unknown format: keep it unchanged instead of corrupting the number.
+  return value;
 }
 
 function normalizeStatus(rawStatus: unknown): string {
