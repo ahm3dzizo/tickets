@@ -447,6 +447,52 @@ router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthReq
       }
     });
     
+    // Complete the actual ticket as well.
+    await prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        status: 'completed',
+        closedAt: now,
+        closureNotes: notes || undefined
+      }
+    });
+
+    // ============================================================
+    // AUTO COMPLETE APPOINTMENT
+    // If this ticket belongs to an appointment and it was the
+    // last non-completed ticket, complete the appointment too.
+    // Appointment status remains "scheduled" while work is active.
+    // ============================================================
+    const completedTicket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { appointmentId: true }
+    });
+
+    if (completedTicket?.appointmentId) {
+      const remainingTickets = await prisma.ticket.count({
+        where: {
+          appointmentId: completedTicket.appointmentId,
+          status: {
+            not: 'completed'
+          }
+        }
+      });
+
+      if (remainingTickets === 0) {
+        await prisma.appointment.update({
+          where: { id: completedTicket.appointmentId },
+          data: {
+            status: 'completed'
+          }
+        });
+
+        console.log(
+          'APPOINTMENT AUTO COMPLETED:',
+          completedTicket.appointmentId
+        );
+      }
+    }
+
     if (session.shiftLogId) {
       const shift = await prisma.shiftLog.findUnique({ where: { id: session.shiftLogId } });
       if (shift) {
@@ -628,6 +674,240 @@ router.patch('/attendance/override', requireAuth, async (req: AuthRequest, res) 
     });
     res.json(updated);
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ============================================================
+// CLAIM APPOINTMENT
+// Claiming an appointment immediately starts all eligible
+// open tickets belonging to that appointment.
+// Direct workflow: IN_PROGRESS -> PAUSED -> IN_PROGRESS -> COMPLETED.
+// ============================================================
+router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (req: TechAuthRequest, res) => {
+  try {
+    const technicianId = req.technicianId!;
+    const appointmentId = req.params.appointmentId;
+
+    const technician = await prisma.technician.findUnique({
+      where: { id: technicianId },
+      select: {
+        id: true,
+        name: true,
+        supervisorId: true,
+        projectId: true,
+        specialty: true
+      }
+    });
+
+    if (!technician) {
+      res.status(404).json({ error: 'Technician not found' });
+      return;
+    }
+
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: {
+        tickets: {
+          select: {
+            id: true,
+            ticketId: true,
+            status: true,
+            assigneeName: true,
+            assignedSupervisorId: true,
+            assignedSupervisorIds: true
+          }
+        }
+      }
+    });
+
+    if (!appointment) {
+      res.status(404).json({ error: 'Appointment not found' });
+      return;
+    }
+
+    if (appointment.status === 'cancelled') {
+      res.status(400).json({ error: 'Cannot claim a cancelled appointment' });
+      return;
+    }
+
+    // Technician must belong to this appointment either directly
+    // or through the technicianIds array.
+    const isDirectTechnician =
+      appointment.technicianId === technician.id ||
+      appointment.technicianIds.includes(technician.id);
+
+    const isSupervisorAppointment =
+      !!technician.supervisorId &&
+      appointment.supervisorIds.includes(technician.supervisorId);
+
+    if (!isDirectTechnician && !isSupervisorAppointment) {
+      res.status(403).json({
+        error: 'This appointment is not assigned to this technician'
+      });
+      return;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const eligibleTickets = appointment.tickets.filter((ticket) => {
+        // Only currently open tickets.
+        if (ticket.status !== 'open') return false;
+
+        const assignedToTech =
+          ticket.assigneeName &&
+          ticket.assigneeName.trim() === technician.name.trim();
+
+        const assignedToSupervisor =
+          !!technician.supervisorId &&
+          (
+            ticket.assignedSupervisorId === technician.supervisorId ||
+            ticket.assignedSupervisorIds.includes(technician.supervisorId)
+          );
+
+        // If the ticket has an explicit technician/supervisor assignment,
+        // only claim it when it belongs to this technician's chain.
+        const hasExplicitAssignment =
+          !!ticket.assigneeName ||
+          !!ticket.assignedSupervisorId ||
+          ticket.assignedSupervisorIds.length > 0;
+
+        if (hasExplicitAssignment) {
+          return assignedToTech || assignedToSupervisor;
+        }
+
+        // Appointment ticket without an explicit assignment:
+        // because the appointment itself belongs to this technician,
+        // it is eligible.
+        return isDirectTechnician;
+      });
+
+      const claimedTickets: any[] = [];
+
+      for (const ticket of eligibleTickets) {
+        /*
+         * IMPORTANT:
+         *
+         * Claiming an appointment starts the work immediately.
+         *
+         * Correct lifecycle:
+         *
+         * IN_PROGRESS
+         *   -> PAUSED / IN_PROGRESS
+         *   -> COMPLETED
+         *
+         * There is no EN_ROUTE / ARRIVED step for appointment claims.
+         */
+
+        const existing = await tx.ticketTimeSession.findFirst({
+          where: {
+            ticketId: ticket.id,
+            status: {
+              notIn: ['COMPLETED', 'CANCELLED']
+            }
+          }
+        });
+
+        if (existing) {
+          /*
+           * If the existing session belongs to this technician,
+           * this ticket has already been claimed by him.
+           *
+           * If it belongs to another technician, DO NOT touch it.
+           * This prevents one technician from hijacking another
+           * technician's active work session.
+           */
+          if (existing.technicianId === technicianId) {
+            claimedTickets.push({
+              ticketId: ticket.ticketId,
+              sessionId: existing.id,
+              alreadyClaimed: true
+            });
+          }
+
+          continue;
+        }
+
+        const shift = await tx.shiftLog.findFirst({
+          where: {
+            technicianId,
+            status: {
+              in: ['ACTIVE', 'ON_BREAK']
+            }
+          },
+          orderBy: {
+            clockInAt: 'desc'
+          }
+        });
+
+        const now = new Date();
+
+        const session = await tx.ticketTimeSession.create({
+          data: {
+            ticketId: ticket.id,
+            technicianId,
+            shiftLogId: shift?.id,
+            status: 'IN_PROGRESS',
+            specialtyKey: technician.specialty || 'general',
+            claimedAt: now,
+            workStartedAt: now
+          }
+        });
+
+        /*
+         * DIRECT WORKFLOW:
+         *
+         * Appointment Claim = IN_PROGRESS immediately.
+         *
+         * There is no EN_ROUTE / ARRIVED step.
+         * Work timing starts at the exact moment of claiming.
+         */
+        await tx.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            status: 'in_progress'
+          }
+        });
+
+        claimedTickets.push({
+          ticketId: ticket.ticketId,
+          sessionId: session.id,
+          alreadyClaimed: false
+        });
+      }
+
+      /*
+       * Claiming an appointment does not complete it.
+       *
+       * remainingOpen is returned only as information for the client.
+       * The appointment must remain active until its tickets are
+       * actually completed through the completion workflow.
+       */
+      const remainingOpen = await tx.ticket.count({
+        where: {
+          appointmentId,
+          status: {
+            in: ['open', 'pending', 'waiting']
+          }
+        }
+      });
+
+      return {
+        claimedTickets,
+        remainingOpen
+      };
+    });
+
+    res.json({
+      ok: true,
+      appointmentId,
+      technicianId,
+      claimedCount: result.claimedTickets.length,
+      tickets: result.claimedTickets
+    });
+
+  } catch (err: any) {
+    console.error('CLAIM APPOINTMENT ERROR:', err);
     res.status(500).json({ error: err.message });
   }
 });

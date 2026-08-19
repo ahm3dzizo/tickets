@@ -172,17 +172,9 @@ export default function TechTicketDetail() {
     currentStatus === 'COMPLETED' ||
     currentStatus === 'CLOSED';
 
-  const canStartTravel =
-    currentStatus === 'CLAIMED' ||
-    currentStatus === 'ASSIGNED';
-
-  const canArrive =
-    currentStatus === 'EN_ROUTE' ||
-    currentStatus === 'TRAVELING';
-
   const canComplete =
-    currentStatus === 'IN_PROGRESS' ||
-    currentStatus === 'ARRIVED';
+    currentStatus === 'in_progress' ||
+    currentStatus === 'IN_PROGRESS';
 
   const locationUrl = useMemo(() => {
     if (
@@ -213,90 +205,6 @@ export default function TechTicketDetail() {
         );
       }
     );
-  };
-
-  const handleStartTravel = async () => {
-    if (!ticket?.id) return;
-
-    setActionLoading(true);
-
-    try {
-      const result = await techApi.startTravel(ticket.id);
-
-      setTicket((prev) => ({
-        ...(prev || {}),
-        ...(result?.ticket || {}),
-        status:
-          result?.ticket?.status ||
-          result?.status ||
-          'EN_ROUTE',
-      }));
-
-      toast.success('تم بدء التحرك');
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || 'فشل بدء التحرك');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleArrive = async () => {
-    if (!ticket?.id) return;
-
-    setActionLoading(true);
-
-    try {
-      toast.info('جاري تحديد موقعك...');
-
-      let location:
-        | { lat: number; lng: number; accuracy?: number }
-        | undefined;
-
-      try {
-        const position = await getCurrentLocation();
-
-        location = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        };
-      } catch (locationError) {
-        console.warn(
-          'Location unavailable:',
-          locationError
-        );
-
-        toast.error(
-          'لا يمكن تسجيل الوصول بدون تحديد موقعك'
-        );
-
-        return;
-      }
-
-      const result = await techApi.arrive(
-        ticket.id,
-        location
-      );
-
-      setTicket((prev) => ({
-        ...(prev || {}),
-        ...(result?.ticket || {}),
-        status:
-          result?.ticket?.status ||
-          result?.status ||
-          'IN_PROGRESS',
-      }));
-
-      toast.success('تم تسجيل وصولك للموقع');
-    } catch (err: any) {
-      console.error(err);
-      toast.error(
-        err.message || 'فشل تسجيل الوصول'
-      );
-    } finally {
-      setActionLoading(false);
-    }
   };
 
   const handleComplete = async () => {
@@ -640,23 +548,6 @@ export default function TechTicketDetail() {
           <div className="space-y-4">
             <WorkflowStep
               active={
-                canStartTravel ||
-                canArrive ||
-                canComplete ||
-                isCompleted
-              }
-              completed={
-                canArrive ||
-                canComplete ||
-                isCompleted
-              }
-              label="تم تخصيص التذكرة"
-            />
-
-            <WorkflowStep
-              active={
-                currentStatus === 'EN_ROUTE' ||
-                currentStatus === 'TRAVELING' ||
                 canComplete ||
                 isCompleted
               }
@@ -664,28 +555,20 @@ export default function TechTicketDetail() {
                 canComplete ||
                 isCompleted
               }
-              label="في الطريق"
+              label="تم استلام التذكرة"
             />
 
             <WorkflowStep
               active={
-                currentStatus === 'ARRIVED' ||
                 currentStatus === 'IN_PROGRESS' ||
+                currentStatus === 'in_progress' ||
                 isCompleted
               }
               completed={
                 currentStatus === 'IN_PROGRESS' ||
+                currentStatus === 'in_progress' ||
                 isCompleted
               }
-              label="تم الوصول للموقع"
-            />
-
-            <WorkflowStep
-              active={
-                currentStatus === 'IN_PROGRESS' ||
-                isCompleted
-              }
-              completed={isCompleted}
               label="جاري التنفيذ"
             />
 
@@ -702,41 +585,6 @@ export default function TechTicketDetail() {
         {!isCompleted && (
           <div className="sticky bottom-[78px] z-40 -mx-1">
             <div className="p-2 rounded-2xl bg-[var(--tech-surface)]/95 backdrop-blur-xl border border-[var(--tech-border)] shadow-lg">
-              {canStartTravel && (
-                <button
-                  onClick={handleStartTravel}
-                  disabled={actionLoading}
-                  className="tech-btn tech-btn-primary"
-                >
-                  {actionLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Navigation className="w-5 h-5" />
-                  )}
-
-                  {actionLoading
-                    ? 'جاري التنفيذ...'
-                    : 'بدء التحرك'}
-                </button>
-              )}
-
-              {canArrive && (
-                <button
-                  onClick={handleArrive}
-                  disabled={actionLoading}
-                  className="tech-btn tech-btn-success"
-                >
-                  {actionLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <MapPin className="w-5 h-5" />
-                  )}
-
-                  {actionLoading
-                    ? 'جاري تحديد الموقع...'
-                    : 'وصلت للموقع'}
-                </button>
-              )}
 
               {canComplete && (
                 <button
@@ -752,18 +600,6 @@ export default function TechTicketDetail() {
                 </button>
               )}
 
-              {currentStatus === 'PAUSED' && (
-                <button
-                  onClick={() => {
-                    toast.info(
-                      'استئناف التذكرة سيتم ربطه بالـ API الخاص بالاستراحة'
-                    );
-                  }}
-                  className="tech-btn tech-btn-primary"
-                >
-                  استئناف العمل
-                </button>
-              )}
             </div>
           </div>
         )}

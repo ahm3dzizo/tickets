@@ -41,12 +41,12 @@ async function request<T>(
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `HTTP ${res.status}`);
   }
-  
+
   return res.json() as Promise<T>;
 }
 
@@ -60,9 +60,9 @@ const patch = <T>(path: string, body: unknown) => request<T>('PATCH', path, body
 export const authApi = {
   login: (identifier: string, password: string) =>
     request<{ token: string; user: any; requiresProfileCompletion?: boolean; isFirstLogin?: boolean }>(
-      'POST', 
-      '/auth/login', 
-      { identifier, password }, 
+      'POST',
+      '/auth/login',
+      { identifier, password },
       { auth: false }
     ),
   register: (data: { displayName: string; email: string; password: string }) =>
@@ -91,7 +91,7 @@ export const usersApi = {
       : `?phoneNumber=${encodeURIComponent(params.phoneNumber ?? '')}`;
     return get<any | null>(`/users/find/by-employee${q}`);
   },
-  // ✨ جديد: إكمال بيانات المستخدم المعلق 
+  // ✨ جديد: إكمال بيانات المستخدم المعلق
   completeProfile: (data: { displayName: string; email: string; password: string }) =>
     post<{ token?: string; user: any }>('/users/complete-profile', data),
 };
@@ -147,7 +147,7 @@ export const ticketsApi = {
   bulkCreate:   (tickets: any[])                       => post<{ count: number }>('/tickets/bulk', { tickets }),
   update:       (id: string, data: any)                => put<any>(`/tickets/${id}`, data),
   bulkStatus:   (ids: string[], status: string)        => patch<{count: number}>('/tickets/bulk-status', { ids, status }),
-  bulkUpdateImported: (updates: { id: string; status: string; closedAt?: string | null }[]) => 
+  bulkUpdateImported: (updates: { id: string; status: string; closedAt?: string | null }[]) =>
     post<{count: number}>('/tickets/bulk-update-imported', { updates }),
   delete:       (id: string)                           => del<any>(`/tickets/${id}`),
   deleteAll:    ()                                     => del<any>('/tickets'),
@@ -165,7 +165,7 @@ export const ticketsApi = {
       form.append('skipDateFilter', 'true');
     }
     const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
-    
+
     const response = await fetch('/api/import-excel', {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -182,7 +182,7 @@ export const ticketsApi = {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      
+
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
@@ -497,6 +497,33 @@ export const techApi = {
     }
     return res.json();
   },
+  claimAppointment: async (appointmentId: string) => {
+    const token = localStorage.getItem('tech_token') || '';
+
+    const res = await fetch(
+      `/api/tech/appointments/${appointmentId}/claim`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({
+        error: res.statusText
+      }));
+
+      throw new Error(
+        err.error || `HTTP ${res.status}`
+      );
+    }
+
+    return res.json();
+  },
+
   startTravel: async (ticketId: string) => {
     const token = localStorage.getItem('tech_token') || '';
     const res = await fetch('/api/ticket-session/travel', {
@@ -545,7 +572,7 @@ export const warrantiesApi = {
     const form = new FormData();
     form.append('file', file);
     if (projectId) form.append('projectId', projectId);
-    
+
     const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
     const res = await fetch('/api/warranties/import', {
       method: 'POST',
@@ -568,4 +595,4 @@ export const learnedKeywordsApi = {
   learn: (keyword: string, type: string) => post<any>('/learned-keywords/learn', { keyword, type }),
   bulkLearn: (items: any[]) => post<any>('/learned-keywords/bulk', { items }),
 };
-
+

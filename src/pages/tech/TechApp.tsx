@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import {
+  useNavigate,
+} from 'react-router-dom';
 import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
 import { techApi } from '@/lib/api';
 import {
+  Loader2,
   Home,
   Calendar,
   LogOut,
@@ -691,6 +694,66 @@ function AppointmentCard({
   const tickets = appt.tickets || [];
   const isCompleted = appt.status === 'completed';
 
+  const initialClaimed =
+    appt.isClaimed === true ||
+    tickets.some(
+      (ticket: any) =>
+        ticket.status === 'in_progress' ||
+        ticket.status === 'IN_PROGRESS' ||
+        ticket.techSessions?.some(
+          (session: any) =>
+            session.status === 'CLAIMED' ||
+            session.status === 'IN_PROGRESS'
+        )
+    );
+
+  const [claiming, setClaiming] = useState(false);
+  const [claimed, setClaimed] = useState(initialClaimed);
+
+  const handleClaimAppointment = async () => {
+    if (claiming || claimed || isCompleted) return;
+
+    setClaiming(true);
+
+    try {
+      const result = await techApi.claimAppointment(appt.id);
+
+      setClaimed(true);
+
+      if (Array.isArray(result?.tickets)) {
+        const claimedIds = new Set(
+          result.tickets.map((t: any) => t.ticketId)
+        );
+
+        appt.tickets = tickets.map((ticket: any) => ({
+          ...ticket,
+          status: claimedIds.has(ticket.ticketId)
+            ? 'in_progress'
+            : ticket.status,
+        }));
+      } else {
+        appt.tickets = tickets.map((ticket: any) => ({
+          ...ticket,
+          status:
+            ticket.status === 'open'
+              ? 'in_progress'
+              : ticket.status,
+        }));
+      }
+
+      toast.success('تم استلام الموعد وبدأ العمل فورًا');
+
+    } catch (err: any) {
+      console.error('CLAIM APPOINTMENT UI ERROR:', err);
+
+      toast.error(
+        err?.message || 'فشل استلام الموعد'
+      );
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   return (
     <article
       className={`tech-appointment ${
@@ -762,6 +825,42 @@ function AppointmentCard({
             </>
           )}
         </div>
+
+        {!isCompleted && (
+          <button
+            onClick={handleClaimAppointment}
+            disabled={claiming || claimed}
+            className={`tech-ticket-toggle ${
+              claimed
+                ? 'opacity-70 cursor-default'
+                : ''
+            }`}
+            style={{
+              minWidth: '120px',
+              justifyContent: 'center',
+            }}
+          >
+            {claiming ? (
+              <>
+                <Loader2
+                  size={14}
+                  className="animate-spin"
+                />
+                جاري الاستلام...
+              </>
+            ) : claimed ? (
+              <>
+                <CheckCircle2 size={14} />
+                تم الاستلام
+              </>
+            ) : (
+              <>
+                <CheckCircle2 size={14} />
+                استلام الموعد
+              </>
+            )}
+          </button>
+        )}
 
         {tickets.length > 0 && (
           <button
