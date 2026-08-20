@@ -422,20 +422,6 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     const projectId = asTrimmedString(data.projectId);
     const clientId = asTrimmedString(data.clientId);
-
-    let resolvedClientName = data.clientName;
-
-    if (clientId) {
-      const clientRecord = await prisma.client.findUnique({
-        where: { id: clientId },
-        select: { id: true, name: true }
-      });
-
-      if (clientRecord) {
-        resolvedClientName = clientRecord.name;
-      }
-    }
-
     if (!projectId) {
       res.status(400).json({ error: "يجب تحديد المشروع لإنشاء التذكرة" });
       return;
@@ -496,7 +482,7 @@ router.post("/", requireAuth, async (req, res) => {
         refNumber: data.refNumber,
         projectAbbr: data.projectAbbr || null,
         projectId, unitId: resolvedUnitId || null, clientId: clientId || null,
-        clientName: resolvedClientName, villaNumber: data.villaNumber,
+        clientName: data.clientName, villaNumber: data.villaNumber,
         issuedAt: data.issuedAt || null,
         description: data.description,
         type: typeKey,
@@ -580,37 +566,6 @@ router.post("/bulk", requireAuth, async (req, res) => {
         closureNotes: t.closureNotes || null,
       };
     });
-
-    // ----------------------------------------------------------
-    // Canonical client names
-    // Never trust imported/client-supplied clientName when a
-    // valid clientId exists. Client.name is the source of truth.
-    // ----------------------------------------------------------
-
-    const clientIds = [
-      ...new Set(
-        normalized
-          .map(t => t.clientId)
-          .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
-      )
-    ];
-
-    const clients = clientIds.length
-      ? await prisma.client.findMany({
-          where: { id: { in: clientIds } },
-          select: { id: true, name: true }
-        })
-      : [];
-
-    const clientNameMap = new Map(
-      clients.map(c => [c.id, c.name])
-    );
-
-    for (const t of normalized) {
-      if (t.clientId && clientNameMap.has(t.clientId)) {
-        t.clientName = clientNameMap.get(t.clientId);
-      }
-    }
 
     const invalidClientRefs: any[] = [];
     const clientCache = new Map<string, boolean>();
@@ -708,27 +663,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       contractorName:       data.contractorName       ?? undefined,
       contractorNote:       data.contractorNote       ?? undefined,
     };
-
-    // ----------------------------------------------------------
-    // Canonical client name
-    // If clientId is supplied, Client.name is authoritative.
-    // ----------------------------------------------------------
-    if (data.clientId !== undefined) {
-      const newClientId = asTrimmedString(data.clientId);
-
-      if (newClientId) {
-        const clientRecord = await prisma.client.findUnique({
-          where: { id: newClientId },
-          select: { id: true, name: true }
-        });
-
-        if (clientRecord) {
-          updatePayload.clientName = clientRecord.name;
-        }
-      } else {
-        updatePayload.clientName = null;
-      }
-    }
 
     // ── Auto-reassign supervisor when classification changes ───────────────
     // Only when type/detectedTypes are being updated AND no explicit supervisor override

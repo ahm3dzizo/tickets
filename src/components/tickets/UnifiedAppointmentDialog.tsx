@@ -503,9 +503,11 @@ export function UnifiedAppointmentDialog({
     ticketsApi.getAll({ projectId: pId, includeDirectAppts: true })
       .then((res: any[]) => {
         const tks = res.filter(
-          (t: any) =>
-            String(t.villaNumber) === String(vNum) &&
-            !['closed', 'out-of-scope', 'completed'].includes(t.status),
+          (t: any) => {
+            const byClient = selectedClientId && t.clientId === selectedClientId;
+            const byVilla  = String(t.villaNumber ?? '').trim() === String(vNum ?? '').trim();
+            return (byClient || byVilla) && !['closed', 'out-of-scope', 'completed'].includes(t.status);
+          }
         );
         setLoadedTickets(tks);
         if (isCalendarMode) {

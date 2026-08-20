@@ -52,92 +52,26 @@ function parseExcelAndDetectHeaders(
     mapping[key] = autoMatch(cols, aliases);
   }
 
-  // ============================================================
-  // Detect Excel Date Format using the LAST VALID DATE in the
-  // SAME EXCEL FILE and the CURRENT MONTH in Saudi Arabia.
-  //
-  // Example in August:
-  //
-  //   18/08/2026
-  //    ^  ^
-  //    |  +-- current month => DD/MM/YYYY
-  //
-  //   08/18/2026
-  //    ^
-  //    +----- current month => MM/DD/YYYY
-  //
-  // We intentionally do NOT use the database date here.
-  // We also do NOT use "max first part / max second part",
-  // because that can silently reverse ambiguous dates.
-  // ============================================================
-
+  // Detect Date Format
   let detectedFormat: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY";
-
   if (mapping["createdAt"]) {
-    // Current month according to Saudi Arabia timezone.
-    const saudiNow = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh" })
-    );
-    const currentMonth = saudiNow.getMonth() + 1;
-
-    let lastDateParts: { first: number; second: number } | null = null;
-
-    // Search from the END of the Excel file.
-    // The last valid ticket date is our reference.
-    for (let i = allData.length - 1; i >= 0; i--) {
-      const rawDate = allData[i][mapping["createdAt"]];
-
-      if (typeof rawDate !== "string") continue;
-
-      const str = rawDate.trim();
-      if (!str || !str.includes("/")) continue;
-
-      const parts = str.split("/");
-
-      if (parts.length < 2) continue;
-
-      const first = parseInt(parts[0], 10);
-      const second = parseInt(parts[1], 10);
-
-      if (
-        Number.isInteger(first) &&
-        Number.isInteger(second) &&
-        first >= 1 &&
-        first <= 31 &&
-        second >= 1 &&
-        second <= 31
-      ) {
-        lastDateParts = { first, second };
-        break;
+    let maxFirstPart = 0;
+    let maxSecondPart = 0;
+    for (const row of allData) {
+      const rawDate = row[mapping["createdAt"]];
+      if (typeof rawDate === "string" && rawDate.includes("/")) {
+        const parts = rawDate.split("/");
+        if (parts.length >= 2) {
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          if (!isNaN(p0) && p0 > maxFirstPart) maxFirstPart = p0;
+          if (!isNaN(p1) && p1 > maxSecondPart) maxSecondPart = p1;
+        }
       }
     }
-
-    if (lastDateParts) {
-      const { first, second } = lastDateParts;
-
-      if (first === currentMonth && second !== currentMonth) {
-        // Example: 08/18/2026 in August
-        detectedFormat = "MM/DD/YYYY";
-      } else if (second === currentMonth && first !== currentMonth) {
-        // Example: 18/08/2026 in August
-        detectedFormat = "DD/MM/YYYY";
-      } else {
-        // Ambiguous or unrelated month:
-        // keep Saudi Arabia default.
-        detectedFormat = "DD/MM/YYYY";
-      }
-
-      console.log(
-        `[IMPORT DATE FORMAT] Last Excel date: ${first}/${second} | ` +
-        `Current Saudi month: ${currentMonth} | ` +
-        `Detected: ${detectedFormat}`
-      );
-    } else {
-      console.warn(
-        "[IMPORT DATE FORMAT] No valid slash-formatted date found in Excel; " +
-        "using default DD/MM/YYYY"
-      );
-    }
+    if (maxFirstPart > 12) detectedFormat = "DD/MM/YYYY";   // أول رقم > 12 → لازم يكون يوم → DD/MM/YYYY
+    else if (maxSecondPart > 12) detectedFormat = "MM/DD/YYYY"; // تاني رقم > 12 → لازم يكون يوم → MM/DD/YYYY
+    else detectedFormat = "DD/MM/YYYY"; // Default to Saudi Arabia standard
   }
 
   let maxTime = 0;
@@ -201,60 +135,15 @@ function normalizeTicketId(raw: string): string {
 }
 
 function autoMatch(columns: string[], aliases: string[]): string {
-  // IMPORTANT:
-  // Never use broad includes() matching here.
-  // It can map one Excel column to another unrelated column.
-  //
-  // Matching priority:
-  // 1) Exact normalized alias
-  // 2) Very conservative match after removing punctuation
-  //
-  // We intentionally DO NOT use:
-  //   nc.includes(na) || na.includes(nc)
-  // because it caused wrong column mappings in some project files.
-
-  const clean = (value: unknown): string =>
-    String(value ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9\u0600-\u06ff]+/g, "");
-
-  const normalizedColumns = columns
-    .filter(Boolean)
-    .map((column) => ({
-      original: column,
-      normalized: clean(column),
-    }));
-
-  // 1) Exact match
   for (const alias of aliases) {
-    const na = clean(alias);
-    if (!na) continue;
-
-    const exact = normalizedColumns.find((c) => c.normalized === na);
-    if (exact) return exact.original;
+    const na = normalize(alias);
+    const found = columns.find((c) => {
+      if (!c) return false; // skip empty columns — na.includes("") is always true and causes false matches
+      const nc = normalize(c);
+      return nc === na || nc.includes(na) || na.includes(nc);
+    });
+    if (found) return found;
   }
-
-  // 2) Conservative fallback:
-  // only allow alias/column to differ by common wording such as
-  // "تاريخ الإنشاء" vs "تاريخ الانشاء".
-  const arabicNormalize = (value: string): string =>
-    value
-      .replace(/[إأآا]/g, "ا")
-      .replace(/ى/g, "ي")
-      .replace(/ة/g, "ه");
-
-  for (const alias of aliases) {
-    const na = arabicNormalize(clean(alias));
-    if (!na) continue;
-
-    const matches = normalizedColumns.filter(
-      (c) => arabicNormalize(c.normalized) === na
-    );
-
-    if (matches.length === 1) return matches[0].original;
-  }
-
   return "";
 }
 
@@ -318,91 +207,32 @@ function excelSerialToDate(serial: number): Date {
   return new Date((serial - 25569) * 86400 * 1000);
 }
 
-function normalizeDate(
-  raw: unknown,
-  formatHint: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY"
-): string {
-  if (raw === null || raw === undefined || String(raw).trim() === "") {
-    return new Date().toISOString().split("T")[0];
-  }
-
-  // Native Excel date object
-  if (raw instanceof Date && !isNaN(raw.getTime())) {
-    return raw.toISOString().split("T")[0];
-  }
-
-  // Excel serial number
+function normalizeDate(raw: unknown, formatHint: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY"): string {
+  if (!raw) return new Date().toISOString().split("T")[0];
+  if (raw instanceof Date && !isNaN(raw.getTime())) return raw.toISOString().split("T")[0];
   if (typeof raw === "number" && raw > 1000 && raw < 100000) {
     const d = excelSerialToDate(raw);
-    if (!isNaN(d.getTime())) {
-      return d.toISOString().split("T")[0];
-    }
+    if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
   }
-
   const str = String(raw).trim();
-
-  // ------------------------------------------------------------
-  // Handle dates such as:
-  // 8/16/2026, 1:22 PM
-  // 18/08/2026, 1:22 PM
-  // 8/16/2026
-  // 18/08/2026
-  // ------------------------------------------------------------
-
-  const match = str.match(
-    /^(\\d{1,2})[\\/](\\d{1,2})[\\/](\\d{2,4})(?:\\s*,?\\s+.*)?$/
-  );
-
-  if (match) {
-    let [, first, second, year] = match;
-
-    if (year.length === 2) {
-      year = `20${year}`;
-    }
-
-    let day: string;
-    let month: string;
-
-    if (formatHint === "MM/DD/YYYY") {
-      month = first;
-      day = second;
+  
+  const parts = str.split("/");
+  if (parts.length === 3) {
+    let day, month, year;
+    if (formatHint === "DD/MM/YYYY") {
+      day = parts[0]; month = parts[1]; year = parts[2];
     } else {
-      day = first;
-      month = second;
+      month = parts[0]; day = parts[1]; year = parts[2];
     }
-
-    const y = Number(year);
-    const m = Number(month);
-    const d = Number(day);
-
-    if (
-      Number.isInteger(y) &&
-      Number.isInteger(m) &&
-      Number.isInteger(d) &&
-      y >= 2000 &&
-      m >= 1 &&
-      m <= 12 &&
-      d >= 1 &&
-      d <= 31
-    ) {
-      const result = new Date(
-        Date.UTC(y, m - 1, d, 12, 0, 0)
-      );
-
-      // Prevent JS from silently converting invalid dates
-      if (
-        result.getUTCFullYear() === y &&
-        result.getUTCMonth() === m - 1 &&
-        result.getUTCDate() === d
-      ) {
-        return result.toISOString().split("T")[0];
-      }
+    if (year.length === 2) year = `20${year}`;
+    const fallback = new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T12:00:00Z`);
+    if (!isNaN(fallback.getTime())) {
+      return fallback.toISOString().split("T")[0];
     }
   }
 
-  // ISO / native formats
+  // Fallback to native parse
   const nativeDate = new Date(str);
-
   if (!isNaN(nativeDate.getTime())) {
     return nativeDate.toISOString().split("T")[0];
   }
@@ -490,16 +320,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const fieldAliases: Record<string, string[]> = {
       ticketId:    ["رقم التذكرة", "ID", "id", "الرقم", "#", "رقم الطلب", "Case Number"],
       villaNumber: ["رقم الفيلا", "فيلا", "villa", "رقم الوحدة", "الوحدة", "Unit"],
-      createdAt:   [
-        "التاريخ",
-        "date",
-        "تاريخ الإنشاء",
-        "issuedAt",
-        "Opened Date",
-        "Date/Time Opened",
-        "Date / Time Opened",
-        "Date Time Opened"
-      ],
+      createdAt:   ["التاريخ", "date", "تاريخ الإنشاء", "issuedAt", "Opened Date"],
       description: ["وصف المشكلة", "الوصف", "وصف", "description", "المشكلة", "الملاحظات"],
       status:      ["حالة الإغلاق", "الحالة", "status", "حالة التذكرة", "حالة الاغلاق"],
       closedAt:    ["تاريخ الاغلاق", "تاريخ الإغلاق", "تاريخ الغلق", "closed date"],

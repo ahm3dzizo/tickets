@@ -217,7 +217,7 @@ function autoMatch(columns: string[], aliases: string[]): string {
     String(value ?? "")
       .trim()
       .toLowerCase()
-      .replace(/[^a-z0-9\u0600-\u06ff]+/g, "");
+      .replace(/[\\s_\\-:#()\\[\\]{}./]+/g, "");
 
   const normalizedColumns = columns
     .filter(Boolean)
@@ -318,91 +318,32 @@ function excelSerialToDate(serial: number): Date {
   return new Date((serial - 25569) * 86400 * 1000);
 }
 
-function normalizeDate(
-  raw: unknown,
-  formatHint: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY"
-): string {
-  if (raw === null || raw === undefined || String(raw).trim() === "") {
-    return new Date().toISOString().split("T")[0];
-  }
-
-  // Native Excel date object
-  if (raw instanceof Date && !isNaN(raw.getTime())) {
-    return raw.toISOString().split("T")[0];
-  }
-
-  // Excel serial number
+function normalizeDate(raw: unknown, formatHint: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY"): string {
+  if (!raw) return new Date().toISOString().split("T")[0];
+  if (raw instanceof Date && !isNaN(raw.getTime())) return raw.toISOString().split("T")[0];
   if (typeof raw === "number" && raw > 1000 && raw < 100000) {
     const d = excelSerialToDate(raw);
-    if (!isNaN(d.getTime())) {
-      return d.toISOString().split("T")[0];
-    }
+    if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
   }
-
   const str = String(raw).trim();
-
-  // ------------------------------------------------------------
-  // Handle dates such as:
-  // 8/16/2026, 1:22 PM
-  // 18/08/2026, 1:22 PM
-  // 8/16/2026
-  // 18/08/2026
-  // ------------------------------------------------------------
-
-  const match = str.match(
-    /^(\\d{1,2})[\\/](\\d{1,2})[\\/](\\d{2,4})(?:\\s*,?\\s+.*)?$/
-  );
-
-  if (match) {
-    let [, first, second, year] = match;
-
-    if (year.length === 2) {
-      year = `20${year}`;
-    }
-
-    let day: string;
-    let month: string;
-
-    if (formatHint === "MM/DD/YYYY") {
-      month = first;
-      day = second;
+  
+  const parts = str.split("/");
+  if (parts.length === 3) {
+    let day, month, year;
+    if (formatHint === "DD/MM/YYYY") {
+      day = parts[0]; month = parts[1]; year = parts[2];
     } else {
-      day = first;
-      month = second;
+      month = parts[0]; day = parts[1]; year = parts[2];
     }
-
-    const y = Number(year);
-    const m = Number(month);
-    const d = Number(day);
-
-    if (
-      Number.isInteger(y) &&
-      Number.isInteger(m) &&
-      Number.isInteger(d) &&
-      y >= 2000 &&
-      m >= 1 &&
-      m <= 12 &&
-      d >= 1 &&
-      d <= 31
-    ) {
-      const result = new Date(
-        Date.UTC(y, m - 1, d, 12, 0, 0)
-      );
-
-      // Prevent JS from silently converting invalid dates
-      if (
-        result.getUTCFullYear() === y &&
-        result.getUTCMonth() === m - 1 &&
-        result.getUTCDate() === d
-      ) {
-        return result.toISOString().split("T")[0];
-      }
+    if (year.length === 2) year = `20${year}`;
+    const fallback = new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T12:00:00Z`);
+    if (!isNaN(fallback.getTime())) {
+      return fallback.toISOString().split("T")[0];
     }
   }
 
-  // ISO / native formats
+  // Fallback to native parse
   const nativeDate = new Date(str);
-
   if (!isNaN(nativeDate.getTime())) {
     return nativeDate.toISOString().split("T")[0];
   }
@@ -490,16 +431,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const fieldAliases: Record<string, string[]> = {
       ticketId:    ["رقم التذكرة", "ID", "id", "الرقم", "#", "رقم الطلب", "Case Number"],
       villaNumber: ["رقم الفيلا", "فيلا", "villa", "رقم الوحدة", "الوحدة", "Unit"],
-      createdAt:   [
-        "التاريخ",
-        "date",
-        "تاريخ الإنشاء",
-        "issuedAt",
-        "Opened Date",
-        "Date/Time Opened",
-        "Date / Time Opened",
-        "Date Time Opened"
-      ],
+      createdAt:   ["التاريخ", "date", "تاريخ الإنشاء", "issuedAt", "Opened Date"],
       description: ["وصف المشكلة", "الوصف", "وصف", "description", "المشكلة", "الملاحظات"],
       status:      ["حالة الإغلاق", "الحالة", "status", "حالة التذكرة", "حالة الاغلاق"],
       closedAt:    ["تاريخ الاغلاق", "تاريخ الإغلاق", "تاريخ الغلق", "closed date"],
