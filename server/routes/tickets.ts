@@ -803,6 +803,18 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       }).catch(() => {});
     }
 
+    // ── Learn specialty from manual supervisor correction ─────────────────────
+    const supervisorsChanged =
+      data.assignedSupervisorIds !== undefined &&
+      JSON.stringify((oldTicket as any)?.assignedSupervisorIds ?? []) !==
+      JSON.stringify(data.assignedSupervisorIds);
+
+    if (supervisorsChanged && ticket.type && ticket.type !== 'unclassified') {
+      import('../classifier/db-helpers.js').then(m => {
+        m.learnSpecialtyFromCorrections(ticket.type!).catch(() => {});
+      }).catch(() => {});
+    }
+
     const closingStatuses = ['closed', 'completed'];
     if (data.status && closingStatuses.includes(data.status) && req.uid) {
       // autoSendClosing(req.uid, ticket).catch(() => {});
