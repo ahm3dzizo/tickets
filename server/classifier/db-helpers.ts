@@ -77,14 +77,82 @@ export async function buildTypeToSpecialtyMap() {
   return map;
 }
 
+// ── Learn Specialty from Supervisor Corrections ─────────────────────────────
+/**
+ * Called after a manual supervisor change on a ticket.
+ * Looks at the last `sampleSize` tickets of this type, tallies which specialty
+ * their supervisors have, and updates TicketType.specialtyId if an alternative
+ * specialty appears in at least `threshold` tickets.
+ */
+export async function learnSpecialtyFromCorrections(
+  typeKey: string,
+  threshold = 3,
+  sampleSize = 50
+): Promise<boolean> {
+  const ticketType = await prisma.ticketType.findUnique({
+    where: { key: typeKey },
+    include: { specialty: { select: { id: true, key: true } } },
+  });
+  if (!ticketType) return false;
+
+  const currentSpecialtyKey = ticketType.specialty?.key || 'general';
+
+  const tickets = await prisma.ticket.findMany({
+    where: { type: typeKey, assignedSupervisorIds: { isEmpty: false } },
+    select: { assignedSupervisorIds: true },
+    orderBy: { updatedAt: 'desc' },
+    take: sampleSize,
+  });
+
+  // Count unique specialty per ticket by looking up supervisor specialties
+  const allSupIds = [...new Set(tickets.flatMap((t: any) => t.assignedSupervisorIds as string[]))];
+  const supUsers = allSupIds.length > 0
+    ? await prisma.user.findMany({ where: { uid: { in: allSupIds } }, select: { uid: true, specialtiesRef: { select: { key: true } } } })
+    : [];
+  const supSpecMap = Object.fromEntries(supUsers.map((u: any) => [u.uid, u.specialtiesRef?.[0]?.key || 'general']));
+
+  const specialtyCounts: Record<string, number> = {};
+  for (const ticket of tickets) {
+    const ids = (ticket as any).assignedSupervisorIds as string[];
+    if (!ids || ids.length === 0) continue;
+    const seen = new Set<string>();
+    for (const id of ids) {
+      const spec: string = supSpecMap[id] || 'general';
+      if (!seen.has(spec)) {
+        seen.add(spec);
+        specialtyCounts[spec] = (specialtyCounts[spec] || 0) + 1;
+      }
+    }
+  }
+
+  // Find the dominant non-current specialty
+  const [newSpecialtyKey, count] = Object.entries(specialtyCounts)
+    .filter(([key]) => key !== currentSpecialtyKey)
+    .sort(([, a], [, b]) => b - a)[0] ?? [null, 0];
+
+  if (!newSpecialtyKey || count < threshold) return false;
+
+  const newSpecialty = await prisma.specialty.findUnique({ where: { key: newSpecialtyKey } });
+  if (!newSpecialty) return false;
+
+  await prisma.ticketType.update({
+    where: { key: typeKey },
+    data: { specialtyId: newSpecialty.id },
+  });
+
+  invalidateReferenceCache();
+  console.log(`[SpecialtyLearn] "${typeKey}" specialty updated: ${currentSpecialtyKey} → ${newSpecialtyKey} (${count}/${sampleSize} tickets)`);
+  return true;
+}
+
 // ── Find Supervisors ────────────────────────────────────────────────────────
 export async function findSupervisorsDB(projectId: string, requiredSpecialties: string[]) {
   const allUsers = await prisma.user.findMany({
     where: { role: "supervisor" },
-    include: { 
-      projects: { select: { id: true } }, 
+    include: {
+      projects: { select: { id: true } },
       specialtiesRef: { select: { key: true } },
-      substituteFor: { select: { specialty: true, specialtiesRef: { select: { key: true } } } }
+      substituteFor: { select: { specialtiesRef: { select: { key: true } } } }
     },
   });
 
@@ -98,13 +166,11 @@ export async function findSupervisorsDB(projectId: string, requiredSpecialties: 
   const getSpecs = (u: any): string[] => {
     const specs: string[] = [];
     if (u.specialtiesRef && u.specialtiesRef.length > 0) specs.push(...u.specialtiesRef.map((s: any) => s.key));
-    else if (u.specialty) specs.push(u.specialty);
     else specs.push("general");
 
     if (u.substituteFor && u.substituteFor.length > 0) {
       for (const sub of u.substituteFor) {
         if (sub.specialtiesRef && sub.specialtiesRef.length > 0) specs.push(...sub.specialtiesRef.map((s: any) => s.key));
-        else if (sub.specialty) specs.push(sub.specialty);
       }
     }
     return [...new Set(specs)];

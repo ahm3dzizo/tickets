@@ -64,7 +64,13 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
 
     const activeTickets = await prisma.ticket.findMany({
       where: { ...ticketsWhere, status: { in: ["open", "in_progress", "pending", "waiting"] } },
-      select: { id: true, ticketId: true, clientName: true, villaNumber: true, type: true, status: true, createdAt: true, assignedSupervisors: true, issuedAt: true, appointmentTime: true },
+      select: {
+        id: true, ticketId: true, type: true, status: true, createdAt: true, issuedAt: true,
+        assignedSupervisorIds: true,
+        unit:    { select: { unitNumber: true } },
+        client:  { select: { name: true } },
+        project: { select: { abbreviation: true } },
+      },
     });
 
     let overdueCount = 0;
@@ -88,7 +94,12 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     }
 
     overdueList.sort((a, b) => b.daysOpen - a.daysOpen);
-    const overdueTickets = overdueList.slice(0, 10);
+    const overdueTickets = overdueList.slice(0, 10).map((t: any) => ({
+      ...t,
+      villaNumber:  t.unit?.unitNumber || '',
+      clientName:   t.client?.name || '',
+      refNumber:    t.project?.abbreviation && t.unit?.unitNumber ? `${t.project.abbreviation}-${t.unit.unitNumber}` : '',
+    }));
 
     // Fetch upcoming appointments from Appointment table
     const apptWhere: any = { date: { gte: todayStr } };
@@ -109,16 +120,22 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
 
     const rawAppts = await prisma.appointment.findMany({
       where: apptWhere,
-      select: { id: true, clientName: true, villaNumber: true, date: true, time: true, types: true, projectId: true },
+      select: {
+        id: true, date: true, time: true, types: true, projectId: true,
+        unit:   { select: { unitNumber: true } },
+        client: { select: { name: true } },
+        project: { select: { abbreviation: true } },
+      },
       orderBy: { date: 'asc' },
       take: 20,
     });
 
-    const todayAppts = rawAppts.map(a => ({
+    const todayAppts = rawAppts.map((a: any) => ({
       id: a.id,
       ticketId: '',
-      clientName: a.clientName,
-      villaNumber: a.villaNumber,
+      clientName:   a.client?.name || '',
+      villaNumber:  a.unit?.unitNumber || '',
+      refNumber:    a.project?.abbreviation && a.unit?.unitNumber ? `${a.project.abbreviation}-${a.unit.unitNumber}` : '',
       appointmentTime: `${a.date}${a.time ? ' ' + a.time : ''}`,
       type: (a.types && a.types[0]) || 'general',
       status: 'pending',
@@ -160,12 +177,13 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
 
     // Per supervisor summary
     const supTickets = await prisma.ticket.findMany({
-      where: { ...ticketsWhere, assignedSupervisorId: { not: null }, status: { not: "closed" } },
-      select: { assignedSupervisorId: true, status: true },
+      where: { ...ticketsWhere, assignedSupervisorIds: { isEmpty: false }, status: { not: "closed" } },
+      select: { assignedSupervisorIds: true, status: true },
     });
     const supMap: Record<string, { open: number; inProgress: number; pending: number }> = {};
     for (const t of supTickets) {
-      const sid = t.assignedSupervisorId!;
+      const sid = t.assignedSupervisorIds[0];
+      if (!sid) continue;
       if (!supMap[sid]) supMap[sid] = { open: 0, inProgress: 0, pending: 0 };
       if (t.status === "open")        supMap[sid].open++;
       if (t.status === "in_progress") supMap[sid].inProgress++;
@@ -173,11 +191,11 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     }
     const supIds = Object.keys(supMap);
     const supUsers = supIds.length
-      ? await prisma.user.findMany({ where: { uid: { in: supIds } }, select: { uid: true, displayName: true, specialty: true } })
+      ? await prisma.user.findMany({ where: { uid: { in: supIds } }, select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } } })
       : [];
     const supNameMap = Object.fromEntries(supUsers.map(u => [u.uid, u]));
     const bySupervisor = supIds
-      .map(uid => ({ uid, name: supNameMap[uid]?.displayName ?? uid, specialty: supNameMap[uid]?.specialty ?? "", ...supMap[uid], total: supMap[uid].open + supMap[uid].inProgress + supMap[uid].pending }))
+      .map(uid => ({ uid, name: supNameMap[uid]?.displayName ?? uid, specialty: supNameMap[uid]?.specialtiesRef?.[0]?.key ?? "", ...supMap[uid], total: supMap[uid].open + supMap[uid].inProgress + supMap[uid].pending }))
       .sort((a, b) => b.total - a.total).slice(0, 10);
 
     const nextMonth = new Date(now.getTime() + 30 * 86_400_000);

@@ -181,7 +181,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       projectIds = [];
     }
 
-    const specialty = specialties[0] || null;
     const displayName = asTrimmedString(data.displayName) || "";
     const photoURL = asTrimmedString(data.photoURL);
 
@@ -197,7 +196,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
         data: {
           uid, email,
           displayName: displayName || "مستخدم جديد",
-          role, employeeId, phoneNumber, specialty,
+          role, employeeId, phoneNumber,
           specialtiesRef: { connect: specialties.map(key => ({ key })) },
           projects: { connect: projectIds.map(id => ({ id })) },
           photoURL, profileCompleted: false,
@@ -224,8 +223,8 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       if (existingPending) {
         user = await prisma.user.update({
           where: { uid: existingPending.uid },
-          data: { 
-            displayName, role, employeeId, phoneNumber, specialty,
+          data: {
+            displayName, role, employeeId, phoneNumber,
             specialtiesRef: { set: specialties.map(key => ({ key })) },
             projects: { set: projectIds.map(id => ({ id })) },
             photoURL, profileCompleted: data.profileCompleted ?? false, notifPrefs: data.notifPrefs ?? undefined 
@@ -237,7 +236,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
         const email = `${uid}@pending.local`;
         user = await prisma.user.create({
           data: {
-            uid, email, displayName, role, employeeId, phoneNumber, specialty,
+            uid, email, displayName, role, employeeId, phoneNumber,
             specialtiesRef: { connect: specialties.map(key => ({ key })) },
             projects: { connect: projectIds.map(id => ({ id })) },
             photoURL, profileCompleted: data.profileCompleted ?? false,
@@ -319,8 +318,6 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
       );
     }
 
-    const specialty = specialties[0] || null;
-
     const updated = await prisma.user.update({
       where: { uid },
       data: {
@@ -328,7 +325,6 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
         role,
         employeeId,
         phoneNumber,
-        specialty,
         specialtiesRef: data.specialties !== undefined ? { set: specialties.map(key => ({ key })) } : undefined,
         projects: data.projectIds !== undefined ? { set: projectIds.map(id => ({ id })) } : undefined,
         photoURL,
@@ -352,27 +348,25 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
       if (substitute) {
         const activeTickets = await prisma.ticket.findMany({
           where: {
-            assignedSupervisorId: uid,
+            assignedSupervisorIds: { has: uid },
             status: { in: ['open', 'in_progress', 'pending', 'waiting'] }
-          }
+          },
+          select: { id: true, assignedSupervisorIds: true },
         });
 
         if (activeTickets.length > 0) {
-          const substituteInfo = [{
-            id: substitute.uid,
-            name: substitute.displayName,
-            specialty: substitute.specialtiesRef[0]?.key || substitute.specialty || 'general'
-          }];
-
-          await prisma.ticket.updateMany({
-            where: { id: { in: activeTickets.map(t => t.id) } },
-            data: {
-              assignedSupervisorId: substitute.uid,
-              assignedSupervisorIds: [substitute.uid],
-              assigneeName: substitute.displayName,
-              assignedSupervisors: substituteInfo as any
-            }
-          });
+          await Promise.all(activeTickets.map(t => {
+            const newIds = t.assignedSupervisorIds.includes(substitute.uid)
+              ? t.assignedSupervisorIds
+              : [substitute.uid, ...t.assignedSupervisorIds.filter((id: string) => id !== uid)];
+            return prisma.ticket.update({
+              where: { id: t.id },
+              data: {
+                assignedSupervisorIds: newIds,
+                assigneeName: substitute.displayName,
+              },
+            });
+          }));
         }
       }
     }
@@ -429,7 +423,7 @@ router.post("/complete-profile", requireAuth, async (req: AuthRequest, res) => {
         data: {
           uid: newUid, email, passwordHash, displayName,
           role: currentUser.role, employeeId: currentUser.employeeId,
-          phoneNumber: currentUser.phoneNumber, specialty: currentUser.specialty,
+          phoneNumber: currentUser.phoneNumber,
           specialtiesRef: { connect: currentUser.specialtiesRef.map((s:any) => ({ id: s.id })) },
           projects: { connect: currentUser.projects.map((p:any) => ({ id: p.id })) },
           photoURL: currentUser.photoURL, profileCompleted: true,
@@ -509,7 +503,6 @@ router.post("/claim-pending", requireAuth, async (req: AuthRequest, res) => {
         data: {
           uid: req.uid!, email, displayName, role: pending.role,
           employeeId: pending.employeeId, phoneNumber: pending.phoneNumber,
-          specialty: pending.specialty, 
           specialtiesRef: { connect: pending.specialtiesRef.map((s:any) => ({ id: s.id })) },
           projects: { connect: pending.projects.map((p:any) => ({ id: p.id })) },
           photoURL: pending.photoURL,

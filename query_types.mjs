@@ -1,1 +1,0 @@
-﻿import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function run() { const types = await prisma.ticketType.findMany({ select: { key: true, nameAr: true, specialty: { select: { key: true, nameAr: true } } } }); console.log(JSON.stringify(types, null, 2)); } run().finally(() => prisma.$disconnect());

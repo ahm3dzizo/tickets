@@ -54,6 +54,70 @@ router.get("/specialties", requireAuth, async (_req, res) => {
   }
 });
 
+// ── POST /api/admin/ticket-types/specialties ─────────────────────────────────
+router.post("/specialties", requireAuth, async (req, res) => {
+  try {
+    const { key, nameAr } = req.body;
+    if (!key?.trim() || !nameAr?.trim()) {
+      res.status(400).json({ error: "key و nameAr مطلوبان" });
+      return;
+    }
+    const maxOrder = await prisma.specialty.aggregate({ _max: { sortOrder: true } });
+    const specialty = await prisma.specialty.create({
+      data: {
+        key: key.trim().toLowerCase().replace(/\s+/g, "_"),
+        nameAr: nameAr.trim(),
+        sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,
+        isActive: true,
+      },
+    });
+    invalidateReferenceCache();
+    res.status(201).json(specialty);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ── PUT /api/admin/ticket-types/specialties/:specId ──────────────────────────
+router.put("/specialties/:specId", requireAuth, async (req, res) => {
+  try {
+    const { nameAr, isActive, sortOrder } = req.body;
+    const specialty = await prisma.specialty.update({
+      where: { id: req.params.specId },
+      data: {
+        ...(nameAr !== undefined && { nameAr: nameAr.trim() }),
+        ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+        ...(sortOrder !== undefined && { sortOrder: Number(sortOrder) }),
+      },
+    });
+    invalidateReferenceCache();
+    res.json(specialty);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/admin/ticket-types/specialties/:specId (soft) ────────────────
+router.delete("/specialties/:specId", requireAuth, async (req, res) => {
+  try {
+    const count = await prisma.ticketType.count({
+      where: { specialtyId: req.params.specId, isActive: true },
+    });
+    if (count > 0) {
+      res.status(400).json({ error: `لا يمكن حذف التخصص — يحتوي على ${count} نوع نشط` });
+      return;
+    }
+    await prisma.specialty.update({
+      where: { id: req.params.specId },
+      data: { isActive: false },
+    });
+    invalidateReferenceCache();
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ── POST /api/admin/ticket-types ─────────────────────────────────────────────
 router.post("/", requireAuth, async (req, res) => {
   try {

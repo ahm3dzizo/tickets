@@ -46,7 +46,7 @@ router.get("/:id/supervisors", requireAuth, async (req: AuthRequest, res) => {
       include: { 
         users: { 
           where: { role: "supervisor", disabled: false },
-          select: { uid: true, displayName: true, specialtiesRef: true, specialty: true } 
+          select: { uid: true, displayName: true, specialtiesRef: true }
         } 
       },
     });
@@ -60,7 +60,7 @@ router.get("/:id/supervisors", requireAuth, async (req: AuthRequest, res) => {
       uid:         s.uid,         // للتوافق مع TicketDetail
       name:        s.displayName,
       displayName: s.displayName, // للتوافق مع TicketDetail
-      specialties: s.specialtiesRef?.length > 0 ? s.specialtiesRef.map((ref:any)=>ref.key) : (s.specialty ? [s.specialty] : []),
+      specialties: s.specialtiesRef?.length > 0 ? s.specialtiesRef.map((ref:any)=>ref.key) : [],
     }));
 
     res.json(result);

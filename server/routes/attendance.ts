@@ -486,10 +486,6 @@ router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthReq
           }
         });
 
-        console.log(
-          'APPOINTMENT AUTO COMPLETED:',
-          completedTicket.appointmentId
-        );
       }
     }
 
@@ -622,7 +618,7 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
         sessions: {
           include: {
             ticket: {
-              select: { id: true, ticketId: true, description: true, status: true, clientName: true }
+              select: { id: true, ticketId: true, description: true, status: true }
             }
           }
         }
@@ -715,7 +711,6 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
             ticketId: true,
             status: true,
             assigneeName: true,
-            assignedSupervisorId: true,
             assignedSupervisorIds: true
           }
         }
@@ -760,16 +755,12 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
 
         const assignedToSupervisor =
           !!technician.supervisorId &&
-          (
-            ticket.assignedSupervisorId === technician.supervisorId ||
-            ticket.assignedSupervisorIds.includes(technician.supervisorId)
-          );
+          ticket.assignedSupervisorIds.includes(technician.supervisorId);
 
         // If the ticket has an explicit technician/supervisor assignment,
         // only claim it when it belongs to this technician's chain.
         const hasExplicitAssignment =
           !!ticket.assigneeName ||
-          !!ticket.assignedSupervisorId ||
           ticket.assignedSupervisorIds.length > 0;
 
         if (hasExplicitAssignment) {
@@ -995,15 +986,11 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
             id: true,
             ticketId: true,
             clientId: true,
-            clientName: true,
-            villaNumber: true,
             description: true,
             status: true,
             type: true,
             detectedTypes: true,
             priority: true,
-            appointmentTime: true,
-            appointmentNotes: true,
 
             techSessions: {
               where: {
@@ -1023,27 +1010,6 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
         { time: 'asc' }
       ]
     });
-
-    console.log('========== TECH APPOINTMENTS DEBUG ==========');
-    console.log('TECHNICIAN:', {
-      id: technician.id,
-      name: technician.name,
-      supervisorId: technician.supervisorId,
-      projectId: technician.projectId
-    });
-    console.log('APPOINTMENTS COUNT:', appointments.length);
-    console.log('APPOINTMENTS:', appointments.map((a: any) => ({
-      id: a.id,
-      date: a.date,
-      time: a.time,
-      projectId: a.projectId,
-      technicianId: a.technicianId,
-      technicianIds: a.technicianIds,
-      supervisorIds: a.supervisorIds,
-      status: a.status,
-      ticketsCount: Array.isArray(a.tickets) ? a.tickets.length : 0
-    })));
-    console.log('=============================================');
 
     const enrichedAppointments = appointments.map((appointment: any) => {
       const isAssignedToMe =

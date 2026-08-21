@@ -549,14 +549,12 @@ export function TicketTable({
   type ApptBucket = 'has' | 'waiting' | 'empty';
 
   const getApptBucket = (t: Ticket): ApptBucket => {
-    if (t.appointmentAwaitingReply && t.status === 'waiting') return 'waiting';
     if (t.appointmentTime) return 'has';
     return 'empty';
   };
   const APPOINTMENT_FILTER_GROUPS: { key: ApptBucket; label: string }[] = [
-    { key: 'has',     label: 'موعد' },
-    { key: 'waiting', label: 'في انتظار العميل' },
-    { key: 'empty',   label: 'فارغ' },
+    { key: 'has',   label: 'موعد' },
+    { key: 'empty', label: 'فارغ' },
   ];
 
   const matchesFilters = (t: Ticket, exclude: FilterDim | null): boolean => {
@@ -1161,14 +1159,7 @@ export function TicketTable({
                           {supervisorNames[0]}
                         </span>
                       )}
-                      {ticket.appointmentAwaitingReply && ticket.status === 'waiting' ? (
-                        <>
-                          {supervisorNames.length > 0 && <span className="text-muted-foreground/30 text-xs shrink-0">·</span>}
-                          <span className="text-[11px] text-orange-400 font-bold flex items-center gap-0.5 shrink-0">
-                            <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد
-                          </span>
-                        </>
-                      ) : ticket.appointmentTime ? (
+                      {ticket.appointmentTime ? (
                         <>
                           {supervisorNames.length > 0 && <span className="text-muted-foreground/30 text-xs shrink-0">·</span>}
                           <span className="text-[11px] text-emerald-500 font-bold shrink-0">{ticket.appointmentTime}</span>
@@ -1555,11 +1546,7 @@ export function TicketTable({
                         )}
                       </td>
                       <td className="px-4 py-3 text-center w-24">
-                        {ticket.appointmentAwaitingReply && ticket.status === 'waiting' ? (
-                          <span className="text-[10px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded flex items-center gap-1 justify-center whitespace-nowrap">
-                            <Clock className="w-3 h-3 animate-pulse" /> بانتظار رد العميل
-                          </span>
-                        ) : ticket.appointmentTime ? (
+                        {ticket.appointmentTime ? (
                           <span className="text-[11px] text-emerald-400 font-bold">{formatAppointmentDayTime(ticket.appointmentTime)}</span>
                         ) : ticket.closureNotes ? (
                           <span className="text-[10px] text-slate-500 line-clamp-1">{ticket.closureNotes}</span>

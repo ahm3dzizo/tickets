@@ -1,10 +1,28 @@
 import { Router } from "express";
 import prisma from "../db.js";
-import { AuthRequest, requireAuth, requireAdmin, getRequesterRole } from "../auth.js";
+import { AuthRequest, requireAuth, getRequesterRole } from "../auth.js";
 import { getIO } from "../socket.js";
 import { DEFAULT_WORK_HOURS, autoCorrectMins, type WorkHoursSettings } from "./settings.js";
 
 const router = Router();
+
+// ── Compute villaNumber / clientName / refNumber from relations for responses ─
+function appointmentToResponse(a: {
+  unit?: { unitNumber: string } | null;
+  client?: { name: string } | null;
+  project?: { abbreviation: string } | null;
+  [key: string]: any;
+}) {
+  const unitNumber  = a.unit?.unitNumber || '';
+  const projAbbr    = a.project?.abbreviation || '';
+  return {
+    ...a,
+    villaNumber: unitNumber,
+    clientName:  a.client?.name || '',
+    refNumber:   projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber,
+    technicians: a.technician ? [a.technician] : [],
+  };
+}
 
 async function validateAndCorrectAppointmentTime(
   projectId: string | null | undefined,
@@ -86,6 +104,8 @@ router.get("/conflicts", requireAuth, async (req: AuthRequest, res) => {
     const appts = await prisma.appointment.findMany({
       where,
       include: {
+        unit:   { select: { unitNumber: true } },
+        client: { select: { name: true } },
         tickets: {
           where: { status: { notIn: ["closed", "completed", "out_of_scope"] } },
           select: { id: true, ticketId: true, status: true },
@@ -99,14 +119,12 @@ router.get("/conflicts", requireAuth, async (req: AuthRequest, res) => {
       : appts;
 
     res.json({
-      conflicts: filtered.map((a) => ({
+      conflicts: filtered.map((a: any) => ({
         id: a.id,
-        clientName: a.clientName,
-        villaNumber: a.villaNumber,
+        clientName:  a.client?.name || '',
+        villaNumber: a.unit?.unitNumber || '',
         appointmentTime: `${a.date} ${a.time || ""}`.trim(),
-        supervisors: Array.isArray(a.supervisors)
-          ? (a.supervisors as any[]).filter((s: any) => ids.includes(s.id))
-          : [],
+        supervisors: [],
       })),
     });
   } catch (err: any) {
@@ -148,45 +166,51 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
     const appts = await prisma.appointment.findMany({
       where,
       include: {
+        unit:    { select: { unitNumber: true } },
+        client:  { select: { name: true } },
+        project: { select: { abbreviation: true } },
         tickets: {
           select: {
-            id: true,
-            ticketId: true,
-            clientName: true,
-            villaNumber: true,
-            appointmentTime: true,
-            appointmentNotes: true,
-            status: true,
-            type: true,
-            projectId: true,
-            assignedSupervisors: true,
+            id: true, ticketId: true, status: true, type: true, projectId: true,
+            assignedSupervisorIds: true,
+            unit:    { select: { unitNumber: true } },
+            client:  { select: { name: true } },
+            project: { select: { abbreviation: true } },
           },
         },
       },
       orderBy: [{ date: "asc" }, { time: "asc" }],
     });
 
-    // Return as flat ticket list for backward compat with existing callers
-    const tickets = appts.flatMap((a) =>
-      a.tickets.length > 0
-        ? a.tickets
-        : [
-            {
-              id: a.id,
-              ticketId: "",
-              clientName: a.clientName,
-              villaNumber: a.villaNumber,
-              appointmentTime: `${a.date} ${a.time || ""}`.trim(),
-              appointmentNotes: a.notes,
-              status: "pending",
-              type: a.types[0] || "general",
-              projectId: a.projectId,
-              assignedSupervisors: a.supervisors,
-            },
-          ]
-    );
+    const ticketList = appts.flatMap((a: any) => {
+      const apptVilla  = a.unit?.unitNumber || '';
+      const apptClient = a.client?.name || '';
+      const apptAbbr   = a.project?.abbreviation || '';
+      if (a.tickets.length > 0) {
+        return a.tickets.map((t: any) => ({
+          ...t,
+          villaNumber: t.unit?.unitNumber || apptVilla,
+          clientName:  t.client?.name || apptClient,
+          refNumber:   t.project?.abbreviation && t.unit?.unitNumber
+            ? `${t.project.abbreviation}-${t.unit.unitNumber}` : '',
+          assignedSupervisors: [],
+          appointmentTime:  `${a.date} ${a.time || ""}`.trim(),
+          appointmentNotes: a.notes,
+        }));
+      }
+      return [{
+        id: a.id, ticketId: '',
+        villaNumber:  apptVilla,
+        clientName:   apptClient,
+        refNumber:    apptAbbr && apptVilla ? `${apptAbbr}-${apptVilla}` : apptVilla,
+        appointmentTime:  `${a.date} ${a.time || ""}`.trim(),
+        appointmentNotes: a.notes,
+        status: 'pending', type: a.types[0] || 'general',
+        projectId: a.projectId, assignedSupervisors: [],
+      }];
+    });
 
-    res.json(tickets);
+    res.json(ticketList);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -239,6 +263,9 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
     const appointments = await prisma.appointment.findMany({
       where,
       include: {
+        unit:    { select: { unitNumber: true } },
+        client:  { select: { name: true } },
+        project: { select: { abbreviation: true } },
         technician: {
           select: {
             id: true,
@@ -253,26 +280,32 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
             id: true,
             ticketId: true,
             clientId: true,
-            clientName: true,
-            villaNumber: true,
             description: true,
             status: true,
             type: true,
             detectedTypes: true,
             detectedSubTypeIds: true,
             assignedSupervisorIds: true,
-            assignedSupervisors: true,
             priority: true,
-            appointmentTime: true,
-            appointmentNotes: true,
-            client: { select: { phone: true } },
+            unit:   { select: { unitNumber: true } },
+            client: { select: { name: true, phone: true } },
+            project: { select: { abbreviation: true } },
           },
         },
       },
       orderBy: [{ date: "asc" }, { time: "asc" }],
     });
 
-    res.json(appointments);
+    res.json(appointments.map((a: any) => ({
+      ...appointmentToResponse(a),
+      tickets: a.tickets.map((t: any) => ({
+        ...t,
+        villaNumber: t.unit?.unitNumber || a.unit?.unitNumber || '',
+        clientName:  t.client?.name || a.client?.name || '',
+        refNumber:   t.project?.abbreviation && t.unit?.unitNumber
+          ? `${t.project.abbreviation}-${t.unit.unitNumber}` : '',
+      })),
+    })));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -297,20 +330,34 @@ router.get("/by-client/:clientId", requireAuth, async (req: AuthRequest, res) =>
 
 // ─── GET /api/appointments/by-unit ───────────────────────────────────────────
 router.get("/by-unit", requireAuth, async (req: AuthRequest, res) => {
-  const { projectId, villaNumber } = req.query as { projectId?: string; villaNumber?: string };
-  if (!projectId || !villaNumber) {
-    res.status(400).json({ error: "projectId و villaNumber مطلوبان" });
+  const { projectId, unitId, villaNumber } = req.query as {
+    projectId?: string; unitId?: string; villaNumber?: string;
+  };
+  if (!projectId || (!unitId && !villaNumber)) {
+    res.status(400).json({ error: "projectId و unitId (أو villaNumber) مطلوبان" });
     return;
   }
   try {
+    let resolvedUnitId = unitId;
+    if (!resolvedUnitId && villaNumber) {
+      const unit = await prisma.unit.findUnique({
+        where: { projectId_unitNumber: { projectId, unitNumber: villaNumber.trim() } },
+        select: { id: true },
+      });
+      resolvedUnitId = unit?.id;
+    }
+    const where: any = resolvedUnitId ? { projectId, unitId: resolvedUnitId } : { projectId };
     const appointments = await prisma.appointment.findMany({
-      where: { projectId, villaNumber },
+      where,
       include: {
+        unit:    { select: { unitNumber: true } },
+        client:  { select: { name: true } },
+        project: { select: { abbreviation: true } },
         tickets: { select: { id: true, ticketId: true, status: true, type: true } },
       },
       orderBy: [{ date: "desc" }, { time: "desc" }],
     });
-    res.json(appointments);
+    res.json(appointments.map(a => appointmentToResponse(a as any)));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -349,58 +396,64 @@ router.delete("/push-unsubscribe", requireAuth, async (req: AuthRequest, res) =>
   }
 });
 
-// ─── POST /api/appointments/migrate ──────────────────────────────────────────
-router.post("/migrate", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  try {
-    const migrated = await migrateAppointments();
-    res.json({ ok: true, created: migrated });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ─── POST /api/appointments ───────────────────────────────────────────────────
 router.post("/", requireAuth, async (req: AuthRequest, res) => {
   const {
     projectId,
-    villaNumber,
+    villaNumber,  // accepted for backward compat — resolved to unitId below
+    unitId: bodyUnitId,
     clientId,
-    clientName,
     clientPhone,
     date,
     time,
     notes,
     supervisorIds,
-    supervisors,
     technicianId,
     technicianIds,
-    technicians,
     types,
     ticketIds,
   } = req.body as {
     projectId: string;
-    villaNumber: string;
+    villaNumber?: string;
+    unitId?: string;
     clientId?: string;
-    clientName: string;
     clientPhone?: string;
     date: string;
     time?: string;
     notes?: string;
     supervisorIds?: string[];
-    supervisors?: any[];
     technicianId?: string;
     technicianIds?: string[];
-    technicians?: any[];
     types?: string[];
     ticketIds?: string[];
   };
 
-  if (!projectId || !villaNumber || !date || !clientName) {
-    res.status(400).json({ error: "projectId, villaNumber, date, clientName مطلوبة" });
+  if (!projectId || !date) {
+    res.status(400).json({ error: "projectId و date مطلوبان" });
     return;
   }
 
   try {
+    // Resolve unitId: prefer explicit, fall back to villaNumber lookup
+    let resolvedUnitId: string | null = bodyUnitId || null;
+    if (!resolvedUnitId && villaNumber) {
+      const unit = await prisma.unit.findUnique({
+        where: { projectId_unitNumber: { projectId, unitNumber: villaNumber.trim() } },
+        select: { id: true },
+      });
+      resolvedUnitId = unit?.id || null;
+    }
+
+    // Resolve clientId from unit if not provided
+    let resolvedClientId = clientId || null;
+    if (!resolvedClientId && resolvedUnitId) {
+      const primaryLink = await prisma.clientUnit.findFirst({
+        where: { unitId: resolvedUnitId, isPrimary: true },
+        select: { clientId: true },
+      });
+      resolvedClientId = primaryLink?.clientId || null;
+    }
+
     let finalTime = time || null;
     if (finalTime) {
       const check = await validateAndCorrectAppointmentTime(projectId, finalTime);
@@ -411,20 +464,21 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       finalTime = check.time || finalTime;
     }
 
+    const apptInclude = {
+      technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
+      unit:       { select: { id: true, unitNumber: true } },
+      client:     { select: { id: true, name: true, phone: true } },
+      project:    { select: { id: true, abbreviation: true } },
+      tickets:    { select: { id: true, ticketId: true, status: true, type: true } },
+    };
+
     let appointment = await prisma.appointment.findFirst({
-      where: { projectId, villaNumber, date }
+      where: resolvedUnitId ? { projectId, unitId: resolvedUnitId, date } : { projectId, date },
     });
 
     if (appointment) {
-      const updatedTypes = Array.from(new Set([...(appointment.types as string[] || []), ...(types || [])]));
-      const updatedSupIds = Array.from(new Set([...(appointment.supervisorIds as string[] || []), ...(supervisorIds || [])]));
-      
-      const existingSups = (appointment.supervisors as any[]) || [];
-      const newSups = (supervisors as any[]) || [];
-      const mergedSupsMap = new Map();
-      existingSups.forEach(s => mergedSupsMap.set(s.id, s));
-      newSups.forEach(s => mergedSupsMap.set(s.id, s));
-      const updatedSups = Array.from(mergedSupsMap.values());
+      const updatedTypes   = Array.from(new Set([...(appointment.types as string[] || []), ...(types || [])]));
+      const updatedSupIds  = Array.from(new Set([...(appointment.supervisorIds as string[] || []), ...(supervisorIds || [])]));
 
       appointment = await prisma.appointment.update({
         where: { id: appointment.id },
@@ -433,46 +487,34 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
           notes: notes ? (appointment.notes ? `${appointment.notes}\n${notes}` : notes) : appointment.notes,
           types: updatedTypes,
           supervisorIds: updatedSupIds,
-          supervisors: updatedSups,
           technicianId: technicianId !== undefined ? (technicianId || null) : appointment.technicianId,
           technicianIds: technicianIds !== undefined ? technicianIds : appointment.technicianIds,
-          technicians: technicians !== undefined ? technicians : appointment.technicians,
           clientPhone: clientPhone || appointment.clientPhone,
+          ...(resolvedClientId && !appointment.clientId ? { clientId: resolvedClientId } : {}),
         },
-        include: {
-          technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
-          tickets: { select: { id: true, ticketId: true, status: true, type: true } }
-        }
+        include: apptInclude,
       });
     } else {
       appointment = await prisma.appointment.create({
         data: {
           projectId,
-          villaNumber,
-          clientId: clientId || null,
-          clientName,
+          unitId: resolvedUnitId,
+          clientId: resolvedClientId,
           clientPhone: clientPhone || null,
           date,
           time: finalTime || null,
           notes: notes || null,
           supervisorIds: supervisorIds || [],
-          supervisors: supervisors || [],
           technicianId: technicianId || null,
           technicianIds: technicianIds || (technicianId ? [technicianId] : []),
-          technicians: technicians || [],
           types: types || [],
         },
-        include: {
-          technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
-          tickets: { select: { id: true, ticketId: true, status: true, type: true } }
-        }
+        include: apptInclude,
       });
     }
 
     // Sync linked tickets
     if (ticketIds && ticketIds.length > 0) {
-      const appointmentTime = `${date} ${finalTime || ""}`.trim();
-
       // Fetch tickets to conditionally update status
       const tickets = await prisma.ticket.findMany({
         where: { id: { in: ticketIds } },
@@ -485,10 +527,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
             where: { id: t.id },
             data: {
               appointmentId: appointment.id,
-              appointmentTime,
-              appointmentNotes: notes || null,
-              appointmentAwaitingReply: false,
-              isDirectAppointment: true,
               ...(t.status !== "closed" ? { status: "pending" } : {}),
             },
           })
@@ -496,8 +534,30 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       );
     }
 
-    getIO()?.emit("appointment:created", appointment);
-    res.json(appointment);
+    const enriched = appointmentToResponse(appointment as any);
+    getIO()?.emit("appointment:created", enriched);
+    res.json(enriched);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/appointments/:id ────────────────────────────────────────────────
+router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
+  const { id } = req.params;
+  try {
+    const appointment = await prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        unit:      { select: { id: true, unitNumber: true } },
+        client:    { select: { id: true, name: true, phone: true } },
+        project:   { select: { id: true, abbreviation: true } },
+        technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
+        tickets: { select: { id: true, ticketId: true, status: true, type: true, detectedTypes: true, assignedSupervisorIds: true } },
+      },
+    });
+    if (!appointment) { res.status(404).json({ error: "Appointment not found" }); return; }
+    res.json(appointmentToResponse(appointment as any));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -511,10 +571,8 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     time,
     notes,
     supervisorIds,
-    supervisors,
     technicianId,
     technicianIds,
-    technicians,
     types,
     clientPhone,
     status
@@ -523,10 +581,8 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     time?: string;
     notes?: string;
     supervisorIds?: string[];
-    supervisors?: any[];
     technicianId?: string | null;
     technicianIds?: string[];
-    technicians?: any[];
     types?: string[];
     clientPhone?: string;
     status?: string;
@@ -554,32 +610,24 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         time: finalTime !== undefined ? (finalTime || null) : undefined,
         notes: notes || null,
         supervisorIds: supervisorIds || [],
-        supervisors: supervisors || [],
         ...(technicianId !== undefined ? { technicianId: technicianId || null } : {}),
         ...(technicianIds !== undefined ? { technicianIds } : {}),
-        ...(technicians !== undefined ? { technicians } : {}),
         types: types || [],
         ...(clientPhone ? { clientPhone } : {}),
         ...(status ? { status } : {}),
       },
       include: {
+        unit:      { select: { unitNumber: true } },
+        client:    { select: { name: true } },
+        project:   { select: { abbreviation: true } },
         technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
         tickets: { select: { id: true, ticketId: true, status: true, type: true } }
       }
     });
 
-    // Sync all linked tickets
-    const appointmentTime = `${date} ${finalTime || ""}`.trim();
-    await prisma.ticket.updateMany({
-      where: { appointmentId: id },
-      data: {
-        appointmentTime,
-        appointmentNotes: notes || null,
-      },
-    });
-
-    getIO()?.emit("appointment:updated", appointment);
-    res.json(appointment);
+    const enriched = appointmentToResponse(appointment as any);
+    getIO()?.emit("appointment:updated", enriched);
+    res.json(enriched);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -588,10 +636,9 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 // ─── PATCH /api/appointments/:id/assign-technician ─────────────────────────────
 router.patch("/:id/assign-technician", requireAuth, async (req: AuthRequest, res) => {
   const { id } = req.params;
-  const { technicianId, technicianIds, technicians } = req.body as {
+  const { technicianId, technicianIds } = req.body as {
     technicianId?: string | null;
     technicianIds?: string[];
-    technicians?: any[];
   };
 
   try {
@@ -600,7 +647,6 @@ router.patch("/:id/assign-technician", requireAuth, async (req: AuthRequest, res
       data: {
         technicianId: technicianId || null,
         technicianIds: technicianIds || (technicianId ? [technicianId] : []),
-        ...(technicians !== undefined ? { technicians } : {}),
       },
       include: {
         technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
@@ -631,13 +677,7 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     const appointmentClear = {
       appointmentId: null as null,
-      appointmentTime: null as null,
-      appointmentNotes: null as null,
-      appointmentAwaitingReply: false,
-      isDirectAppointment: false,
-      assignedSupervisorId: null as null,
       assignedSupervisorIds: [] as string[],
-      assignedSupervisors: [] as any[],
     };
 
     if (pendingIds.length > 0) {
@@ -660,81 +700,5 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-export async function migrateAppointments(): Promise<number> {
-  // Find tickets with appointmentTime but no appointmentId
-  const tickets = await prisma.ticket.findMany({
-    where: {
-      appointmentTime: { not: null },
-      appointmentId: null,
-    },
-    select: {
-      id: true,
-      projectId: true,
-      villaNumber: true,
-      clientId: true,
-      clientName: true,
-      appointmentTime: true,
-      appointmentNotes: true,
-      assignedSupervisorIds: true,
-      assignedSupervisors: true,
-      type: true,
-      detectedTypes: true,
-      client: { select: { phone: true } },
-    },
-  });
-
-  if (tickets.length === 0) return 0;
-
-  // Group by (projectId, villaNumber, date)
-  const groups = new Map<string, typeof tickets>();
-  for (const t of tickets) {
-    const date = (t.appointmentTime || "").split(" ")[0];
-    const key = `${t.projectId}|${t.villaNumber}|${date}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(t);
-  }
-
-  let created = 0;
-  for (const [, group] of groups) {
-    const first = group[0];
-    const apptTime = first.appointmentTime || "";
-    const [date, time] = apptTime.split(" ");
-
-    const types = new Set<string>();
-    for (const t of group) {
-      if (t.type) types.add(t.type);
-      if (t.detectedTypes) t.detectedTypes.forEach((dt) => types.add(dt));
-    }
-
-    const supIds: string[] = first.assignedSupervisorIds || [];
-
-    const appointment = await prisma.appointment.create({
-      data: {
-        projectId: first.projectId,
-        villaNumber: first.villaNumber,
-        clientId: first.clientId || null,
-        clientName: first.clientName,
-        clientPhone: first.client?.phone || null,
-        date,
-        time: time || null,
-        notes: first.appointmentNotes || null,
-        supervisorIds: supIds,
-        supervisors: (first.assignedSupervisors as any) || [],
-        types: Array.from(types),
-      },
-    });
-
-    // Link tickets
-    await prisma.ticket.updateMany({
-      where: { id: { in: group.map((t) => t.id) } },
-      data: { appointmentId: appointment.id },
-    });
-
-    created++;
-  }
-
-  return created;
-}
 
 export default router;

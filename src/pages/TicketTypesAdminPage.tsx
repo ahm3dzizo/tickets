@@ -3,6 +3,7 @@ import {
   Plus, Search, Trash2, Pencil, ChevronDown, ChevronUp,
   Tags, Layers, Hash, CheckCircle2, Loader2, X,
   ToggleLeft, ToggleRight, AlertTriangle, Brain, BarChart2,
+  Wrench, Zap, Globe, FolderPlus,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -51,7 +52,18 @@ interface Specialty {
   id: string;
   key: string;
   nameAr: string;
+  sortOrder: number;
 }
+
+// ─── Specialty theme ──────────────────────────────────────────────────────────
+const SPEC_THEME: Record<string, { border: string; header: string; badge: string; text: string; icon: React.ReactNode }> = {
+  mechanics:   { border: 'border-blue-500/25', header: 'bg-blue-500/8', badge: 'bg-blue-500/15 text-blue-300 border-blue-500/30', text: 'text-blue-400', icon: <Wrench className="w-4 h-4" /> },
+  electricity: { border: 'border-amber-500/25', header: 'bg-amber-500/8', badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30', text: 'text-amber-400', icon: <Zap className="w-4 h-4" /> },
+  general:     { border: 'border-slate-500/25', header: 'bg-slate-500/8', badge: 'bg-slate-500/15 text-slate-300 border-slate-500/30', text: 'text-slate-300', icon: <Globe className="w-4 h-4" /> },
+};
+const DEFAULT_THEME = { border: 'border-purple-500/25', header: 'bg-purple-500/8', badge: 'bg-purple-500/15 text-purple-300 border-purple-500/30', text: 'text-purple-400', icon: <Tags className="w-4 h-4" /> };
+
+const getTheme = (key?: string) => (key && SPEC_THEME[key]) || DEFAULT_THEME;
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 const BASE = '/api/admin/ticket-types';
@@ -293,10 +305,7 @@ const TypeCard = ({ type, specialties, onRefresh }: {
   const [saving, setSaving] = useState(false);
   const [addSubOpen, setAddSubOpen] = useState(false);
 
-  // Edit form state
   const [editData, setEditData] = useState({ nameAr: type.nameAr, description: type.description || '', specialtyId: type.specialtyId || '', isActive: type.isActive });
-
-  // New subtype state
   const [newSubName, setNewSubName] = useState('');
   const [newSubDesc, setNewSubDesc] = useState('');
   const [addingSubtype, setAddingSubtype] = useState(false);
@@ -341,14 +350,6 @@ const TypeCard = ({ type, specialties, onRefresh }: {
     finally { setAddingSubtype(false); }
   };
 
-  const specialtyColor: Record<string, string> = {
-    mechanics:   'text-blue-400 bg-blue-500/10',
-    electricity: 'text-amber-400 bg-amber-500/10',
-    general:     'text-slate-400 bg-slate-500/10',
-  };
-  const spColor = specialtyColor[type.specialty?.key || 'general'] || 'text-slate-400 bg-slate-500/10';
-
-  // distribution of tickets across sub-types
   const totalSubTickets = type.subTypes.reduce((s, st) => s + (st._count?.tickets ?? 0), 0);
   const hasDistribution = totalSubTickets > 0 && type.subTypes.length > 0;
 
@@ -358,10 +359,9 @@ const TypeCard = ({ type, specialties, onRefresh }: {
         'border transition-all duration-200 overflow-hidden',
         type.isActive ? 'bg-white/5 border-border hover:border-white/20' : 'bg-white/2 border-border/40 opacity-60'
       )}>
-        {/* ── Card Header ── */}
         <CardContent className="p-0">
+          {/* ── Card Header ── */}
           <div className="flex items-center justify-between p-4">
-            {/* Left actions */}
             <div className="flex items-center gap-2 shrink-0">
               <button onClick={() => setExpanded(v => !v)}
                 className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-border flex items-center justify-center text-slate-400 hover:text-white transition-all">
@@ -377,7 +377,6 @@ const TypeCard = ({ type, specialties, onRefresh }: {
               </button>
             </div>
 
-            {/* Right: type info */}
             <div className="flex items-center gap-3 text-right">
               <div>
                 <div className="flex items-center justify-start gap-2">
@@ -395,17 +394,13 @@ const TypeCard = ({ type, specialties, onRefresh }: {
                 </div>
                 <div className="flex items-center justify-start gap-2 mt-1">
                   <code className="text-[10px] text-slate-500 font-mono bg-white/5 px-1.5 py-0.5 rounded">{type.key}</code>
-                  {type.specialty && (
-                    <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', spColor)}>
-                      {type.specialty.nameAr}
-                    </span>
-                  )}
                 </div>
+                {type.description && (
+                  <p className="text-slate-500 text-xs mt-1 text-right">{type.description}</p>
+                )}
               </div>
-              <div className="flex flex-col items-center gap-1">
-                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-border">
-                  <Tags className="w-4 h-4 text-slate-400" />
-                </div>
+              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-border shrink-0">
+                <Tags className="w-4 h-4 text-slate-400" />
               </div>
             </div>
           </div>
@@ -429,8 +424,6 @@ const TypeCard = ({ type, specialties, onRefresh }: {
           {/* ── Expanded section ── */}
           {expanded && (
             <div className="border-t border-border animate-in fade-in slide-in-from-top-2 duration-200">
-
-              {/* Sub-type distribution bar */}
               {hasDistribution && (
                 <div className="px-4 pt-3 pb-1 space-y-1.5">
                   <div className="flex items-center gap-1.5 text-[10px] text-slate-500 justify-end">
@@ -457,7 +450,6 @@ const TypeCard = ({ type, specialties, onRefresh }: {
                 </div>
               )}
 
-              {/* Tabs */}
               <div className="flex gap-1 p-3 pb-0">
                 {([['keywords', 'الكلمات المفتاحية', Hash], ['subtypes', 'الأنواع الفرعية', Layers]] as const).map(([key, label, Icon]) => (
                   <button key={key} onClick={() => setTab(key)}
@@ -484,8 +476,6 @@ const TypeCard = ({ type, specialties, onRefresh }: {
                     {type.subTypes.map(st => (
                       <SubTypeRow key={st.id} st={st} typeId={type.id} onRefresh={onRefresh} />
                     ))}
-
-                    {/* Add subtype inline */}
                     {addSubOpen ? (
                       <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
                         <Field label="الاسم بالعربي" value={newSubName} onChange={setNewSubName} placeholder="مثال: تسرب مياه من الصنبور" required />
@@ -520,7 +510,7 @@ const TypeCard = ({ type, specialties, onRefresh }: {
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title={`تعديل: ${type.nameAr}`}>
         <div className="space-y-4">
           <Field label="الاسم بالعربي" value={editData.nameAr} onChange={v => setEditData(p => ({ ...p, nameAr: v }))} required />
-          <Field label="الوصف" value={editData.description} onChange={v => setEditData(p => ({ ...p, description: v }))} placeholder="وصف اختياري..." textarea />
+          <Field label="الوصف (اختياري)" value={editData.description} onChange={v => setEditData(p => ({ ...p, description: v }))} placeholder="وصف مختصر..." textarea />
           <div className="space-y-1.5">
             <label className="block text-right text-[10px] font-bold uppercase tracking-widest text-slate-500">التخصص</label>
             <select value={editData.specialtyId} onChange={e => setEditData(p => ({ ...p, specialtyId: e.target.value }))}
@@ -554,21 +544,215 @@ const TypeCard = ({ type, specialties, onRefresh }: {
   );
 };
 
+// ─── Add Type Inline Form (inside a specialty section) ────────────────────────
+const AddTypeInline = ({ specialtyId, onDone, specialties }: {
+  specialtyId: string; onDone: () => void; specialties: Specialty[];
+}) => {
+  const [data, setData] = useState({ key: '', nameAr: '', description: '', specialtyId });
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = async () => {
+    if (!data.key.trim() || !data.nameAr.trim()) return;
+    setSaving(true);
+    try {
+      await apiFetch(BASE, { method: 'POST', body: JSON.stringify(data) });
+      toast.success('تمت إضافة النوع بنجاح');
+      onDone();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+      <p className="text-blue-400 text-xs font-bold text-right">إضافة نوع جديد</p>
+      <Field label="المفتاح (key) بالإنجليزية" value={data.key}
+        onChange={v => setData(p => ({ ...p, key: v.toLowerCase().replace(/\s+/g, '_') }))}
+        placeholder="مثال: plumbing" required />
+      <Field label="الاسم بالعربي" value={data.nameAr}
+        onChange={v => setData(p => ({ ...p, nameAr: v }))} placeholder="مثال: السباكة" required />
+      <Field label="الوصف (اختياري)" value={data.description}
+        onChange={v => setData(p => ({ ...p, description: v }))} placeholder="وصف مختصر..." textarea />
+      <div className="space-y-1.5">
+        <label className="block text-right text-[10px] font-bold uppercase tracking-widest text-slate-500">التخصص</label>
+        <select value={data.specialtyId} onChange={e => setData(p => ({ ...p, specialtyId: e.target.value }))}
+          className="w-full bg-white/5 border border-border text-slate-200 rounded-xl px-4 h-10 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all appearance-none">
+          <option value="">— بدون تخصص —</option>
+          {specialties.map(s => <option key={s.id} value={s.id}>{s.nameAr}</option>)}
+        </select>
+      </div>
+      <div className="flex gap-2">
+        <Button onClick={handleAdd} disabled={saving || !data.key.trim() || !data.nameAr.trim()}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 text-sm">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'إضافة النوع'}
+        </Button>
+        <Button variant="ghost" onClick={onDone}
+          className="flex-1 text-slate-400 hover:text-white rounded-xl h-10 text-sm border border-border">
+          إلغاء
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Specialty Section ────────────────────────────────────────────────────────
+const SpecialtySection = ({ specialty, types, allSpecialties, onRefresh, onEditSpecialty, onDeleteSpecialty }: {
+  specialty: Specialty | null;
+  types: TicketTypeItem[];
+  allSpecialties: Specialty[];
+  onRefresh: () => void;
+  onEditSpecialty: (s: Specialty) => void;
+  onDeleteSpecialty: (s: Specialty) => void;
+}) => {
+  const [expanded, setExpanded] = useState(true);
+  const [addingType, setAddingType] = useState(false);
+  const theme = getTheme(specialty?.key);
+
+  const label = specialty ? specialty.nameAr : 'غير مصنف';
+  const specId = specialty?.id ?? '';
+
+  return (
+    <div className={cn('rounded-2xl border overflow-hidden', theme.border)}>
+      {/* ── Specialty Header ── */}
+      <div className={cn('flex items-center justify-between px-5 py-3', theme.header)}>
+        {/* Left: actions */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setExpanded(v => !v)}
+            className="text-slate-500 hover:text-slate-300 transition-colors">
+            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {specialty && (
+            <>
+              <button onClick={() => onEditSpecialty(specialty)}
+                className="text-slate-500 hover:text-blue-400 transition-colors" title="تعديل التخصص">
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => onDeleteSpecialty(specialty)}
+                className="text-slate-500 hover:text-red-400 transition-colors" title="حذف التخصص">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+          <button onClick={() => setAddingType(true)}
+            className={cn('flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border transition-all', theme.badge)}>
+            <Plus className="w-3 h-3" />
+            نوع جديد
+          </button>
+        </div>
+
+        {/* Right: specialty name */}
+        <div className="flex items-center gap-2.5 text-right">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={cn('text-base font-bold', theme.text)}>{label}</span>
+              {specialty && (
+                <code className="text-[9px] text-slate-600 font-mono bg-white/5 px-1 py-0.5 rounded">{specialty.key}</code>
+              )}
+            </div>
+            <p className="text-slate-500 text-xs">{types.length} {types.length === 1 ? 'نوع' : 'أنواع'}</p>
+          </div>
+          <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center border', theme.badge)}>
+            {theme.icon}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Types under this specialty ── */}
+      {expanded && (
+        <div className="p-3 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          {addingType && (
+            <AddTypeInline
+              specialtyId={specId}
+              specialties={allSpecialties}
+              onDone={() => { setAddingType(false); onRefresh(); }}
+            />
+          )}
+          {types.length === 0 && !addingType && (
+            <p className="text-slate-600 text-xs text-center py-4">لا توجد أنواع تذاكر في هذا التخصص</p>
+          )}
+          {types.map(type => (
+            <TypeCard key={type.id} type={type} specialties={allSpecialties} onRefresh={onRefresh} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Specialty Modal (add / edit) ─────────────────────────────────────────────
+const SpecialtyModal = ({ open, onClose, editing, onRefresh }: {
+  open: boolean; onClose: () => void; editing: Specialty | null; onRefresh: () => void;
+}) => {
+  const [data, setData] = useState({ key: '', nameAr: '' });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setData(editing ? { key: editing.key, nameAr: editing.nameAr } : { key: '', nameAr: '' });
+    }
+  }, [open, editing]);
+
+  const handleSave = async () => {
+    if (!data.nameAr.trim()) return;
+    setSaving(true);
+    try {
+      if (editing) {
+        await apiFetch(`${BASE}/specialties/${editing.id}`, { method: 'PUT', body: JSON.stringify({ nameAr: data.nameAr.trim() }) });
+        toast.success('تم تحديث التخصص');
+      } else {
+        if (!data.key.trim()) return;
+        await apiFetch(`${BASE}/specialties`, { method: 'POST', body: JSON.stringify({ key: data.key.trim(), nameAr: data.nameAr.trim() }) });
+        toast.success('تمت إضافة التخصص');
+      }
+      onRefresh();
+      onClose();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={editing ? `تعديل تخصص: ${editing.nameAr}` : 'إضافة تخصص جديد'}>
+      <div className="space-y-4">
+        {!editing && (
+          <Field label="المفتاح (key) بالإنجليزية" value={data.key}
+            onChange={v => setData(p => ({ ...p, key: v.toLowerCase().replace(/\s+/g, '_') }))}
+            placeholder="مثال: mechanics أو electricity" required />
+        )}
+        <Field label="الاسم بالعربي" value={data.nameAr}
+          onChange={v => setData(p => ({ ...p, nameAr: v }))}
+          placeholder="مثال: ميكانيكا" required />
+        <div className="flex gap-3 pt-2">
+          <Button onClick={handleSave} disabled={saving || !data.nameAr.trim() || (!editing && !data.key.trim())}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? 'حفظ التغييرات' : 'إضافة التخصص'}
+          </Button>
+          <Button variant="ghost" onClick={onClose}
+            className="flex-1 text-slate-400 hover:text-white rounded-xl h-11 border border-border">
+            إلغاء
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function TicketTypesAdminPage() {
   const [types, setTypes] = useState<TicketTypeItem[]>([]);
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [addOpen, setAddOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [newData, setNewData] = useState({ key: '', nameAr: '', description: '', specialtyId: '' });
+
+  // specialty modal state
+  const [specModalOpen, setSpecModalOpen] = useState(false);
+  const [editingSpecialty, setEditingSpecialty] = useState<Specialty | null>(null);
+  const [confirmDelSpec, setConfirmDelSpec] = useState<Specialty | null>(null);
+  const [deletingSpec, setDeletingSpec] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const [typesData, specsData] = await Promise.all([
         apiFetch(BASE),
-        apiFetch('/api/admin/ticket-types/specialties'),
+        apiFetch(`${BASE}/specialties`),
       ]);
       setTypes(typesData);
       setSpecialties(specsData);
@@ -578,22 +762,28 @@ export default function TicketTypesAdminPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAdd = async () => {
-    if (!newData.key.trim() || !newData.nameAr.trim()) return;
-    setSaving(true);
+  const handleDeleteSpecialty = async () => {
+    if (!confirmDelSpec) return;
+    setDeletingSpec(true);
     try {
-      await apiFetch(BASE, { method: 'POST', body: JSON.stringify(newData) });
-      toast.success('تمت إضافة النوع بنجاح');
-      setNewData({ key: '', nameAr: '', description: '', specialtyId: '' });
-      setAddOpen(false);
+      await apiFetch(`${BASE}/specialties/${confirmDelSpec.id}`, { method: 'DELETE' });
+      toast.success('تم حذف التخصص');
+      setConfirmDelSpec(null);
       load();
     } catch (e: any) { toast.error(e.message); }
-    finally { setSaving(false); }
+    finally { setDeletingSpec(false); }
   };
 
   const filtered = types.filter(t =>
     t.nameAr.includes(search) || t.key.toLowerCase().includes(search.toLowerCase()) || t.specialty?.nameAr.includes(search)
   );
+
+  // Group types by specialty
+  const grouped = specialties.map(spec => ({
+    specialty: spec,
+    types: filtered.filter(t => t.specialtyId === spec.id),
+  }));
+  const unassigned = filtered.filter(t => !t.specialtyId);
 
   const stats = {
     total: types.length,
@@ -604,18 +794,18 @@ export default function TicketTypesAdminPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto" dir="rtl">
+      <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto" dir="rtl">
 
         {/* ── Header ── */}
         <div className="flex items-start justify-between">
-          <Button onClick={() => setAddOpen(true)}
-            className="gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl h-11 px-5 font-bold shrink-0">
-            <Plus className="w-4 h-4" />
-            نوع جديد
-          </Button>
+          <button onClick={() => { setEditingSpecialty(null); setSpecModalOpen(true); }}
+            className="flex items-center gap-2 px-4 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-border text-slate-400 hover:text-white text-sm font-bold transition-all shrink-0">
+            <FolderPlus className="w-4 h-4" />
+            تخصص جديد
+          </button>
           <div className="text-right">
             <h1 className="text-2xl font-bold text-white">أنواع التذاكر</h1>
-            <p className="text-slate-400 text-sm mt-1">إدارة أنواع التذاكر والأنواع الفرعية والكلمات المفتاحية</p>
+            <p className="text-slate-400 text-sm mt-1">مجمّعة حسب التخصص — ميكانيكا · كهرباء · عام</p>
           </div>
         </div>
 
@@ -634,57 +824,69 @@ export default function TicketTypesAdminPage() {
             className="w-full bg-white/5 border border-border text-slate-200 rounded-2xl pr-11 pl-4 h-11 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-600 transition-all" />
         </div>
 
-        {/* ── Types List ── */}
+        {/* ── Grouped Sections ── */}
         {loading ? (
           <div className="space-y-3">
-            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-white/5 border border-border flex items-center justify-center mb-4">
-              <Tags className="w-8 h-8 text-slate-600" />
-            </div>
-            <p className="text-white font-semibold">{search ? 'لا توجد نتائج' : 'لا توجد أنواع بعد'}</p>
-            <p className="text-slate-500 text-sm mt-1">{search ? 'جرب كلمة بحث أخرى' : 'أضف أول نوع تذكرة للبدء'}</p>
+            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
           </div>
         ) : (
-          <div className="space-y-3">
-            {filtered.map(type => (
-              <TypeCard key={type.id} type={type} specialties={specialties} onRefresh={load} />
+          <div className="space-y-4">
+            {/* Specialty sections */}
+            {grouped.map(({ specialty, types: sTypes }) => (
+              (sTypes.length > 0 || !search) && (
+                <SpecialtySection
+                  key={specialty.id}
+                  specialty={specialty}
+                  types={sTypes}
+                  allSpecialties={specialties}
+                  onRefresh={load}
+                  onEditSpecialty={s => { setEditingSpecialty(s); setSpecModalOpen(true); }}
+                  onDeleteSpecialty={s => setConfirmDelSpec(s)}
+                />
+              )
             ))}
+
+            {/* Unassigned */}
+            {(unassigned.length > 0 || (!search && specialties.length === 0)) && (
+              <SpecialtySection
+                specialty={null}
+                types={unassigned}
+                allSpecialties={specialties}
+                onRefresh={load}
+                onEditSpecialty={() => {}}
+                onDeleteSpecialty={() => {}}
+              />
+            )}
+
+            {filtered.length === 0 && search && (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-white/5 border border-border flex items-center justify-center mb-3">
+                  <Search className="w-6 h-6 text-slate-600" />
+                </div>
+                <p className="text-white font-semibold">لا توجد نتائج</p>
+                <p className="text-slate-500 text-sm mt-1">جرب كلمة بحث أخرى</p>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* ── Add Type Modal ── */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="إضافة نوع جديد">
-        <div className="space-y-4">
-          <Field label="المفتاح (key) بالإنجليزية" value={newData.key} onChange={v => setNewData(p => ({ ...p, key: v.toLowerCase().replace(/\s+/g, '_') }))}
-            placeholder="مثال: plumbing أو water_leaks" required />
-          <Field label="الاسم بالعربي" value={newData.nameAr} onChange={v => setNewData(p => ({ ...p, nameAr: v }))}
-            placeholder="مثال: السباكة" required />
-          <Field label="الوصف (اختياري)" value={newData.description} onChange={v => setNewData(p => ({ ...p, description: v }))}
-            placeholder="وصف مختصر للنوع..." textarea />
-          <div className="space-y-1.5">
-            <label className="block text-right text-[10px] font-bold uppercase tracking-widest text-slate-500">التخصص</label>
-            <select value={newData.specialtyId} onChange={e => setNewData(p => ({ ...p, specialtyId: e.target.value }))}
-              className="w-full bg-white/5 border border-border text-slate-200 rounded-xl px-4 h-11 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all appearance-none">
-              <option value="">— بدون تخصص —</option>
-              {specialties.map(s => <option key={s.id} value={s.id}>{s.nameAr}</option>)}
-            </select>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Button onClick={handleAdd} disabled={saving || !newData.key.trim() || !newData.nameAr.trim()}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'إضافة النوع'}
-            </Button>
-            <Button variant="ghost" onClick={() => setAddOpen(false)}
-              className="flex-1 text-slate-400 hover:text-white rounded-xl h-11 border border-border">
-              إلغاء
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {/* ── Specialty Modal ── */}
+      <SpecialtyModal
+        open={specModalOpen}
+        onClose={() => setSpecModalOpen(false)}
+        editing={editingSpecialty}
+        onRefresh={load}
+      />
+
+      {/* ── Confirm delete specialty ── */}
+      <ConfirmDelete
+        open={!!confirmDelSpec}
+        onClose={() => setConfirmDelSpec(null)}
+        onConfirm={handleDeleteSpecialty}
+        name={confirmDelSpec?.nameAr ?? ''}
+        loading={deletingSpec}
+      />
     </Layout>
   );
 }

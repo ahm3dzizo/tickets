@@ -233,8 +233,6 @@ export const whatsappApi = {
     post<{ success: boolean; message: string }>('/whatsapp/start', {}),
   restart: () =>
     post<{ success: boolean; message: string }>('/whatsapp/restart', {}),
-  sendApprovalRequest: (ticketId: string) =>
-    post<{ sent: boolean; fallback: boolean }>(`/whatsapp/approval/${ticketId}`, {}),
   sendAppointmentRange: (ticketId: string, data: {
     startDate: string; endDate: string; preferredTime: string;
     notes?: string; phone: string; clientName: string; villaNumber: string;
@@ -369,12 +367,6 @@ export const appointmentsApi = {
     if (params.excludeTicketId) q.set('excludeTicketId', params.excludeTicketId);
     return get<{ conflicts: any[] }>(`/appointments/conflicts?${q.toString()}`);
   },
-  getUpcoming: (supervisorId?: string, days?: number) => {
-    const q = new URLSearchParams();
-    if (supervisorId) q.set('supervisorId', supervisorId);
-    if (days) q.set('days', String(days));
-    return get<any[]>(`/appointments/upcoming?${q.toString()}`);
-  },
   getCalendar: (params: { from: string; to: string; supervisorId?: string; projectId?: string; projectIds?: string[] }) => {
     const q = new URLSearchParams();
     q.set('from', params.from);
@@ -414,8 +406,7 @@ export const appointmentsApi = {
       }
       return r.json();
     }),
-  deleteAppointment: (id: string) => del<any>(`/appointments/${id}`),
-  migrate: () => post<{ ok: boolean; created: number }>('/appointments/migrate', {}),
+  getById: (id: string) => get<any>(`/appointments/${id}`),
   getByClient: (clientId: string) => get<any[]>(`/appointments/by-client/${clientId}`),
   getByUnit: (projectId: string, villaNumber: string) => get<any[]>(`/appointments/by-unit/${projectId}/${villaNumber}`),
 };
@@ -587,12 +578,4 @@ export const warrantiesApi = {
   },
 };
 
-
-// ── Learned Keywords ──────────────────────────────────────────────────────────
-export interface LearnedKeyword { id?: string; keyword: string; type: string; confidence: number; usageCount: number; }
-export const learnedKeywordsApi = {
-  getAll: () => get<LearnedKeyword[]>('/learned-keywords'),
-  learn: (keyword: string, type: string) => post<any>('/learned-keywords/learn', { keyword, type }),
-  bulkLearn: (items: any[]) => post<any>('/learned-keywords/bulk', { items }),
-};
 

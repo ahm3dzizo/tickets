@@ -18,43 +18,58 @@ function normalizeTicketId(raw: string): string {
   return trimmed;
 }
 
-// ── Enrich tickets: replace stored supervisor names with live names from DB ──
-async function enrichSupervisorNames<T extends { assignedSupervisorIds?: string[]; assignedSupervisors?: any }>(
-  tickets: T[]
-): Promise<T[]> {
-  // collect all unique supervisor UIDs across all tickets
+// ── Compute virtual fields and enrich supervisor names ───────────────────────
+async function enrichTickets<T extends {
+  assignedSupervisorIds?: string[];
+  unit?: { unitNumber: string; block?: { blockNumber: string } | null } | null;
+  client?: { name: string; phone?: string | null } | null;
+  project?: { abbreviation: string } | null;
+  contractor?: { name: string } | null;
+}>(tickets: T[]): Promise<(T & {
+  villaNumber: string;
+  refNumber: string;
+  clientName: string;
+  contractorName: string;
+  assignedSupervisorId: string | null;
+  assignedSupervisors: { id: string; name: string; specialty?: string }[];
+})[]> {
   const allIds = new Set<string>();
   for (const t of tickets) {
     for (const id of (t.assignedSupervisorIds || [])) {
       if (id) allIds.add(id);
     }
   }
-  if (allIds.size === 0) return tickets;
 
-  // fetch current names from DB — User PK is `uid`, name is `displayName`
-  const users = await prisma.user.findMany({
-    where: { uid: { in: [...allIds] } },
-    select: { uid: true, displayName: true, specialty: true },
-  });
-  const nameMap = new Map(users.map(u => [u.uid, u]));
+  const nameMap = new Map<string, { uid: string; displayName: string; specialtiesRef: { key: string }[] }>();
+  if (allIds.size > 0) {
+    const users = await prisma.user.findMany({
+      where: { uid: { in: [...allIds] } },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
+    });
+    users.forEach(u => nameMap.set(u.uid, u));
+  }
 
-  // patch each ticket's assignedSupervisors with live data
   return tickets.map(t => {
+    const unitNumber = t.unit?.unitNumber || '';
+    const projAbbr   = t.project?.abbreviation || '';
+    const villaNumber = unitNumber;
+    const refNumber   = projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber;
+    const clientName  = t.client?.name || '';
+    const contractorName = t.contractor?.name || '';
     const ids = t.assignedSupervisorIds || [];
-    if (ids.length === 0) return t;
-    const supervisors = ids
+    const assignedSupervisorId = ids[0] || null;
+    const assignedSupervisors = ids
       .map(id => {
         const u = nameMap.get(id);
-        if (!u) return null;
-        const stored = Array.isArray(t.assignedSupervisors)
-          ? (t.assignedSupervisors as any[]).find((s: any) => s.id === id)
-          : null;
-        return { id: u.uid, name: u.displayName, specialty: stored?.specialty || u.specialty || "general" };
+        return u ? { id: u.uid, name: u.displayName, specialty: u.specialtiesRef?.[0]?.key || 'general' } : null;
       })
-      .filter(Boolean);
-    return { ...t, assignedSupervisors: supervisors };
+      .filter((s): s is { id: string; name: string; specialty: string } => s !== null);
+    return { ...t, villaNumber, refNumber, clientName, contractorName, assignedSupervisorId, assignedSupervisors };
   });
 }
+
+// backward-compat alias
+const enrichSupervisorNames = enrichTickets;
 
 async function shouldAutoSendWA(uid: string): Promise<boolean> {
   try {
@@ -81,7 +96,7 @@ async function autoSendOpening(uid: string, ticket: any) {
       ticketId: ticket.ticketId,
       clientName: client.name,
       description: ticket.description,
-      villaNumber: ticket.villaNumber,
+      villaNumber: ticket.villaNumber || ticket.unit?.unitNumber || '',
       date: new Date().toLocaleDateString('ar-EG'),
     });
     await sendWAText(uid, client.phone, msg);
@@ -100,7 +115,7 @@ async function autoSendClosing(uid: string, ticket: any) {
       ticketId: ticket.ticketId,
       clientName: client.name,
       description: ticket.description,
-      villaNumber: ticket.villaNumber,
+      villaNumber: ticket.villaNumber || ticket.unit?.unitNumber || '',
       closureNotes: ticket.closureNotes,
     });
     await sendWAText(uid, client.phone, msg);
@@ -112,7 +127,7 @@ async function autoSendAbsent(uid: string, ticket: any) {
     if (!(await shouldAutoSendWA(uid))) return;
     const client = await prisma.client.findUnique({ where: { id: ticket.clientId }, select: { phone: true, name: true } });
     if (!client?.phone) return;
-    const msg = await buildAbsentMsg({ ticketId: ticket.ticketId, clientName: client.name, description: ticket.description, villaNumber: ticket.villaNumber });
+    const msg = await buildAbsentMsg({ ticketId: ticket.ticketId, clientName: client.name, description: ticket.description, villaNumber: ticket.villaNumber || ticket.unit?.unitNumber || '' });
     await sendWAText(uid, client.phone, msg);
   } catch {}
 }
@@ -122,7 +137,7 @@ async function autoSendOutOfScope(uid: string, ticket: any) {
     if (!(await shouldAutoSendWA(uid))) return;
     const client = await prisma.client.findUnique({ where: { id: ticket.clientId }, select: { phone: true, name: true } });
     if (!client?.phone) return;
-    const msg = await buildOutOfScopeMsg({ ticketId: ticket.ticketId, clientName: client.name, description: ticket.description, villaNumber: ticket.villaNumber });
+    const msg = await buildOutOfScopeMsg({ ticketId: ticket.ticketId, clientName: client.name, description: ticket.description, villaNumber: ticket.villaNumber || ticket.unit?.unitNumber || '' });
     await sendWAText(uid, client.phone, msg);
   } catch {}
 }
@@ -181,9 +196,7 @@ async function classifyInBackground(
     };
 
     if (!keepManualSupervisors) {
-      updateData.assignedSupervisorId = primarySupId;
       updateData.assignedSupervisorIds = supervisorIds;
-      updateData.assignedSupervisors = supervisorList.length > 0 ? supervisorList : undefined;
     }
 
     await prisma.ticket.updateMany({ where: { id: ticketId }, data: updateData });
@@ -282,18 +295,30 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     where,
     orderBy: { createdAt: "desc" },
     include: {
+      unit:          { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+      client:        { select: { id: true, name: true, phone: true } },
+      project:       { select: { id: true, abbreviation: true } },
+      contractor:    { select: { name: true } },
       ticketSubType: { select: { id: true, nameAr: true } },
-      client:        { select: { phone: true } },
+      appointment:   { select: { id: true, date: true, time: true, notes: true } },
     },
   });
-  const enriched = await enrichSupervisorNames(tickets);
-  res.json(enriched.map(t => ({
-    ...t,
-    subTypeName:  (t as any).ticketSubType?.nameAr ?? null,
-    clientPhone:  (t as any).client?.phone         ?? null,
-    client:       undefined,
-    ticketSubType: undefined,
-  })));
+  const enriched = await enrichTickets(tickets);
+  const now = new Date();
+  res.json(enriched.map(t => {
+    const appt = (t as any).appointment;
+    const apptTime = appt ? [appt.date, appt.time].filter(Boolean).join(' ') : null;
+    const apptInFuture = apptTime ? new Date(apptTime.replace(' ', 'T') || apptTime) > now : false;
+    return {
+      ...t,
+      appointmentTime:  apptInFuture ? apptTime : null,
+      appointmentNotes: appt?.notes ?? null,
+      appointment:      appt ? { id: appt.id, date: appt.date, time: appt.time ?? null } : null,
+      subTypeName:      (t as any).ticketSubType?.nameAr ?? null,
+      clientPhone:      (t as any).client?.phone         ?? null,
+      ticketSubType:    undefined,
+    };
+  }));
 });
 
 // GET /api/tickets/ticketids — للكشف عن المكررات في الاستيراد (خفيف)
@@ -349,7 +374,10 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
     // جلب بيانات التذكرة والعميل قبل الإغلاق
     const ticketInfo = await prisma.ticket.findUnique({
       where: { id: req.params.id },
-      include: { client: { select: { phone: true, name: true } } }
+      include: {
+        client: { select: { phone: true, name: true } },
+        unit:   { select: { unitNumber: true } },
+      }
     });
 
     if (!ticketInfo) {
@@ -362,9 +390,9 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
       if (phone) {
         let msg = '';
         if (closeType === 'absent') {
-          msg = await buildAbsentMsg({ ticketId: ticketInfo.ticketId, clientName: ticketInfo.client?.name || '', description: ticketInfo.description || '', villaNumber: ticketInfo.villaNumber || '' });
+          msg = await buildAbsentMsg({ ticketId: ticketInfo.ticketId, clientName: ticketInfo.client?.name || '', description: ticketInfo.description || '', villaNumber: ticketInfo.unit?.unitNumber || '' });
         } else {
-          msg = await buildOutOfScopeMsg({ ticketId: ticketInfo.ticketId, clientName: ticketInfo.client?.name || '', description: ticketInfo.description || '', villaNumber: ticketInfo.villaNumber || '' });
+          msg = await buildOutOfScopeMsg({ ticketId: ticketInfo.ticketId, clientName: ticketInfo.client?.name || '', description: ticketInfo.description || '', villaNumber: ticketInfo.unit?.unitNumber || '' });
         }
         
         const sendResult = await sendWAText(uid, phone, msg);
@@ -384,9 +412,9 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },
       data: { status, closureNotes: notes || null, closedAt: closeType === 'out_of_scope' ? new Date() : null },
-      select: { id: true, ticketId: true, clientId: true, description: true, villaNumber: true, status: true },
+      select: { id: true, ticketId: true, clientId: true, description: true, unitId: true, status: true },
     });
-    
+
     res.json({ ok: true, status });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -404,15 +432,21 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
 
   const ticket = await prisma.ticket.findUnique({
     where: { id: req.params.id },
-    include: { ticketSubType: { select: { id: true, nameAr: true } } },
+    include: {
+      unit:          { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+      client:        { select: { id: true, name: true, phone: true } },
+      project:       { select: { id: true, abbreviation: true } },
+      contractor:    { select: { name: true } },
+      ticketSubType: { select: { id: true, nameAr: true } },
+    },
   });
   if (!ticket) { res.status(404).json({ error: "Not found" }); return; }
-  
+
   if (role !== "admin" && ticket.projectId && !userProjectIds.includes(ticket.projectId)) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const [enriched] = await enrichSupervisorNames([ticket]);
+  const [enriched] = await enrichTickets([ticket]);
   res.json({ ...enriched, subTypeName: (ticket as any).ticketSubType?.nameAr ?? null });
 });
 
@@ -422,19 +456,6 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     const projectId = asTrimmedString(data.projectId);
     const clientId = asTrimmedString(data.clientId);
-
-    let resolvedClientName = data.clientName;
-
-    if (clientId) {
-      const clientRecord = await prisma.client.findUnique({
-        where: { id: clientId },
-        select: { id: true, name: true }
-      });
-
-      if (clientRecord) {
-        resolvedClientName = clientRecord.name;
-      }
-    }
 
     if (!projectId) {
       res.status(400).json({ error: "يجب تحديد المشروع لإنشاء التذكرة" });
@@ -493,26 +514,24 @@ router.post("/", requireAuth, async (req, res) => {
     const ticket = await prisma.ticket.create({
       data: {
         ticketId: ticketIdToUse,
-        refNumber: data.refNumber,
-        projectAbbr: data.projectAbbr || null,
         projectId, unitId: resolvedUnitId || null, clientId: clientId || null,
-        clientName: resolvedClientName, villaNumber: data.villaNumber,
         issuedAt: data.issuedAt || null,
         description: data.description,
         type: typeKey,
         typeId: data.typeId || typeRecord?.id || null,
         status: data.status || "open", priority,
         assigneeName: data.assigneeName || null,
-        assignedSupervisorId: (assignedSupervisorIds[0] && !assignedSupervisorIds[0].startsWith('pending_')) ? assignedSupervisorIds[0] : null,
         assignedSupervisorIds,
-        assignedSupervisors: data.assignedSupervisors ?? undefined,
         detectedTypes: data.detectedTypes || [],
-        appointmentTime: data.appointmentTime || null,
-        appointmentNotes: data.appointmentNotes || null,
         closureNotes: data.closureNotes || null,
         maintenanceItems: data.maintenanceItems ?? undefined,
         closedAt: data.closedAt ? new Date(data.closedAt) : null,
-        isDirectAppointment: data.isDirectAppointment ?? false,
+      },
+      include: {
+        unit:       { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+        client:     { select: { id: true, name: true, phone: true } },
+        project:    { select: { id: true, abbreviation: true } },
+        contractor: { select: { name: true } },
       },
     });
 
@@ -527,8 +546,9 @@ router.post("/", requireAuth, async (req, res) => {
     // بناءً على طلب المستخدم: تم إيقاف إرسال رسالة الترحيب التلقائية عند إنشاء التذكرة
     // if (senderUid) autoSendOpening(senderUid, ticket).catch(() => {});
 
-    getIO().emit("ticket:created", ticket);
-    res.status(201).json(ticket);
+    const [enrichedTicket] = await enrichTickets([ticket]);
+    getIO().emit("ticket:created", enrichedTicket);
+    res.status(201).json(enrichedTicket);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -545,12 +565,9 @@ router.post("/bulk", requireAuth, async (req, res) => {
 
     const now = Date.now();
     const normalized = tickets.map((t, index) => {
-      let assignedSupervisorIds = Array.isArray(t.assignedSupervisorIds)
+      const assignedSupervisorIds = Array.isArray(t.assignedSupervisorIds)
         ? t.assignedSupervisorIds.filter((id: string) => id && !id.startsWith('pending_'))
         : [];
-      let assignedSupervisorId = t.assignedSupervisorId && !t.assignedSupervisorId.startsWith('pending_')
-        ? t.assignedSupervisorId
-        : (assignedSupervisorIds[0] || null);
 
       let priority = 3;
       if (t.priority !== undefined) {
@@ -561,54 +578,36 @@ router.post("/bulk", requireAuth, async (req, res) => {
       return {
         index,
         ticketId: normalizeTicketId(t.ticketId || String(now + Math.random()).slice(-6)),
-        refNumber: t.refNumber || "", projectAbbr: t.projectAbbr || null,
         projectId: asTrimmedString(t.projectId) || "",
+        unitId: asTrimmedString(t.unitId) || null,
         clientId: asTrimmedString(t.clientId) || "",
-        clientName: t.clientName, villaNumber: t.villaNumber,
+        villaNumber: t.villaNumber || null, // kept only for unitId resolution below
         issuedAt: t.issuedAt || null,
         description: t.description, type: t.type || "general",
         typeId:   (t.typeId   && typeof t.typeId   === 'string' && t.typeId.length > 0) ? t.typeId   : (typeIdMap.get(t.type) || null),
         subTypeId:(t.subTypeId && typeof t.subTypeId === 'string' && t.subTypeId.length > 0) ? t.subTypeId : null,
         status: t.status || "open", priority,
         assigneeName: t.assigneeName || null,
-        assignedSupervisorId: (assignedSupervisorId && !assignedSupervisorId.startsWith('pending_')) ? assignedSupervisorId : null,
         assignedSupervisorIds,
         detectedTypes: t.detectedTypes || [],
-        appointmentTime: t.appointmentTime || null,
-        appointmentNotes: t.appointmentNotes || null,
         closedAt: t.closedAt ? new Date(t.closedAt) : null,
         closureNotes: t.closureNotes || null,
       };
     });
 
-    // ----------------------------------------------------------
-    // Canonical client names
-    // Never trust imported/client-supplied clientName when a
-    // valid clientId exists. Client.name is the source of truth.
-    // ----------------------------------------------------------
-
-    const clientIds = [
-      ...new Set(
-        normalized
-          .map(t => t.clientId)
-          .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
-      )
-    ];
-
-    const clients = clientIds.length
-      ? await prisma.client.findMany({
-          where: { id: { in: clientIds } },
-          select: { id: true, name: true }
-        })
-      : [];
-
-    const clientNameMap = new Map(
-      clients.map(c => [c.id, c.name])
-    );
-
+    // Resolve unitId from villaNumber for tickets that don't have it
+    const unitCache = new Map<string, string | null>();
     for (const t of normalized) {
-      if (t.clientId && clientNameMap.has(t.clientId)) {
-        t.clientName = clientNameMap.get(t.clientId);
+      if (!t.unitId && t.villaNumber && t.projectId) {
+        const cacheKey = `${t.projectId}:${t.villaNumber}`;
+        if (!unitCache.has(cacheKey)) {
+          const unit = await prisma.unit.findUnique({
+            where: { projectId_unitNumber: { projectId: t.projectId, unitNumber: t.villaNumber } },
+            select: { id: true },
+          });
+          unitCache.set(cacheKey, unit?.id || null);
+        }
+        t.unitId = unitCache.get(cacheKey) || null;
       }
     }
 
@@ -633,21 +632,20 @@ router.post("/bulk", requireAuth, async (req, res) => {
     }
 
     if (invalidClientRefs.length > 0) {
-      const sample = invalidClientRefs.slice(0, 5).map(t => t.ticketId || t.refNumber || `row-${t.index+1}`).join(", ");
+      const sample = invalidClientRefs.slice(0, 5).map(t => t.ticketId || `row-${t.index+1}`).join(", ");
       res.status(400).json({ error: `هناك ${invalidClientRefs.length} تذاكر بدون عميل أو لا تنتمي لهذا المشروع (نماذج: ${sample})` });
       return;
     }
 
     const created = await prisma.ticket.createMany({
       data: normalized.map(t => ({
-        ticketId: t.ticketId, refNumber: t.refNumber, projectAbbr: t.projectAbbr,
-        projectId: t.projectId, clientId: t.clientId || null, clientName: t.clientName,
-        villaNumber: t.villaNumber, issuedAt: t.issuedAt, description: t.description,
+        ticketId: t.ticketId,
+        projectId: t.projectId, unitId: t.unitId || null, clientId: t.clientId || null,
+        issuedAt: t.issuedAt, description: t.description,
         type: t.type, typeId: t.typeId, subTypeId: t.subTypeId,
         status: t.status, priority: t.priority,
-        assigneeName: t.assigneeName, assignedSupervisorId: t.assignedSupervisorId,
+        assigneeName: t.assigneeName,
         assignedSupervisorIds: t.assignedSupervisorIds, detectedTypes: t.detectedTypes,
-        appointmentTime: t.appointmentTime, appointmentNotes: t.appointmentNotes,
         closedAt: t.closedAt,
         closureNotes: t.closureNotes,
       })),
@@ -682,61 +680,29 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
     // ── Build base update payload ──────────────────────────────────────────
     const updatePayload: Record<string, any> = {
-      status:               data.status               ?? undefined,
-      priority:             data.priority !== undefined ? Number(data.priority) : undefined,
-      assigneeName:         data.assigneeName         ?? undefined,
-      assignedSupervisorId: data.assignedSupervisorId !== undefined
-        ? (data.assignedSupervisorId && String(data.assignedSupervisorId).trim() ? data.assignedSupervisorId : null)
-        : undefined,
+      status:                data.status               ?? undefined,
+      priority:              data.priority !== undefined ? Number(data.priority) : undefined,
+      assigneeName:          data.assigneeName         ?? undefined,
       assignedSupervisorIds: data.assignedSupervisorIds
         ? (data.assignedSupervisorIds as string[]).filter((id: string) => id && id.trim())
         : undefined,
-      assignedSupervisors:  data.assignedSupervisors  ?? undefined,
-      appointmentTime:      data.appointmentTime      ?? undefined,
-      appointmentNotes:     data.appointmentNotes     ?? undefined,
-      closureNotes:         data.closureNotes         ?? undefined,
-      maintenanceItems:     data.maintenanceItems     ?? undefined,
-      closedAt:             data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
-      description:          data.description          ?? undefined,
-      type:                 data.type                 ?? undefined,
-      detectedTypes:        data.detectedTypes        ?? undefined,
-      clientId:             data.clientId             ?? undefined,
-      clientName:           data.clientName           ?? undefined,
-      villaNumber:          data.villaNumber          ?? undefined,
-      isDirectAppointment:  data.isDirectAppointment  ?? undefined,
-      contractorId:         data.contractorId         ?? undefined,
-      contractorName:       data.contractorName       ?? undefined,
-      contractorNote:       data.contractorNote       ?? undefined,
+      closureNotes:          data.closureNotes         ?? undefined,
+      maintenanceItems:      data.maintenanceItems     ?? undefined,
+      closedAt:              data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
+      description:           data.description          ?? undefined,
+      type:                  data.type                 ?? undefined,
+      detectedTypes:         data.detectedTypes        ?? undefined,
+      clientId:              data.clientId             ?? undefined,
+      unitId:                data.unitId               ?? undefined,
+      contractorId:          data.contractorId         ?? undefined,
+      contractorNote:        data.contractorNote       ?? undefined,
     };
 
-    // ----------------------------------------------------------
-    // Canonical client name
-    // If clientId is supplied, Client.name is authoritative.
-    // ----------------------------------------------------------
-    if (data.clientId !== undefined) {
-      const newClientId = asTrimmedString(data.clientId);
-
-      if (newClientId) {
-        const clientRecord = await prisma.client.findUnique({
-          where: { id: newClientId },
-          select: { id: true, name: true }
-        });
-
-        if (clientRecord) {
-          updatePayload.clientName = clientRecord.name;
-        }
-      } else {
-        updatePayload.clientName = null;
-      }
-    }
-
     // ── Auto-reassign supervisor when classification changes ───────────────
-    // Only when type/detectedTypes are being updated AND no explicit supervisor override
     const typeChanged = data.type !== undefined || data.detectedTypes !== undefined;
-    const supervisorExplicit = data.assignedSupervisorId !== undefined;
+    const supervisorExplicit = data.assignedSupervisorIds !== undefined;
 
     if (typeChanged && !supervisorExplicit) {
-      // Get the ticket's projectId (need the current record)
       const existing = await prisma.ticket.findUnique({
         where: { id: req.params.id },
         select: { projectId: true, type: true },
@@ -755,63 +721,16 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
           const supervisors     = await findSupervisorsDB(existing.projectId, specialties);
 
           if (supervisors.length > 0) {
-            updatePayload.assignedSupervisorId  = supervisors[0].id;
             updatePayload.assignedSupervisorIds = supervisors.map((s) => s.id);
-            updatePayload.assignedSupervisors   = supervisors.map((s) => ({
-              id: s.id, name: s.name, specialty: s.specialties[0] || "general",
-            }));
           }
-        } catch { /* non-fatal — keep old supervisor */ }
-      }
-    }
-
-    // ── Validate / auto-correct appointmentTime against work hours ───────────
-    // Only applies when a specific time component is present ("YYYY-MM-DD HH:mm")
-    if (data.appointmentTime && String(data.appointmentTime).includes(' ')) {
-      const whSetting = await prisma.systemSetting.findUnique({ where: { key: 'work_hours' } });
-      const whAll = whSetting?.value as unknown as import('./settings.js').WorkHoursSettings | null;
-
-      if (whAll) {
-        // Get the ticket's projectId to apply project-specific work hours
-        const existing = await prisma.ticket.findUnique({ where: { id: req.params.id }, select: { projectId: true } });
-        const cfg = (existing?.projectId && whAll.byProject?.[existing.projectId]) || whAll.default;
-
-        if (cfg?.enabled) {
-          const parts = String(data.appointmentTime).split(' ');
-          const datePart = parts[0];
-          const timePart = parts[1];
-          const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timePart);
-
-          if (timeMatch) {
-            const rawMins = parseInt(timeMatch[1], 10) * 60 + parseInt(timeMatch[2], 10);
-            const { toMins, inWorkHours, autoCorrectMins } = await import('./settings.js');
-
-            const correctedMins = autoCorrectMins(rawMins, cfg);
-            if (correctedMins === null) {
-              const periods: Array<{ start: string; end: string }> = [];
-              if (cfg.hasMorning !== false && cfg.morning) periods.push(cfg.morning);
-              if (cfg.hasAfternoon !== false && cfg.afternoon) periods.push(cfg.afternoon);
-              const rangeStr = periods.length > 0
-                ? periods.map(p => `${p.start}–${p.end}`).join(' و ')
-                : 'غير محددة';
-              res.status(400).json({ error: `الموعد خارج أوقات الدوام — المواعيد متاحة: ${rangeStr}` });
-              return;
-            }
-
-            const h = Math.floor(correctedMins / 60);
-            const m = correctedMins % 60;
-            const corrected = `${datePart} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            data.appointmentTime = corrected;
-            updatePayload.appointmentTime = corrected;
-          }
-        }
+        } catch { /* non-fatal */ }
       }
     }
 
     // ── Fetch old values for audit trail ────────────────────────────────────
     const oldTicket = await prisma.ticket.findUnique({
       where: { id: req.params.id },
-      select: { status: true, type: true, assignedSupervisorId: true, appointmentTime: true, priority: true },
+      select: { status: true, type: true, assignedSupervisorIds: true, priority: true },
     });
 
     const ticket = await prisma.ticket.update({
@@ -822,8 +741,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     // ── Log audit entries ────────────────────────────────────────────────────
     if (req.uid && oldTicket) {
       const AUDIT_FIELDS: Record<string, string> = {
-        status: 'الحالة', type: 'التصنيف',
-        assignedSupervisorId: 'المشرف', appointmentTime: 'الموعد', priority: 'الأولوية',
+        status: 'الحالة', type: 'التصنيف', priority: 'الأولوية',
       };
       const auditRows: { ticketId: string; field: string; oldValue: string | null; newValue: string | null; changedBy: string }[] = [];
       for (const [key, label] of Object.entries(AUDIT_FIELDS)) {
@@ -831,6 +749,14 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         const newVal = String((updatePayload as any)[key] ?? (oldTicket as any)[key] ?? '');
         if (updatePayload[key] !== undefined && oldVal !== newVal) {
           auditRows.push({ ticketId: ticket.id, field: label, oldValue: oldVal || null, newValue: newVal || null, changedBy: req.uid });
+        }
+      }
+      // audit supervisor change via array comparison
+      if (updatePayload.assignedSupervisorIds !== undefined) {
+        const oldSups = JSON.stringify(oldTicket.assignedSupervisorIds ?? []);
+        const newSups = JSON.stringify(updatePayload.assignedSupervisorIds);
+        if (oldSups !== newSups) {
+          auditRows.push({ ticketId: ticket.id, field: 'المشرف', oldValue: oldSups, newValue: newSups, changedBy: req.uid });
         }
       }
       if (auditRows.length > 0) {
@@ -845,34 +771,57 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       }).catch(() => {});
     }
 
+    // ── Learn specialty from manual supervisor correction ─────────────────────
+    const supervisorsChanged =
+      data.assignedSupervisorIds !== undefined &&
+      JSON.stringify((oldTicket as any)?.assignedSupervisorIds ?? []) !==
+      JSON.stringify(data.assignedSupervisorIds);
+
+    if (supervisorsChanged && ticket.type && ticket.type !== 'unclassified') {
+      import('../classifier/db-helpers.js').then(m => {
+        m.learnSpecialtyFromCorrections(ticket.type!).catch(() => {});
+      }).catch(() => {});
+    }
+
     const closingStatuses = ['closed', 'completed'];
     if (data.status && closingStatuses.includes(data.status) && req.uid) {
       // autoSendClosing(req.uid, ticket).catch(() => {});
     }
 
     // ── إشعار المشرفين الآخرين عند تحديد موعد ──────────────────────────────
-    const apptChanged = data.appointmentTime !== undefined &&
-      data.appointmentTime !== (oldTicket as any)?.appointmentTime;
+    const apptChanged = data.appointmentId !== undefined &&
+      data.appointmentId !== (oldTicket as any)?.appointmentId;
 
-    if (apptChanged && data.appointmentTime && ticket.assignedSupervisorIds?.length) {
+    if (apptChanged && data.appointmentId && ticket.assignedSupervisorIds?.length) {
       const senderUid = req.uid!;
       const io = getIO();
 
-      // جلب اسم المشرف المُرسِل
-      const sender = await prisma.user.findUnique({
-        where: { uid: senderUid },
-        select: { displayName: true },
-      }).catch(() => null);
+      const [sender, appt, ticketWithUnit] = await Promise.all([
+        prisma.user.findUnique({ where: { uid: senderUid }, select: { displayName: true } }).catch(() => null),
+        prisma.appointment.findUnique({ where: { id: data.appointmentId }, select: { date: true, time: true } }).catch(() => null),
+        prisma.ticket.findUnique({
+          where: { id: ticket.id },
+          include: {
+            unit:    { select: { unitNumber: true } },
+            client:  { select: { name: true } },
+            project: { select: { abbreviation: true } },
+          }
+        }).catch(() => null),
+      ]);
 
-      // إرسال إشعار Socket.io لكل مشرف في التذكرة (بما فيهم المُرسِل — لعرضه في واجهته)
+      const appointmentTime = appt ? `${appt.date}${appt.time ? ' ' + appt.time : ''}` : null;
+      const unitNumber = ticketWithUnit?.unit?.unitNumber || '';
+      const projAbbr   = ticketWithUnit?.project?.abbreviation || '';
+
       for (const supId of ticket.assignedSupervisorIds) {
         io.emit(`notification:supervisor:${supId}`, {
           type: 'appointment_set',
           ticketId: ticket.id,
           ticketRef: ticket.ticketId,
-          clientName: ticket.clientName,
-          villaNumber: ticket.villaNumber,
-          appointmentTime: data.appointmentTime,
+          clientName: ticketWithUnit?.client?.name || '',
+          villaNumber: unitNumber,
+          refNumber: projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber,
+          appointmentTime,
           setBy: sender?.displayName || 'مشرف',
           setByUid: senderUid,
           isShared: ticket.assignedSupervisorIds.length > 1,
@@ -880,7 +829,17 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       }
     }
 
-    res.json(ticket);
+    const ticketWithRel = await prisma.ticket.findUnique({
+      where: { id: ticket.id },
+      include: {
+        unit:       { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+        client:     { select: { id: true, name: true, phone: true } },
+        project:    { select: { id: true, abbreviation: true } },
+        contractor: { select: { name: true } },
+      },
+    });
+    const [enrichedResult] = await enrichTickets([ticketWithRel!]);
+    res.json(enrichedResult);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -966,7 +925,7 @@ router.post("/auto-link", requireAuth, async (req, res) => {
 
     const unlinkedTickets = await prisma.ticket.findMany({
       where,
-      select: { id: true, villaNumber: true, projectId: true, clientName: true }
+      select: { id: true, projectId: true }
     });
 
     if (unlinkedTickets.length === 0) {
@@ -979,30 +938,12 @@ router.post("/auto-link", requireAuth, async (req, res) => {
       include: { clients: { include: { client: true } } }
     });
 
-    const unitMap = new Map();
-    for (const u of units) {
-      const key = `${u.projectId}:${(u.unitNumber || "").trim()}`;
-      unitMap.set(key, u);
-    }
-
+    // Can't auto-link without villaNumber — log and skip
     let linkedCount = 0;
     for (const ticket of unlinkedTickets) {
-      const villa = (ticket.villaNumber || "").trim();
-      const key = `${ticket.projectId}:${villa}`;
-      const matchedUnit = unitMap.get(key);
-
-      if (matchedUnit) {
-        const primaryClient = matchedUnit.clients.find((c: any) => c.isPrimary)?.client || matchedUnit.clients[0]?.client;
-        await prisma.ticket.update({
-          where: { id: ticket.id },
-          data: {
-            unitId: matchedUnit.id,
-            clientId: primaryClient ? primaryClient.id : null,
-            clientName: primaryClient ? primaryClient.name : ticket.clientName,
-          }
-        });
-        linkedCount++;
-      }
+      // Tickets without unitId but we have no villaNumber text anymore;
+      // linkage must happen via unitId directly (this endpoint is now a no-op for orphan tickets)
+      void ticket; void units;
     }
 
     res.json({ count: linkedCount, message: `تم ربط ${linkedCount} تذاكر بنجاح.` });

@@ -53,19 +53,18 @@ router.post("/bulk", requireAuth, async (req, res) => {
     for (const pid of projectIds) {
       supervisorCache[pid] = await prisma.user.findMany({
         where: { role: "supervisor", projects: { some: { id: pid } } },
-        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
       });
       if (supervisorCache[pid].length === 0) {
         supervisorCache[pid] = await prisma.user.findMany({
           where: { role: "supervisor" },
-          select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+          select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
         });
       }
     }
 
     const getSpecs = (u: any): string[] => {
       if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-      if (u.specialty) return [u.specialty];
       return ["general"];
     };
 
@@ -327,9 +326,7 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
                   await prisma.ticket.update({
                     where: { id: ticket.id },
                     data: {
-                      assignedSupervisorId:  supervisors[0].id,
                       assignedSupervisorIds: supervisors.map(s => s.id),
-                      assignedSupervisors:   supervisors.map(s => ({ id: s.id, name: s.name, specialty: s.specialties[0] || "general" })),
                     },
                   });
                 }
@@ -432,11 +429,11 @@ router.post("/import", requireAuth, async (req, res) => {
 
     const projectSups = await prisma.user.findMany({
       where: { role: "supervisor", projects: { some: { id: projectId } } },
-      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
     });
     const allSups = projectSups.length > 0 ? projectSups : await prisma.user.findMany({
       where: { role: "supervisor" },
-      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
     });
 
     const keywords = await loadKeywordsFromDB();
@@ -444,7 +441,6 @@ router.post("/import", requireAuth, async (req, res) => {
 
     const getSpecs = (u: any): string[] => {
       if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-      if (u.specialty) return [u.specialty];
       return ["general"];
     };
 
@@ -474,19 +470,14 @@ router.post("/import", requireAuth, async (req, res) => {
 
       ticketsToCreate.push({
         ticketId: raw.ticketId || String(Date.now() + i).slice(-6),
-        refNumber: raw.refNumber || "", projectAbbr: null,
         projectId, clientId: matchedClientId || null,
         unitId: clientByVilla[villaNumber]?.unitId || null,
-        clientName: clientByVilla[villaNumber]?.name || raw.clientName || "",
-        villaNumber, issuedAt: raw.issuedAt || null,
+        issuedAt: raw.issuedAt || null,
         description, type, status: "open",
         priority: isNaN(priorityNum) ? 3 : priorityNum,
         assigneeName: primarySup?.displayName || null,
-        assignedSupervisorId: primarySup?.uid || null,
         assignedSupervisorIds: supervisorIds,
-        assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
         detectedTypes: classification.allTypes,
-        appointmentTime: null, appointmentNotes: null,
       });
     }
 

@@ -517,7 +517,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const [existingRows, unitRows, ticketTypes, keywordsCache, typeToSpecialty, projectSups] = await Promise.all([
       prisma.ticket.findMany({
         where: { projectId },
-        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentAwaitingReply: true, appointmentNotes: true, clientId: true, unitId: true, villaNumber: true, description: true },
+        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, clientId: true, unitId: true, description: true },
       }),
       prisma.unit.findMany({
         where: { projectId },
@@ -528,18 +528,17 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       buildTypeToSpecialtyMap(),
       prisma.user.findMany({
         where: { role: "supervisor", projects: { some: { id: projectId } } },
-        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
       })
     ]);
 
     const allSups = projectSups.length > 0 ? projectSups : await prisma.user.findMany({
       where: { role: "supervisor" },
-      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
     });
 
     const getSpecs = (u: any): string[] => {
       if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-      if (u.specialty) return [u.specialty];
       return ["general"];
     };
 
@@ -549,29 +548,14 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       return [normalizeVillaNumber(String(u.unitNumber)), { unitId: u.id, clientId: primaryClient?.id || null, name: primaryClient?.name || "" }];
     }));
 
-    // ── Build appointments map to inherit for new tickets ──────────────────
-    // القاعدة: الموعد ينتقل للتذاكر الجديدة فقط لو كان في المستقبل (غداً فصاعداً)
-    // الموعد اليوم أو قبله يخص التذاكر القديمة ولا ينتقل
-    // الملاحظات (appointmentNotes) لا تنتقل لأن رسالة الواتساب ما بُعتتش للتذكرة الجديدة
-    const activeAppointmentsByVilla = new Map<string, any>();
-    const activeAppointmentsByClient = new Map<string, any>();
+    // ── Build waiting-status map to inherit for new tickets ───────────────
+    const waitingByUnit = new Map<string, boolean>();
+    const waitingByClient = new Map<string, boolean>();
 
     for (const t of existingRows) {
-      if (!t.appointmentTime && t.status !== "waiting") continue;
-      if (t.status === "closed" || t.status === "out_of_scope") continue;
-
-      const inheritedData = {
-        appointmentTime: t.appointmentTime || null,
-        appointmentAwaitingReply: t.appointmentAwaitingReply || false,
-        status: t.status === "waiting" ? "waiting" : null
-      };
-
-      if (t.villaNumber) {
-        activeAppointmentsByVilla.set(normalizeVillaNumber(String(t.villaNumber)), inheritedData);
-      }
-      if (t.clientId) {
-        activeAppointmentsByClient.set(t.clientId, inheritedData);
-      }
+      if (t.status !== "waiting") continue;
+      if (t.unitId) waitingByUnit.set(t.unitId, true);
+      if (t.clientId) waitingByClient.set(t.clientId, true);
     }
 
     const rows = allData;
@@ -582,18 +566,16 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     // ── 5. Process rows ───────────────────────────────────────────────────────
     const toCreate: any[] = [];
-    const toUpdate: { 
-      id: string; 
-      status: string; 
-      closedAt: string | null; 
+    const toUpdate: {
+      id: string;
+      status: string;
+      closedAt: string | null;
       description?: string;
-      type?: string; 
-      typeId?: string; 
+      type?: string;
+      typeId?: string;
       detectedTypes?: string[];
       assigneeName?: string | null;
-      assignedSupervisorId?: string | null;
       assignedSupervisorIds?: string[];
-      assignedSupervisors?: any[];
     }[] = [];
     let skippedInFile = 0;  // مكرر داخل الملف
     let skippedInDB  = 0;   // موجود في DB ولم يتغير
@@ -635,7 +617,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
         const rawVilla = String(get("villaNumber") || "").trim();
         const cleanVilla = normalizeVillaNumber(rawVilla);
-        const refNumber = cleanVilla ? `${projectAbbr}-${cleanVilla}` : "";
 
         const rawStatus = get("status");
         const status = normalizeStatus(rawStatus);
@@ -668,7 +649,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const unitData = clientMap.get(cleanVilla);
         const clientId = unitData?.clientId || null;
         const unitId = unitData?.unitId || null;
-        const clientName = unitData?.name || "";
 
         // ── Assign Supervisors based on Final Types ──────────────────────────
         const requiredSpecialties = [...new Set(finalTypes.map((t: string) => typeToSpecialty[t] || "general"))];
@@ -698,9 +678,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
               upd.typeId = finalTypeId;
               upd.detectedTypes = finalTypes;
               upd.assigneeName = primarySup?.displayName || null;
-              upd.assignedSupervisorId = primarySup?.uid || null;
               upd.assignedSupervisorIds = supervisorIds;
-              upd.assignedSupervisors = supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] }));
             }
             toUpdate.push(upd);
           } else {
@@ -709,91 +687,35 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           continue;
         }
 
-        // ورث المواعيد وحالة الانتظار للتذاكر الجديدة (بدون الملاحظات)
-        const inheritedData: any =
-          (cleanVilla && activeAppointmentsByVilla.get(cleanVilla)) ||
-          (clientId && activeAppointmentsByClient.get(clientId)) ||
-          null;
+        // Inherit waiting status for new tickets matching same unit/client
+        const inheritWaiting =
+          (unitId && waitingByUnit.get(unitId)) ||
+          (clientId && waitingByClient.get(clientId)) ||
+          false;
 
         toCreate.push({
           ticketId,
-          refNumber,
-          projectAbbr,
           projectId,
           unitId,
           clientId,
-          clientName,
-          villaNumber: cleanVilla || rawVilla,
           issuedAt,
           description,
           type: finalType,
           typeId: finalTypeId,
           subTypeId: finalSubTypeId,
-          status,
+          status: inheritWaiting ? "waiting" : status,
           priority: 3,
           assigneeName: primarySup?.displayName || null,
-          assignedSupervisorId: primarySup?.uid || null,
           assignedSupervisorIds: supervisorIds,
-          assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
           detectedTypes: finalTypes,
-          appointmentTime: inheritedData ? inheritedData.appointmentTime : null,
-          appointmentNotes: null, // لا نورث الملاحظات
-          appointmentAwaitingReply: inheritedData ? inheritedData.appointmentAwaitingReply : false,
           closedAt: closedAt ? new Date(closedAt) : null,
         });
-
-        // Override status if it was waiting
-        if (inheritedData && inheritedData.status === "waiting") {
-          toCreate[toCreate.length - 1].status = "waiting";
-        }
       } catch (err: any) {
         errors.push(String(err.message));
       }
     }
 
     sendProgress(0.4);
-
-    // ── 5.5 Second-pass: inherit strictly-future appointments only ──────────
-    // يعالج حالات عدم تطابق رقم الفيلا في المرور الأول
-    // القاعدة: موعد اليوم أو قبله لا ينتقل — يخص التذاكر القديمة فقط
-    // الملاحظات لا تنتقل — رسالة الواتساب لم تُرسل للتذكرة الجديدة
-    {
-      const villaApptMap2 = new Map<string, any>();
-      const clientApptMap2 = new Map<string, any>();
-
-      for (const t of existingRows) {
-        if (!t.appointmentTime && t.status !== "waiting") continue;
-        if (t.status === "closed" || t.status === "out_of_scope") continue;
-
-        const inheritedData = {
-          appointmentTime: t.appointmentTime || null,
-          appointmentAwaitingReply: t.appointmentAwaitingReply || false,
-          status: t.status === "waiting" ? "waiting" : null
-        };
-
-        const vKey = t.villaNumber ? normalizeVillaNumber(String(t.villaNumber)) : "";
-        if (vKey) villaApptMap2.set(vKey, inheritedData);
-        if (t.clientId) clientApptMap2.set(t.clientId, inheritedData);
-      }
-
-      for (const ticket of toCreate) {
-        if (ticket.appointmentTime || ticket.status === "closed") continue;
-
-        const vKey = ticket.villaNumber ? normalizeVillaNumber(String(ticket.villaNumber)) : "";
-        const inheritedData =
-          (vKey && villaApptMap2.get(vKey)) ||
-          (ticket.clientId && clientApptMap2.get(ticket.clientId)) ||
-          null;
-
-        if (inheritedData) {
-          ticket.appointmentTime = inheritedData.appointmentTime;
-          ticket.appointmentAwaitingReply = inheritedData.appointmentAwaitingReply;
-          if (inheritedData.status === "waiting") ticket.status = "waiting";
-          ticket.appointmentNotes = null; // لا نورث الملاحظات
-        }
-      }
-    }
-
 
     // ── 6. Bulk create in batches ──────────────────────────────────────────────
     const BATCH = 200;
@@ -824,14 +746,12 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
               ...(u.status ? { status: u.status as any, closedAt: u.closedAt ? new Date(u.closedAt) : null } : {}),
               ...(u.description ? { description: u.description } : {}),
               ...(u.type && u.type !== "unclassified"
-                ? { 
-                    type: u.type, 
-                    typeId: u.typeId || null, 
+                ? {
+                    type: u.type,
+                    typeId: u.typeId || null,
                     detectedTypes: u.detectedTypes ?? [u.type],
                     assigneeName: u.assigneeName,
-                    assignedSupervisorId: u.assignedSupervisorId,
                     assignedSupervisorIds: u.assignedSupervisorIds,
-                    assignedSupervisors: u.assignedSupervisors,
                   }
                 : {}),
             },

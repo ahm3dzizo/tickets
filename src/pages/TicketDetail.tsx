@@ -39,7 +39,6 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
@@ -166,14 +165,9 @@ export default function TicketDetail() {
   const [supervisorsLoading, setSupervisorsLoading] = useState(false);
 
   // ── Approval state ──
-  const [sendingApproval, setSendingApproval] = useState(false);
 
   // ── Appointment dialog state ──
   const [apptOpen, setApptOpen] = useState(false);
-  const [apptDate, setApptDate] = useState('');
-  const [apptTime, setApptTime] = useState('');
-  const [apptNotes, setApptNotes] = useState('');
-  const [apptSaving, setApptSaving] = useState(false);
   const [waSent, setWaSent] = useState(false);
   const [waSending, setWaSending] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
@@ -324,60 +318,6 @@ export default function TicketDetail() {
     }
   };
 
-  const handleSaveAppointment = async () => {
-    if (!ticket) return;
-    setApptSaving(true);
-    try {
-      const appointmentTimeStr = apptDate ? `${apptDate}${apptTime ? ' ' + apptTime : ''}` : '';
-      const supervisorIds = (ticket.assignedSupervisorIds as string[]) || [];
-      const supervisorsList = ticket.assignedSupervisors || [];
-
-      if ((ticket as any).appointmentId) {
-        await appointmentsApi.update((ticket as any).appointmentId, {
-          date: apptDate,
-          time: apptTime || undefined,
-          notes: apptNotes || undefined,
-          supervisorIds,
-          supervisors: supervisorsList,
-        });
-      } else {
-        await appointmentsApi.create({
-          projectId: ticket.projectId,
-          villaNumber: ticket.villaNumber,
-          clientId: ticket.clientId || undefined,
-          clientName: ticket.clientName,
-          date: apptDate,
-          time: apptTime || undefined,
-          notes: apptNotes || undefined,
-          supervisorIds,
-          supervisors: supervisorsList,
-          types: [ticket.type as string].filter(Boolean),
-          ticketIds: [ticket.id],
-        });
-      }
-
-      // إرسال رسالة الموعد عبر واتساب تلقائياً
-      const phone = client?.phone?.replace(/\D/g, '') || '';
-      if (phone && appointmentTimeStr) {
-        const apptMsg = `السلام عليكم ${client?.name || ''}\n\nتم تحديد موعد زيارة فريق الصيانة لوحدتكم رقم ${ticket.villaNumber}.\n\nرقم التذكرة: #${ticket.ticketId}\nموعد الزيارة: ${appointmentTimeStr}\n${apptNotes ? `ملاحظات: ${apptNotes}\n` : ''}\nيرجى التواجد في الموعد المحدد.\nشكراً لتعاونكم.`;
-        try {
-          const r = await whatsappApi.send(phone, apptMsg);
-          toast.success(r?.sent ? 'تم تأكيد الموعد وإشعار العميل عبر واتساب' : 'تم حفظ الموعد');
-        } catch {
-          toast.success('تم حفظ الموعد');
-        }
-      } else {
-        toast.success('تم حفظ الموعد');
-      }
-
-      setApptOpen(false);
-      navigate(-1);
-    } catch {
-      toast.error('فشل حفظ الموعد');
-    } finally {
-      setApptSaving(false);
-    }
-  };
 
   const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -411,24 +351,6 @@ export default function TicketDetail() {
       toast.error('Ø®Ø·Ø£ ÙÙŠ Ø§Ù„Ø§ØªØµØ§Ù„');
     } finally {
       setWaSending(false);
-    }
-  };
-
-  const handleSendApproval = async () => {
-    if (!ticket) return;
-    setSendingApproval(true);
-    try {
-      const result = await whatsappApi.sendApprovalRequest(ticket.id);
-      if (result.sent) {
-        toast.success('تم إرسال طلب الموافقة للعميل عبر واتساب');
-        loadData();
-      } else {
-        toast.error('تعذر الإرسال. تحقق من اتصال الواتساب.');
-      }
-    } catch {
-      toast.error('فشل إرسال طلب الموافقة.');
-    } finally {
-      setSendingApproval(false);
     }
   };
 
@@ -756,14 +678,6 @@ export default function TicketDetail() {
                 <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest text-right">إجراءات سريعة</CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-2">
-                {ticket.appointmentAwaitingReply && ticket.status === 'waiting' && (
-                  <div className="w-full flex items-center justify-between p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 mb-3">
-                    <div className="flex items-center gap-2 text-orange-400">
-                      <Clock className="w-4 h-4 animate-pulse" />
-                      <span className="text-xs font-bold">بانتظار رد العميل لتأكيد الموعد</span>
-                    </div>
-                  </div>
-                )}
                 {waSent ? (
                   /* ── بعد إرسال الرسالة: اختفاء كل الأزرار ── */
                   <div className="w-full flex flex-col items-center justify-center gap-2 py-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
@@ -794,35 +708,6 @@ export default function TicketDetail() {
                       {waSending ? 'جارٍ الإرسال...' : 'إرسال تحديث للعميل'}
                     </Button>
 
-                    {/* زر طلب الموافقة على الإغلاق */}
-                    {(ticket.status === 'closed' || ticket.status === 'completed') && client?.phone && (
-                      <div className="space-y-2">
-                        <Button
-                          variant="outline"
-                          disabled={sendingApproval || (ticket as any).approvalState === 'rated'}
-                          className="w-full justify-start border-border bg-white/5 text-purple-400 hover:bg-purple-500/10 text-xs h-12 rounded-2xl font-bold disabled:opacity-50"
-                          onClick={handleSendApproval}
-                        >
-                          <CheckCircle2 className="w-4 h-4 me-2" />
-                          {sendingApproval ? 'جاري الإرسال...' : 'طلب موافقة العميل'}
-                        </Button>
-                        {(ticket as any).approvalState && (
-                          <div className={cn(
-                            'text-[10px] font-bold px-3 py-1.5 rounded-xl text-center',
-                            (ticket as any).approvalState === 'rated'     ? 'bg-emerald-500/10 text-emerald-400' :
-                            (ticket as any).approvalState === 'approved'  ? 'bg-blue-500/10 text-blue-400'      :
-                            (ticket as any).approvalState === 'rejected'  ? 'bg-red-500/10 text-red-400'        :
-                            'bg-amber-500/10 text-amber-400'
-                          )}>
-                            {(ticket as any).approvalState === 'sent'           && 'في انتظار رد العميل'}
-                            {(ticket as any).approvalState === 'awaiting_rating' && 'وافق — في انتظار التقييم'}
-                            {(ticket as any).approvalState === 'approved'        && 'وافق العميل'}
-                            {(ticket as any).approvalState === 'rejected'        && 'رفض العميل'}
-                            {(ticket as any).approvalState === 'rated'           && `التقييم: ${(ticket as any).clientRating}/5`}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </>
                 )}
               </CardContent>
@@ -973,7 +858,6 @@ export default function TicketDetail() {
             clientId: ticket.clientId,
             appointmentId: (ticket as any).appointmentId,
             appointmentTime: ticket.appointmentTime,
-            appointmentNotes: ticket.appointmentNotes,
             type: ticket.type as string,
             detectedTypes: ticket.detectedTypes,
             assignedSupervisorIds: ticket.assignedSupervisorIds as string[] | undefined,

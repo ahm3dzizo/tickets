@@ -67,9 +67,10 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
       select: {
         id: true, type: true, typeId: true, subTypeId: true,
         status: true, priority: true, projectId: true,
-        clientId: true, clientName: true, villaNumber: true,
-        assignedSupervisorId: true,
+        clientId: true, assignedSupervisorIds: true,
         issuedAt: true, createdAt: true, closedAt: true,
+        unit:   { select: { unitNumber: true } },
+        client: { select: { name: true } },
       },
     });
 
@@ -227,27 +228,28 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     // ── 12. Supervisor Performance ────────────────────────────────────────────
     const supMap: Record<string,{open:number;closed:number;days:number[];}> = {};
     for (const t of filtered) {
-      if (!t.assignedSupervisorId) continue;
-      if (!supMap[t.assignedSupervisorId]) supMap[t.assignedSupervisorId] = { open:0, closed:0, days:[] };
+      const primarySupId = (t as any).assignedSupervisorIds?.[0];
+      if (!primarySupId) continue;
+      if (!supMap[primarySupId]) supMap[primarySupId] = { open:0, closed:0, days:[] };
       if (isClosedLike(t.status)) {
-        supMap[t.assignedSupervisorId].closed++;
+        supMap[primarySupId].closed++;
         if (t.closedAt) {
           const days = (t.closedAt.getTime() - parseIssued(t.issuedAt, t.createdAt).getTime()) / 86_400_000;
-          if (days >= 0 && days < 3650) supMap[t.assignedSupervisorId].days.push(days);
+          if (days >= 0 && days < 3650) supMap[primarySupId].days.push(days);
         }
       } else {
-        supMap[t.assignedSupervisorId].open++;
+        supMap[primarySupId].open++;
       }
     }
     const supIds = Object.keys(supMap);
     const supUsers = supIds.length
-      ? await prisma.user.findMany({ where:{ uid:{ in:supIds } }, select:{ uid:true, displayName:true, specialty:true } })
+      ? await prisma.user.findMany({ where:{ uid:{ in:supIds } }, select:{ uid:true, displayName:true, specialtiesRef:{ select:{ key:true } } } })
       : [];
     const supMeta = Object.fromEntries(supUsers.map(u => [u.uid, u]));
     const bySupervisor = supIds.map(uid => {
       const v = supMap[uid];
       return {
-        uid, name: supMeta[uid]?.displayName ?? uid, specialty: supMeta[uid]?.specialty ?? '',
+        uid, name: supMeta[uid]?.displayName ?? uid, specialty: supMeta[uid]?.specialtiesRef?.[0]?.key ?? '',
         open: v.open, closed: v.closed, total: v.open + v.closed,
         avgDays: v.days.length ? Math.round(v.days.reduce((a,b)=>a+b,0)/v.days.length*10)/10 : null,
       };
@@ -257,7 +259,8 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     const clientMap: Record<string,{name:string;villa:string;open:number;closed:number}> = {};
     for (const t of filtered) {
       if (!t.clientId) continue;
-      if (!clientMap[t.clientId]) clientMap[t.clientId] = { name:t.clientName, villa:t.villaNumber, open:0, closed:0 };
+      const tAny = t as any;
+      if (!clientMap[t.clientId]) clientMap[t.clientId] = { name: tAny.client?.name || '', villa: tAny.unit?.unitNumber || '', open:0, closed:0 };
       isClosedLike(t.status) ? clientMap[t.clientId].closed++ : clientMap[t.clientId].open++;
     }
     const topClients = Object.entries(clientMap)

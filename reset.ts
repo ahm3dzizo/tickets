@@ -1,1 +1,0 @@
-import prisma from './server/db.ts'; async function run() { const res = await prisma.ticket.updateMany({ where: { status: { notIn: ['closed', 'out_of_scope'] } }, data: { geminiClassifiedAt: null } }); console.log('Reset ' + res.count + ' tickets'); } run();

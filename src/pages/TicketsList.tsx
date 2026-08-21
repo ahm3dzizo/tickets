@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
-import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, MoreHorizontal, ShieldAlert, Download } from 'lucide-react';
+import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, ShieldAlert, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -511,7 +511,6 @@ export default function TicketsList() {
               clientId: t.clientId,
               appointmentId: (t as any).appointmentId,
               appointmentTime: t.appointmentTime,
-              appointmentNotes: t.appointmentNotes,
               type: t.type as string,
               detectedTypes: t.detectedTypes,
               assignedSupervisorIds: t.assignedSupervisorIds as string[] | undefined,
