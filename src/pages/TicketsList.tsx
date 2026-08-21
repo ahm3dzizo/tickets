@@ -511,7 +511,6 @@ export default function TicketsList() {
               clientId: t.clientId,
               appointmentId: (t as any).appointmentId,
               appointmentTime: t.appointmentTime,
-              appointmentNotes: t.appointmentNotes,
               type: t.type as string,
               detectedTypes: t.detectedTypes,
               assignedSupervisorIds: t.assignedSupervisorIds as string[] | undefined,

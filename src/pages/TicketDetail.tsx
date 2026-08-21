@@ -917,7 +917,6 @@ export default function TicketDetail() {
             clientId: ticket.clientId,
             appointmentId: (ticket as any).appointmentId,
             appointmentTime: ticket.appointmentTime,
-            appointmentNotes: ticket.appointmentNotes,
             type: ticket.type as string,
             detectedTypes: ticket.detectedTypes,
             assignedSupervisorIds: ticket.assignedSupervisorIds as string[] | undefined,

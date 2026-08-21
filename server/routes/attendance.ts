@@ -1022,27 +1022,6 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
       ]
     });
 
-    console.log('========== TECH APPOINTMENTS DEBUG ==========');
-    console.log('TECHNICIAN:', {
-      id: technician.id,
-      name: technician.name,
-      supervisorId: technician.supervisorId,
-      projectId: technician.projectId
-    });
-    console.log('APPOINTMENTS COUNT:', appointments.length);
-    console.log('APPOINTMENTS:', appointments.map((a: any) => ({
-      id: a.id,
-      date: a.date,
-      time: a.time,
-      projectId: a.projectId,
-      technicianId: a.technicianId,
-      technicianIds: a.technicianIds,
-      supervisorIds: a.supervisorIds,
-      status: a.status,
-      ticketsCount: Array.isArray(a.tickets) ? a.tickets.length : 0
-    })));
-    console.log('=============================================');
-
     const enrichedAppointments = appointments.map((appointment: any) => {
       const isAssignedToMe =
         appointment.technicianId === technician.id ||

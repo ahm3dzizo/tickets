@@ -541,7 +541,7 @@ export default function Appointments() {
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
           {sorted.map((g, i) => {
             const tA = (g.appointmentTime || '').split(' ')[1] || '---';
-            const note = g.notes || g.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || tr.noAdditionalNotes;
+            const note = g.notes || tr.noAdditionalNotes;
             const imageUrls: string[] = withImages
               ? g.tickets.flatMap((t: any) => (t.description || '').match(/(https?:\/\/[^\s]+)/g) || [])
               : [];

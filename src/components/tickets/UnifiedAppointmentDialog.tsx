@@ -24,7 +24,6 @@ interface TicketLike {
   clientId?: string;
   appointmentId?: string | null;
   appointmentTime?: string;
-  appointmentNotes?: string;
   type?: string;
   detectedTypes?: string[];
   assignedSupervisorIds?: string[];
@@ -405,11 +404,7 @@ export function UnifiedAppointmentDialog({
       const [d, t] = (editGroup.appointmentTime || '').split(' ');
       setDate(d || todayStr());
       if (t) { setCustomTime(t); setTimeMode('custom'); } else setTimeMode('morning');
-      setNotes(
-        editGroup.notes ||
-        (editGroup.tickets ?? []).find((tk: any) => tk.appointmentNotes)?.appointmentNotes ||
-        ''
-      );
+      setNotes(editGroup.notes || '');
       const typesSet: Set<string> = editGroup.types instanceof Set
         ? editGroup.types
         : new Set<string>(editGroup.types || []);
