@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { AuthRequest, requireAuth } from '../auth.js';
-import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, sendWAText, pairWACode, sendApprovalRequest, buildAppointmentRangeMsg } from '../baileys.js';
+import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, sendWAText, pairWACode, buildAppointmentRangeMsg } from '../baileys.js';
 import qrcode from 'qrcode';
 import prisma from '../db.js';
 
@@ -135,64 +135,6 @@ router.post('/restart', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// ─── POST /api/whatsapp/approval/:ticketId ───────────────────────────────────
-router.post('/approval/:ticketId', requireAuth, async (req: AuthRequest, res) => {
-  const uid = req.uid!;
-  const { ticketId } = req.params;
-
-  if (getWAStatus(uid) !== 'CONNECTED') {
-    res.status(503).json({ error: 'واتساب غير متصل. يرجى توصيل حسابك أولاً.' });
-    return;
-  }
-
-  try {
-    const ticket = await (prisma as any).ticket.findUnique({
-      where: { id: ticketId },
-      include: { client: true },
-    });
-
-    if (!ticket) {
-      res.status(404).json({ error: 'التذكرة غير موجودة' });
-      return;
-    }
-
-    const clientPhone = ticket.client?.phone;
-    if (!clientPhone) {
-      res.status(400).json({ error: 'لا يوجد رقم هاتف مسجل للعميل' });
-      return;
-    }
-
-    const result = await sendApprovalRequest(
-      uid,
-      clientPhone,
-      ticketId,
-      ticket.clientName,
-      ticket.villaNumber,
-      ticket.closureNotes,
-    );
-
-    if (result.sent) {
-      await (prisma as any).ticket.update({
-        where: { id: ticketId },
-        data: {
-          approvalState: 'sent',
-          approvalSentAt: new Date(),
-          approvalUserId: uid,
-        },
-      });
-      res.json(result);
-    } else {
-      const errMsg = result.error === 'NOT_ON_WHATSAPP' 
-        ? 'لا يمكن إرسال طلب الموافقة، رقم العميل غير مسجل في الواتساب.' 
-        : (result.error === 'NOT_CONNECTED' ? 'واتساب غير متصل.' : 'فشل إرسال الرسالة.');
-      res.status(400).json({ error: errMsg });
-    }
-  } catch (err: any) {
-    console.error('[WA] /approval error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ─── POST /api/whatsapp/preview-appointment-range ────────────────────────────
 router.post('/preview-appointment-range/:ticketId', requireAuth, async (req: AuthRequest, res) => {
   const { ticketId } = req.params;
@@ -286,7 +228,6 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
         await prisma.ticket.update({
           where: { id: t.id },
           data: {
-            appointmentAwaitingReply: true,
             isDirectAppointment: false,
             ...(t.status !== 'closed' ? { status: 'waiting' } : {}),
             appointmentTime: null,

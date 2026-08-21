@@ -626,7 +626,6 @@ export function UnifiedAppointmentDialog({
             ticketsApi.update(t.id, {
               appointmentTime: apptTime,
               appointmentNotes: notes,
-              appointmentAwaitingReply: false,
               isDirectAppointment: true,
               assignedSupervisorIds: selectedSupIds,
               assignedSupervisors,

@@ -5,7 +5,7 @@ import path from "path";
 import { __dirname } from "../config.js";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth } from "../auth.js";
-import { sendWAImage, sendApprovalRequest } from "../baileys.js";
+import { sendWAImage } from "../baileys.js";
 
 const router = Router();
 

@@ -233,8 +233,6 @@ export const whatsappApi = {
     post<{ success: boolean; message: string }>('/whatsapp/start', {}),
   restart: () =>
     post<{ success: boolean; message: string }>('/whatsapp/restart', {}),
-  sendApprovalRequest: (ticketId: string) =>
-    post<{ sent: boolean; fallback: boolean }>(`/whatsapp/approval/${ticketId}`, {}),
   sendAppointmentRange: (ticketId: string, data: {
     startDate: string; endDate: string; preferredTime: string;
     notes?: string; phone: string; clientName: string; villaNumber: string;

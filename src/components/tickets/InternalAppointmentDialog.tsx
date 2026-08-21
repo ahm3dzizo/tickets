@@ -292,7 +292,6 @@ export function InternalAppointmentDialog({
           type: selectedTypes[0],
           detectedTypes: selectedTypes,
           status: 'pending',
-          appointmentAwaitingReply: false,
           priority: 3,
           appointmentTime,
           isDirectAppointment: true,

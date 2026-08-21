@@ -94,7 +94,6 @@ export interface Ticket {
   subTypeName?: string | null;
   appointmentTime?: string;
   appointmentNotes?: string;
-  appointmentAwaitingReply?: boolean;
   createdAt: any;
   closedAt?: any;
   closureNotes?: string;

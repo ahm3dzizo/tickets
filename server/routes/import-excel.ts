@@ -517,7 +517,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const [existingRows, unitRows, ticketTypes, keywordsCache, typeToSpecialty, projectSups] = await Promise.all([
       prisma.ticket.findMany({
         where: { projectId },
-        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentAwaitingReply: true, appointmentNotes: true, clientId: true, unitId: true, villaNumber: true, description: true },
+        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, appointmentTime: true, appointmentNotes: true, clientId: true, unitId: true, villaNumber: true, description: true },
       }),
       prisma.unit.findMany({
         where: { projectId },
@@ -562,7 +562,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
       const inheritedData = {
         appointmentTime: t.appointmentTime || null,
-        appointmentAwaitingReply: t.appointmentAwaitingReply || false,
         status: t.status === "waiting" ? "waiting" : null
       };
 
@@ -738,7 +737,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           detectedTypes: finalTypes,
           appointmentTime: inheritedData ? inheritedData.appointmentTime : null,
           appointmentNotes: null, // لا نورث الملاحظات
-          appointmentAwaitingReply: inheritedData ? inheritedData.appointmentAwaitingReply : false,
           closedAt: closedAt ? new Date(closedAt) : null,
         });
 
@@ -767,7 +765,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
         const inheritedData = {
           appointmentTime: t.appointmentTime || null,
-          appointmentAwaitingReply: t.appointmentAwaitingReply || false,
           status: t.status === "waiting" ? "waiting" : null
         };
 
@@ -787,7 +784,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
         if (inheritedData) {
           ticket.appointmentTime = inheritedData.appointmentTime;
-          ticket.appointmentAwaitingReply = inheritedData.appointmentAwaitingReply;
           if (inheritedData.status === "waiting") ticket.status = "waiting";
           ticket.appointmentNotes = null; // لا نورث الملاحظات
         }
