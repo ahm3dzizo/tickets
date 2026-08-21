@@ -279,7 +279,6 @@ export function InternalAppointmentDialog({
         }
       } else {
         // Create new ticket first, then create appointment
-        const appointmentTime = `${effectiveDate} ${time}`;
         const nextId = await ticketsApi.getNextId(projectId);
         const ticketPayload: any = {
           ticketId: nextId,
@@ -293,11 +292,8 @@ export function InternalAppointmentDialog({
           detectedTypes: selectedTypes,
           status: 'pending',
           priority: 3,
-          appointmentTime,
-          isDirectAppointment: true,
           createdAt: new Date().toISOString(),
         };
-        if (notes) ticketPayload.appointmentNotes = notes;
         if (selectedSupIds.length > 0) {
           ticketPayload.assignedSupervisorIds = selectedSupIds;
           ticketPayload.assignedSupervisorId = selectedSupIds[0];

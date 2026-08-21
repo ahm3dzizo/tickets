@@ -1002,8 +1002,6 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
             type: true,
             detectedTypes: true,
             priority: true,
-            appointmentTime: true,
-            appointmentNotes: true,
 
             techSessions: {
               where: {

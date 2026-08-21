@@ -472,15 +472,18 @@ async function cmdTicketDetails(ticketId: string, user: BotUser): Promise<string
   const projectIds = scopedProjectIds(user);
   const ticket = await prisma.ticket.findFirst({
     where: { ticketId, ...projectWhere(projectIds), ...supervisorWhere(user) },
+    include: { appointment: { select: { date: true, time: true } } },
   });
   if (!ticket) return `❌ مفيش تذكرة رقم ${ticketId} في نطاق صلاحياتك.`;
+  const appt = (ticket as any).appointment;
+  const appointmentTime = appt ? `${appt.date}${appt.time ? ' ' + appt.time : ''}` : null;
   return [
     `🎫 تذكرة #${ticket.ticketId}`,
     `الفيلا: ${ticket.villaNumber} — ${ticket.clientName}`,
     `الحالة: ${statusLabel(ticket.status)}`,
     `الوصف: ${ticket.description}`,
     ticket.assigneeName ? `المسؤول: ${ticket.assigneeName}` : null,
-    ticket.appointmentTime ? `الموعد: ${ticket.appointmentTime}` : null,
+    appointmentTime ? `الموعد: ${appointmentTime}` : null,
   ].filter(Boolean).join('\n');
 }
 

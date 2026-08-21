@@ -64,7 +64,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
 
     const activeTickets = await prisma.ticket.findMany({
       where: { ...ticketsWhere, status: { in: ["open", "in_progress", "pending", "waiting"] } },
-      select: { id: true, ticketId: true, clientName: true, villaNumber: true, type: true, status: true, createdAt: true, assignedSupervisors: true, issuedAt: true, appointmentTime: true },
+      select: { id: true, ticketId: true, clientName: true, villaNumber: true, type: true, status: true, createdAt: true, assignedSupervisors: true, issuedAt: true },
     });
 
     let overdueCount = 0;

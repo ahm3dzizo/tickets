@@ -284,16 +284,26 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     include: {
       ticketSubType: { select: { id: true, nameAr: true } },
       client:        { select: { phone: true } },
+      appointment:   { select: { id: true, date: true, time: true, notes: true } },
     },
   });
   const enriched = await enrichSupervisorNames(tickets);
-  res.json(enriched.map(t => ({
-    ...t,
-    subTypeName:  (t as any).ticketSubType?.nameAr ?? null,
-    clientPhone:  (t as any).client?.phone         ?? null,
-    client:       undefined,
-    ticketSubType: undefined,
-  })));
+  const now = new Date();
+  res.json(enriched.map(t => {
+    const appt = (t as any).appointment;
+    const apptTime = appt ? [appt.date, appt.time].filter(Boolean).join(' ') : null;
+    const apptInFuture = apptTime ? new Date(apptTime.replace(' ', 'T') || apptTime) > now : false;
+    return {
+      ...t,
+      appointmentTime:  apptInFuture ? apptTime : null,
+      appointmentNotes: appt?.notes ?? null,
+      appointment:      appt ? { id: appt.id, date: appt.date, time: appt.time ?? null } : null,
+      subTypeName:      (t as any).ticketSubType?.nameAr ?? null,
+      clientPhone:      (t as any).client?.phone         ?? null,
+      client:           undefined,
+      ticketSubType:    undefined,
+    };
+  }));
 });
 
 // GET /api/tickets/ticketids — للكشف عن المكررات في الاستيراد (خفيف)
@@ -507,12 +517,9 @@ router.post("/", requireAuth, async (req, res) => {
         assignedSupervisorIds,
         assignedSupervisors: data.assignedSupervisors ?? undefined,
         detectedTypes: data.detectedTypes || [],
-        appointmentTime: data.appointmentTime || null,
-        appointmentNotes: data.appointmentNotes || null,
         closureNotes: data.closureNotes || null,
         maintenanceItems: data.maintenanceItems ?? undefined,
         closedAt: data.closedAt ? new Date(data.closedAt) : null,
-        isDirectAppointment: data.isDirectAppointment ?? false,
       },
     });
 
@@ -574,8 +581,6 @@ router.post("/bulk", requireAuth, async (req, res) => {
         assignedSupervisorId: (assignedSupervisorId && !assignedSupervisorId.startsWith('pending_')) ? assignedSupervisorId : null,
         assignedSupervisorIds,
         detectedTypes: t.detectedTypes || [],
-        appointmentTime: t.appointmentTime || null,
-        appointmentNotes: t.appointmentNotes || null,
         closedAt: t.closedAt ? new Date(t.closedAt) : null,
         closureNotes: t.closureNotes || null,
       };
@@ -647,7 +652,6 @@ router.post("/bulk", requireAuth, async (req, res) => {
         status: t.status, priority: t.priority,
         assigneeName: t.assigneeName, assignedSupervisorId: t.assignedSupervisorId,
         assignedSupervisorIds: t.assignedSupervisorIds, detectedTypes: t.detectedTypes,
-        appointmentTime: t.appointmentTime, appointmentNotes: t.appointmentNotes,
         closedAt: t.closedAt,
         closureNotes: t.closureNotes,
       })),
@@ -692,8 +696,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         ? (data.assignedSupervisorIds as string[]).filter((id: string) => id && id.trim())
         : undefined,
       assignedSupervisors:  data.assignedSupervisors  ?? undefined,
-      appointmentTime:      data.appointmentTime      ?? undefined,
-      appointmentNotes:     data.appointmentNotes     ?? undefined,
       closureNotes:         data.closureNotes         ?? undefined,
       maintenanceItems:     data.maintenanceItems     ?? undefined,
       closedAt:             data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
@@ -703,7 +705,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       clientId:             data.clientId             ?? undefined,
       clientName:           data.clientName           ?? undefined,
       villaNumber:          data.villaNumber          ?? undefined,
-      isDirectAppointment:  data.isDirectAppointment  ?? undefined,
       contractorId:         data.contractorId         ?? undefined,
       contractorName:       data.contractorName       ?? undefined,
       contractorNote:       data.contractorNote       ?? undefined,
@@ -765,53 +766,10 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       }
     }
 
-    // ── Validate / auto-correct appointmentTime against work hours ───────────
-    // Only applies when a specific time component is present ("YYYY-MM-DD HH:mm")
-    if (data.appointmentTime && String(data.appointmentTime).includes(' ')) {
-      const whSetting = await prisma.systemSetting.findUnique({ where: { key: 'work_hours' } });
-      const whAll = whSetting?.value as unknown as import('./settings.js').WorkHoursSettings | null;
-
-      if (whAll) {
-        // Get the ticket's projectId to apply project-specific work hours
-        const existing = await prisma.ticket.findUnique({ where: { id: req.params.id }, select: { projectId: true } });
-        const cfg = (existing?.projectId && whAll.byProject?.[existing.projectId]) || whAll.default;
-
-        if (cfg?.enabled) {
-          const parts = String(data.appointmentTime).split(' ');
-          const datePart = parts[0];
-          const timePart = parts[1];
-          const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timePart);
-
-          if (timeMatch) {
-            const rawMins = parseInt(timeMatch[1], 10) * 60 + parseInt(timeMatch[2], 10);
-            const { toMins, inWorkHours, autoCorrectMins } = await import('./settings.js');
-
-            const correctedMins = autoCorrectMins(rawMins, cfg);
-            if (correctedMins === null) {
-              const periods: Array<{ start: string; end: string }> = [];
-              if (cfg.hasMorning !== false && cfg.morning) periods.push(cfg.morning);
-              if (cfg.hasAfternoon !== false && cfg.afternoon) periods.push(cfg.afternoon);
-              const rangeStr = periods.length > 0
-                ? periods.map(p => `${p.start}–${p.end}`).join(' و ')
-                : 'غير محددة';
-              res.status(400).json({ error: `الموعد خارج أوقات الدوام — المواعيد متاحة: ${rangeStr}` });
-              return;
-            }
-
-            const h = Math.floor(correctedMins / 60);
-            const m = correctedMins % 60;
-            const corrected = `${datePart} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            data.appointmentTime = corrected;
-            updatePayload.appointmentTime = corrected;
-          }
-        }
-      }
-    }
-
     // ── Fetch old values for audit trail ────────────────────────────────────
     const oldTicket = await prisma.ticket.findUnique({
       where: { id: req.params.id },
-      select: { status: true, type: true, assignedSupervisorId: true, appointmentTime: true, priority: true },
+      select: { status: true, type: true, assignedSupervisorId: true, priority: true },
     });
 
     const ticket = await prisma.ticket.update({
@@ -823,7 +781,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     if (req.uid && oldTicket) {
       const AUDIT_FIELDS: Record<string, string> = {
         status: 'الحالة', type: 'التصنيف',
-        assignedSupervisorId: 'المشرف', appointmentTime: 'الموعد', priority: 'الأولوية',
+        assignedSupervisorId: 'المشرف', priority: 'الأولوية',
       };
       const auditRows: { ticketId: string; field: string; oldValue: string | null; newValue: string | null; changedBy: string }[] = [];
       for (const [key, label] of Object.entries(AUDIT_FIELDS)) {
@@ -851,18 +809,20 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     }
 
     // ── إشعار المشرفين الآخرين عند تحديد موعد ──────────────────────────────
-    const apptChanged = data.appointmentTime !== undefined &&
-      data.appointmentTime !== (oldTicket as any)?.appointmentTime;
+    const apptChanged = data.appointmentId !== undefined &&
+      data.appointmentId !== (oldTicket as any)?.appointmentId;
 
-    if (apptChanged && data.appointmentTime && ticket.assignedSupervisorIds?.length) {
+    if (apptChanged && data.appointmentId && ticket.assignedSupervisorIds?.length) {
       const senderUid = req.uid!;
       const io = getIO();
 
-      // جلب اسم المشرف المُرسِل
-      const sender = await prisma.user.findUnique({
-        where: { uid: senderUid },
-        select: { displayName: true },
-      }).catch(() => null);
+      // جلب اسم المشرف المُرسِل والموعد
+      const [sender, appt] = await Promise.all([
+        prisma.user.findUnique({ where: { uid: senderUid }, select: { displayName: true } }).catch(() => null),
+        prisma.appointment.findUnique({ where: { id: data.appointmentId }, select: { date: true, time: true } }).catch(() => null),
+      ]);
+
+      const appointmentTime = appt ? `${appt.date}${appt.time ? ' ' + appt.time : ''}` : null;
 
       // إرسال إشعار Socket.io لكل مشرف في التذكرة (بما فيهم المُرسِل — لعرضه في واجهته)
       for (const supId of ticket.assignedSupervisorIds) {
@@ -872,7 +832,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
           ticketRef: ticket.ticketId,
           clientName: ticket.clientName,
           villaNumber: ticket.villaNumber,
-          appointmentTime: data.appointmentTime,
+          appointmentTime,
           setBy: sender?.displayName || 'مشرف',
           setByUid: senderUid,
           isShared: ticket.assignedSupervisorIds.length > 1,

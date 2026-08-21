@@ -23,7 +23,7 @@ import dashboardRoutes from "./routes/dashboard.js";
 import whatsappRoutes from "./routes/whatsapp.js";
 import whatsappBotRoutes from "./routes/whatsapp-bot.js";
 import settingsRoutes from "./routes/settings.js";
-import appointmentRoutes, { migrateAppointments } from "./routes/appointments.js";
+import appointmentRoutes from "./routes/appointments.js";
 import ocrRoutes from "./routes/ocr.js";
 import importExcelRoutes from "./routes/import-excel.js";
 import contractorRoutes from "./routes/contractors.js";
@@ -188,11 +188,6 @@ async function startServer() {
 
   // Ensure critical sub-types exist (e.g. روائح كريهة under drainage)
   seedSubTypes().catch((e) => console.error('⚠️  Sub-type seed failed:', e.message));
-
-  // Migrate existing appointmentTime fields to Appointment table (one-time, idempotent)
-  migrateAppointments()
-    .then((n) => { if (n > 0) console.log(`✅ Migrated ${n} appointment groups to Appointment table`); })
-    .catch((e) => console.error('⚠️  Appointment migration failed:', e.message));
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);

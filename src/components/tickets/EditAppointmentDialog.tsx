@@ -115,12 +115,8 @@ export function EditAppointmentDialog({ open, onOpenChange, group, supervisors =
         });
       } else {
         // Fallback: legacy direct ticket update (for old appointments without appointmentId)
-        const newAppointmentTime = `${date} ${time}`;
         const promises = (group?.tickets || []).map((t: any) =>
           ticketsApi.update(t.id, {
-            appointmentTime: newAppointmentTime,
-            appointmentNotes: notes,
-            isDirectAppointment: true,
             assignedSupervisorId: selectedSupIds.length > 0 ? selectedSupIds[0] : null,
             assignedSupervisorIds: selectedSupIds,
             assignedSupervisors,

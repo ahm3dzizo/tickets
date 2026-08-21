@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ticketsApi, clientsApi, projectsApi } from '@/lib/api';
-import { toast } from 'sonner';
-import { Loader2, Save, FileImage, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
+import { Loader2, FileImage, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
@@ -14,7 +11,6 @@ interface ClientTicketsModalProps {
   onOpenChange: (open: boolean) => void;
   villaNumber: string;
   projectId: string;
-  initialNotes?: string;
   onSuccess?: () => void;
 }
 
@@ -40,13 +36,10 @@ export function ClientTicketsModal({
   onOpenChange,
   villaNumber,
   projectId,
-  initialNotes = '',
   onSuccess,
 }: ClientTicketsModalProps) {
-  const [loading, setLoading]   = useState(false);
   const [tickets, setTickets]   = useState<any[]>([]);
   const [fetching, setFetching] = useState(false);
-  const [notes, setNotes]       = useState(initialNotes);
   const [ticketToClose, setTicketToClose] = useState<any | null>(null);
 
   const [clients, setClients] = useState<any[]>([]);
@@ -72,33 +65,15 @@ export function ClientTicketsModal({
         resProjects.forEach((p: any) => { projMap[p.id] = p; });
         setProjects(projMap);
 
-        if (!initialNotes && tks.length > 0 && tks[0].appointmentNotes) {
-          setNotes(tks[0].appointmentNotes);
-        }
       })
       .catch(() => {})
       .finally(() => setFetching(false));
   };
 
   useEffect(() => {
-    setNotes(initialNotes || '');
     fetchTickets();
   }, [open, villaNumber, projectId]);
 
-  const handleSaveNotes = async () => {
-    if (tickets.length === 0) return;
-    setLoading(true);
-    try {
-      await Promise.all(tickets.map(t => ticketsApi.update(t.id, { appointmentNotes: notes })));
-      toast.success('تم حفظ الملاحظات بنجاح');
-      onSuccess?.();
-      onOpenChange(false);
-    } catch {
-      toast.error('فشل حفظ الملاحظات');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -188,32 +163,8 @@ export function ClientTicketsModal({
             </div>
           )}
 
-          {/* Notes */}
-          <div className="space-y-2 pt-1 border-t border-border/50">
-            <Label className="text-xs font-bold text-muted-foreground tracking-wide block">
-              ملاحظات الموعد
-            </Label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="أضف ملاحظات فنية لهذا الموعد..."
-              rows={3}
-              className="w-full bg-background border border-border/60 rounded-xl px-3.5 py-2.5 text-sm text-foreground resize-none text-right placeholder:text-muted-foreground focus:outline-none focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/10 transition-all"
-            />
-          </div>
         </div>
 
-        {/* Footer */}
-        <DialogFooter className="px-5 py-4 border-t border-border/60 bg-muted/30">
-          <Button
-            onClick={handleSaveNotes}
-            disabled={loading || fetching || tickets.length === 0}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 font-bold gap-2"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            حفظ الملاحظات
-          </Button>
-        </DialogFooter>
       </DialogContent>
 
       {ticketToClose && (

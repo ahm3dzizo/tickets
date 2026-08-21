@@ -107,7 +107,7 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
             { ticketId: rawId },
           ],
         },
-        select: { id: true, status: true, appointmentTime: true },
+        select: { id: true, status: true },
       });
 
       if (existing) {

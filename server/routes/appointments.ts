@@ -154,8 +154,6 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
             ticketId: true,
             clientName: true,
             villaNumber: true,
-            appointmentTime: true,
-            appointmentNotes: true,
             status: true,
             type: true,
             projectId: true,
@@ -169,7 +167,7 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
     // Return as flat ticket list for backward compat with existing callers
     const tickets = appts.flatMap((a) =>
       a.tickets.length > 0
-        ? a.tickets
+        ? a.tickets.map((t) => ({ ...t, appointmentTime: `${a.date} ${a.time || ""}`.trim(), appointmentNotes: a.notes }))
         : [
             {
               id: a.id,
@@ -263,8 +261,6 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
             assignedSupervisorIds: true,
             assignedSupervisors: true,
             priority: true,
-            appointmentTime: true,
-            appointmentNotes: true,
             client: { select: { phone: true } },
           },
         },
@@ -344,16 +340,6 @@ router.delete("/push-unsubscribe", requireAuth, async (req: AuthRequest, res) =>
       where: { key: `pushSubs_${req.uid}` },
     });
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ─── POST /api/appointments/migrate ──────────────────────────────────────────
-router.post("/migrate", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
-  try {
-    const migrated = await migrateAppointments();
-    res.json({ ok: true, created: migrated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -471,8 +457,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 
     // Sync linked tickets
     if (ticketIds && ticketIds.length > 0) {
-      const appointmentTime = `${date} ${finalTime || ""}`.trim();
-
       // Fetch tickets to conditionally update status
       const tickets = await prisma.ticket.findMany({
         where: { id: { in: ticketIds } },
@@ -485,9 +469,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
             where: { id: t.id },
             data: {
               appointmentId: appointment.id,
-              appointmentTime,
-              appointmentNotes: notes || null,
-              isDirectAppointment: true,
               ...(t.status !== "closed" ? { status: "pending" } : {}),
             },
           })
@@ -567,15 +548,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       }
     });
 
-    // Sync all linked tickets
-    const appointmentTime = `${date} ${finalTime || ""}`.trim();
-    await prisma.ticket.updateMany({
-      where: { appointmentId: id },
-      data: {
-        appointmentTime,
-        appointmentNotes: notes || null,
-      },
-    });
+    // No ticket field sync needed — appointment data is derived from the Appointment record
 
     getIO()?.emit("appointment:updated", appointment);
     res.json(appointment);
@@ -630,9 +603,6 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     const appointmentClear = {
       appointmentId: null as null,
-      appointmentTime: null as null,
-      appointmentNotes: null as null,
-      isDirectAppointment: false,
       assignedSupervisorId: null as null,
       assignedSupervisorIds: [] as string[],
       assignedSupervisors: [] as any[],
@@ -658,81 +628,5 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-export async function migrateAppointments(): Promise<number> {
-  // Find tickets with appointmentTime but no appointmentId
-  const tickets = await prisma.ticket.findMany({
-    where: {
-      appointmentTime: { not: null },
-      appointmentId: null,
-    },
-    select: {
-      id: true,
-      projectId: true,
-      villaNumber: true,
-      clientId: true,
-      clientName: true,
-      appointmentTime: true,
-      appointmentNotes: true,
-      assignedSupervisorIds: true,
-      assignedSupervisors: true,
-      type: true,
-      detectedTypes: true,
-      client: { select: { phone: true } },
-    },
-  });
-
-  if (tickets.length === 0) return 0;
-
-  // Group by (projectId, villaNumber, date)
-  const groups = new Map<string, typeof tickets>();
-  for (const t of tickets) {
-    const date = (t.appointmentTime || "").split(" ")[0];
-    const key = `${t.projectId}|${t.villaNumber}|${date}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(t);
-  }
-
-  let created = 0;
-  for (const [, group] of groups) {
-    const first = group[0];
-    const apptTime = first.appointmentTime || "";
-    const [date, time] = apptTime.split(" ");
-
-    const types = new Set<string>();
-    for (const t of group) {
-      if (t.type) types.add(t.type);
-      if (t.detectedTypes) t.detectedTypes.forEach((dt) => types.add(dt));
-    }
-
-    const supIds: string[] = first.assignedSupervisorIds || [];
-
-    const appointment = await prisma.appointment.create({
-      data: {
-        projectId: first.projectId,
-        villaNumber: first.villaNumber,
-        clientId: first.clientId || null,
-        clientName: first.clientName,
-        clientPhone: first.client?.phone || null,
-        date,
-        time: time || null,
-        notes: first.appointmentNotes || null,
-        supervisorIds: supIds,
-        supervisors: (first.assignedSupervisors as any) || [],
-        types: Array.from(types),
-      },
-    });
-
-    // Link tickets
-    await prisma.ticket.updateMany({
-      where: { id: { in: group.map((t) => t.id) } },
-      data: { appointmentId: appointment.id },
-    });
-
-    created++;
-  }
-
-  return created;
-}
 
 export default router;

@@ -213,10 +213,8 @@ export function DirectAppointmentDialog({
           detectedTypes: selectedTypes,
           status: 'pending',
           priority: 3,
-          isDirectAppointment: true,
           createdAt: new Date().toISOString(),
         };
-        if (notes) ticketPayload.appointmentNotes = notes;
         if (selectedSupIds.length > 0) {
           ticketPayload.assignedSupervisorIds = selectedSupIds;
           ticketPayload.assignedSupervisorId = selectedSupIds[0];

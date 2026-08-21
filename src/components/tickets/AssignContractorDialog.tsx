@@ -151,7 +151,6 @@ export function AssignContractorDialog({
           ...t,
           contractorNote: noteText.trim(),
           assigneeName: 'ملاحظة',
-          appointmentNotes: noteText.trim(),
           status: 'note' as any,
         })));
         setShowAppointment(true);

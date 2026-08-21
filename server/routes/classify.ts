@@ -486,7 +486,6 @@ router.post("/import", requireAuth, async (req, res) => {
         assignedSupervisorIds: supervisorIds,
         assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
         detectedTypes: classification.allTypes,
-        appointmentTime: null, appointmentNotes: null,
       });
     }
 

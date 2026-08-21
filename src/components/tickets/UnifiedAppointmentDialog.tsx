@@ -621,12 +621,8 @@ export function UnifiedAppointmentDialog({
             clientPhone: resolvedClientPhone,
           });
         } else {
-          const apptTime = `${date} ${saveTime || '08:00'}`;
           await Promise.all((editGroup.tickets ?? []).map((t: any) =>
             ticketsApi.update(t.id, {
-              appointmentTime: apptTime,
-              appointmentNotes: notes,
-              isDirectAppointment: true,
               assignedSupervisorIds: selectedSupIds,
               assignedSupervisors,
               status: t.status === 'waiting' ? 'pending' : t.status,

@@ -92,8 +92,9 @@ export interface Ticket {
   detectedTypes?: string[];
   subTypeId?: string | null;
   subTypeName?: string | null;
-  appointmentTime?: string;
-  appointmentNotes?: string;
+  appointmentTime?: string | null;
+  appointmentNotes?: string | null;
+  appointment?: { id: string; date: string; time?: string | null } | null;
   createdAt: any;
   closedAt?: any;
   closureNotes?: string;

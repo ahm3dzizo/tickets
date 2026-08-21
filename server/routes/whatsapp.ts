@@ -199,7 +199,7 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     const ticketIds = ticketId.split(',');
     const tickets = await prisma.ticket.findMany({
       where: { id: { in: ticketIds } },
-      select: { id: true, ticketId: true, clientName: true, villaNumber: true, isDirectAppointment: true, status: true },
+      select: { id: true, ticketId: true, clientName: true, villaNumber: true, status: true },
     });
     if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
 
@@ -228,10 +228,7 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
         await prisma.ticket.update({
           where: { id: t.id },
           data: {
-            isDirectAppointment: false,
             ...(t.status !== 'closed' ? { status: 'waiting' } : {}),
-            appointmentTime: null,
-            appointmentNotes: notes || null
           }
         });
         try {
