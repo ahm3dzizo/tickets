@@ -352,27 +352,25 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
       if (substitute) {
         const activeTickets = await prisma.ticket.findMany({
           where: {
-            assignedSupervisorId: uid,
+            assignedSupervisorIds: { has: uid },
             status: { in: ['open', 'in_progress', 'pending', 'waiting'] }
-          }
+          },
+          select: { id: true, assignedSupervisorIds: true },
         });
 
         if (activeTickets.length > 0) {
-          const substituteInfo = [{
-            id: substitute.uid,
-            name: substitute.displayName,
-            specialty: substitute.specialtiesRef[0]?.key || substitute.specialty || 'general'
-          }];
-
-          await prisma.ticket.updateMany({
-            where: { id: { in: activeTickets.map(t => t.id) } },
-            data: {
-              assignedSupervisorId: substitute.uid,
-              assignedSupervisorIds: [substitute.uid],
-              assigneeName: substitute.displayName,
-              assignedSupervisors: substituteInfo as any
-            }
-          });
+          await Promise.all(activeTickets.map(t => {
+            const newIds = t.assignedSupervisorIds.includes(substitute.uid)
+              ? t.assignedSupervisorIds
+              : [substitute.uid, ...t.assignedSupervisorIds.filter((id: string) => id !== uid)];
+            return prisma.ticket.update({
+              where: { id: t.id },
+              data: {
+                assignedSupervisorIds: newIds,
+                assigneeName: substitute.displayName,
+              },
+            });
+          }));
         }
       }
     }

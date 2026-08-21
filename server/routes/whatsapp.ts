@@ -144,7 +144,7 @@ router.post('/preview-appointment-range/:ticketId', requireAuth, async (req: Aut
     const ticketIds = ticketId.split(',');
     const tickets = await prisma.ticket.findMany({
       where: { id: { in: ticketIds } },
-      select: { ticketId: true, clientName: true, villaNumber: true },
+      select: { ticketId: true, unit: { select: { unitNumber: true } }, client: { select: { name: true } } },
     });
     if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
 
@@ -156,9 +156,9 @@ router.post('/preview-appointment-range/:ticketId', requireAuth, async (req: Aut
     });
 
     const msg = await buildAppointmentRangeMsg({
-      clientName: clientName || firstTicket.clientName,
+      clientName: clientName || firstTicket.client?.name || '',
       ticketId: combinedTicketIds,
-      villaNumber: villaNumber || firstTicket.villaNumber,
+      villaNumber: villaNumber || firstTicket.unit?.unitNumber || '',
       startDate: fmtDate(startDate),
       endDate: fmtDate(endDate),
       preferredTime,
@@ -199,7 +199,7 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     const ticketIds = ticketId.split(',');
     const tickets = await prisma.ticket.findMany({
       where: { id: { in: ticketIds } },
-      select: { id: true, ticketId: true, clientName: true, villaNumber: true, status: true },
+      select: { id: true, ticketId: true, status: true, unit: { select: { unitNumber: true } }, client: { select: { name: true } } },
     });
     if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
 
@@ -212,9 +212,9 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     });
 
     const msg = await buildAppointmentRangeMsg({
-      clientName: clientName || firstTicket.clientName,
+      clientName: clientName || (firstTicket as any).client?.name || '',
       ticketId: combinedTicketIds,
-      villaNumber: villaNumber || firstTicket.villaNumber,
+      villaNumber: villaNumber || (firstTicket as any).unit?.unitNumber || '',
       startDate: fmtDate(startDate),
       endDate: fmtDate(endDate),
       preferredTime,

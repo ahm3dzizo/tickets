@@ -35,7 +35,6 @@ model User {
   updatedAt          DateTime  @updatedAt
 
   supervisedTechnicians Technician[] @relation("SupervisorTechnicians")
-  assignedTickets       Ticket[]     @relation("TicketAssignedSupervisor")
   projects              Project[]    @relation("ProjectUsers")
   specialtiesRef        Specialty[]  @relation("UserSpecialties")
   substitute            User?        @relation("UserSubstitute", fields: [substituteUid], references: [uid])
@@ -98,6 +97,7 @@ model Unit {
   block                 Block?                 @relation(fields: [blockId], references: [id], onDelete: SetNull)
   clients               ClientUnit[] // عميل واحد أو أكثر (مشاركة)
   tickets               Ticket[]
+  appointments          Appointment[]
   contractorAssignments ContractorAssignment[]
 
   @@unique([projectId, unitNumber])
@@ -136,52 +136,44 @@ model ClientUnit {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Ticket {
-  id                       String       @id @default(cuid())
-  ticketId                 String       @unique
-  refNumber                String
-  projectAbbr              String?
-  projectId                String
-  unitId                   String? // FK → Unit (الوحدة الحقيقية)
-  clientId                 String? // FK → Client
-  clientName               String // مخزون للسرعة (denormalized)
-  villaNumber              String // مخزون للسرعة + التوافق مع الاستيراد
-  issuedAt                 String?
-  description              String
-  type                     String
-  typeId                   String?
-  subTypeId                String?
-  status                   TicketStatus @default(open)
-  priority                 Int          @default(4)
-  assigneeName             String?
-  assignedSupervisorId     String?
-  assignedSupervisorIds    String[]     @default([])
-  assignedSupervisors      Json?
-  detectedTypes            String[]     @default([])
-  detectedSubTypeIds       String[]     @default([])
-  closureNotes             String?
-  maintenanceItems         Json?
-  contractorId             String?
-  contractorName           String?
-  contractorNote           String?
-  createdAt                DateTime     @default(now())
-  closedAt                 DateTime?
-  createdBy                String?
-  geminiClassifiedAt       DateTime?
+  id                    String       @id @default(cuid())
+  ticketId              String       @unique
+  projectId             String
+  unitId                String? // FK → Unit
+  clientId              String? // FK → Client
+  issuedAt              String?
+  description           String
+  type                  String
+  typeId                String?
+  subTypeId             String?
+  status                TicketStatus @default(open)
+  priority              Int          @default(4)
+  assigneeName          String?
+  assignedSupervisorIds String[]     @default([])
+  detectedTypes         String[]     @default([])
+  detectedSubTypeIds    String[]     @default([])
+  closureNotes          String?
+  maintenanceItems      Json?
+  contractorId          String?
+  contractorName        String?
+  contractorNote        String?
+  createdAt             DateTime     @default(now())
+  closedAt              DateTime?
+  createdBy             String?
+  geminiClassifiedAt    DateTime?
+  appointmentId         String?
 
-  appointmentId String?
-
-  project            Project        @relation(fields: [projectId], references: [id])
-  unit               Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  client             Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  assignedSupervisor User?          @relation("TicketAssignedSupervisor", fields: [assignedSupervisorId], references: [uid])
-  ticketType         TicketType?    @relation(fields: [typeId], references: [id])
-  ticketSubType      TicketSubType? @relation(fields: [subTypeId], references: [id])
-  audits             TicketAudit[]
-  appointment        Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-  techSessions       TicketTimeSession[]
+  project       Project        @relation(fields: [projectId], references: [id])
+  unit          Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  client        Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  ticketType    TicketType?    @relation(fields: [typeId], references: [id])
+  ticketSubType TicketSubType? @relation(fields: [subTypeId], references: [id])
+  audits        TicketAudit[]
+  appointment   Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  techSessions  TicketTimeSession[]
 
   @@index([projectId, status])
-  @@index([projectId, villaNumber])
+  @@index([projectId, unitId])
   @@index([unitId])
   @@index([clientId])
 }
@@ -386,15 +378,13 @@ model BotCommandLog {
 model Appointment {
   id            String   @id @default(cuid())
   projectId     String
-  villaNumber   String
+  unitId        String? // FK → Unit
   clientId      String?
-  clientName    String
   clientPhone   String?
   date          String   // "2026-07-15"
   time          String?  // "09:00"
   notes         String?
   supervisorIds String[] @default([])
-  supervisors   Json?
   technicianIds String[] @default([])
   technicians   Json?
   technicianId  String?
@@ -404,11 +394,13 @@ model Appointment {
   updatedAt     DateTime @updatedAt
 
   project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit       Unit?       @relation(fields: [unitId], references: [id], onDelete: SetNull)
   client     Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
   technician Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
   tickets    Ticket[]
 
   @@index([projectId, date])
+  @@index([projectId, unitId])
   @@index([date])
 }
 

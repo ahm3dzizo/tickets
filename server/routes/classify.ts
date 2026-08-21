@@ -327,9 +327,7 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
                   await prisma.ticket.update({
                     where: { id: ticket.id },
                     data: {
-                      assignedSupervisorId:  supervisors[0].id,
                       assignedSupervisorIds: supervisors.map(s => s.id),
-                      assignedSupervisors:   supervisors.map(s => ({ id: s.id, name: s.name, specialty: s.specialties[0] || "general" })),
                     },
                   });
                 }
@@ -474,17 +472,13 @@ router.post("/import", requireAuth, async (req, res) => {
 
       ticketsToCreate.push({
         ticketId: raw.ticketId || String(Date.now() + i).slice(-6),
-        refNumber: raw.refNumber || "", projectAbbr: null,
         projectId, clientId: matchedClientId || null,
         unitId: clientByVilla[villaNumber]?.unitId || null,
-        clientName: clientByVilla[villaNumber]?.name || raw.clientName || "",
-        villaNumber, issuedAt: raw.issuedAt || null,
+        issuedAt: raw.issuedAt || null,
         description, type, status: "open",
         priority: isNaN(priorityNum) ? 3 : priorityNum,
         assigneeName: primarySup?.displayName || null,
-        assignedSupervisorId: primarySup?.uid || null,
         assignedSupervisorIds: supervisorIds,
-        assignedSupervisors: supervisorList.map((s: any) => ({ id: s.uid, name: s.displayName, specialty: getSpecs(s)[0] })),
         detectedTypes: classification.allTypes,
       });
     }

@@ -6,6 +6,23 @@ import { DEFAULT_WORK_HOURS, autoCorrectMins, type WorkHoursSettings } from "./s
 
 const router = Router();
 
+// ── Compute villaNumber / clientName / refNumber from relations for responses ─
+function appointmentToResponse(a: {
+  unit?: { unitNumber: string } | null;
+  client?: { name: string } | null;
+  project?: { abbreviation: string } | null;
+  [key: string]: any;
+}) {
+  const unitNumber  = a.unit?.unitNumber || '';
+  const projAbbr    = a.project?.abbreviation || '';
+  return {
+    ...a,
+    villaNumber: unitNumber,
+    clientName:  a.client?.name || '',
+    refNumber:   projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber,
+  };
+}
+
 async function validateAndCorrectAppointmentTime(
   projectId: string | null | undefined,
   timeStr: string | null | undefined
@@ -86,6 +103,8 @@ router.get("/conflicts", requireAuth, async (req: AuthRequest, res) => {
     const appts = await prisma.appointment.findMany({
       where,
       include: {
+        unit:   { select: { unitNumber: true } },
+        client: { select: { name: true } },
         tickets: {
           where: { status: { notIn: ["closed", "completed", "out_of_scope"] } },
           select: { id: true, ticketId: true, status: true },
@@ -99,14 +118,12 @@ router.get("/conflicts", requireAuth, async (req: AuthRequest, res) => {
       : appts;
 
     res.json({
-      conflicts: filtered.map((a) => ({
+      conflicts: filtered.map((a: any) => ({
         id: a.id,
-        clientName: a.clientName,
-        villaNumber: a.villaNumber,
+        clientName:  a.client?.name || '',
+        villaNumber: a.unit?.unitNumber || '',
         appointmentTime: `${a.date} ${a.time || ""}`.trim(),
-        supervisors: Array.isArray(a.supervisors)
-          ? (a.supervisors as any[]).filter((s: any) => ids.includes(s.id))
-          : [],
+        supervisors: [],
       })),
     });
   } catch (err: any) {
@@ -148,43 +165,51 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
     const appts = await prisma.appointment.findMany({
       where,
       include: {
+        unit:    { select: { unitNumber: true } },
+        client:  { select: { name: true } },
+        project: { select: { abbreviation: true } },
         tickets: {
           select: {
-            id: true,
-            ticketId: true,
-            clientName: true,
-            villaNumber: true,
-            status: true,
-            type: true,
-            projectId: true,
-            assignedSupervisors: true,
+            id: true, ticketId: true, status: true, type: true, projectId: true,
+            assignedSupervisorIds: true,
+            unit:    { select: { unitNumber: true } },
+            client:  { select: { name: true } },
+            project: { select: { abbreviation: true } },
           },
         },
       },
       orderBy: [{ date: "asc" }, { time: "asc" }],
     });
 
-    // Return as flat ticket list for backward compat with existing callers
-    const tickets = appts.flatMap((a) =>
-      a.tickets.length > 0
-        ? a.tickets.map((t) => ({ ...t, appointmentTime: `${a.date} ${a.time || ""}`.trim(), appointmentNotes: a.notes }))
-        : [
-            {
-              id: a.id,
-              ticketId: "",
-              clientName: a.clientName,
-              villaNumber: a.villaNumber,
-              appointmentTime: `${a.date} ${a.time || ""}`.trim(),
-              appointmentNotes: a.notes,
-              status: "pending",
-              type: a.types[0] || "general",
-              projectId: a.projectId,
-              assignedSupervisors: a.supervisors,
-            },
-          ]
-    );
+    const ticketList = appts.flatMap((a: any) => {
+      const apptVilla  = a.unit?.unitNumber || '';
+      const apptClient = a.client?.name || '';
+      const apptAbbr   = a.project?.abbreviation || '';
+      if (a.tickets.length > 0) {
+        return a.tickets.map((t: any) => ({
+          ...t,
+          villaNumber: t.unit?.unitNumber || apptVilla,
+          clientName:  t.client?.name || apptClient,
+          refNumber:   t.project?.abbreviation && t.unit?.unitNumber
+            ? `${t.project.abbreviation}-${t.unit.unitNumber}` : '',
+          assignedSupervisors: [],
+          appointmentTime:  `${a.date} ${a.time || ""}`.trim(),
+          appointmentNotes: a.notes,
+        }));
+      }
+      return [{
+        id: a.id, ticketId: '',
+        villaNumber:  apptVilla,
+        clientName:   apptClient,
+        refNumber:    apptAbbr && apptVilla ? `${apptAbbr}-${apptVilla}` : apptVilla,
+        appointmentTime:  `${a.date} ${a.time || ""}`.trim(),
+        appointmentNotes: a.notes,
+        status: 'pending', type: a.types[0] || 'general',
+        projectId: a.projectId, assignedSupervisors: [],
+      }];
+    });
 
-    res.json(tickets);
+    res.json(ticketList);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -237,6 +262,9 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
     const appointments = await prisma.appointment.findMany({
       where,
       include: {
+        unit:    { select: { unitNumber: true } },
+        client:  { select: { name: true } },
+        project: { select: { abbreviation: true } },
         technician: {
           select: {
             id: true,
@@ -251,24 +279,32 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
             id: true,
             ticketId: true,
             clientId: true,
-            clientName: true,
-            villaNumber: true,
             description: true,
             status: true,
             type: true,
             detectedTypes: true,
             detectedSubTypeIds: true,
             assignedSupervisorIds: true,
-            assignedSupervisors: true,
             priority: true,
-            client: { select: { phone: true } },
+            unit:   { select: { unitNumber: true } },
+            client: { select: { name: true, phone: true } },
+            project: { select: { abbreviation: true } },
           },
         },
       },
       orderBy: [{ date: "asc" }, { time: "asc" }],
     });
 
-    res.json(appointments);
+    res.json(appointments.map((a: any) => ({
+      ...appointmentToResponse(a),
+      tickets: a.tickets.map((t: any) => ({
+        ...t,
+        villaNumber: t.unit?.unitNumber || a.unit?.unitNumber || '',
+        clientName:  t.client?.name || a.client?.name || '',
+        refNumber:   t.project?.abbreviation && t.unit?.unitNumber
+          ? `${t.project.abbreviation}-${t.unit.unitNumber}` : '',
+      })),
+    })));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -293,20 +329,34 @@ router.get("/by-client/:clientId", requireAuth, async (req: AuthRequest, res) =>
 
 // ─── GET /api/appointments/by-unit ───────────────────────────────────────────
 router.get("/by-unit", requireAuth, async (req: AuthRequest, res) => {
-  const { projectId, villaNumber } = req.query as { projectId?: string; villaNumber?: string };
-  if (!projectId || !villaNumber) {
-    res.status(400).json({ error: "projectId و villaNumber مطلوبان" });
+  const { projectId, unitId, villaNumber } = req.query as {
+    projectId?: string; unitId?: string; villaNumber?: string;
+  };
+  if (!projectId || (!unitId && !villaNumber)) {
+    res.status(400).json({ error: "projectId و unitId (أو villaNumber) مطلوبان" });
     return;
   }
   try {
+    let resolvedUnitId = unitId;
+    if (!resolvedUnitId && villaNumber) {
+      const unit = await prisma.unit.findUnique({
+        where: { projectId_unitNumber: { projectId, unitNumber: villaNumber.trim() } },
+        select: { id: true },
+      });
+      resolvedUnitId = unit?.id;
+    }
+    const where: any = resolvedUnitId ? { projectId, unitId: resolvedUnitId } : { projectId };
     const appointments = await prisma.appointment.findMany({
-      where: { projectId, villaNumber },
+      where,
       include: {
+        unit:    { select: { unitNumber: true } },
+        client:  { select: { name: true } },
+        project: { select: { abbreviation: true } },
         tickets: { select: { id: true, ticketId: true, status: true, type: true } },
       },
       orderBy: [{ date: "desc" }, { time: "desc" }],
     });
-    res.json(appointments);
+    res.json(appointments.map(a => appointmentToResponse(a as any)));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -349,15 +399,14 @@ router.delete("/push-unsubscribe", requireAuth, async (req: AuthRequest, res) =>
 router.post("/", requireAuth, async (req: AuthRequest, res) => {
   const {
     projectId,
-    villaNumber,
+    villaNumber,  // accepted for backward compat — resolved to unitId below
+    unitId: bodyUnitId,
     clientId,
-    clientName,
     clientPhone,
     date,
     time,
     notes,
     supervisorIds,
-    supervisors,
     technicianId,
     technicianIds,
     technicians,
@@ -365,15 +414,14 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     ticketIds,
   } = req.body as {
     projectId: string;
-    villaNumber: string;
+    villaNumber?: string;
+    unitId?: string;
     clientId?: string;
-    clientName: string;
     clientPhone?: string;
     date: string;
     time?: string;
     notes?: string;
     supervisorIds?: string[];
-    supervisors?: any[];
     technicianId?: string;
     technicianIds?: string[];
     technicians?: any[];
@@ -381,12 +429,32 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     ticketIds?: string[];
   };
 
-  if (!projectId || !villaNumber || !date || !clientName) {
-    res.status(400).json({ error: "projectId, villaNumber, date, clientName مطلوبة" });
+  if (!projectId || !date) {
+    res.status(400).json({ error: "projectId و date مطلوبان" });
     return;
   }
 
   try {
+    // Resolve unitId: prefer explicit, fall back to villaNumber lookup
+    let resolvedUnitId: string | null = bodyUnitId || null;
+    if (!resolvedUnitId && villaNumber) {
+      const unit = await prisma.unit.findUnique({
+        where: { projectId_unitNumber: { projectId, unitNumber: villaNumber.trim() } },
+        select: { id: true },
+      });
+      resolvedUnitId = unit?.id || null;
+    }
+
+    // Resolve clientId from unit if not provided
+    let resolvedClientId = clientId || null;
+    if (!resolvedClientId && resolvedUnitId) {
+      const primaryLink = await prisma.clientUnit.findFirst({
+        where: { unitId: resolvedUnitId, isPrimary: true },
+        select: { clientId: true },
+      });
+      resolvedClientId = primaryLink?.clientId || null;
+    }
+
     let finalTime = time || null;
     if (finalTime) {
       const check = await validateAndCorrectAppointmentTime(projectId, finalTime);
@@ -397,20 +465,21 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       finalTime = check.time || finalTime;
     }
 
+    const apptInclude = {
+      technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
+      unit:       { select: { id: true, unitNumber: true } },
+      client:     { select: { id: true, name: true, phone: true } },
+      project:    { select: { id: true, abbreviation: true } },
+      tickets:    { select: { id: true, ticketId: true, status: true, type: true } },
+    };
+
     let appointment = await prisma.appointment.findFirst({
-      where: { projectId, villaNumber, date }
+      where: resolvedUnitId ? { projectId, unitId: resolvedUnitId, date } : { projectId, date },
     });
 
     if (appointment) {
-      const updatedTypes = Array.from(new Set([...(appointment.types as string[] || []), ...(types || [])]));
-      const updatedSupIds = Array.from(new Set([...(appointment.supervisorIds as string[] || []), ...(supervisorIds || [])]));
-      
-      const existingSups = (appointment.supervisors as any[]) || [];
-      const newSups = (supervisors as any[]) || [];
-      const mergedSupsMap = new Map();
-      existingSups.forEach(s => mergedSupsMap.set(s.id, s));
-      newSups.forEach(s => mergedSupsMap.set(s.id, s));
-      const updatedSups = Array.from(mergedSupsMap.values());
+      const updatedTypes   = Array.from(new Set([...(appointment.types as string[] || []), ...(types || [])]));
+      const updatedSupIds  = Array.from(new Set([...(appointment.supervisorIds as string[] || []), ...(supervisorIds || [])]));
 
       appointment = await prisma.appointment.update({
         where: { id: appointment.id },
@@ -419,39 +488,31 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
           notes: notes ? (appointment.notes ? `${appointment.notes}\n${notes}` : notes) : appointment.notes,
           types: updatedTypes,
           supervisorIds: updatedSupIds,
-          supervisors: updatedSups,
           technicianId: technicianId !== undefined ? (technicianId || null) : appointment.technicianId,
           technicianIds: technicianIds !== undefined ? technicianIds : appointment.technicianIds,
           technicians: technicians !== undefined ? technicians : appointment.technicians,
           clientPhone: clientPhone || appointment.clientPhone,
+          ...(resolvedClientId && !appointment.clientId ? { clientId: resolvedClientId } : {}),
         },
-        include: {
-          technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
-          tickets: { select: { id: true, ticketId: true, status: true, type: true } }
-        }
+        include: apptInclude,
       });
     } else {
       appointment = await prisma.appointment.create({
         data: {
           projectId,
-          villaNumber,
-          clientId: clientId || null,
-          clientName,
+          unitId: resolvedUnitId,
+          clientId: resolvedClientId,
           clientPhone: clientPhone || null,
           date,
           time: finalTime || null,
           notes: notes || null,
           supervisorIds: supervisorIds || [],
-          supervisors: supervisors || [],
           technicianId: technicianId || null,
           technicianIds: technicianIds || (technicianId ? [technicianId] : []),
           technicians: technicians || [],
           types: types || [],
         },
-        include: {
-          technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
-          tickets: { select: { id: true, ticketId: true, status: true, type: true } }
-        }
+        include: apptInclude,
       });
     }
 
@@ -476,8 +537,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       );
     }
 
-    getIO()?.emit("appointment:created", appointment);
-    res.json(appointment);
+    const enriched = appointmentToResponse(appointment as any);
+    getIO()?.emit("appointment:created", enriched);
+    res.json(enriched);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -490,12 +552,15 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
     const appointment = await prisma.appointment.findUnique({
       where: { id },
       include: {
+        unit:      { select: { id: true, unitNumber: true } },
+        client:    { select: { id: true, name: true, phone: true } },
+        project:   { select: { id: true, abbreviation: true } },
         technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
-        tickets: { select: { id: true, ticketId: true, status: true, type: true, detectedTypes: true, assignedSupervisorIds: true, assignedSupervisors: true } },
+        tickets: { select: { id: true, ticketId: true, status: true, type: true, detectedTypes: true, assignedSupervisorIds: true } },
       },
     });
     if (!appointment) { res.status(404).json({ error: "Appointment not found" }); return; }
-    res.json(appointment);
+    res.json(appointmentToResponse(appointment as any));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -509,7 +574,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     time,
     notes,
     supervisorIds,
-    supervisors,
     technicianId,
     technicianIds,
     technicians,
@@ -521,7 +585,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     time?: string;
     notes?: string;
     supervisorIds?: string[];
-    supervisors?: any[];
     technicianId?: string | null;
     technicianIds?: string[];
     technicians?: any[];
@@ -552,7 +615,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         time: finalTime !== undefined ? (finalTime || null) : undefined,
         notes: notes || null,
         supervisorIds: supervisorIds || [],
-        supervisors: supervisors || [],
         ...(technicianId !== undefined ? { technicianId: technicianId || null } : {}),
         ...(technicianIds !== undefined ? { technicianIds } : {}),
         ...(technicians !== undefined ? { technicians } : {}),
@@ -561,15 +623,17 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         ...(status ? { status } : {}),
       },
       include: {
+        unit:      { select: { unitNumber: true } },
+        client:    { select: { name: true } },
+        project:   { select: { abbreviation: true } },
         technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
         tickets: { select: { id: true, ticketId: true, status: true, type: true } }
       }
     });
 
-    // No ticket field sync needed — appointment data is derived from the Appointment record
-
-    getIO()?.emit("appointment:updated", appointment);
-    res.json(appointment);
+    const enriched = appointmentToResponse(appointment as any);
+    getIO()?.emit("appointment:updated", enriched);
+    res.json(enriched);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -621,9 +685,7 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     const appointmentClear = {
       appointmentId: null as null,
-      assignedSupervisorId: null as null,
       assignedSupervisorIds: [] as string[],
-      assignedSupervisors: [] as any[],
     };
 
     if (pendingIds.length > 0) {

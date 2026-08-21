@@ -18,23 +18,15 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     try {
       const firstTicketId = body.ticket_num.split("،")[0]?.trim() || body.ticket_num;
       const ticket = await prisma.ticket.findFirst({
-        where: {
-          OR: [
-            { ticketId: firstTicketId },
-            { refNumber: firstTicketId },
-          ],
-        },
-        select: { 
-          projectAbbr: true, 
+        where: { ticketId: firstTicketId },
+        select: {
           projectId: true,
           unit: {
             select: { handoverDate: true, warrantyExpiryDate: true }
           }
         },
       });
-      if (ticket?.projectAbbr) {
-        body.nhc = ticket.projectAbbr;
-      } else if (ticket?.projectId) {
+      if (ticket?.projectId) {
         const project = await prisma.project.findUnique({
           where: { id: ticket.projectId },
           select: { abbreviation: true },

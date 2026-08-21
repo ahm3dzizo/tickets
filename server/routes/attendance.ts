@@ -618,7 +618,7 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
         sessions: {
           include: {
             ticket: {
-              select: { id: true, ticketId: true, description: true, status: true, clientName: true }
+              select: { id: true, ticketId: true, description: true, status: true }
             }
           }
         }
@@ -711,7 +711,6 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
             ticketId: true,
             status: true,
             assigneeName: true,
-            assignedSupervisorId: true,
             assignedSupervisorIds: true
           }
         }
@@ -756,16 +755,12 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
 
         const assignedToSupervisor =
           !!technician.supervisorId &&
-          (
-            ticket.assignedSupervisorId === technician.supervisorId ||
-            ticket.assignedSupervisorIds.includes(technician.supervisorId)
-          );
+          ticket.assignedSupervisorIds.includes(technician.supervisorId);
 
         // If the ticket has an explicit technician/supervisor assignment,
         // only claim it when it belongs to this technician's chain.
         const hasExplicitAssignment =
           !!ticket.assigneeName ||
-          !!ticket.assignedSupervisorId ||
           ticket.assignedSupervisorIds.length > 0;
 
         if (hasExplicitAssignment) {
@@ -991,8 +986,6 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
             id: true,
             ticketId: true,
             clientId: true,
-            clientName: true,
-            villaNumber: true,
             description: true,
             status: true,
             type: true,

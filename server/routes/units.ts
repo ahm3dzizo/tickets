@@ -56,14 +56,6 @@ router.put("/:id", requireAuth, async (req, res) => {
       include: { project: true, block: true, clients: { include: { client: true } } },
     });
 
-    // Keep villaNumber in sync on tickets
-    if (unitNumber !== undefined) {
-      await prisma.ticket.updateMany({
-        where: { unitId: req.params.id },
-        data: { villaNumber: String(unitNumber) },
-      });
-    }
-
     res.json(unit);
   } catch (e: any) {
     res.status(500).json({ error: e.message });

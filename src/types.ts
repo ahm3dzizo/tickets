@@ -73,21 +73,22 @@ export type TicketType =
 export interface Ticket {
   id: string;
   ticketId: string;
-  refNumber: string;
-  projectAbbr?: string;
   projectId: string;
   unitId?: string | null;
-  clientId: string;
-  clientName: string;
-  villaNumber: string;
+  clientId?: string | null;
   issuedAt?: string;
   description: string;
   type: TicketType;
   status: 'open' | 'in-progress' | 'in_progress' | 'pending' | 'completed' | 'closed' | 'waiting' | 'out-of-scope' | 'out_of_scope' | 'absent' | 'contractor' | 'note';
   priority: 'low' | 'medium' | 'high' | 'urgent' | number;
   assigneeName?: string;
-  assignedSupervisorId?: string;
   assignedSupervisorIds?: string[];
+  // Virtual fields computed by the API from relations:
+  refNumber?: string;
+  villaNumber?: string;
+  clientName?: string;
+  projectAbbr?: string;
+  assignedSupervisorId?: string;
   assignedSupervisors?: { id: string; name: string; specialty?: string }[];
   detectedTypes?: string[];
   subTypeId?: string | null;
