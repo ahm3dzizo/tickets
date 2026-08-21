@@ -1,6 +1,6 @@
 import { Router } from "express";
 import prisma from "../db.js";
-import { AuthRequest, requireAuth, requireAdmin, getRequesterRole } from "../auth.js";
+import { AuthRequest, requireAuth, getRequesterRole } from "../auth.js";
 import { getIO } from "../socket.js";
 import { DEFAULT_WORK_HOURS, autoCorrectMins, type WorkHoursSettings } from "./settings.js";
 

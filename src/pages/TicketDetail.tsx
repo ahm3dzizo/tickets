@@ -39,7 +39,6 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
@@ -169,10 +168,6 @@ export default function TicketDetail() {
 
   // ── Appointment dialog state ──
   const [apptOpen, setApptOpen] = useState(false);
-  const [apptDate, setApptDate] = useState('');
-  const [apptTime, setApptTime] = useState('');
-  const [apptNotes, setApptNotes] = useState('');
-  const [apptSaving, setApptSaving] = useState(false);
   const [waSent, setWaSent] = useState(false);
   const [waSending, setWaSending] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
@@ -323,60 +318,6 @@ export default function TicketDetail() {
     }
   };
 
-  const handleSaveAppointment = async () => {
-    if (!ticket) return;
-    setApptSaving(true);
-    try {
-      const appointmentTimeStr = apptDate ? `${apptDate}${apptTime ? ' ' + apptTime : ''}` : '';
-      const supervisorIds = (ticket.assignedSupervisorIds as string[]) || [];
-      const supervisorsList = ticket.assignedSupervisors || [];
-
-      if ((ticket as any).appointmentId) {
-        await appointmentsApi.update((ticket as any).appointmentId, {
-          date: apptDate,
-          time: apptTime || undefined,
-          notes: apptNotes || undefined,
-          supervisorIds,
-          supervisors: supervisorsList,
-        });
-      } else {
-        await appointmentsApi.create({
-          projectId: ticket.projectId,
-          villaNumber: ticket.villaNumber,
-          clientId: ticket.clientId || undefined,
-          clientName: ticket.clientName,
-          date: apptDate,
-          time: apptTime || undefined,
-          notes: apptNotes || undefined,
-          supervisorIds,
-          supervisors: supervisorsList,
-          types: [ticket.type as string].filter(Boolean),
-          ticketIds: [ticket.id],
-        });
-      }
-
-      // إرسال رسالة الموعد عبر واتساب تلقائياً
-      const phone = client?.phone?.replace(/\D/g, '') || '';
-      if (phone && appointmentTimeStr) {
-        const apptMsg = `السلام عليكم ${client?.name || ''}\n\nتم تحديد موعد زيارة فريق الصيانة لوحدتكم رقم ${ticket.villaNumber}.\n\nرقم التذكرة: #${ticket.ticketId}\nموعد الزيارة: ${appointmentTimeStr}\n${apptNotes ? `ملاحظات: ${apptNotes}\n` : ''}\nيرجى التواجد في الموعد المحدد.\nشكراً لتعاونكم.`;
-        try {
-          const r = await whatsappApi.send(phone, apptMsg);
-          toast.success(r?.sent ? 'تم تأكيد الموعد وإشعار العميل عبر واتساب' : 'تم حفظ الموعد');
-        } catch {
-          toast.success('تم حفظ الموعد');
-        }
-      } else {
-        toast.success('تم حفظ الموعد');
-      }
-
-      setApptOpen(false);
-      navigate(-1);
-    } catch {
-      toast.error('فشل حفظ الموعد');
-    } finally {
-      setApptSaving(false);
-    }
-  };
 
   const todayStr = () => new Date().toISOString().split('T')[0];
 

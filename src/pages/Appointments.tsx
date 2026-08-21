@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
-  Plus, Users, Ticket as TicketIcon, CalendarPlus, Printer, Pencil, Search, FileImage,
-  Phone, MessageCircle, CheckCircle2, RotateCcw, Building2, Wrench, Home, UserCheck
+  Plus, Users, CalendarPlus, Printer, Pencil, Search, FileImage,
+  Phone, MessageCircle, CheckCircle2, RotateCcw, Wrench, Home
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';

@@ -486,10 +486,6 @@ router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthReq
           }
         });
 
-        console.log(
-          'APPOINTMENT AUTO COMPLETED:',
-          completedTicket.appointmentId
-        );
       }
     }
 

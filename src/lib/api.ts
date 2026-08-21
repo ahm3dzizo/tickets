@@ -367,12 +367,6 @@ export const appointmentsApi = {
     if (params.excludeTicketId) q.set('excludeTicketId', params.excludeTicketId);
     return get<{ conflicts: any[] }>(`/appointments/conflicts?${q.toString()}`);
   },
-  getUpcoming: (supervisorId?: string, days?: number) => {
-    const q = new URLSearchParams();
-    if (supervisorId) q.set('supervisorId', supervisorId);
-    if (days) q.set('days', String(days));
-    return get<any[]>(`/appointments/upcoming?${q.toString()}`);
-  },
   getCalendar: (params: { from: string; to: string; supervisorId?: string; projectId?: string; projectIds?: string[] }) => {
     const q = new URLSearchParams();
     q.set('from', params.from);
@@ -412,7 +406,6 @@ export const appointmentsApi = {
       }
       return r.json();
     }),
-  deleteAppointment: (id: string) => del<any>(`/appointments/${id}`),
   getById: (id: string) => get<any>(`/appointments/${id}`),
   getByClient: (clientId: string) => get<any[]>(`/appointments/by-client/${clientId}`),
   getByUnit: (projectId: string, villaNumber: string) => get<any[]>(`/appointments/by-unit/${projectId}/${villaNumber}`),
