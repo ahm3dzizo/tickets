@@ -191,11 +191,11 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     }
     const supIds = Object.keys(supMap);
     const supUsers = supIds.length
-      ? await prisma.user.findMany({ where: { uid: { in: supIds } }, select: { uid: true, displayName: true, specialty: true } })
+      ? await prisma.user.findMany({ where: { uid: { in: supIds } }, select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } } })
       : [];
     const supNameMap = Object.fromEntries(supUsers.map(u => [u.uid, u]));
     const bySupervisor = supIds
-      .map(uid => ({ uid, name: supNameMap[uid]?.displayName ?? uid, specialty: supNameMap[uid]?.specialty ?? "", ...supMap[uid], total: supMap[uid].open + supMap[uid].inProgress + supMap[uid].pending }))
+      .map(uid => ({ uid, name: supNameMap[uid]?.displayName ?? uid, specialty: supNameMap[uid]?.specialtiesRef?.[0]?.key ?? "", ...supMap[uid], total: supMap[uid].open + supMap[uid].inProgress + supMap[uid].pending }))
       .sort((a, b) => b.total - a.total).slice(0, 10);
 
     const nextMonth = new Date(now.getTime() + 30 * 86_400_000);

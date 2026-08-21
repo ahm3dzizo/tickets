@@ -20,6 +20,7 @@ function appointmentToResponse(a: {
     villaNumber: unitNumber,
     clientName:  a.client?.name || '',
     refNumber:   projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber,
+    technicians: a.technician ? [a.technician] : [],
   };
 }
 
@@ -409,7 +410,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     supervisorIds,
     technicianId,
     technicianIds,
-    technicians,
     types,
     ticketIds,
   } = req.body as {
@@ -424,7 +424,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     supervisorIds?: string[];
     technicianId?: string;
     technicianIds?: string[];
-    technicians?: any[];
     types?: string[];
     ticketIds?: string[];
   };
@@ -490,7 +489,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
           supervisorIds: updatedSupIds,
           technicianId: technicianId !== undefined ? (technicianId || null) : appointment.technicianId,
           technicianIds: technicianIds !== undefined ? technicianIds : appointment.technicianIds,
-          technicians: technicians !== undefined ? technicians : appointment.technicians,
           clientPhone: clientPhone || appointment.clientPhone,
           ...(resolvedClientId && !appointment.clientId ? { clientId: resolvedClientId } : {}),
         },
@@ -509,7 +507,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
           supervisorIds: supervisorIds || [],
           technicianId: technicianId || null,
           technicianIds: technicianIds || (technicianId ? [technicianId] : []),
-          technicians: technicians || [],
           types: types || [],
         },
         include: apptInclude,
@@ -576,7 +573,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     supervisorIds,
     technicianId,
     technicianIds,
-    technicians,
     types,
     clientPhone,
     status
@@ -587,7 +583,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     supervisorIds?: string[];
     technicianId?: string | null;
     technicianIds?: string[];
-    technicians?: any[];
     types?: string[];
     clientPhone?: string;
     status?: string;
@@ -617,7 +612,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         supervisorIds: supervisorIds || [],
         ...(technicianId !== undefined ? { technicianId: technicianId || null } : {}),
         ...(technicianIds !== undefined ? { technicianIds } : {}),
-        ...(technicians !== undefined ? { technicians } : {}),
         types: types || [],
         ...(clientPhone ? { clientPhone } : {}),
         ...(status ? { status } : {}),
@@ -642,10 +636,9 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 // ─── PATCH /api/appointments/:id/assign-technician ─────────────────────────────
 router.patch("/:id/assign-technician", requireAuth, async (req: AuthRequest, res) => {
   const { id } = req.params;
-  const { technicianId, technicianIds, technicians } = req.body as {
+  const { technicianId, technicianIds } = req.body as {
     technicianId?: string | null;
     technicianIds?: string[];
-    technicians?: any[];
   };
 
   try {
@@ -654,7 +647,6 @@ router.patch("/:id/assign-technician", requireAuth, async (req: AuthRequest, res
       data: {
         technicianId: technicianId || null,
         technicianIds: technicianIds || (technicianId ? [technicianId] : []),
-        ...(technicians !== undefined ? { technicians } : {}),
       },
       include: {
         technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },

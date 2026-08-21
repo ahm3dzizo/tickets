@@ -243,13 +243,13 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     }
     const supIds = Object.keys(supMap);
     const supUsers = supIds.length
-      ? await prisma.user.findMany({ where:{ uid:{ in:supIds } }, select:{ uid:true, displayName:true, specialty:true } })
+      ? await prisma.user.findMany({ where:{ uid:{ in:supIds } }, select:{ uid:true, displayName:true, specialtiesRef:{ select:{ key:true } } } })
       : [];
     const supMeta = Object.fromEntries(supUsers.map(u => [u.uid, u]));
     const bySupervisor = supIds.map(uid => {
       const v = supMap[uid];
       return {
-        uid, name: supMeta[uid]?.displayName ?? uid, specialty: supMeta[uid]?.specialty ?? '',
+        uid, name: supMeta[uid]?.displayName ?? uid, specialty: supMeta[uid]?.specialtiesRef?.[0]?.key ?? '',
         open: v.open, closed: v.closed, total: v.open + v.closed,
         avgDays: v.days.length ? Math.round(v.days.reduce((a,b)=>a+b,0)/v.days.length*10)/10 : null,
       };

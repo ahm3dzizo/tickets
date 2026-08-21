@@ -528,18 +528,17 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       buildTypeToSpecialtyMap(),
       prisma.user.findMany({
         where: { role: "supervisor", projects: { some: { id: projectId } } },
-        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
       })
     ]);
 
     const allSups = projectSups.length > 0 ? projectSups : await prisma.user.findMany({
       where: { role: "supervisor" },
-      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
     });
 
     const getSpecs = (u: any): string[] => {
       if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-      if (u.specialty) return [u.specialty];
       return ["general"];
     };
 

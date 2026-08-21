@@ -98,20 +98,26 @@ export async function learnSpecialtyFromCorrections(
   const currentSpecialtyKey = ticketType.specialty?.key || 'general';
 
   const tickets = await prisma.ticket.findMany({
-    where: { type: typeKey, assignedSupervisors: { not: null } },
-    select: { assignedSupervisors: true },
+    where: { type: typeKey, assignedSupervisorIds: { isEmpty: false } },
+    select: { assignedSupervisorIds: true },
     orderBy: { updatedAt: 'desc' },
     take: sampleSize,
   });
 
-  // Count unique specialty per ticket (one vote per ticket)
+  // Count unique specialty per ticket by looking up supervisor specialties
+  const allSupIds = [...new Set(tickets.flatMap((t: any) => t.assignedSupervisorIds as string[]))];
+  const supUsers = allSupIds.length > 0
+    ? await prisma.user.findMany({ where: { uid: { in: allSupIds } }, select: { uid: true, specialtiesRef: { select: { key: true } } } })
+    : [];
+  const supSpecMap = Object.fromEntries(supUsers.map((u: any) => [u.uid, u.specialtiesRef?.[0]?.key || 'general']));
+
   const specialtyCounts: Record<string, number> = {};
   for (const ticket of tickets) {
-    const sups = ticket.assignedSupervisors as any[];
-    if (!Array.isArray(sups) || sups.length === 0) continue;
+    const ids = (ticket as any).assignedSupervisorIds as string[];
+    if (!ids || ids.length === 0) continue;
     const seen = new Set<string>();
-    for (const sup of sups) {
-      const spec: string = sup.specialty || 'general';
+    for (const id of ids) {
+      const spec: string = supSpecMap[id] || 'general';
       if (!seen.has(spec)) {
         seen.add(spec);
         specialtyCounts[spec] = (specialtyCounts[spec] || 0) + 1;
@@ -143,10 +149,10 @@ export async function learnSpecialtyFromCorrections(
 export async function findSupervisorsDB(projectId: string, requiredSpecialties: string[]) {
   const allUsers = await prisma.user.findMany({
     where: { role: "supervisor" },
-    include: { 
-      projects: { select: { id: true } }, 
+    include: {
+      projects: { select: { id: true } },
       specialtiesRef: { select: { key: true } },
-      substituteFor: { select: { specialty: true, specialtiesRef: { select: { key: true } } } }
+      substituteFor: { select: { specialtiesRef: { select: { key: true } } } }
     },
   });
 
@@ -160,13 +166,11 @@ export async function findSupervisorsDB(projectId: string, requiredSpecialties: 
   const getSpecs = (u: any): string[] => {
     const specs: string[] = [];
     if (u.specialtiesRef && u.specialtiesRef.length > 0) specs.push(...u.specialtiesRef.map((s: any) => s.key));
-    else if (u.specialty) specs.push(u.specialty);
     else specs.push("general");
 
     if (u.substituteFor && u.substituteFor.length > 0) {
       for (const sub of u.substituteFor) {
         if (sub.specialtiesRef && sub.specialtiesRef.length > 0) specs.push(...sub.specialtiesRef.map((s: any) => s.key));
-        else if (sub.specialty) specs.push(sub.specialty);
       }
     }
     return [...new Set(specs)];

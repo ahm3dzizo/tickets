@@ -53,19 +53,18 @@ router.post("/bulk", requireAuth, async (req, res) => {
     for (const pid of projectIds) {
       supervisorCache[pid] = await prisma.user.findMany({
         where: { role: "supervisor", projects: { some: { id: pid } } },
-        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
       });
       if (supervisorCache[pid].length === 0) {
         supervisorCache[pid] = await prisma.user.findMany({
           where: { role: "supervisor" },
-          select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+          select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
         });
       }
     }
 
     const getSpecs = (u: any): string[] => {
       if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-      if (u.specialty) return [u.specialty];
       return ["general"];
     };
 
@@ -430,11 +429,11 @@ router.post("/import", requireAuth, async (req, res) => {
 
     const projectSups = await prisma.user.findMany({
       where: { role: "supervisor", projects: { some: { id: projectId } } },
-      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
     });
     const allSups = projectSups.length > 0 ? projectSups : await prisma.user.findMany({
       where: { role: "supervisor" },
-      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } }, specialty: true },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
     });
 
     const keywords = await loadKeywordsFromDB();
@@ -442,7 +441,6 @@ router.post("/import", requireAuth, async (req, res) => {
 
     const getSpecs = (u: any): string[] => {
       if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-      if (u.specialty) return [u.specialty];
       return ["general"];
     };
 

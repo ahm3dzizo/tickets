@@ -62,6 +62,23 @@ async function main() {
   `);
   console.log(`✔ تم ربط ${clientResult} موعد بعملائهم`);
 
+  // ── 5. نقل User.specialty → _UserSpecialties قبل حذف العمود ────────────────
+  const usersWithSpecialty = await prisma.$queryRawUnsafe<Array<{ uid: string; specialty: string }>>(
+    `SELECT uid, specialty FROM "User" WHERE specialty IS NOT NULL AND specialty <> ''`
+  );
+  let specialtyMigrated = 0;
+  for (const u of usersWithSpecialty) {
+    const sp = await prisma.specialty.findUnique({ where: { key: u.specialty } });
+    if (sp) {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "_UserSpecialties" ("A", "B") VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        sp.id, u.uid
+      );
+      specialtyMigrated++;
+    }
+  }
+  console.log(`✔ تم نقل تخصص ${specialtyMigrated} مستخدم إلى _UserSpecialties`);
+
   console.log('── اكتملت التهيئة ──');
   console.log('');
   console.log('الخطوة التالية:');

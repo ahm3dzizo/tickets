@@ -24,10 +24,12 @@ async function enrichTickets<T extends {
   unit?: { unitNumber: string; block?: { blockNumber: string } | null } | null;
   client?: { name: string; phone?: string | null } | null;
   project?: { abbreviation: string } | null;
+  contractor?: { name: string } | null;
 }>(tickets: T[]): Promise<(T & {
   villaNumber: string;
   refNumber: string;
   clientName: string;
+  contractorName: string;
   assignedSupervisorId: string | null;
   assignedSupervisors: { id: string; name: string; specialty?: string }[];
 })[]> {
@@ -38,11 +40,11 @@ async function enrichTickets<T extends {
     }
   }
 
-  const nameMap = new Map<string, { uid: string; displayName: string; specialty: string | null }>();
+  const nameMap = new Map<string, { uid: string; displayName: string; specialtiesRef: { key: string }[] }>();
   if (allIds.size > 0) {
     const users = await prisma.user.findMany({
       where: { uid: { in: [...allIds] } },
-      select: { uid: true, displayName: true, specialty: true },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
     });
     users.forEach(u => nameMap.set(u.uid, u));
   }
@@ -53,15 +55,16 @@ async function enrichTickets<T extends {
     const villaNumber = unitNumber;
     const refNumber   = projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber;
     const clientName  = t.client?.name || '';
+    const contractorName = t.contractor?.name || '';
     const ids = t.assignedSupervisorIds || [];
     const assignedSupervisorId = ids[0] || null;
     const assignedSupervisors = ids
       .map(id => {
         const u = nameMap.get(id);
-        return u ? { id: u.uid, name: u.displayName, specialty: u.specialty || 'general' } : null;
+        return u ? { id: u.uid, name: u.displayName, specialty: u.specialtiesRef?.[0]?.key || 'general' } : null;
       })
       .filter((s): s is { id: string; name: string; specialty: string } => s !== null);
-    return { ...t, villaNumber, refNumber, clientName, assignedSupervisorId, assignedSupervisors };
+    return { ...t, villaNumber, refNumber, clientName, contractorName, assignedSupervisorId, assignedSupervisors };
   });
 }
 
@@ -295,6 +298,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       unit:          { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
       client:        { select: { id: true, name: true, phone: true } },
       project:       { select: { id: true, abbreviation: true } },
+      contractor:    { select: { name: true } },
       ticketSubType: { select: { id: true, nameAr: true } },
       appointment:   { select: { id: true, date: true, time: true, notes: true } },
     },
@@ -432,6 +436,7 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
       unit:          { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
       client:        { select: { id: true, name: true, phone: true } },
       project:       { select: { id: true, abbreviation: true } },
+      contractor:    { select: { name: true } },
       ticketSubType: { select: { id: true, nameAr: true } },
     },
   });
@@ -523,9 +528,10 @@ router.post("/", requireAuth, async (req, res) => {
         closedAt: data.closedAt ? new Date(data.closedAt) : null,
       },
       include: {
-        unit:    { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
-        client:  { select: { id: true, name: true, phone: true } },
-        project: { select: { id: true, abbreviation: true } },
+        unit:       { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+        client:     { select: { id: true, name: true, phone: true } },
+        project:    { select: { id: true, abbreviation: true } },
+        contractor: { select: { name: true } },
       },
     });
 
@@ -689,7 +695,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       clientId:              data.clientId             ?? undefined,
       unitId:                data.unitId               ?? undefined,
       contractorId:          data.contractorId         ?? undefined,
-      contractorName:        data.contractorName       ?? undefined,
       contractorNote:        data.contractorNote       ?? undefined,
     };
 
@@ -827,9 +832,10 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     const ticketWithRel = await prisma.ticket.findUnique({
       where: { id: ticket.id },
       include: {
-        unit:    { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
-        client:  { select: { id: true, name: true, phone: true } },
-        project: { select: { id: true, abbreviation: true } },
+        unit:       { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+        client:     { select: { id: true, name: true, phone: true } },
+        project:    { select: { id: true, abbreviation: true } },
+        contractor: { select: { name: true } },
       },
     });
     const [enrichedResult] = await enrichTickets([ticketWithRel!]);

@@ -19,7 +19,6 @@ model User {
   role               String    @default("engineer")
   employeeId         String?
   phoneNumber        String?
-  specialty          String?
   photoURL           String?
   profileCompleted   Boolean   @default(false)
   disabled           Boolean   @default(false)
@@ -155,7 +154,6 @@ model Ticket {
   closureNotes          String?
   maintenanceItems      Json?
   contractorId          String?
-  contractorName        String?
   contractorNote        String?
   createdAt             DateTime     @default(now())
   closedAt              DateTime?
@@ -166,6 +164,7 @@ model Ticket {
   project       Project        @relation(fields: [projectId], references: [id])
   unit          Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
   client        Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  contractor    Contractor?    @relation(fields: [contractorId], references: [id], onDelete: SetNull)
   ticketType    TicketType?    @relation(fields: [typeId], references: [id])
   ticketSubType TicketSubType? @relation(fields: [subTypeId], references: [id])
   audits        TicketAudit[]
@@ -189,6 +188,7 @@ model Contractor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tickets     Ticket[]
   specialties ContractorSpecialty[]
   assignments ContractorAssignment[]
 }
@@ -386,7 +386,6 @@ model Appointment {
   notes         String?
   supervisorIds String[] @default([])
   technicianIds String[] @default([])
-  technicians   Json?
   technicianId  String?
   types         String[] @default([])
   status        String   @default("scheduled") // scheduled, completed, cancelled
