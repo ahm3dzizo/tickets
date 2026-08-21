@@ -434,208 +434,24 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }
 
   try {
-    // ============================================================
-    // STRICT PROJECT / UNIT / CLIENT VALIDATION
-    // ============================================================
-
-    // villaNumber is ONLY an input/lookup mechanism.
-    // unitId is the real relationship.
+    // Resolve unitId: prefer explicit, fall back to villaNumber lookup
     let resolvedUnitId: string | null = bodyUnitId || null;
-
-    // 1) Explicit unitId MUST belong to the requested project
-    if (resolvedUnitId) {
-      const unit = await prisma.unit.findFirst({
-        where: {
-          id: resolvedUnitId,
-          projectId,
-        },
-        select: {
-          id: true,
-          unitNumber: true,
-        },
-      });
-
-      if (!unit) {
-        res.status(400).json({
-          error: "الوحدة المحددة لا تتبع المشروع المحدد",
-          code: "UNIT_PROJECT_MISMATCH",
-        });
-        return;
-      }
-    }
-
-    // 2) villaNumber can ONLY resolve a unit inside this project
-    else if (villaNumber) {
+    if (!resolvedUnitId && villaNumber) {
       const unit = await prisma.unit.findUnique({
-        where: {
-          projectId_unitNumber: {
-            projectId,
-            unitNumber: villaNumber.trim(),
-          },
-        },
-        select: {
-          id: true,
-          unitNumber: true,
-        },
+        where: { projectId_unitNumber: { projectId, unitNumber: villaNumber.trim() } },
+        select: { id: true },
       });
-
-      if (!unit) {
-        res.status(400).json({
-          error: "رقم الوحدة غير موجود في المشروع المحدد",
-          code: "UNIT_NOT_FOUND_IN_PROJECT",
-        });
-        return;
-      }
-
-      resolvedUnitId = unit.id;
+      resolvedUnitId = unit?.id || null;
     }
 
-    // 3) Appointment MUST have a Unit
-    if (!resolvedUnitId) {
-      res.status(400).json({
-        error: "unitId مطلوب ولا يمكن إنشاء موعد بدون وحدة",
-        code: "UNIT_REQUIRED",
-      });
-      return;
-    }
-
-    // 4) clientId MUST belong to the same project
-    if (clientId) {
-      const client = await prisma.client.findFirst({
-        where: {
-          id: clientId,
-          projectId,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!client) {
-        res.status(400).json({
-          error: "العميل لا يتبع المشروع المحدد",
-          code: "CLIENT_PROJECT_MISMATCH",
-        });
-        return;
-      }
-    }
-
-    // 5) clientId and unitId MUST actually be linked
-    if (clientId && resolvedUnitId) {
-      const clientUnit = await prisma.clientUnit.findFirst({
-        where: {
-          clientId,
-          unitId: resolvedUnitId,
-        },
-        select: {
-          clientId: true,
-          unitId: true,
-        },
-      });
-
-      if (!clientUnit) {
-        res.status(400).json({
-          error: "العميل لا يرتبط بالوحدة المحددة",
-          code: "CLIENT_UNIT_MISMATCH",
-        });
-        return;
-      }
-    }
-
-    // 6) Resolve primary client from the Unit if clientId wasn't supplied
+    // Resolve clientId from unit if not provided
     let resolvedClientId = clientId || null;
-
-    if (!resolvedClientId) {
+    if (!resolvedClientId && resolvedUnitId) {
       const primaryLink = await prisma.clientUnit.findFirst({
-        where: {
-          unitId: resolvedUnitId,
-          isPrimary: true,
-        },
-        select: {
-          clientId: true,
-        },
+        where: { unitId: resolvedUnitId, isPrimary: true },
+        select: { clientId: true },
       });
-
       resolvedClientId = primaryLink?.clientId || null;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // STRICT PROJECT CONSISTENCY VALIDATION
-    // projectId, unitId and clientId MUST belong to the same project.
-    // ─────────────────────────────────────────────────────────────────────
-
-    // 1. Unit must belong to the requested project
-    if (resolvedUnitId) {
-      const unitCheck = await prisma.unit.findUnique({
-        where: { id: resolvedUnitId },
-        select: {
-          id: true,
-          unitNumber: true,
-          projectId: true,
-        },
-      });
-
-      if (!unitCheck) {
-        res.status(400).json({
-          error: "الوحدة غير موجودة",
-          code: "UNIT_NOT_FOUND",
-        });
-        return;
-      }
-
-      if (unitCheck.projectId !== projectId) {
-        res.status(400).json({
-          error: "لا يمكن إنشاء الموعد: الوحدة تابعة لمشروع مختلف",
-          code: "UNIT_PROJECT_MISMATCH",
-        });
-        return;
-      }
-    }
-
-    // 2. Client must be linked to a unit in the requested project
-    if (resolvedClientId) {
-      const clientUnits = await prisma.clientUnit.findMany({
-        where: {
-          clientId: resolvedClientId,
-        },
-        select: {
-          unit: {
-            select: {
-              id: true,
-              unitNumber: true,
-              projectId: true,
-            },
-          },
-        },
-      });
-
-      const clientBelongsToProject = clientUnits.some(
-        (cu) => cu.unit && cu.unit.projectId === projectId
-      );
-
-      if (!clientBelongsToProject) {
-        res.status(400).json({
-          error: "لا يمكن إنشاء الموعد: العميل غير مرتبط بهذا المشروع",
-          code: "CLIENT_PROJECT_MISMATCH",
-        });
-        return;
-      }
-
-      // 3. If both client and unit are supplied,
-      //    the client must actually belong to that exact unit.
-      if (resolvedUnitId) {
-        const clientBelongsToUnit = clientUnits.some(
-          (cu) => cu.unit && cu.unit.id === resolvedUnitId
-        );
-
-        if (!clientBelongsToUnit) {
-          res.status(400).json({
-            error: "لا يمكن إنشاء الموعد: العميل غير مرتبط بهذه الوحدة",
-            code: "CLIENT_UNIT_MISMATCH",
-          });
-          return;
-        }
-      }
     }
 
     let finalTime = time || null;
@@ -697,82 +513,21 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       });
     }
 
-    // ============================================================
-    // STRICT TICKET PROJECT / UNIT VALIDATION
-    // ============================================================
-
+    // Sync linked tickets
     if (ticketIds && ticketIds.length > 0) {
-      const uniqueTicketIds = Array.from(new Set(ticketIds));
-
+      // Fetch tickets to conditionally update status
       const tickets = await prisma.ticket.findMany({
-        where: {
-          id: {
-            in: uniqueTicketIds,
-          },
-        },
-        select: {
-          id: true,
-          status: true,
-          projectId: true,
-          unitId: true,
-        },
+        where: { id: { in: ticketIds } },
+        select: { id: true, status: true },
       });
 
-      // Every requested ticket must exist
-      if (tickets.length !== uniqueTicketIds.length) {
-        const foundIds = new Set(tickets.map(t => t.id));
-        const missingTicketIds = uniqueTicketIds.filter(
-          id => !foundIds.has(id)
-        );
-
-        res.status(400).json({
-          error: "يوجد تذاكر غير موجودة",
-          code: "TICKET_NOT_FOUND",
-          ticketIds: missingTicketIds,
-        });
-        return;
-      }
-
-      // Every ticket MUST belong to the appointment project
-      const wrongProjectTickets = tickets.filter(
-        t => t.projectId !== projectId
-      );
-
-      if (wrongProjectTickets.length > 0) {
-        res.status(400).json({
-          error: "يوجد تذاكر لا تتبع المشروع المحدد",
-          code: "TICKET_PROJECT_MISMATCH",
-          ticketIds: wrongProjectTickets.map(t => t.id),
-        });
-        return;
-      }
-
-      // Every ticket with a unit MUST belong to the appointment unit
-      const wrongUnitTickets = tickets.filter(
-        t => t.unitId && t.unitId !== resolvedUnitId
-      );
-
-      if (wrongUnitTickets.length > 0) {
-        res.status(400).json({
-          error: "يوجد تذاكر لا تتبع الوحدة المحددة",
-          code: "TICKET_UNIT_MISMATCH",
-          ticketIds: wrongUnitTickets.map(t => t.id),
-        });
-        return;
-      }
-
-      // Safe to link tickets now
       await Promise.all(
         tickets.map((t) =>
           prisma.ticket.update({
-            where: {
-              id: t.id,
-            },
+            where: { id: t.id },
             data: {
               appointmentId: appointment.id,
-              ...(t.status !== "closed"
-                ? { status: "pending" }
-                : {}),
+              ...(t.status !== "closed" ? { status: "pending" } : {}),
             },
           })
         )

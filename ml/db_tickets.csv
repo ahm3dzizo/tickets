@@ -3558,7 +3558,6 @@ text,label
 "نحتاج إلى إزالة الباب",doors
 "تعطل زر الكرسي الإفرنجي  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mrpcimug405gzw1mrpcimuh1mrpcimui.png",plumbing
 "حمام غرفة الماستر الثانية ما يتقفل فيه مشكله في اغلاقه",doors
-"قفل شباك المطبخ  لا يعمل",doors_windows
 "يوجد تشققات في السطح كثيره وعميقة تؤدي الى تسرب المياه وتراكم المشاكل   ارجو ارسال باقرب وقت اخذت بعض الصور. السطح بالكامل فيه تشققات متشعبه وعميقة",cracks
 "بلاط مكسور",ceramics
 "سلة نفايات خارج المنزل لم يتم وضع واحدة لي ، كل الفلل على الشارع لديها الا فلة 407  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mruclvic405gzw1mruclvid1mruclvie.png",cleaning
@@ -3621,7 +3620,6 @@ text,label
 "صوت مزعج",ac_ventilation
 "فتحت الخزان الارضي",tank_insulation
 "الريموت يفتح بايكتي و بايكة جاري !!!!",garage_door
-"استكمال الاعمال بعد ملاحظة التسريب  اعمال الجبس و البوية و البلاط والترويبة",paints
 "تمديد التكييف مغلق https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mrgddcve405gzw1mrgddcvf1mrgddcvg.png",ac_ventilation
 "عندي 3 افياش انفصلت و قطعت علي الكهرباء وعندي 7 لمبات صغيره طافيه  وعندي رخام مغسلة غرفة النوم يهرب مويه من الزاويه",electricity
 "تسرب مياه من اسفل الحنفيه - وتسرب مياه من تصريف غسالة الملابس تم الطلب عدة مرات لاصلاحها ولم تحل المشكله",plumbing
@@ -3713,10 +3711,10 @@ text,label
 "ريموت باب الكراج يفتح كراج الجار وليس كراج بيتي",garage_door
 "اضاءة لوحة الارقام الخارجي للفلة",electricity
 "مفتاح الاضاءة عطلان",electricity
-"لا يوجد ماء في البيت",plumbing
 "دفع الماء ضعيف جدا وتم تعبية الخزان صباح اليوم والى الان ضعيف دفع الماء",pumps
 "احتاج كهربائي لتعديل التمديدات داخل المطبخ وغرفة الغسيل",electricity
 "تشققات في الجدران",cracks
+"لا يوجد ماء في البيت",plumbing
 "غطاء فتحت الخزان الارضي لايمكن اغلاقها لارتفاع منسوب الصبة على حلق الخزان",tank_insulation
 "استهلاك المياه عالي جدا مع ان البيت فاضي كل يوم نص وايت",plumbing
 "الابواب ماتفتح والحمامات فيها ريحه",doors
@@ -4739,7 +4737,6 @@ text,label
 "انسداد",drainage
 "صيانه ‫كراج الفيلا لايفتح رقم الفيلا ٢٠٠ مشروع نساج النرجس",garage_door
 "نوافذ غير متزنه وبحاجه إلى وزون بالإضافة إلى وجود صعوبة في القفل و الفتح",doors_windows
-"المكيف بالممرات في الدور الثاني لايعمل بشكل جيد.",ac_ventilation
 "السلام عليكم،   لوحظ أثناء معاينة الفيلا وجود عدد من الملاحظات على أعمال السباكة، تتمثل في:  * وجود تسريب في بعض الحنفيات الداخلية والخارجية، مما يدل على عدم إحكام التركيب أو الحاجة إلى إعادة الضبط والفحص. * وجود فراغات واضحة بين أغطية مخارج الحنفيات واللياسة، وعدم التصاقها بالجدار بالشكل الصحيح، مما يؤثر على جودة التشطيب ويسمح بدخول المياه والأتربة والحشرات خلف التشطيب.  عليه، أرجو معالجة جميع التسريبات، وإجراء اختبار للتأكد من عدم وجود أي تسرب في جميع الحنفيات، وإعادة تنفيذ التشطيب حول مخارج المياه بإغلاق جميع الفراغات وتركيب الأغطية بالشكل الصحيح بما يتوافق مع الأصول الفنية وجودة التشطيب المطلوبة.  شاكر لكم تعاونكم https://retal-objects.yukiroad.ovh/tickets/pictures/msbdpdw3405gzz1msbdpdw41msbdpdw5.png https://retal-objects.yukiroad.ovh/tickets/pictures/msbdpfit405gzz1msbdpfiu1msbdpfiv.png https://retal-objects.yukiroad.ovh/tickets/pictures/msbdpg57405gzz1msbdpg581msbdpg59.png",plumbing
 "صيانة ٣ أبواب الغملاس حيث مفكوك  المسامير",doors
 "لنفس المشكلة قمت قبل اسبوع برفع تذكرة، ومجرد أن حضر فريق الصيانة وقام بإصلاح تسرب المياه من خرطوم (الهوز) المغذي للمغسلة، إلا أن المشكلة عادت مرة أخرى بعد أقل من يوم واحد من تنفيذ الإصلاح، مما يدل على أن المعالجة لم تكن نهائية ولم تعالج سبب الخلل بشكل صحيح.  هذا التسرب المستمر يجبرنا على التوقف عن استخدام المغسلة لتجنب تجمع المياه داخل الخزانة وما قد يترتب على ذلك من أضرار، كما يسبب تعطيلًا غير مبرر للاستفادة من أحد مرافق المنزل الأساسية.  لذا أرجو معالجة المشكلة بشكل جذري والتحقق من جميع التوصيلات واستبدال القطع التالفة عند الحاجة، وعدم الاكتفاء بحلول مؤقتة تؤدي إلى تكرار نفس العطل خلال فترة قصيرة.. https://retal-objects.yukiroad.ovh/tickets/pictures/msezgrdf405gzz1msezgrdg1msezgrdh.png https://retal-objects.yukiroad.ovh/tickets/pictures/msezguqm405gzz1msezguqn1msezguqo.png",plumbing
@@ -4824,8 +4821,8 @@ text,label
 "خزان المياه العلوي يسرب بسبب وصول المياه لفوق الحد الاعلى (عوامه)",pumps
 "لياسه الجدار الخلفي",paints
 "رفع المضخة ٥ سم عن قاع الخزان لكي لا تسحب الأتربة. إحكام إغلاق غطاء الخزان. تغيير ربلة غطاء الخزان الإنترلوك الخارجي و إحكام إغلاقة لمنع تسرب المياه لداخل الخزان.",plumbing
-"التروبية تحتاج صيانه",grading
 "وجود بقعه في الجبس  يوضح  تهريب مويه يظهر لي  بمعالجتها  غدا https://retal-objects.yukiroad.ovh/tickets/pictures/msxb1tct405gzw1msxb1tcu1msxb1tcv.png",waterproofing
+"التروبية تحتاج صيانه",grading
 "تهريب موية من سقف غرفة الماستر",waterproofing
 "لدي مشكله في الزوايا وارغب بحل المشكله --",cracks
 "السلام عليكم،  يوجد عندي شباك مايفتح في الدور الاول في غرفة الملابس المطله على الشارع. الفتاحة حقت الشباك خربانه عشان كذا مانقدر نفتحها   والله يعافيكم",doors_windows
@@ -4893,8 +4890,8 @@ text,label
 "يوجد روائح كريهة بالحمامات وأرجو الموعد يكون يوم السبت الساعه ١١ صباحا",drainage
 "تسريب في شطارات المياه ٣ مرات غيرتها ارجوا ايجاد شركة ممتازة",plumbing
 "يوجد رائحة كريهة بالحمامات",drainage
-"تسريب ماء في مغسلة المطبخ   https://retal-objects.yukiroad.ovh/tickets/pictures/msx6qpdd405gzw1msx6qpde1msx6qpdf.png",plumbing
 "الجبس خربان  بالاضافة عندي جدار فوق تشقق واضح مخيف  https://retal-objects.yukiroad.ovh/tickets/pictures/msm9t2a5405gzw1msm9t2a61msm9t2a7.png https://retal-objects.yukiroad.ovh/tickets/pictures/msm9t6hw405gzw1msm9t6hx1msm9t6hy.png",paints
+"تسريب ماء في مغسلة المطبخ   https://retal-objects.yukiroad.ovh/tickets/pictures/msx6qpdd405gzw1msx6qpde1msx6qpdf.png",plumbing
 "رائحة كريهة  تخرج من هذه الفتحات في المطبخ  بدات من اليوم الاحد بتاريخ هذه التذكرة https://retal-objects.yukiroad.ovh/tickets/pictures/msbzd56e405gzz1msbzd56f1msbzd56g.png",drainage
 "نحتاج كهربائي  وسباك",electricity
 "انسداد في فتحة تصريف حمام الماستر روم",drainage
@@ -4902,8 +4899,8 @@ text,label
 "التمديد صاير خارجي وخطير ع الماره في الفناء الخلفي https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mikbsalh405gzx1mikbsali1mikbsalj.png",electricity
 "يوجد رائحة كريهة وسيئة تطلع من فتحات الصرف والتفتيش و خصوصاً في الدور ٣ و في اكثر من حمام بعد. الرجاء حل الاشكالية عاجلاً.",drainage
 "غطاء الخزان الارضي لا يمكن إغلاقه بأي حال من الأحوال لعدم وجود ( حلق ) أو ( رقبة ) لغطاء الخزان",plumbing
-"رخام المغاسل عندي مكسوره ومدهونه  https://retal-objects.yukiroad.ovh/tickets/pictures/msyla1pt405gzw1msyla1pu1msyla1pv.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyla2yt405gzw1msyla2yu1msyla2yv.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyla3hq405gzw1msyla3hr1msyla3hs.png",ceramics
 "٢ فيش الكهرباء في غرفة النوم  لايعمل",electricity
+"رخام المغاسل عندي مكسوره ومدهونه  https://retal-objects.yukiroad.ovh/tickets/pictures/msyla1pt405gzw1msyla1pu1msyla1pv.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyla2yt405gzw1msyla2yu1msyla2yv.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyla3hq405gzw1msyla3hr1msyla3hs.png",ceramics
 "باب سطح الخدمات يوجد به فتحة وغير معزول باب مدخل المنزل الجانبي يوجد به فتحة وغير معزول",doors_windows
 "يوجد رائحة مزعجة وتم رفع طلب اكثر من ٣ مرات ولا تزال الرائحة موجودة",drainage
 "اغلب الاجهزه الالكترونيه لما اشبكها في الكهرب تخرب علما انها ٢٢٠",electricity
@@ -4923,7 +4920,6 @@ text,label
 "تشققات بالجدار الداخلي والخارجي",cracks
 "وجود راحه كريه صادره مدوره المياه.  ولا يعرف السبب.",drainage
 "شحره  تالف تحتاج اعاده زراعه",doors_windows
-"فتحة الكاميرا في المدخل التي تحتوي على اسلاك CAT6 مخفية بالحجر.",electricity
 "السلام عليكم، استبدال تلف غطاء الخزان الارضي الشكر لكم https://retal-objects.yukiroad.ovh/tickets/pictures/msm3k7n8405gzw1msm3k7n91msm3k7na.png",tank_cover
 "وجود رطوبة بالجدران",paints
 "المكيف فيه تسريب مويه الرجاء اصلاحها ضروري مأثره على اثاث",ac_ventilation
@@ -4935,7 +4931,6 @@ text,label
 "لم يتم عزل سلك الكهرب للطبلون",electricity
 "يوجد رائحة في احد المكيفات",plumbing
 "السلام عليكم ورحمة اللّهُ وبركاته اعزائي الكرام في رتال ١- توجد انسدادات في مواصير الصرف الصحي وبعد الكشف تبين وجود مخلفات بناء مما تسبب في ظهور حشرات وروائح محرجة وكذلك منسوب المياه في اكواع الرائحة غير متزن فالماء ليس مرتفع كفاية ليمنع الحشرات والرائحة الكريهة. ٢-وكذلك جميع النوافذ والنوافذ المنزلقة وبعض الابواب الخشبية لا تغلق بشكل جيد تسببت بوجود فئران وحشرات وغبار وهذه افات لا يجب التهاون في التعامل معها. ٣-وتبين أيضاً ان مغسلة حمام الصالة الداخلية والخارجية و مغسلة غرفة النوم الرئيسية ينقصها ديكورات مثل الموجود في فيلا العرض وتأكد ذلك بعد زيارة عدد من فلل الجيران. وأيضاً ترجد مغسلة بها خدوش من يوم الاستلام ولم يتم تغييرها وسبق ان رفعنا طلب ولم يتم التغيير. ٤- غطاء خزان الماء السفلي لا يغلق وهو شبه مكشوف طوال الوقت وحلق الخزان به رطوبه ولا يوجد به عزل وهذا قد يتسبب بضعف حلق الخزان وهبوط التربة واضرار قد تصل للخزان مستقبلا لا سمح اللّٰه نرجو الاطلاع على الصور المرفقة نرجوا تعاونكم وشكرا لكم. https://retal-objects.yukiroad.ovh/tickets/pictures/ms7kd457eey3l1ms7kd4581ms7kd459.png htt",plumbing
-"يوجد كسور في الجبس في عدة مناطق. حول اضاءات السبوت لايت وفتحات التكييف. وذلك بسبب تركيبها قبل التشطيب النهائي https://retal-objects.yukiroad.ovh/tickets/pictures/mspuk2q1405gzw1mspuk2q21mspuk2q3.png https://retal-objects.yukiroad.ovh/tickets/pictures/mspuk4b2405gzw1mspuk4b31mspuk4b4.png https://retal-objects.yukiroad.ovh/tickets/pictures/mspuk5f1405gzw1mspuk5f21mspuk5f3.png",gypsum
 "تسرب من احد الأنابيب في السطح يحتاج صيانة عاجلة. شكراً  https://retal-objects.yukiroad.ovh/tickets/pictures/mslosunr405gzw1mslosuns1mslosunt.png",plumbing
 "طلب تضويق الشبابيك من اجل سلامة الاطفال",doors_windows
 "مروحة الشفط في غرفة الخادمة تسريب من شباك غرفة السطح تسريب من شباك غرفة الخادمة باب الكراج فيه مشكله باب المدخل الرئيسي يحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته باب غرفة النوم الرئيسية تحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته ترويب انترلوك مدخل الشارع ( الارضيات ) يوجد ميول في رصيف الشارع عند الباب الرئيسي للڤيلا بما يتسبب بتجمع مياه الامطار عند الباب وجود مشاكل في غطاء الخزان الارضي بما لا يجعله يعمل بالشكل الصحيح وجود مشاكل في الدرج كما في الصورة ويحتاج اصلاح وترويب",ac_ventilation
@@ -4966,8 +4961,8 @@ text,label
 "السلام عليكم  يوجد مشكلة في الجدران",cracks
 "وجود تهريب في شطاف عدد اثنين ،،العوامه لا تعمل لا يوجد ماء بالخزان العلوي",plumbing
 "عزل الجدار  لجميع السور دار ما دار  للفلة حيث ان البوية تقشرت وتساقطت عزل + بوية",waterproofing
-"تبديل مروحه  خلل في ميزانية ادراج المطبخ عند الفتح",ac_ventilation
 "جهاز الانتركوم الخارجي لا يعمل ارجو استبداله في اقرب وقت ممكن   شاكرلكم",electricity
+"تبديل مروحه  خلل في ميزانية ادراج المطبخ عند الفتح",ac_ventilation
 "رخام المغاسل يحتاج وزنية وترتيب",doors_windows
 "مروحة الشفط في غرفة الخادمة تسريب من شباك غرفة السطح تسريب من شباك غرفة الخادمة باب الكراج فيه مشكله باب المدخل الرئيسي يحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته باب غرفة النوم الرئيسية تحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته ترويب انترلوك مدخل الشارع ( الارضيات ) يوجد ميول في رصيف الشارع عند الباب الرئيسي للڤيلا بما يتسبب بتجمع مياه الامطار عند الباب وجود مشاكل في غطاء الخزان الارضي بما لا يجعله يعمل بالشكل الصحيح وجود مشاكل في الدرج كما في الصورة ويحتاج اصلاح وترويب",ac_ventilation
 "باب الفلة الداخلي يحتاج ميزان",doors_windows
@@ -4993,7 +4988,6 @@ text,label
 "الشطاف بدورة المياه يهرب مويه",plumbing
 "السلام عليكم ..  تم كسر العداد من قبل الفريق المتخصص بأختبار مشروع تحلية المياه وعدم أصلاحه مع العلم أن له فتره طويل وهو بهذه الحاله من أول مابدئوا بأختبار المياه .. وحتى هذه اللحظه لم يتم اصلاحه https://retal-objects.yukiroad.ovh/tickets/pictures/mscvncla405gzz1mscvnclb1mscvnclc.png https://retal-objects.yukiroad.ovh/tickets/pictures/mscvnec2405gzz1mscvnec31mscvnec4.png https://retal-objects.yukiroad.ovh/tickets/pictures/mscvnh5a405gzz1mscvnh5b1mscvnh5c.png",plumbing
 "تنظيف جميع فتحات التصريف من بقايا مخلفات البناء كالحجر وقطع الإسمنت المتحجر و فتحات التصريف لغسالات الرخام. الموعد يكون يوم السبت ١٥/٨/٢٠٢٦ بعد الساعة ١٢م",plumbing
-"البويات خربانة بحاجة لضرب بوية حيث انه لا يمكن تنظيف الجدران لذلك اطلب منكم ضرب المنزل بالكامل بويات داخلية حيث ان الموجوده حاليا بوية وجه على الارجح نرجوا دعمكم . https://retal-objects.yukiroad.ovh/tickets/pictures/mst41bqi405gzw1mst41bqj1mst41bqk.png",paints
 "عدم تركيب ماسكات الشطافات بشكل صحيح  وتركيبها بشكل خاطي مما يودي لسقوطها باستمرار https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mm8lbhvv405h031mm8lbhvw1mm8lbhvx.png",plumbing
 "تم رفع طلب صيانة ٧ مرات لنفس الباب منذ استلام المنزل ولم يتم حل المشكلة للان كل مرة يتم محاولة ابراز القطعة الحديد ليتم اغلاق الباب بسهولة المشكلة انحناء الباب من الوسط كما واضح بالصورة ونتيجة لذالك لا يتم اغلاق الباب ويجي ضغطه ليقفل اتمنى حل المشكلة واصلاح الباب بدل من معاودة نفس الاجراءات بمحاولة ابراز القطعة الحديد لما تسببه من خط عند الدخول والخروج لبروزها الزائد",doors_windows
 "تحية طيبة ،، يوجد ضعف في  ضخ الماء عندي امل التواصل مع الرقم 0551385515  وكل عام وانتم بخير",pumps
@@ -5082,13 +5076,13 @@ text,label
 "يوجد تهريب ماء اسفل الحوض بحمام غرفة الماستر الرئيسية",plumbing
 "باب الشارع يعلق لسانه ولا يفتح الباب بسهولة",doors_windows
 "يوجد تشققات في دهان السور الخاص بالحوش حسب الصورة المرفقة، ارجو معالجتها",paints
-"يوجد ماء في الخزان ولكن لايصل إلى دورات المياه او المطبخ",plumbing
 "لا يوجد عزل للحمامات مجرد بويه ويتطلب الامر عزل كامل دورات المياه المحدده وعددها ٣ جاهزه لتنفيذ العزل",waterproofing
 "تكرر انتشار الروائح من جميع الحمامات حتى مع الاستخدام والصيانة من قبلكم ..",drainage
 "يوجد تسريب ماء  في الزاوية داخل فتحة الخزان الارضي حسب الصورة المرفقة ارجو عمل لياسة لها وعزلها  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk480ibx405gzp1mk480iby1mk480ibz.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk480k0u405gzp1mk480k0v1mk480k0w.png",waterproofing
 "تصدع في الجدار الخارجي لياصة بويه داخليه  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjihhu1v405gzx1mjihhu1w1mjihhu1x.png",cracks
 "تحية طيبة،،، وجود تشققات على طول الجدار",cracks
 "الأبواب ما تتسكر بعد الموكيت . اربع ابواب تحتاج قص",doors
+"يوجد ماء في الخزان ولكن لايصل إلى دورات المياه او المطبخ",plumbing
 "فتحة الصيانة تحتاج إلى صيانة  https://retal-objects.yukiroad.ovh/tickets/pictures/msizn8ak405gzw1msizn8al1msizn8am.png",paints
 "تشققات سراميك  https://retal-objects.yukiroad.ovh/tickets/pictures/msjcm0qp405gzw1msjcm0qq1msjcm0qr.png",paints
 "لم يتم تزيويدي بمفتاح للطبلون الموجود في الحوش عند استلام المنزل ولا يمكن اغلاقه. كماًان الطبلون لك يتم تركيبه جيداً وغطيان الكهرباء الخارجية المقاومة للماء بسبب الحرارة تكسرت ويجب تغييرها. https://retal-objects.yukiroad.ovh/tickets/pictures/ms7gqzdmeey3l1ms7gqzdn1ms7gqzdo.png https://retal-objects.yukiroad.ovh/tickets/pictures/ms7gr956eey3l1ms7gr9571ms7gr958.png",electricity
@@ -5114,16 +5108,14 @@ text,label
 "عندي الفيش حق بابا الكراج عطلان + غطاء مرحاض غرفة النوم الماستر + ديكور انفك في دورة المياة + علبة عداد المياه الخارجي مفكوكة من يوم استلمت البيت",electricity
 "مشكله تدفق الماء  في الافرنجي",plumbing
 "تسرب في مغاسل دوره المياه  التمديد جدا سيئ ارجوا تغييره https://retal-objects.yukiroad.ovh/tickets/pictures/msc3uxid405gzz1msc3uxie1msc3uxif.png",plumbing
-"تحتاج المنطقة إلى تكسير البلاطة بشكل موضعي لتمديد الكهرباء إلى منطقة خدمة الشاور، وذلك لتوفير نقطة كهرباء مناسبة وتركيب لمبة LED، مع إعادة إغلاق وترميم البلاطة بعد الانتهاء من التمديد بحيث يكون التشطيب النهائي مطابقًا للموجود. للإحاطه حمام غرفه الماستر   https://retal-objects.yukiroad.ovh/tickets/pictures/msx35fc4405gzw1msx35fc51msx35fc6.png",electricity
 "السلام عليكم،   ابواب الألمنيوم الخارجية تحتاج على وزن   https://retal-objects.yukiroad.ovh/tickets/pictures/mswsapxl405gzw1mswsapxm1mswsapxn.png",doors_windows
 "تسرب المياه من شطاف حمام غرفة النوم بالدور الثاني",plumbing
 "تجمع المياة في وسط الحمام بسبب عدم وزنية البلاط. https://retal-objects.yukiroad.ovh/tickets/pictures/msmukbt1405gzw1msmukbt21msmukbt3.png",grading
-"زوايا الباب غير متناسقة   يحتاج ضبط لمفصلات الابواب",doors
-"١. مكيف المطبخ والصالة يطلع اهتزاز وصوت ٢. مكيف سبيلت مايشتغل ٣. مكيف سبيلت يطلع موية",ac_ventilation
 "وجود بعض أوساخ على البروفايل الخارجي للدهان تحتاج الى اعادة دهان https://retal-objects.yukiroad.ovh/tickets/pictures/msbo015p405gzz1msbo015q1msbo015r.png https://retal-objects.yukiroad.ovh/tickets/pictures/msbo078t405gzz1msbo078u1msbo078v.png",paints
 "لوحة رقم الفيلا مثبته على حجرة صغيرة واي تحريك لها تختل اللوحة لعدم تثبيتها https://retal-objects.yukiroad.ovh/tickets/pictures/msbo5i47405gzz1msbo5i481msbo5i49.png",doors_windows
 "وجود رائحة مجاري موذية في حمامات غرف الماستر https://retal-objects.yukiroad.ovh/tickets/pictures/mseskc4m405gzz1mseskc4n1mseskc4o.png https://retal-objects.yukiroad.ovh/tickets/pictures/mseskdps405gzz1mseskdpt1mseskdpu.png",drainage
 "وجود التماس كهربائي ياثر على الاضاءات",electricity
+"زوايا الباب غير متناسقة   يحتاج ضبط لمفصلات الابواب",doors
 "تم طلب صيانه ووضع معجون ولم يتم سنفرته بشكل صحيح مما ادى الى وجود بروز وتموجات",paints
 "شبك الباب في الصالة السفليه متقطع",doors_windows
 "تهريب غسالة",plumbing
@@ -5142,9 +5134,9 @@ text,label
 "عندي مشكله في تمديد الكميرات والانتركم الجرجور مسدود والسلك يوصل لحد معين.",electricity
 "تنقيط موية في الحمام",plumbing
 "السيفون في حمام الدور الارضي جهة النساء لايعمل  مرفق فديو",plumbing
-"يوجد تبيان بالألوان البوية في الدور الأرضي  وتششققات وإعادة دهان في الدور الثالث ( السطح)  https://retal-objects.yukiroad.ovh/tickets/pictures/msycgc7g405gzw1msycgc7h1msycgc7i.png https://retal-objects.yukiroad.ovh/tickets/pictures/msycgdkl405gzw1msycgdkm1msycgdkn.png",paints
 "الجدار في شق كبير في غرفة الماستر",cracks
 "يوجد لدي تشققات في الدهان الخارجية وايضاً هناك اختلاف في الاولوان بعد معالجة الرطوبة",paints
+"يوجد تبيان بالألوان البوية في الدور الأرضي  وتششققات وإعادة دهان في الدور الثالث ( السطح)  https://retal-objects.yukiroad.ovh/tickets/pictures/msycgc7g405gzw1msycgc7h1msycgc7i.png https://retal-objects.yukiroad.ovh/tickets/pictures/msycgdkl405gzw1msycgdkm1msycgdkn.png",paints
 "ملاحظة المقيم تبين وجود فتحة في منفذ الفيش .  عدم اغلاق الفتحة بإحكام  https://retal-objects.yukiroad.ovh/tickets/pictures/msk2ehgz405gzw1msk2ehh01msk2ehh1.png https://retal-objects.yukiroad.ovh/tickets/pictures/msk2ekq7405gzw1msk2ekq81msk2ekq9.png",electricity
 "عدم وجود غطا لفتحة الخزان الأرضي  عدم اغلاق فتحة الرداد ( فتحة الصرف بجنب الخزان الأرضي ) مما تسبب بدخول مواد وبلاستيك.  https://retal-objects.yukiroad.ovh/tickets/pictures/msk38f2q405gzw1msk38f2r1msk38f2s.png https://retal-objects.yukiroad.ovh/tickets/pictures/msk38gv2405gzw1msk38gv31msk38gv4.png https://retal-objects.yukiroad.ovh/tickets/pictures/msk38hhd405gzw1msk38hhe1msk38hhf.png",plumbing
 "رطوبه في جدار الحوش الخارجي  - عند المحبس  https://retal-objects.yukiroad.ovh/tickets/pictures/msk2hs9f405gzw1msk2hs9g1msk2hs9h.png https://retal-objects.yukiroad.ovh/tickets/pictures/msk2htwl405gzw1msk2htwm1msk2htwn.png",waterproofing
@@ -5162,7 +5154,6 @@ text,label
 "الرجاء الاتصال على هاتف",plumbing
 "رائحة قويه كريهه من الحمام علما انه تم صيانتها مسبقا ولا تزال موجوده",drainage
 "الحمام المشترك بين الغرفتين بالدور الأول يوجد فيه رائحة لم تذهب مع الصيانة الأولى، قد تكون الريحة من جهة كرسي الحمام",drainage
-"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله وبركاته  ارفع لكم هذا الطلب المستعجل جدا حول  مشكلة شطاف الحمامات في الدور الثالث  وعددها ٢ حيث انها تعمل فقط على الحار ارجو حل هذه المشكلة عاجلا ولكم الشكر",plumbing
 "يوجد رائحة صرف صحي بالحمام العلوي .. يجب تغيير جلبة مرحاض الحمام",drainage
 "باب الكراج ينفتح من نفسه والمشكلة متكرره",garage_door
 "يوجد فتحات فراغات بالدرج الداخلي بحاجه الى إغلاق ترويبه لان النمل يدخل بكثره من خلالها على البيت .. مرفق صورة كمثال",pest_control
@@ -5198,9 +5189,9 @@ text,label
 "١- يوجد روائح كريهة في الحمامات ٢- ماء البالوعة يخرج من تصريف الدش ٣- يخرج اتربة من الخلطات و الشطافات و المراحيض في حال تم تركها لفترة بدون استخدام -اقل من ٣ مرات في اليوم-",drainage
 "تهريب في شطاف الحمام في غرفة الماستر",plumbing
 "السيفون في حمام الدور الارضي جهة النساء لايعمل  مرفق فديو",plumbing
-"السلام عليكم   يوجد تشققات فوق نافذة الماستر روم كما هو موضح لكم في المرفق   https://retal-objects.yukiroad.ovh/tickets/pictures/msy8uts0405gzw1msy8uts11msy8uts2.png https://retal-objects.yukiroad.ovh/tickets/pictures/msy8uvr6405gzw1msy8uvr71msy8uvr8.png",cracks
 "تسريب من صنبور الحوش تسريب موية من ماصورة  غسالة حمام السطح وروائح كريهة من تصريف غسالة الملابس",plumbing
 "خراب في الشطافات وتسرب  وتسققات في الجدران والاسقف",plumbing
+"السلام عليكم   يوجد تشققات فوق نافذة الماستر روم كما هو موضح لكم في المرفق   https://retal-objects.yukiroad.ovh/tickets/pictures/msy8uts0405gzw1msy8uts11msy8uts2.png https://retal-objects.yukiroad.ovh/tickets/pictures/msy8uvr6405gzw1msy8uvr71msy8uvr8.png",cracks
 "فجوات في الانترلوك الانترلوك تم برده بالصاروخ",ceramics
 "تسريب سيفوان حمام المجلس. تسريب شطاف حمام العيشه. الباب الرئيسي محتاج صيانه للقفل. اضوية الدرج الطابق الأول لا تعمل. بعض الاماكن صغيره تحتاج الدهان.",plumbing
 "اعادة عزل لجدار الحوش",waterproofing
@@ -5211,7 +5202,6 @@ text,label
 "باب حمام الغرفة الرئيسية باب منزلق المطبخ فيه فتحة يدخل منها فيران",doors
 "المكيف لا يعمل بكفاءة عاليه",ac_ventilation
 "تم دهن هذه المنطقة بلون مختلف الصورة مرفقة",paints
-"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله وبركاته  ارفع هذه التذكرة لحل مشكلة احدى الحمامات حيث يصدر رائحة كريهه جدا  ارجو حل المشكله عاجلا  وشكرا",plumbing
 "الغطاس لايعمل",pumps
 "التماس في لوحة الكهرباء الدور الاول !!! ضروري بشكل عاجل التدخل للمعالجة",electricity
 "‏رصيف الشارع أمام الفلة مكسر ويحتاج تصليح وصبغة",interlocking
@@ -5221,6 +5211,7 @@ text,label
 "انبعاث رائحة كريه من دورات المياه ( احتماليات انسداد مجرى التصريف بسبب مخلفات البناء )",drainage
 "الجدار الخارجي (الحوش)",waterproofing
 "الجدار الخارجي (الحوش)",waterproofing
+"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله وبركاته  ارفع هذه التذكرة لحل مشكلة احدى الحمامات حيث يصدر رائحة كريهه جدا  ارجو حل المشكله عاجلا  وشكرا",plumbing
 "توجد مشكله في تهوية دورة المياه مكتومه جدا وضعيفه وسبق طلب صيانه وتعود المشكله ومن المتوقع بان تحتاج تهوية وتسليك من الخارج اكثر",ac_ventilation
 "لا يمكن شرح المشكله يجب ان يراء الفني ذلك ، ويجب تغيير الكراج بالكامل",garage_door
 "روائح في الحمامات بحاجه لتسليك",drainage
@@ -5257,7 +5248,6 @@ text,label
 "يوجد خلل خلال عملية الفتح والاغلاق",doors_windows
 "هناك سدد في ماسورة مجلى المطبخ، والمياه لا تذهب من مجلى المطبخ بسبب السدد",drainage
 "يوجد اثار كسر في الجدار اثناء بناء المرر",cracks
-"‏العوامة في الخزان العلوي لا تعمل ويتم تسرب الماء من الخزان إلى السطح  ‏وجود فتحات في الأرضيات الداخلية والخارجية مما يسبب تواجد الحشرات والنمل في البيت بشكل هائل ￼￼",plumbing
 "السلام عليكم ورحمة الله وبركاته  اما بعد  اود اتنويه بعد عمليه التنظيف للفله واجهت مشكله ان بعض الجدران يوجد فيها بقع سوداء لا يمكن تنظيفها بسبب عمليه الدهان. الرجاء دعمكم بمعالجة المشكله. مع التحيه",paints
 "احتاج صيانة الباب الخارجي  يوجد خلل",doors_windows
 "يوجد عطل في المضخة ( الاتوماتيك لا يعمل )",pumps
@@ -5273,9 +5263,9 @@ text,label
 "السلام عليكم هذا طلب لاعادة العزل",waterproofing
 "رؤايح كريهه جدا بيارة وهاذي المرة الثالثه واطلب تصليحها وأرجّع رؤايح البيارات القراش خبط صار يفتح ويقفل من نفسه آخر شيء اصبح manual",drainage
 "السلام عليكم اواجه مشكله حاليا في ان بعض الافياش لايوجد فيها كهرباء، الرجاء دعمكم العاجل بعمل صيانه عاجله للتمديدات مع التحيه",electricity
-"السلام عليكم،   الحديقة الخارجية تحتاج الى دهم كما هو مرفق لكم في الصورة  https://retal-objects.yukiroad.ovh/tickets/pictures/mswsctbj405gzw1mswsctbk1mswsctbl.png",paints
 "يوجد رائحة بالمجلس داخل عند النافذة وليس بالحمام",smells
 "تحتاج وزرن وتعديل الربل الخاص بالنوافذ وذلك لمرور الهواء والاصوات منه يحتاج شد واعاد صيانه",doors_windows
+"السلام عليكم،   الحديقة الخارجية تحتاج الى دهم كما هو مرفق لكم في الصورة  https://retal-objects.yukiroad.ovh/tickets/pictures/mswsctbj405gzw1mswsctbk1mswsctbl.png",paints
 "الاضاءة الخارجية تحتاج تغيير  https://retal-objects.yukiroad.ovh/tickets/pictures/msu1d0l4405gzw1msu1d0l51msu1d0l6.png",electricity
 "طلب اعمال صيانة بويه خارجية للحوش  ووجود مشكلة في الباب لايفتح  و عدم وجود مفتاح للطبلون مثل اللي في الصورة  وجود رائحة فالحمام  https://retal-objects.yukiroad.ovh/tickets/pictures/msn7uuhv405gzw1msn7uuhw1msn7uuhx.png https://retal-objects.yukiroad.ovh/tickets/pictures/msn7v2s4405gzw1msn7v2s51msn7v2s6.png https://retal-objects.yukiroad.ovh/tickets/pictures/msn7v7i8405gzw1msn7v7i91msn7v7ia.png",paints
 "جميع الحمامات تخرج منها رائحة كريهة امل معالجة المشكلة",drainage
@@ -5412,7 +5402,6 @@ text,label
 "لدي اضاءة لاتعمل عدد ٨ داخلية",electricity
 "لا يوجد ريموت تحكم للمكيفات الغرف بعد التسليم",ac_ventilation
 "يوجد تسرب ماء غير واضح مصدره",plumbing
-"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله  ارفع هده التذكره للقسم المختص لانهاء الجبس والدهان بعد صيانة التكييف المركزي مع أ. مصعب",gypsum
 "لدي مشكلة وجود رائحة كريهة في الحمام الماستر بشكل واضح ومزعج .. سكنت مؤخرا والرائخة مستمرة من البداية",drainage
 "المضخة السفلية لا تعمل ولا ترفع الماء لاعلى واللخزان الان فاضي ولا يوجد به ماء",pumps
 "تهريب مغسلة وتغيير شطافات",plumbing
@@ -5483,7 +5472,6 @@ text,label
 "تم تغيير البلاط بعد اشعارهم بوجود ملاحظات ولكن لم يتم التنظيف",cleaning
 "وجود نمل في البيت الرجاء القضاء عليه",pest_control
 "تسرب بالجدار وجوانب الدرج مو معروف من وين جايه",waterproofing
-"لي شطاف يهرب مويه  بزبوز الحوش الخلفي مكسور  الافرنجي العلوي يهرب ماء  المغسلة اللي تحت تهرب مويه  بعد التنظيف الدرج فيه فتحات يحتاج ترويبه  المغسلة العلوية تحتاج سلكون  https://retal-objects.yukiroad.ovh/tickets/pictures/msyde3x9405gzw1msyde3xa1msyde3xb.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyde4zc405gzw1msyde4zd1msyde4ze.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyde5o1405gzw1msyde5o21msyde5o3.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyde636405gzw1msyde6371msyde638.png",plumbing
 "يوجد انسداد في الصفايات بسبب الاسمنت والاوساخ",drainage
 "احتاج وزن للنوافذ",doors_windows
 "عزل المنطقة الخاصة بالخزان الارضي وتنظيفها",waterproofing
@@ -5508,7 +5496,6 @@ text,label
 "تصريف الماء يحدث احتباس في الحوش الخلفي  جهة المطبخ وضروري تعديل الميول",grading
 "١- يوجد اتربه في   ومخلفات بناء في  الخزان العلوي والسفلي.. يوجد مخلفات بناء في تصريف دوارات المياه.  ٢- غطاء الخزلن الارضي تالف  ٣- لايوجد مفتاح غطاء الخران الارضي  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mij6xrha405gzx1mij6xrhb1mij6xrhc.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mij6xt2i405gzx1mij6xt2j1mij6xt2k.png",cleaning
 "السلام عليكم ورحمة الله وبركاته الملاحظة عل صيانة أبواب دورة المياه لاتزال موجودة  وتحتاج الى وزنية",doors
-"نامل تكليف من يلزم بمعالجة البويا نظرا لوجود اشكالية سابقة https://retal-objects.yukiroad.ovh/tickets/pictures/msz28rvb405gzw1msz28rvc1msz28rvd.png",paints
 "مرحاض احد الحمامات بالدور العلوي لا يصرف قد يكون هناك سدد",plumbing
 "سبق صبغ البويه فيه هذه المنطقه ويوجد اختلاف بدرجة اللون  الحل صبغ كامل الجدار لتوحيد اللون",paints
 "يرجى معالجة الابواب",doors
@@ -5516,17 +5503,17 @@ text,label
 "الكرسي في الحمام المجاور للمطبخ مسدود",drainage
 "الكرسي في الحمام المجاور للمطبخ مسدود",drainage
 "يوجد انسداد المياه لا يتم تصريفها من دورة المياة",drainage
+"سباكه في دورات المياه  في روائح والمويه ماتمشي زين",plumbing
 "عدا الكهربائي",electricity
 "عدم اكمال الترويبه والبلاط الناقص",ceramics
-"سباكه في دورات المياه  في روائح والمويه ماتمشي زين",plumbing
 "السلام عليكم   يوجد صوت قوي يخرج من مكيف الصالة الرئيسية ، جودة التكييف في الدور الأرضي ضعيفة.   الرجاء المعاينة  عبدالمحسن",ac_ventilation
 "العوامة في الخزان العلوي لا تعمل و الراجع غير موصل",pumps
 "السلام عليكم ورحمة الله وبركاته مساء الخير  يوجد لدي ملاحظة على لون مغسلة دورة مياه الغرفة الرئيسية (أجلكم الله) ، علماً بأنه تم ملاحظة اختلاف اللون اثناء الاستلام وأفاد المهندس وليد بأنه سيكلف العمال بعمل جلي للمغسله ولكن لم يتم ذلك على اكمل وجه ويلاحظ اختلاف اللون عن مغسلة مجلس الضيوف  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mionmxaf405gzx1mionmxag1mionmxah.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mionmys2405gzx1mionmys31mionmys4.png",plumbing
 "عندي مشكلة بالشطافات جميعها ويوجد خدش في مغسلة دورة المياه الرئيسية https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mip0p7fi405gzx1mip0p7fj1mip0p7fk.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mip0p91h405gzx1mip0p91i1mip0p91j.png",plumbing
 "تجدون برفقه ملف يحتوي على ملاحظات الوحدة",plumbing
 "تصدع في البلاط الدور الاول في غرف النوم  شطافات دورات المياه  عدم نظافة كراسي دورات المياه  عدم اكمال ترويبة البلاط الداخلي ودورات المياه",ceramics
-"يوجد ريحة في الحمامات",plumbing
 "باب المنيوم الحديقة لايغلق جيدا + باب حمام لا يغلق",doors_windows
+"يوجد ريحة في الحمامات",plumbing
 "شبابيك غير موزونه وشباك المجلس لا يقفل",doors_windows
 "الميول في المدخل غير صحيحه وتم اطلاع المهندس شريف. عليها",grading
 "ميول الجلسة حق الشباك لغرفة الماستر الصغيرة مقلوب للداخل",doors_windows
@@ -5537,12 +5524,12 @@ text,label
 "عندي مشكلة بالشطافات جميعها ويوجد خدش في مغسلة دورة المياه الرئيسية https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mip0pf74405gzx1mip0pf751mip0pf76.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mip0pg23405gzx1mip0pg241mip0pg25.png",plumbing
 "تصريف المياه في الغرفة الرئيسية مسدود",drainage
 "يوجد تسريب ولا يوجد ماسوره للحديقة",plumbing
+"عندي رخامه مكسوره وكم بلاطه داخلي وخارجي يحتاج تغيير",ceramics
 "ارجو معالجة التشوة في الواجهة حسب الصورة المرفقة، مع العلم ان التعديل السيء الموضح بالصورة تم خلال فترة الاستلام وافاد الموظف المصري بأن الاثر واختلاف اللون سيزول بعد يومين لكنه استمر لغاية الآن (اكثر من شهر) https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/miuanc76405gzx1miuanc771miuanc78.png",paints
 "السلام عليكم يوجد لدي تسريب مياة من كرسي الحمام في الدور الاول",plumbing
 "الباب عطلان من الداخل  فقط بالريموت يعمل",garage_door
 "شطاف حمام غرفة الخادمة مكسور منذ تركيبه ولا يعمل",plumbing
 "تكييف حار",ac_ventilation
-"عندي رخامه مكسوره وكم بلاطه داخلي وخارجي يحتاج تغيير",ceramics
 "رطوبة بالجدار خلف دورة المياه في الارتداد الجانبي",waterproofing
 "مروحة شفاط دورة المياه السفلية (امام المدخل الرئيسي ) لا تعمل و حسب فحص كهربائي المشروع افاد بفرع طلب تغيير المروحه.",ac_ventilation
 "يوجد دهانات متقشرة خارج وداخل المنزل",paints
@@ -5550,7 +5537,6 @@ text,label
 "نافذة لا تقفل بالكامل يدخل هوا وغبار",doors_windows
 "نافذة لا تقفل بالكامل يدخل هوا وغبار  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mix018zc405gzx1mix018zd1mix018ze.png",doors_windows
 "الشطافات ردئيه  هذا ثاني شطاف يتعطل قبل اسكن البيت",plumbing
-"كرسي المرحاض في أحد دورات المياه يحتاج إلى صيانة",plumbing
 "يوجد ملاحظات داخلية",plumbing
 "ابواب خشبية",plumbing
 "اصلاح  التشقق في فيش الكهرب بالدور الثاني (غرفة الخادمة) تنظيف الجدران والجدران والافياش من بقايا البويات والتوسخات",electricity
@@ -5580,7 +5566,6 @@ text,label
 "يوجد كسر في الدرج  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mj4hrjzj405gzx1mj4hrjzk1mj4hrjzl.png",structural
 "يوجد كسر في الدرج  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mj4hrq5z405gzx1mj4hrq601mj4hrq61.png",structural
 "كسر في الجدار الخارجي   https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mj4hm51e405gzx1mj4hm51f1mj4hm51g.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mj4hm6k7405gzx1mj4hm6k81mj4hm6k9.png",cracks
-"يوجد تهريب في شطاف الحمام https://retal-objects.yukiroad.ovh/tickets/pictures/mt00zhuc405gzw1mt00zhud1mt00zhue.png",plumbing
 "اعمال دهان لاجزاء من البروفايل الخارجي",paints
 "مشاكل في الألمنيوم",doors_windows
 "باب شبك السطح  احد الشبابيك (المسكه)",doors_windows
@@ -5648,17 +5633,16 @@ text,label
 "القاعدة الخاصة بنافذة غرفة السطح سقطت بسبب سوء التركيب، ارجو اصلاحها  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mje5yxyu405gzx1mje5yxyv1mje5yxyw.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mje5yzkg405gzx1mje5yzkh1mje5yzki.png",doors_windows
 "مشكلة ريحة في حمامات الماستر كريهه لا تطاق ومزعجة",drainage
 "تسريب الماء من صنبور حمام",plumbing
-"بعد عمل العزل في السطح يحتاج بويه  https://retal-objects.yukiroad.ovh/tickets/pictures/mt015nz2405gzw1mt015nz31mt015nz4.png",paints
 "يوجد فتحات بالبلاط الداخلي ويخرج منه نمل",ceramics
 "السلام عليكم ، حصلت هذي الطاولة عندي في الفلة ليست تبعي ، ولا اعلم من ادخلها فلتي  فضلا ازالتها",cleaning
 "المغسله مسدوده",plumbing
 "تغير ٦ شفافات بلياتهم يسربون في ٦ حمامات",ceramics
 "تنضيف أمام الفيلا مخلفات https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjeij49e405gzx1mjeij49f1mjeij49g.png",cleaning
 "ارجو معالجة او استبدال مواسير المياه في السطح، لان حالتها سيئة ومرتفعة عن الارض حسب الصور المرفقة  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjeq4846405gzx1mjeq48471mjeq4848.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjeq4aaq405gzx1mjeq4aar1mjeq4aas.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjeq4bea405gzx1mjeq4beb1mjeq4bec.png",plumbing
+"بعد عمل العزل في السطح يحتاج بويه  https://retal-objects.yukiroad.ovh/tickets/pictures/mt015nz2405gzw1mt015nz31mt015nz4.png",paints
 "السلام عليكم  فضلا ، احتاج تقليل مستوى فتح النوافذ لامان الأطفال للنوافذ الموجودة في الدور الاول  لجميع الغرف",doors_windows
 "عازل  مائي متشقق ويحتاج الى جديد سمنت تيشن عازل",waterproofing
 "النوافذ",doors_windows
-"المغسله ما تصرف المويه",plumbing
 "EXTERNAL: This is an external email received from the Internet.  السلام عليكم يوجد ملاحظتين لتهريب المياه وتأثيرها على الجدار الداخلي للمنزل، ١- باب السطح الامامي ويحتاج عزل باب السحب لتفادي التهريب. ٢- ماصورة تصريف المياه من السطح تأثر على الغرفه الارضيه. مرفق الصور.",waterproofing
 "طلب تضويق فتحت الشبابيك  في الدور الاول من اجل سلامة الاطفال",doors_windows
 "طلب تنظيف للوحده من الداخل بعد اعمال الديكورات",cleaning
@@ -5667,7 +5651,6 @@ text,label
 "دهانات داخليد وخارجية",paints
 "EXTERNAL: This is an external email received from the Internet.  الاخوة الكرام في رتال  بعد استلام الفلة تكررت ورود تعرجات في اسقف الفيلا وبالاخص مجلس الرجال وصالة الطعام، علماً انه تمت معالجة التشققات في الاسقف قبل الاستلام، آمل دعمكم في مراجعتها وكما لوحظ وجود تعرجات في السطح بعد معالجة الدهان الذي تم اثناء مرحلة الاستلام. مرفق الصور لاطلاعكم",cracks
 "باب القاراج لا يعمل معلق على الوضع اليدوي",garage_door
-"رااائحة كريهة في الحمام",plumbing
 "ميزان باب المنزل الخارجي",doors_windows
 "سبق رفع تذكره لمعالجة الدهان وعند المعالجه يوجد اختلاف باللون https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjgzs2x9405gzx1mjgzs2xa1mjgzs2xb.png",waterproofing
 "وجود رطوبة على الجدار الخارجي الملاصق للجار  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjh35ldo405gzx1mjh35ldp1mjh35ldq.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjh35nyj405gzx1mjh35nyk1mjh35nyl.png",ceramics
@@ -5677,7 +5660,6 @@ text,label
 "مع الامطار طلعت بوية جدار الحوش كامل يحتاج صبغة ومواد كيميائية لضمان عدم التكرار",cracks
 "يوجد شقوق في الجدار الخارجي للحوش  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjgvlr8z405gzx1mjgvlr901mjgvlr91.png",paints
 "يد الشباك انفكت و الشباك مفتوح",doors_windows
-"فتحات التهوية في سطح السطح  تالفه ومتكسرة وبعضها قصير وبعضها طويل  المفترض طويله لتفادي التهريب اثناء المساء والأمطار  يوجد تصوير  https://retal-objects.yukiroad.ovh/tickets/pictures/mszuysig405gzw1mszuysih1mszuysii.png https://retal-objects.yukiroad.ovh/tickets/pictures/mszuyuwr405gzw1mszuyuws1mszuyuwt.png",ac_ventilation
 "ناقص الغطاء (الصفاية / الشبك)  الدور الثالث  مفتاح لوحة الكهرباء غير موجود( الحوش ) https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjhdwgnz405gzx1mjhdwgo01mjhdwgo1.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjhdwhwh405gzx1mjhdwhwi1mjhdwhwj.png",drainage
 "ابواب الحمامات والغرف لا تغلق بشكل كامل ويوجد ضوء خارج من الابواب",doors
 "لا تغلق بشكل صحبح  الغرفه الماستر الثانيه https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjhdnwfc405gzx1mjhdnwfd1mjhdnwfe.png",doors
@@ -5715,8 +5697,6 @@ text,label
 "انسداد وطفح من صفاية الغسيل تبع الغسالة",drainage
 "غطاس الكهرباء لايعمل",pumps
 "البوية الخارجية متشققة",paints
-"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله وبركاته  ارفع هذه  التذكره لصيانة باب الحمام  حيث انه لايقفل  بتاتا ويوجد  شرخ في حلق نفس  الباب الخشب من الاعلى  بحاجه لصيانه ايضا وقفل  احدى  الغرف بحاجه لصيانه  شاكره لكم",doors
-"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله وبركاته  افيدكم بانقطاع المياه عن وحدتي السكنيه ارجو حل آلمشكله عاجلا للضروره",plumbing
 "اللي او الجرجور اسفل مغسلة المجلس غير مغلق ويحتاج الى تثبيت بشكل جيد https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjok7axd405gzp1mjok7axe1mjok7axf.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjok7byk405gzp1mjok7byl1mjok7bym.png",plumbing
 "تعديل ميول",grading
 "الكراج لا يعمل تصريف الحوش الخارجي دفع الماء للسطح",garage_door
@@ -5726,15 +5706,14 @@ text,label
 "قاعدة شطاف حمام غرفة الماستر مكسوره وتحتاج الى اصلاح او تغيير",plumbing
 "لا تعمل المضخة في الخزان الأرضي",pumps
 "احتاج مفتاح للخزان https://retal-objects.yukiroad.ovh/tickets/pictures/mslk9xy7405gzw1mslk9xy81mslk9xy9.png",tank_cover
-"التشجير ضعيف وغير مكتمل https://retal-objects.yukiroad.ovh/tickets/pictures/msvndojg405gzw1msvndojh1msvndoji.png",cleaning
 "حمام الغرفة الرئيسية فيه ريحة  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjoj96y6405gzp1mjoj96y71mjoj96y8.png",drainage
+"التشجير ضعيف وغير مكتمل https://retal-objects.yukiroad.ovh/tickets/pictures/msvndojg405gzw1msvndojh1msvndoji.png",cleaning
 "الخزان الارضي يوجد به اشكاليه وهذا الكسر الرابع خلال شهرين والكسر الثاني خلال اسبوع وتم الكشف من قبل الزامل وكان السبب هو الدفان اللي حول الخزان ارجو حل المشكله وتصليح الدفان حول الخزان وتغيرة حيث ان التصليح واللحام غير مجدي وسبق ان حصل عندي هبوط بالانترلوك بسبب التسريبات والارضية لدي غير",plumbing
 "تم عمل جزء من الشغل و لم يتم اكماله  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjq4hgx1405gzp1mjq4hgx21mjq4hgx3.png",plumbing
 "مفتاح  الاضاءة بالمطبخ لايعمل من وقت الاستلام واعتقد انه مكسور بالإضافة لوجود سلك مكشوف في العداد الخارجي في الفيلا",electricity
 "١- خطر جدا وجود لي كهرباء مفتوح قد يكون مربوط بالطبلون  بجانب الخزان ( يوجد صورة )  ٢- يوجد ميلان غير صحيح في المطبخ ٣- الأسوار لا يوجد فيها عزل سفلي ٤- يوحد كركات في يسار الفله في الاعلي قد تكون هناك خطر علي المبني الخارجي المفروض عمل شبكة وأسمنت وبويه وليس مثل العمل الحالي فقط إسمنت وبوية فقد تتكرر مره اخري ٥- الأسوار فيها معالجة غير صحيحة ويوجد كركات المفروض يتم عمل شبكة وتصبغ بشكل جيد وليس العمل الحالي الواضح  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjpzox2o405gzp1mjpzox2p1mjpzox2q.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjpzoxzw405gzp1mjpzoxzx1mjpzoxzy.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjpzoycc405gzp1mjpzoycd1mjpzoyce.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjpzoypc405gzp1mjpzoypd1mjpzoype.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.",electricity
 "الشبابيك لا تغلق بإحكام كما يوجد فراغات في إطار الألمنيوم .  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjo2uptj405gzp1mjo2uptk1mjo2uptl.png",doors_windows
 "هبوط في احد قطع بلاط الحوش",ceramics
-"نقص في تركيب عدد لمبة  واحدة اسبوت لايت لم يتم تركيبه ولم يتم فتحه في الجبس مرفق لكم المخطط الانشائي  https://retal-objects.yukiroad.ovh/tickets/pictures/msyeqa9l405gzw1msyeqa9m1msyeqa9n.png",electricity
 "السلام عليكم، مساء الخير  تم ملاحظة وجود العديد من التشققات الداخلية بالدور الاول والثاني من بعد الامطار",cracks
 "يوجد مشكله في ميول البلاط مقابل مدخل الصالة",grading
 "تم تعبئة الخزان الارضي لكن الخزان العلوي شبه فارغ والدينمو او المضخه لاتعمل لسحب المياه للاعلى مما ادى لضعف دفع المياه في الصنابير مما كانت عليه وقت الاستلام ، برجاء الزياره والتقييم والاصلاح وشكراً.",pumps
@@ -5761,7 +5740,6 @@ text,label
 "الكهرباء لاتعمل في الدور الأرضي",electricity
 "نوافذ غير متزنه وبحاجه إلى وزون بالإضافة إلى وجود صعوبة في القفل و الفتح",doors_windows
 "تشققات في البوية https://retal-objects.yukiroad.ovh/tickets/pictures/msoostoo405gzw1msoostop1msoostoq.png",paints
-"السلام عليكم   بعض تركيبات المطبخ غير موزونه او غير مركبة بالشكل الصحيح   احتاج ايضا مساعدة في تركيب فرن مدخنه    https://retal-objects.yukiroad.ovh/tickets/pictures/mswsji9w405gzw1mswsji9x1mswsji9y.png https://retal-objects.yukiroad.ovh/tickets/pictures/mswsjjbd405gzw1mswsjjbe1mswsjjbf.png https://retal-objects.yukiroad.ovh/tickets/pictures/mswsjjvn405gzw1mswsjjvo1mswsjjvp.png https://retal-objects.yukiroad.ovh/tickets/pictures/mswsjkup405gzw1mswsjkuq1mswsjkur.png",plumbing
 "أحتاج صيانة عاجلة للتشطيب والصرف الصحي والبلاط وترويب",paints
 "أحتاج صيانة عاجلة للتشطيب والصرف الصحي والبلاط وترويب",paints
 "السلام عليكم يوجد لدي مشكلة في الشباك العلوي",doors_windows
@@ -5769,7 +5747,6 @@ text,label
 "تكرر الكسر اكثر من مره في غطاء خزان المياه ارجوا تغيير الغطاء الخارجي  https://retal-objects.yukiroad.ovh/tickets/pictures/msbuabdb405gzz1msbuabdc1msbuabdd.png",tank_cover
 "حجم الفتحة في الحوش اكبر من الطبلون !",doors_windows
 "العلاقه مصدية ومتشققه حقت حمام مجلس الرجال https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjh3a6c7405gzx1mjh3a6c81mjh3a6c9.png",doors_windows
-"السلام عليكم ،، أسلاك المرايا عفير متوفره ،، وأسلاك المغاسل ليست منده للمفاتيح ،، احضرت شركة لتمديد اللمبات المخفيه ولم يجدوا اي تمديدات للكهرباء ،، فقط أسلاك كعلقه ،، أرجو دعمكم العاجل للملاحظات المذكوره مع الطلب السابق    https://retal-objects.yukiroad.ovh/tickets/pictures/msyy8pyk405gzw1msyy8pyl1msyy8pym.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyy8qyq405gzw1msyy8qyr1msyy8qys.png",electricity
 "السلام عليكم سوينا صيانة وبعد الصيانة الموية ماصارت تنزل من البزابيز ممكم تشوفون الحل وشكرا",plumbing
 "سبق ورفعت طلب لمعالجة تشقق في جدار الحوش و العمال صلحوه لكن بطريقه مشوهه معجون  بدون بويه امريكيه مثل باقي الجدار المنظر بشع مرفق لكم الصوره اطالب بضربه بويه امريكيه مثل باقي الجدار ولم ارضى بهذا المنظر للأسف  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjwxqx6y405gzp1mjwxqx6z1mjwxqx70.png",paints
 "ظهور ماء في جدران الحوش كامله  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjxl3y9z405gzp1mjxl3ya01mjxl3ya1.png",waterproofing
@@ -5778,7 +5755,6 @@ text,label
 "وين الغطاء ؟ https://retal-objects.yukiroad.ovh/tickets/pictures/msovukyf405gzw1msovukyg1msovukyh.png",tank_cover
 "فتحة تصريف المطبخ مقفلة  دفع المياه الحارة ضعيف",drainage
 "هناك تشققات بسبب الرطوبة في الجدار الخارجي https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjx8ko16405gzp1mjx8ko171mjx8ko18.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjx8kq72405gzp1mjx8kq731mjx8kq74.png",waterproofing
-"نود إفادتكم بأنه أثناء إجراءات تسليم الفيلا بتاريخ 5 أغسطس 2026م، لوحظ وجود اتساخات شديدة من الإسمنت والغبار على الانترلوك الخاص بالفيلا، وتم التقدم بطلب لتنظيفه في حينه. وبناءً عليه، بدأ العامل بالتنظيف على أن يستكمل العمل في اليوم التالي لانتهاء ساعات عمله الرسمية. وعند معاينة الموقع في اليوم التالي، تبين أن الانترلوك لا يمكن معالجته بالتنظيف. وبحسب توجيهات مشرف التسليم، تم رفع طلب صيانة عبر التطبيق برقم (00203198) لتغيير الجزء التالف. وعلى إثر ذلك، حضر فني الصيانة للمعاينة وأفاد بأنه تم رفع طلب للإدارة، إلا أنه لم يتم اتخاذ أي إجراء حتى تاريخه. وحيث إن هذا الضرر سابق لعملية الاستلام الفعلية ولم ينتج عن الاستخدام، نأمل منكم التكرم بالاطلاع والتوجيه بسرعة معالجة الضرر واستبدال الانترلوك التالف في أقرب وقت ممكن. (مرفق لكم الصور التوضيحية)  مع خالص الشكر والتقدير،",interlocking
 "تم رفع تذكرة مرتين بوجود مشكلة بالباب الخلفي وتم اغلاقها بدون اصلاحها https://retal-objects.yukiroad.ovh/tickets/pictures/mskxiu8g405gzw1mskxiu8h1mskxiu8i.png https://retal-objects.yukiroad.ovh/tickets/pictures/mskxiv4t405gzw1mskxiv4u1mskxiv4v.png",doors_windows
 "وجود رطوبه  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjsyxo5x405gzp1mjsyxo5y1mjsyxo5z.png",waterproofing
 "أثار تسريب عند الحمام  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjy4aqpx405gzp1mjy4aqpy1mjy4aqpz.png",plumbing
@@ -5804,15 +5780,14 @@ text,label
 "السلام عليكم، يرجى اكمال الطلب واصلاح الخلل كما هو واضح في الصورة وشكراً  https://retal-objects.yukiroad.ovh/tickets/pictures/msopt83k405gzw1msopt83l1msopt83m.png https://retal-objects.yukiroad.ovh/tickets/pictures/msopt97l405gzw1msopt97m1msopt97n.png https://retal-objects.yukiroad.ovh/tickets/pictures/msopt9jm405gzw1msopt9jn1msopt9jo.png",paints
 "انقطعت المياه و لدي مشكله بالكهرب",plumbing
 "باب أحد دورات المياه لا يمكن فتحه، نحتاج إلى إصلاحه بشكل عاجل. مع التحية",doors
-"فقط دورة مياة واحده يوجد بها مسار للاضاءة .  https://retal-objects.yukiroad.ovh/tickets/pictures/mswbii7m405gzw1mswbii7n1mswbii7o.png",plumbing
 "EXTERNAL: This is an external email received from the Internet.   السلام عليكم ورحمة الله وبركاته،   أود إفادتكم بوجود مشكلة في باب السحب الخاص بالسطح، حيث أنه لا يعمل بالشكل المطلوب ولا يغلق الباب لوجود مشكله.   آمل منكم التكرم بإرسال فني مختص لمعاينة المشكلة واصلاحها في أقرب وقت ممكن.   تحياتي  الاسم: زياد الموسى  رقم الجوال: 0503431323  فله رقم: 191  مشروع نساج النرجس",doors_windows
 "لا يوجد تسليك للفايبر للداخل",electricity
 "خلل في تركيب الشطافات لحمامين  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk0sxvl0405gzp1mk0sxvl11mk0sxvl2.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk0sxvui405gzp1mk0sxvuj1mk0sxvuk.png",plumbing
 "الدهان الخارجي سقط",paints
 "بعد المطر البويه فيها تتفخ السور",waterproofing
+"فقط دورة مياة واحده يوجد بها مسار للاضاءة .  https://retal-objects.yukiroad.ovh/tickets/pictures/mswbii7m405gzw1mswbii7n1mswbii7o.png",plumbing
 "يوجد مشاكل في دورات المياه تسريب مياه  وايضا يوجد رطوبه في الجدران الخارجية وتلف في البويه",plumbing
 "خلل في تركيب الشطافات لحمامين  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk0sxuzd405gzp1mk0sxuze1mk0sxuzf.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk0sxvbm405gzp1mk0sxvbn1mk0sxvbo.png",plumbing
-"الكباس هذا اطرافه السفليه خربانه ولا يمكن شبك الغساله الاتوماتيك فيه لان السنه السفليه له غير جيده  https://retal-objects.yukiroad.ovh/tickets/pictures/mszwkuyi405gzw1mszwkuyj1mszwkuyk.png",plumbing
 "رطوبه في الدور الارضي والحوش وتقشر البويات",waterproofing
 "رطوبه في الدور الارضي والحوش وتقشر البويات",waterproofing
 "رطوبه في الدور الارضي والحوش وتقشر البويات",waterproofing
@@ -5823,7 +5798,6 @@ text,label
 "وجود رطوبة على الجدران  الخارجية للفيلا مما أدى إلى انتفاخ فيها",waterproofing
 "غساله تالفه  مدخل الرجال",plumbing
 "ميول بالانترلوك الداخلي  الخزان",interlocking
-"عاجل كرماً الماء في السطح بعد مشكلة الخزان وتسربه سبب مشاكل في الجدران بسبب عدم وجود عزل مائي.",waterproofing
 "4 مفاتيح للاضاية صعبة الاستخدام وبحاجة الى التغيير",electricity
 "عند فتح خطر جدا على الاطفال واحتمال السقوط، ارجو تعديل وزنية فتح النوافذ لتكون الفتحة صغيرة ولا تسمح بسقوط الطفل",doors_windows
 "البلاط كذلك",ceramics
@@ -5842,7 +5816,6 @@ text,label
 "احتاج اصلح الي موجود بصوره  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk3qdxoi405gzp1mk3qdxoj1mk3qdxok.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk3qdyyx405gzp1mk3qdyyy1mk3qdyyz.png",plumbing
 "احتاج اصلح الي موجود بصوره  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk3qe1df405gzp1mk3qe1dg1mk3qe1dh.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk3qe2jy405gzp1mk3qe2jz1mk3qe2k0.png",plumbing
 "السلام عليكم  مغلسة اليدين لحمام الماستر الرئيسي ( اكرمك الله )فيها بهتان سيء من تاريخ الاستلام وغير قابل  للتنظيف.  الرجاء الافادة كرماً",ceramics
-"بعد حل مشكلة التسريب بالمياه يوجد بقعة ماء على الجبس (مكان التسريب)  نأمل منكم اعادة طلاء المنطقة الموضحة  https://retal-objects.yukiroad.ovh/tickets/pictures/mswtmy3w405gzw1mswtmy3x1mswtmy3y.png",paints
 "يوجد فراغ اسفل الابواب حسب الصورة المرفقة  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk47qp94405gzp1mk47qp951mk47qp96.png",doors_windows
 "يوجد فراغات بجانب نعله الصالة العلوية وعدم اكتمال نعلة البلاط اوجو استبدال النعلة او اغلاق الفتحات بطريقة مناسبة  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk47v1x9405gzp1mk47v1xa1mk47v1xb.png",ceramics
 "لدي انتفاخ في البرفايل الخارجي ارغب باصلاحة",paints
@@ -5851,8 +5824,6 @@ text,label
 "لي الحمام خربان و يسرب ماء",plumbing
 "عدم وجود ربل لتغطية المسامير في باب الحمام المشترك للصالة العلوية https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mk4456nn405gzp1mk4456no1mk4456np.png",doors
 "باب الكراج يوجد به ميول، ايضا لا يتم اغلاقه بشكل سليم.",garage_door
-"السلام عليكم ورحمة الله وبركاته  فريق دعم رتال  لدي مشكلة مستمرة بالتهريب بالخزان، وصحيح بكل مره يتم تلحيم الخزان، لكن هل هذا حل منطقي وآمن لأم وثقت واشترت منزل من مطور معروف لتستقر به هي واطفالها!؟  تم تجاهل تذكرتي الاخيرة بطلبي لتقارير الزامل وكما ذكرت مسبقاً تلحيم الخزان ليس حل دائم وانا ملتزمة بتمويل عقاري لهذا المنزل ولا يوجد لدي سيولة تساعدني باصلاح الخلل بنفسي،،  لذلك، ارغب من حضراتكم التكرم بالتوجيه بهذا الأمر حيث ان السكن بمنزل لا نأمن ارضه ووضع اساساته يعرض اهل البيت للخطر وينافي اهداف شركتكم المرموقة واهداف وجهة الفرسان تحت اشراف الشركة الوطنية للاسكان  هذا الموضوع جداً مهم ولن يهدأ لي بال ولا منام حتى آمن منزلي",tank_broken
-"الحمام بجانب المطبخ (الكرسي)  يهرب كما هو ظاهر في الصور  https://retal-objects.yukiroad.ovh/tickets/pictures/msx9n6gt405gzw1msx9n6gu1msx9n6gv.png https://retal-objects.yukiroad.ovh/tickets/pictures/msx9n7pd405gzw1msx9n7pe1msx9n7pf.png https://retal-objects.yukiroad.ovh/tickets/pictures/msx9n8qu405gzw1msx9n8qv1msx9n8qw.png",drainage
 "بلاط الانترلوك لموقف السيارة. صار فيه هبوط مما يؤدي الى تجمع المياه فيه وركودها",interlocking
 "تشقق بالجدار الخارجي",cracks
 "لدي يد نافذه تحتاج تغيير",doors_windows
@@ -5890,10 +5861,12 @@ text,label
 "تهريب في دورات المياه",plumbing
 "السلام عليكم ورحمة الله وبركاته يوجد لدي مشكله في قفل النافذه (حسب الصوره المرفقه). آمل تكليف المختصين لديكم بالاصلاح وشكراً",doors_windows
 "يوجد تهريب في محبس الخزان العلوي  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mkb6h8oy405gzp1mkb6h8oz1mkb6h8p0.png",plumbing
+"وجود حشرات صغيرة داخل المنزل",pest_control
 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",plumbing
 "15541545",plumbing
 "الصفاية في حمام الغرفة الرئيسية لاتعمل نهائيا ولا يمكن تصريف المياه",drainage
 "تصريف حمام المجلس الارضي يطفح https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mkbg2bm2405gzp1mkbg2bm31mkbg2bm4.png",drainage
+"لدي عطل في باب الكراج",garage_door
 "٢ حمام تخرج منها روائح كريهة والباب الرئيسي ما يسكر يحتاج استخدام القفل",drainage
 "يوجد مشكلة في عزل الجدران القريبه من اخواض الحديقه لا يوجد عزل بها ادى الى تقشر البويه",waterproofing
 "يوجد رائحة كريهة جدا في دورات المياة  لاتطاق",drainage
@@ -5911,6 +5884,7 @@ text,label
 "تشققات في الدهان للاسوار الحوش ورطوبة واختلاف وتشققات بالجدران",paints
 "باب السحب بين المجلس والصالة يحتاج رفع وضبط وزنية",doors_windows
 "تسريب بكرسي المرحاض ، لم يتم تركيبه بالشكل الصحيح .",plumbing
+"تشققات بالدهان الخارجي https://retal-objects.yukiroad.ovh/tickets/pictures/mt0h8is2405gzw1mt0h8is31mt0h8is4.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0h8jr1405gzw1mt0h8jr21mt0h8jr3.png",paints
 "تشقق جدار الحوش  كامل",cracks
 "تشقق جدار الحوش  كامل",cracks
 "تشقق جدار الحوش  كامل",cracks
@@ -5920,6 +5894,7 @@ text,label
 "السلام عليكم مشروع نساج تاون النرجس فيلا رقم 340 العمل / سلمان العصيمي رقم الجوال / 0566929996  يوجد تسريب مويه في الخزان الأرضي كما هو موضح في الصورة",plumbing
 "- اصلاح نعل الدرج (صنفرة او استبدال) - اصلاح كراكات في الجدران الداخلية الفيلا",doors
 "تقصير فتحات النوافذ وذلك للحماية من الاطفات + يوجد عطل في نافذة غرفه الطعام في الدور الارضي",doors_windows
+"ملاحظات بالخزان كسور",tank_broken
 "ابواب الحمام و بعض الغرف تحتاج الى ضبط الوزنية لعدم انغلاقها بشكل مباشر لابد من قفلها بالمفتاح باب الكراج لا يغلق الكترونياً النوافذ تفتح بشكل كبير مما فيه خطر على الأطفال نظافة الخزان",doors
 "يوجد لدي رطوبة في جدران المنزل والسور الخارجية",waterproofing
 "الماصورة منطلقة بسبب سنة الخزان العلوي",plumbing
@@ -5928,7 +5903,6 @@ text,label
 "مشكلة تهريب في الدينمو",pumps
 "١. البلاط في المجلس الأرضي طلبت تغييرة لانه مكسور عند الاستلام، ولم يتم. ٢. البلاط الذي تم تغييره في الحوش ، لم يتم عمل الترويبه له. ٣. هناك شرخ في باب الحمام الخاص بغرفة الخادمة في الدور الثاني.",ceramics
 "دريشتين الصالة متلاصقة ولا يمكن فكها عن بعض",doors_windows
-"ملاحظات بالخزان كسور",tank_broken
 "صعوبة إغلاق شباك المجلس بالدور الأرضي ارجو تغييره  https://retal-objects.yukiroad.ovh/tickets/pictures/msk74iw3405gzw1msk74iw41msk74iw5.png",doors_windows
 "صيانة شبك باب السطوح  https://retal-objects.yukiroad.ovh/tickets/pictures/msk7wxgo405gzw1msk7wxgp1msk7wxgq.png",doors_windows
 "تنظيف الوحده",ac_ventilation
@@ -6016,6 +5990,7 @@ text,label
 "تم اعادة رفع الطلب لم يتم اصلاح التسرب في الحنفيه ولم يزور اي فني",plumbing
 "عدم تصريف الماء ورجعوه داخل المنزل في المطبخ مما ادى الى التلف",drainage
 "تطبيل في البلاط",ceramics
+"التماس  ب الكهرباء",electricity
 "رائحه في احد دورات المكيفات  لا يوجد اغطيه في الصفيات  غطاء الخزان غير موجود  3 بلاطات مكسورة  النمل الابيض  تسريب في حوض المغسله  وروائح في دورات المياة  النافذة لا يمكن اغلاقها",plumbing
 "خلل في بعض المفاتيح",electricity
 "لا يغلق جيدا",doors_windows
@@ -6026,6 +6001,8 @@ text,label
 "تسريب مويه من الغرفة الرئيسية على مدخل البيت https://retal-objects.yukiroad.ovh/tickets/pictures/msqamuou405gzw1msqamuov1msqamuow.png https://retal-objects.yukiroad.ovh/tickets/pictures/msqamwoe405gzw1msqamwof1msqamwog.png",waterproofing
 "لا تغلق",doors_windows
 "قماش الباب",doors
+"احتاج تنظيف للمواصير الصرف  الصحي",plumbing
+"تواجد حشرات صغيرة داخل المنزل",pest_control
 "شبك الشباك عدد 2",doors_windows
 "كسور متعددة في رخام الدرج",ceramics
 "لي الشطاف مقطوع ويهرب 2",plumbing
@@ -6034,6 +6011,7 @@ text,label
 "فيه تهريب ماء ودايم تشتغل المضخة",plumbing
 "الدهان يحتاج للتعديل",paints
 "الدهان يحتاج للتعديل",paints
+"شطاف حمام الخادمة والحمام في الطابق الارضي خربان https://retal-objects.yukiroad.ovh/tickets/pictures/mt0c2odr405gzw1mt0c2ods1mt0c2odt.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0c2p6n405gzw1mt0c2p6o1mt0c2p6p.png",plumbing
 "رشاش خربان يهرب ماء وكرسي افرنجي مايوقف الماء ابد",plumbing
 "نافذة الألمنيوم في الدور الثاني لا تغلق جيداً",doors_windows
 "الشطاف لا يعمل جيدا ويوجد تسريب",plumbing
@@ -6053,6 +6031,7 @@ text,label
 "الخلاطات و الليات تخرج ماء لونه بني عند استخدامها لاول ثواني",plumbing
 "رائحة كريهة في فتحات تصريف الارضيه  في المطبخ وفي دورات المياه",drainage
 "شروخ وتكسير في جدار السطح",cracks
+"-[ ] يوجد بلاطة مكسورة بالحوش - [ ] زجاج الباب السحاب مخدوش - [ ] هراب مغسلة الماستر مفقود - [ ] أزرار السيفون  المعلق غير ثابته - [ ] لسان باب حمام الماستر بدون مسمار - [ ] سيفون حمام  ماستر 2 معلق يحتاج تغيير - [ ] رائحة مجاري من كرسي حمام مدخل العائلة  - [ ] فراغات بلاط ترويبة حمام العائلة - [ ] فراغات في رخام الدرج  - [ ] ربل الأبواب غير ثابت  - [ ] تعرجات بوية غرفة السطح - [ ] تشقق بوية غرفة الأطفال  - [ ] خدش مغسلة حمام مدخل العائلة - [ ] عزل حديقة الحوش وازالة المخلفات  - [ ] تركيب الجلبة في الصفايات  - [ ] ترتيب الزراعة وتغيير الشجرة الميتة امام المنزل في رصيف الشارع",ceramics
 "يوجد لدي بلاطتين مكسورة على عتبة باب السطح",ceramics
 "السلام عليكم  تسريب ماء على المطبخ من السطح",waterproofing
 "يوجد انسداد في صفايه",drainage
@@ -6072,6 +6051,7 @@ text,label
 "رائحة كريهه متكرره في احد دورات المياه",plumbing
 "١- يوجد سيفون معلق في في افرنجي دوره المياه ٢- ريحه صرف صحي قويه في حمام الغرفه رقم ٣",plumbing
 "شطاف حمام الماستر الثانية لا يعمل",plumbing
+"وزن نوافذ المنيوم مع تغيير شبك لنافذة.  دخول غبار ونمل من باب الرئيسي للمنزل.  https://retal-objects.yukiroad.ovh/tickets/pictures/mt0k44wa405gzw1mt0k44wb1mt0k44wc.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0k45y4405gzw1mt0k45y51mt0k45y6.png",doors_windows
 "مرحبا نرجو ارسال الفني لمعالجة تهريب الماء من الخزان العلوي عن طريق المواصير الخظراء. القفل لهذة المواصير يسبب بتهريب الماء الى الخارج",plumbing
 "يوجد رائحة كريهة في احد الحمامات ويحتاج الى تنظيف فتحات التصريف او معالجة مشكلة موجودة",drainage
 "يوجد رائحة كريهة في احد الحمامات ويحتاج الى تنظيف فتحات التصريف او معالجة مشكلة موجودة",drainage
@@ -6087,6 +6067,7 @@ text,label
 "خلل جسيم في تنفيذ الجدران الداخلية لحمام غرفة النوم الماستر كما هو متضح لكم بالصورة المرفقة.  *المطلوب* الافادة وتعديل الخلل من المقاول والاستشاري",ceramics
 "واحد من غرف نوم الدور ١ الشباك غير موزون ولايقوم بالاغلاق كاملاً. تم رفع شكوى وقت الاستلام ولم يتم الاصلاح الى الان. الغرفة في الدور ١ على اليمين.",doors_windows
 "تطبيل في الحمامات انتفاخ ورطوبة",ceramics
+"نافذه الحمام الماستر لا تفتح     https://retal-objects.yukiroad.ovh/tickets/pictures/mt0j0u8n405gzw1mt0j0u8o1mt0j0u8p.png",doors_windows
 "العوامة الخزان العلوي لاتعمل",pumps
 "تم رفع تذكرة من قبل بوجود تنفيخ وتشققات بجدار الحوش، وتم اعادة صبغ الجدار قبل مايقارب اسبوع والان رجعت نفس المشكله انتفاخ وتشققات بالجدار. بحاجه الى عازل لحل المشكله",waterproofing
 "النوافذ بحاجه الى ميزان . ايضا نافذة الصاله بحاجة الى تصغير الفتحه للحماية للاطفال",doors_windows
@@ -6094,6 +6075,7 @@ text,label
 "الخزان العلوي مايمتلي مويه الا اذا حركت العوامه بشكل يدوي اللي بالخزان السفلي",pumps
 "بلاط خارجي",ceramics
 "٤ اهواز الحمامات تهرب ماء، تحتاج الى تغيير",plumbing
+"حافة الدرج مزالة بسبب عمل العمال ولم يتم عمل اي إصلاح لمدة اسبوع https://retal-objects.yukiroad.ovh/tickets/pictures/mt08xa6w405gzw1mt08xa6x1mt08xa6y.png",structural
 "جميع نوافذ المنزل بدون عزل الاصوات الخارجية مسموعه لداخل المنزل",doors_windows
 "برمجة الريموت",garage_door
 "البريكر في الطبلون الرئيسي الخاص بلمبات الاحواش الداخليه والخارجيه يقفل ويتم فتحه ويقفل مره اخرى باستمرار ولمدة شهر سابق",electricity
@@ -6103,6 +6085,7 @@ text,label
 "الصفاية في الماستر روم لاتصرف المياه وتخرج اوساخ الى السطح وتم رفع طلب مرتين ولم يتم حل المشكلة",drainage
 "يوجد مشكلة في البوية للحوش تم عمل دهان لها يوم الاربعاء الماضي والان يوجد تنفخ في البوية وتشقق امل فحص الجدار وعمل الدهان مره اخرى",paints
 "يوجد مشكلة في دورات المياه الرائحة سيئة جداً نحتاج حل للمشكلة",plumbing
+"ترويبة بلاط الحوش والاترلوك",ceramics
 "وجود رائحة كريهة جداً في حمام العاملة بالسطح",drainage
 "الأحبال في حرحور تمديد الكاميرات عالقة، مما يمنع تمديد الكيابل ، الرجاء فك السدد وإصلاحه.",electricity
 "سبق ورفعت تذكرة عن وجود خلل في مغسلة المجلس وبالتحديد ( الشلال) مختلف لونه عن بقية اجزاء المغسلة بشكل واضح جداً يحتاج لتغير ولم يتم التفاعل معي",plumbing
@@ -6117,6 +6100,8 @@ text,label
 "عندي مشكلة في برمجة باب الكراج احتاج حلها الفيلا اللي جنبي يفتح بابه  ويفتح بابي",garage_door
 "رائحة كريهة في دورات المياه وتم تنظيفها قبل اسبوع موقتا ورجعت مرة اخرى  مهم حدا",drainage
 "مشكلة في غطاء الخزان العلوي ايضا غطاء الخزان السفلي لا يغلق بشكل صحيح",tank_cover
+"باب الجراج خربان ما يشتغل",garage_door
+"يوجد اشتباه بوجود كسر في الخزان",plumbing
 "ظهور اسلاك كهرباء وحديد الاعمدة واحجار في احوض الزراعة تهدد السلامة خصوصا في وجود اطفال",structural
 "رائحة صرف صحي في دورات المياه",drainage
 "دخول أتربة من أسفل الباب، تحتاج معالجة",doors_windows
@@ -6156,6 +6141,7 @@ text,label
 "شبك الحشرات  يحتاج صيانة (يوجد فراغ)",doors_windows
 "تم اصلاح رخام الدرج بمعجون، وهذا غير مقبول نهائيا، ارجوا استبدال الرخام المكسور برخام جديد",ceramics
 "خدش في بلاط السطح (صالة السطح)، تبديل البلاط المخدوش ببلاط جديد",ceramics
+"تهريب في شطاف حمام الضيوف و حمام غرف النوم المشتركة",plumbing
 "تم إغلاق طلبين سابقين لإصلاح باب الكراج ولم يتم اصلاحه",garage_door
 "إضاءات الحوش ما تشتغل",electricity
 "توجد شفاطات لا تعمل وشفاطات هواء مفكوكة غير صالحة ، تم فكّها عند الاستلام لاصلاحها ولم يتم اصلاحها",ac_ventilation
@@ -6167,6 +6153,8 @@ text,label
 "النوافذ ما تسكر بشكل جيد و تبقى من الجوانب مفتوحة حتى بعد الاغلاق",doors_windows
 "توجد كسور عند الافياش",electricity
 "تنظيف",cleaning
+"روائح من غرف التفتيش احتاج كشف لجميع غرف التفتيش",drainage
+"ترويبة  رخام الدرج   ترويبة بلاط الفيلا من الداخل ترويبة سراميك الحمام",ceramics
 "نافذة الالمنيوم لا تغلق وسهلة الفتح",doors_windows
 "تشققات في دهان الحوش الخارجي بالإضافة إلى  عدد ٢ بلاطة حمام و٢ بلاطه الصالة الداخلية",paints
 "يوجد مشكلة في مفتاح الكهرب https://retal-objects.yukiroad.ovh/tickets/pictures/mspustqx405gzw1mspustqy1mspustqz.png",electricity
@@ -6196,6 +6184,7 @@ text,label
 "حمام الغرفة الرئيسية مسدود الصرف",drainage
 "يوجد تشققات بعد عمل صيانة من فني رتال لعزل النوافذ والانتركوم لايعمل",cracks
 "حمام الغرفة الرئيسية مسدود الصرف",drainage
+"بعد اتمام تمديد ماصورة المكيف قام العمال بكسر الزجاج وجعل بقايا الترميم على الارض لمدة اسبوع كامل ولم يتم ازالتها حتى الان https://retal-objects.yukiroad.ovh/tickets/pictures/mt08ufla405gzw1mt08uflb1mt08uflc.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt08ulc3405gzw1mt08ulc41mt08ulc5.png",doors_windows
 "مفتاح باب الكراج لايعمل",garage_door
 "ضعف عدد 2 خلاط مغسلة الحمام الاوسط والعلوي",plumbing
 "خلل في جميع وزنيات النوافذ",doors_windows
@@ -6214,6 +6203,7 @@ text,label
 "رائحة في دورة المياه وتغيير شطاف",drainage
 "تشقق في دهان الحديقة",paints
 "الشبابيك كذا مره ارفع وتجي الصيانه ولا يضبطونها الماء والتراب يدخل  الكراج نفس الوضع كذا مره ولا يضبطونه  والحين الخزان ما يعبي فوق",waterproofing
+"ريحة المجاري وكراسي الحمام",plumbing
 "وجود تسريب في سيفون حمام الرجال وسبق ان وجدة نفس المشكله قبل الاستلام",plumbing
 "الباب الخارجي للفلة لا يفتح؟! الباب المنزلق في السطح لا يفتح شكراً",doors_windows
 "بعد اخر صيانة لم يتم ارجاع شبك شباك صالة الطعام وصالة الدور الثالث",doors_windows
@@ -6225,6 +6215,7 @@ text,label
 "جهاز انذار الحريق عطلان",electricity
 "وزن ابواب الخشب الفيلا",doors
 "ريح قوي من الحمام",plumbing
+"كسور في البلاط بعد اعمال السباكة  https://retal-objects.yukiroad.ovh/tickets/pictures/mt07o1fw405gzw1mt07o1fx1mt07o1fy.png",ceramics
 "السلام عليكم باب السطح مقفل، و لم اجد مفتاح الباب  تحياتي،",doors_windows
 "ارتفاع منسوب أنبوب صرف التكييف",ac_ventilation
 "تشققات وبوية  على السور ورطوبة",cracks
@@ -6233,6 +6224,7 @@ text,label
 "تشققات وبوية  على السور ورطوبة",cracks
 "مشكله في الجبس الخارجي يسرب ماء    https://retal-objects.yukiroad.ovh/tickets/pictures/msqa8top405gzw1msqa8toq1msqa8tor.png",waterproofing
 "الجرجور والليات",drainage
+"وجود تشققات في مختلف أنحاء المنزل، تم محاوله معالجتها عده مرات وتعاود الظهور سريعا  https://retal-objects.yukiroad.ovh/tickets/pictures/mt0qkx3e405gzw1mt0qkx3f1mt0qkx3g.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0qkyb8405gzw1mt0qkyb91mt0qkyba.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0qkyx5405gzw1mt0qkyx61mt0qkyx7.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0qkzfj405gzw1mt0qkzfk1mt0qkzfl.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0qkzx5405gzw1mt0qkzx61mt0qkzx7.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0ql09n405gzw1mt0ql09o1mt0ql09p.png",paints
 "غطاء كرسي غرفه النوم الماستر المعلق وغطاء حمام الضيوف المعلق يوجد بهم خدوش ومتهالكه  اريد جديدة",doors
 "حابس هواء",plumbing
 "ريحة دورة مياه الماستر متكرره رغم قيام عامل السباكه بوضع سيلكون ولكن المشكله لم يتم حلها امل حضور المهندس للفحص وحل المشكله",drainage
@@ -6252,6 +6244,8 @@ text,label
 "الباب لا يعمل",doors_windows
 "منطقة الرمل الخارجية الخاصة للزراعة خارج المنزل، بها رائحة وتجمع للحشرات والرمل يحتاج نظافة",drainage
 "عندي احد المغاسل  يوجد بها تهريب مياة",plumbing
+"يوجد فراغات للباب الجانبي وشباك غرفة الماستر حيث انها غير محكمة الاغلاق ويدخل الهوا والغبار  https://retal-objects.yukiroad.ovh/tickets/pictures/mt0rs5he405gzw1mt0rs5hf1mt0rs5hg.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0rs6mz405gzw1mt0rs6n01mt0rs6n1.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0rs769405gzw1mt0rs76a1mt0rs76b.png",doors_windows
+"تحية طيبة هل يعقل وضع تمديدات الكهرب بهذا الشكل في الاحواض المخصصة للزراعة دون مراعاة لمعايير السلامة او وقوع صعق كهربائي لاسمح الله بسبب تأكل التمديدات بسبب مياه الري والاملاح  نامل معالجتها بشكل دقيق اجل حفاظا على سلامة اسرتي حفظنا وحفظكم الله  https://retal-objects.yukiroad.ovh/tickets/pictures/mt0hdonm405gzw1mt0hdonn1mt0hdono.png",electricity
 "يوجد مشاكل في الدهانات الخارجية ومشاكل في وزنية النوافذ  ايمن",paints
 "يوجد مشاكل في الدهانات الخارجية ومشاكل في وزنية النوافذ",paints
 "مدخل القراج يوجد تجمع مياه / الميول  انترلوك    تم ترك باب القراج مفتوح للبدء في العمل",grading
@@ -6276,6 +6270,7 @@ text,label
 "وجود بقعة بدرجة لون مختلف https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mltc6myi405h031mltc6myj1mltc6myk.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mltc6oag405h031mltc6oah1mltc6oai.png",paints
 "اضاءة البيت عطلانه",electricity
 "رائحة كريهة من دورات المياه",plumbing
+"الدهان الخارجي https://retal-objects.yukiroad.ovh/tickets/pictures/mt0uh7wu405gzw1mt0uh7wv1mt0uh7ww.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt0uhbh6405gzw1mt0uhbh71mt0uhbh8.png",paints
 "شطاف خربان رائحة سيئة في دورات المياه مشكلة في مروحة دورة المياه",plumbing
 "تحية طيبة ..  العوامه في الخزان العلوي لا تعمل، وايضا المضخة العلويه   تحياتي   https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlursszw405h031mlursszx1mlursszy.png",pumps
 "تحية طيبة ..  العوامه في الخزان العلوي لا تعمل، وايضا المضخة العلويه   تحياتي   https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlursyd2405h031mlursyd31mlursyd4.png",pumps
@@ -6283,9 +6278,11 @@ text,label
 "تشققات بالدهان الخارجي https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mluyc4mm405h031mluyc4mn1mluyc4mo.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mluyc5ph405h031mluyc5pi1mluyc5pj.png",paints
 "عندي مشكلة في باب الكراج مايشتغل، عندي مشكلة في تسليك الكاميرات الخارجية (مسدودة) عندي مشلكة في شفاط حمام الدور الارضي عنديّ إشكالية في ارضية غرفة الخادمة السراميك (ساخن) عكس السراميك اللي في الممر امام غرفة الخادمة الوليد",garage_door
 "باب لايغلق بشكل جيد",doors_windows
+"مخش بالباب الغرف تبع الغملاس وجلد باب دواير الصغيره",doors_windows
 "اصوات مزعجه بالخارج عزل الشباك يوجد به مشكله",doors_windows
 "باب الكراج لايقفل بالزر",garage_door
 "دورات المياه في المنزل يصدر منها رائحة مجاري كريهة حتى بعد تنظيفها وتعقيمها وهذا من قبل السكن وهذ مزعج جدا",drainage
+"كشف هلى الخزان",plumbing
 "الزراعة الخارجية غير موصلة بشبكة الري وكذلك وجود كسر في سنادة الشجر  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlvjrbai405h031mlvjrbaj1mlvjrbak.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlvjrjjk405h031mlvjrjjl1mlvjrjjm.png",plumbing
 "الزراعة الخارجية غير موصلة بشبكة الري وكذلك وجود كسر في سنادة الشجر  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlvjr3ii405h031mlvjr3ij1mlvjr3ik.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlvjr93j405h031mlvjr93k1mlvjr93l.png",plumbing
 "شق في باب دورة مياه الخادمه بلاط مكسور ترويبة بلاط الحوش شريف",doors
@@ -6300,6 +6297,7 @@ text,label
 "المكرمين شركة ريتال للتطوير العقاري السلام عليكم ورحمة الله  ارفع هذه التذكره  بطلب لاصلاح هذا الجزء من المغسله  حيث انه مكسور ولم تتم معالجته منذ امس بواحده جديده  دمتم برعاية الله",plumbing
 "خدوش عميقه في مسكات الابواب والابواب الخشبيه",doors_windows
 "الظاغط في الخزان العلوي لا يعمل",pumps
+"الكباس هذا اطرافه السفليه خربانه ولا يمكن شبك الغساله الاتوماتيك فيه لان السنه السفليه له غير جيده  https://retal-objects.yukiroad.ovh/tickets/pictures/mszwkuyi405gzw1mszwkuyj1mszwkuyk.png",plumbing
 "الالمنيوم مكسور، الالمنيوم غير مركب بشكل صحيح ، المعجون والدهان موضوع بشكل سيء  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmnsl405h031mlxrmnsm1mlxrmnsn.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmw6k405h031mlxrmw6l1mlxrmw6m.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmwk7405h031mlxrmwk81mlxrmwk9.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmwwo405h031mlxrmwwp1mlxrmwwq.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmxaz405h031mlxrmxb01mlxrmxb1.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrn56l405h031mlxrn56m1mlxrn56n.png",doors_windows
 "كسور في بلاط https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrdkwr405h031mlxrdkws1mlxrdkwt.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrdm8j405h031mlxrdm8k1mlxrdm8l.png",ceramics
 "الالمنيوم مكسور، الالمنيوم غير مركب بشكل صحيح ، المعجون والدهان موضوع بشكل سيء  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmtcg405h031mlxrmtch1mlxrmtci.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmuee405h031mlxrmuef1mlxrmueg.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmutc405h031mlxrmutd1mlxrmute.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmv6u405h031mlxrmv6v1mlxrmv6w.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmvkm405h031mlxrmvkn1mlxrmvko.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmvxd405h031mlxrmvxe1mlxrmvxf.png",doors_windows
@@ -6314,6 +6312,7 @@ text,label
 "تشققات https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrph32405h031mlxrph331mlxrph34.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrpi41405h031mlxrpi421mlxrpi43.png",cracks
 "تشققات",cracks
 "باب الالمينيوم لا يغلق  مكيف عطلان  تسريب في مكيف المطبخ",doors
+"يوجد مشكلة في التأريض",electricity
 "تطبيل https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxs2l6m405h031mlxs2l6n1mlxs2l6o.png",ceramics
 "الدهان سيء جدًا يوجد بويه في اغل جدران الوحدة، و اغلب جوانب الافياش فيها كسور https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxseebv405h031mlxseebw1mlxseebx.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsefsf405h031mlxsefsg1mlxsefsh.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxseg7r405h031mlxseg7s1mlxseg7t.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsf963405h031mlxsf9641mlxsf965.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsf9xx405h031mlxsf9xy1mlxsf9xz.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsfacg405h031mlxsfach1mlxsfaci.png",paints
 "حاجز الغبار والحشرات أسفل الباب غير مناسب",doors_windows
@@ -6324,8 +6323,10 @@ text,label
 "امل التواصل بخصوص الطلب السابق( مرفق) الخاص بغطاء الخزان. لم يصلني اتصال من قبلكم. حيث ارجو منكم حتى وان لم يتم الرد من احد عملائكم إعطاء فرصه والاتصال مره اخرى.  الطلب الاخر بخصوص باب الكراج ( الباب الخارجي الكبير). عند فتحه بالريموت يستمر بالعمل حتى اضغط الرز الاحمر من الكيبل الخاص فيه. ارجو حلها لكي لا يتعطل.  شكراً.  https://retal-objects.yukiroad.ovh/tickets/pictures/msqqzumo405gzw1msqqzump1msqqzumq.png",garage_door
 "الدهان سيء جدًا يوجد بويه في اغل جدران الوحدة، و اغلب جوانب الافياش فيها كسور https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxset6o405h031mlxset6p1mlxset6q.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsf147405h031mlxsf1481mlxsf149.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsfb8n405h031mlxsfb8o1mlxsfb8p.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsfbqp405h031mlxsfbqq1mlxsfbqr.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsfc1w405h031mlxsfc1x1mlxsfc1y.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsfcen405h031mlxsfceo1mlxsfcep.png",paints
 "تشققات وسقوط للبوية في الحوش الخارجي الغير بروفايل والدهان الأبيض الداخلي",paints
+"انطفاء اضاءات السقف في المطبخ و الصالة",electricity
 "الدهان سيء جدًا يوجد بويه في اغل جدران الوحدة، و اغلب جوانب الافياش فيها كسور https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsf9kq405h031mlxsf9kr1mlxsf9ks.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsfao5405h031mlxsfao61mlxsfao7.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsfb0y405h031mlxsfb0z1mlxsfb10.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsffde405h031mlxsffdf1mlxsffdg.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsffsb405h031mlxsffsc1mlxsffsd.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsfj8h405h031mlxsfj8i1mlxsfj8j.png",paints
 "عدم اخفاء التشققات في الجدار الخلفي للوحدة https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsi8ly405h031mlxsi8lz1mlxsi8m0.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsiabs405h031mlxsiabt1mlxsiabu.png",paints
+"احتاج تنظيف للمواصير الصرف  الصحي",plumbing
 "تهريب في صنبور الحوش الأمامي  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mly2i54r405h031mly2i54s1mly2i54t.png",plumbing
 "تشققات في سور المنزل الخارجي حسب المرفق لكم للتصليح وشكراً https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mly2uhid405h031mly2uhie1mly2uhif.png",cracks
 "* المكيف المركزي لايبرد نهائيا في الدور الاول والثاني في الصالتين من اول يوم تم استلام الفله وبحاجه الى تنظيف من الغبار ايضاحيث انه متراكم عليه بشكل مزعج   باب الحمام للغرفة الماستر بحاجة لتغيير وقد تم معاينته من قبل نجار الشركة وكتب الملاحظه  المواسير في البيت بحاجه الى تنظيفها بشكل جيد من مخلفات البناء",plumbing
@@ -6337,6 +6338,7 @@ text,label
 "السلام عليكم كل عام وانتم بخير يوجد فراغات في تبليط الرصيف امام منزلنا بالقرب من باب الكراج نأمل منكم تغطيها ببلاط او اسمنت  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlywblpz405h031mlywblq01mlywblq1.png",interlocking
 "1- شبك غرفة الخادمه ماهو مركب بشكل صحيح  2- بويه السور الخارجي فيها رطوبة يحتاج معالجة بشكل صحيح شريف",doors_windows
 "وزن ابواب واقفال",doors
+"يوجد تهريب في شطاف الحمام https://retal-objects.yukiroad.ovh/tickets/pictures/mt00zhuc405gzw1mt00zhud1mt00zhue.png",plumbing
 "دعمكم في فك باب السحب لدورة المياه في الغرفة الرئيسية لاعمال تركيب ورق الجدران",doors_windows
 "مرحبا",plumbing
 "رائحة كريهة جدا وقوية في دورة مياه غرفة النوم الرئيسية",drainage
@@ -6352,11 +6354,11 @@ text,label
 "باب الكراج يحتاج اعادة برمجه هذا ثاني طلب لي غير معقول كل شوي ينفتح الباب من قبل الجيران!! الرجاء ارسال فني (متخصص)",garage_door
 "ترويبات للحوش ومجلس الرجال",ceramics
 "احتاج تغيير  اغطية الافياش الخارجية بالحوش والسطوح متهالكه",electricity
+"تسريب في مغاسل غرفة النوم الماستر و كرسي الحمام",plumbing
 "يوجد عند تهريب مياة  من السطح العلوي الى الدور الارضي الواضح ان العزل فيه مشكله  سبب لي مشكله في البيت كاملك",waterproofing
 "رائحة كريهة في دورات المياه",drainage
 "المضخه تفصل باستمرار من دون سبب بشكل يومي او نصف يومي",pumps
 "خروج رائحة وتهريب بالسيفونات",drainage
-"خزان المياه السفلي يوجد به تسريب لان امس الليل عبيته فل واليوم الصباح ناقص  حوالي متر والخزان العلوي مليان مليان من قبل ما اعبي  الخزان السفلي اتمنى سرعة الصيانه لانه  تسبب لي بطلب وايت بشكل يومي",plumbing
 "تشققات خارجيه",cracks
 "سلام عليكم الاخوان في ريتال ، انا من اسبوع دخلت الفلة وتفاجأت بأنو الماء ضعيف جداً وفي بعض الأماكن لا يصل الماء ، والمضخة لا تعمل بطريقة طبيعية .. اضافة الى المواسير الممتدة الى الخزان فيها تسريب للماء ..",pumps
 "بعض الشبابيك ما يتسكر  والبعض يحتاج لوزنية",doors_windows
@@ -6424,8 +6426,11 @@ text,label
 "احدى الغرف شباكها يدخل منه الغبار والمطر ويوجد به تشققات في الجدار",doors_windows
 "الانتركوم لا يصدر صوت",electricity
 "جميع الابواب تحتاج وزنية",doors
+"بقع سوداء على زجاج الشباك",doors_windows
 "تشققات في اغلب الاسوار الخارجيه وبعض الاماكن الداخليه",cracks
 "ارجو التحقق من جميع مواصير شفاطات الهواء وان تكون فير مغلقه بمخلفات البناء",ac_ventilation
+"قطع في شبك النافذة https://retal-objects.yukiroad.ovh/tickets/pictures/mt0fg6et405gzw1mt0fg6eu1mt0fg6ev.png",doors_windows
+"اشكالية في الجدران",cracks
 "يوجد تشققات كبيرة في السور الخارجي تحتاج اللي معالجة كبيرة",cracks
 "النوافذ لا تغلق بالشكل المطلوب ويوجد فراغات في بعض النوافذ",doors_windows
 "باب الكراج لا يعمل بشكل اوتوماتيكي",garage_door
@@ -6454,6 +6459,7 @@ text,label
 "يوجد تشققات في جدار الحمام وفراغات في زوايا الابواب",cracks
 "توجد رائحه بدورات المياه لجميع حمامات الفله امل الحضور وعمل الصيانة اللازمة",drainage
 "3 شطافات حمام",plumbing
+"رفعت طلب صيانه لشبك الشباك الخارجي متشقق منذ استلام الفله ورفعت طلب من أيام المهندس حسن الزبيدي وجت الصيانه مره أخرى وقالوا التغير ليس من عندنا رفعت لكم أنصافنا في التركيبات السيئه في الشبابيك وانتم مثالا للرقي والتميزياريتال",doors_windows
 "عدم ثبات الاكسسوارات في العديد من دورات المياه",plumbing
 "تكسر بالبلاط بعد المعالجة",ceramics
 "تكسر بالبلاط بعد المعالجة",ceramics
@@ -6463,6 +6469,7 @@ text,label
 "الدينمو يعمل حتى بدون استخدام المياه ، امل الفحص و التاكد من الدينمو او من وجود تسرب.",pumps
 "شطافات الحمام الضغط عليها قوي ودايم تخري مره جبتو لي بلاستيك لونه رصاصي هذا افضل شي ناسب معي للحين شغال عندي 3خربانه",plumbing
 "تمديد سلك كاميره",electricity
+"ارضيات الكراج تتجمع المياه ولا يمكن تصريفها  https://retal-objects.yukiroad.ovh/tickets/pictures/mt15pv3j405gzw1mt15pv3k1mt15pv3l.png",grading
 "الزملاء الكرام في رتال تحية طيبة أثناء تركيب مكيفات الفيلا ظهرت لدي مشكلة أثناء تركيب الوحدة الداخلية للمطبخ، حيث ان مستوى ماسورة (وكوع) تصريف المياه اعلى من مستوى المكيف نظرا للسقف. (يرجى مراجعة الصورة المرفقة) وعليه امل تكليف المسؤول لتعديل مستوى ماسورة التصريف مما اعتقد انه سيتسبب في تكسير المنطقة وتعديل مستوى الماسورة من جديد وإعادة الجدار وإعمال التنفيذ والدهان للمستوى .. فقط الجزء اعلى باب المطبخ 'موقع المكيف'.",ac_ventilation
 "امل صيانة الرطوبه على سور الحوش",waterproofing
 "مشكلة بالدهان الخارجي",paints
@@ -6472,6 +6479,8 @@ text,label
 "باب الكراج لا يعمل دهان خارجي",garage_door
 "تدخل غبار",doors_windows
 "سقوط قطعة بلاستيكية من احد النوافذ",doors_windows
+"وزن ابواب الخشب",doors
+"احتاج تغيير علب غطاء الكهرباء بالحوش والسطح",electricity
 "الباب ما يقفل حسب الفيديو",doors_windows
 "الباب ما يقفل حسب الفيديو",doors_windows
 "الباب ما يقفل حسب الفيديو",doors_windows
@@ -6499,6 +6508,7 @@ text,label
 "الباب لا يتحرك عند استخدام الريموت ولا يمكن اغلاقه تو فتحه",garage_door
 "الأعمال المطلوبة: ١- عزل الجدران الخارجية ٢- تسكير فتحات التهوية في عدد ٢ حمامات  وليد",waterproofing
 "باب احد دورات المياه ما يصك زين",plumbing
+"السلام عليكم ورحمة الله وبركاته   يوجد ريحة صرف صحي في الدور الثاني اجلكم الله و تهريب الشطاف و لا يمكن اغلاقة الا عند طريق الحنفية الرئيسية ودورة المياة خارجة عن الخدمة حاليا  و تشقاقات البوية في السور الخارجي و الداخي كما هو موضح في الصورة https://retal-objects.yukiroad.ovh/tickets/pictures/msytkxvw405gzw1msytkxvx1msytkxvy.png https://retal-objects.yukiroad.ovh/tickets/pictures/msytkzlh405gzw1msytkzli1msytkzlj.png https://retal-objects.yukiroad.ovh/tickets/pictures/msytl0km405gzw1msytl0kn1msytl0ko.png https://retal-objects.yukiroad.ovh/tickets/pictures/msytl1ed405gzw1msytl1ee1msytl1ef.png",drainage
 "احتاج نفس الاضاءة",electricity
 "جميع تمديدات الفايبر في تاسيس البيت مسدودة",electricity
 "جميع تمديدات الفايبر في تاسيس البيت مسدودة",electricity
@@ -6509,12 +6519,14 @@ text,label
 "رطوبه في الجدار وقد تستدعي سباكه بسبب الانتفاخات لايكفي دهان",waterproofing
 "تسريب محبس السطح",plumbing
 "عندي رطوبة في الحمام لم يتم حلها",waterproofing
+"انتظار التوريد من المورد للزجاج",doors_windows
+"الشطافات والليات في الحمامات ضعيفة ومن نوعية رديئة لا تتحمل دفع الماء من المضخة مما سبب تلفها وتسريب الماء منها",plumbing
 "‏يوجد تكسر في الدهان الخارجي للفلة بعد الأمطار ‏و تصبغ في الجدران ‏وتحتاج دهان آخر ‏ويوجد عدم احترافية في تركيب مخرج المياه النازلة من السطح وشكلها قبيح تحتاج تغيير ‏وغرف التفتيش مليئة بالتراب ولم يتم عمل لياس لها كما هو مرفق في الصورة ‏وطريقة عملها غير احترافية وغير سليمة وتحتاج لي لياسة",paints
 "يوجد انسداد داخل فتحتا الصرف في اغلب دورات المياه",drainage
-"انتظار التوريد من المورد للزجاج",doors_windows
 "ترويبه البلاط",ceramics
 "‏يوجد تكسر في الدهان الخارجي للفلة بعد الأمطار ‏و تصبغ في الجدران ‏وتحتاج دهان آخر ‏ويوجد عدم احترافية في تركيب مخرج المياه النازلة من السطح وشكلها قبيح تحتاج تغيير ‏وغرف التفتيش مليئة بالتراب ولم يتم عمل لياس لها كما هو مرفق في الصورة ‏وطريقة عملها غير احترافية وغير سليمة وتحتاج لي لياسة",paints
 "غطاء الخزان الاسود يوجد به ثقب ويجمع اوساخ واتربة",tank_cover
+"خروج روائح كريهة مزعجة  من الحمامات والصفايات   تجعل من الجلوس في المكان صعب",plumbing
 "مشكله في تسليك اتوصيلات تمديد الكمرا مشكله في مروحة الشفط",electricity
 "باب الالمنيوم لا يتسكر من جهتين",doors_windows
 "الماسورتين الخارجة من سور الفيلا إلى الشارع والخاصة بتعبئة الخزان الأرضي والخزان العلوي ومكانها خارج السور وجتها مكسورة ولا اعلم من هو الفاعل .                             ( المطلوب ) اصلاحها",plumbing
@@ -6525,6 +6537,7 @@ text,label
 "عبيت وايت وامتلا السطح مويه",waterproofing
 "عبيت وايت وامتلا السطح مويه ونزل للحوش",waterproofing
 "وجود رائحة",smells
+"محبس الماء   يهرب ماء",plumbing
 "تسريب في احد جدران المنزل",waterproofing
 "تسريب في احد جدران المنزل",waterproofing
 "تسريب في احد جدران المنزل",waterproofing
@@ -6534,7 +6547,6 @@ text,label
 "النافذة لا يمكن اغلاقها",doors_windows
 "تهريب شطاف",plumbing
 "عوامة الماء في الخزان العلوي لا تعمل والماء لا يتوقف",pumps
-"محبس الماء   يهرب ماء",plumbing
 "النافذه لاتغلق باحكام",doors_windows
 "تصدية جميع مسامير الصفايات والصفايات في جميع الحمامات",plumbing
 "الرجاء تقليل مساحة الفتح  لشبابيك الدور الاول بحيث مستحيل الاطفال يقدرون يطلعون منها",doors_windows
@@ -6544,6 +6556,7 @@ text,label
 "كرسي الحمام غير ثابت وسبق صيانته دون فايده",plumbing
 "تنظيف صفايات",drainage
 "مدخل العائلة لايمكن اقفاله من الداخل بينما من الخارج يمكن القفل  https://retal-objects.yukiroad.ovh/tickets/pictures/msrjmonr405gzw1msrjmons1msrjmont.png",doors
+"تمزق السيلكون من الافرنجي https://retal-objects.yukiroad.ovh/tickets/pictures/mstm0k4v405gzw1mstm0k4w1mstm0k4x.png",doors_windows
 "الشطف خربان وكذلك سيفون وانسداد تصريف الفرجي",plumbing
 "نافذة المطبخ يدخل الغبار عن طريقها على اسطح المطبخ  وكذلك باب البيت الرئيسي غير معزول بشكل جيد لدخول الماء من تحت",doors_windows
 "انسداد كرسي الحمام و رائحة كريهة فق الحمامات العلوية الرجاء دعمكم العاجل",plumbing
@@ -6579,7 +6592,6 @@ text,label
 "يوجد انتفاخ في البروفايل في واجهة المنزل اسفل البروز الجانبي والدريشة وذلك بعد الامطار التي هطلت مساء امس امل توجيه المختصين لمعالجة المشكلة والتنسيق معي في ذلك 0569000333",paints
 "استكمال سابق لعمليه عزل السور",waterproofing
 "رطوبة وتشققات في الدهان الخارجي",paints
-"تمزق السيلكون من الافرنجي https://retal-objects.yukiroad.ovh/tickets/pictures/mstm0k4v405gzw1mstm0k4w1mstm0k4x.png",doors_windows
 "جهز الانتركوم متعطل والجرس الخارجي معلق",electricity
 "تشققات خارجية",cracks
 "تذبذب في الاناره مستمر وانطفاء الاضاءه عند استخدام الجرس",electricity
@@ -6610,6 +6622,7 @@ text,label
 "يوجد لدي الباب الخارجي مايفتح بسهولة لازم بالقوة المياة يكون لونها اسود في البداية مع العلم انه تم تركيب فلتر جامبو   وليد",doors_windows
 "يوجد بعض التشققات في المبنى الخارجي والجدران الخارجيه بالاضافة الى اقفال بعض الفتحات في البلاط الخارجي الذي تدخل معه النمل.",cracks
 "انسداد فتحات الاتصالات",electricity
+"الخزان الارضي يهرب ماء",plumbing
 "لا تتقفل نافذة السحب للملحق وطلب تغيير شبك نافذة السحب للصاله الأرضي  لوجود شقوق به",doors_windows
 "مكافحة النمل",pest_control
 "1- د هان سور الحوش بحاجة الى تعديل حيث تساقط جزء من الدهان بعد المطر 2- يوجد عدد من الفتحات او التشققات الداخلية في البلاط والارضيات مرفق صور توضّح الملاحظات",paints
@@ -6617,7 +6630,6 @@ text,label
 "عدم وجود عزل بين طبقات النوافذ السحب مما يزيد احتمالية دخول الغبار والحشرات",doors_windows
 "الباب الخشبي لا يقفل بالشكل المطلوب",doors
 "احتاج فقط تنضيف الشارع اللي مقابل فلتي يوجد بقعة زيت كما في الصورة",cleaning
-"الخزان الارضي يهرب ماء",plumbing
 "عندي بلاط الدرج واحد الغرف والصالة يحتاج إعادة تركيب مو ثابت",ceramics
 "عندي مشكله في اكثر من نافذه لا تغلق بالشكل الصحيح",doors_windows
 "يوجد تسريب في شطاف دورات المياه تحتاج الى تعديل + القماش المانع لدخول الغبار للمنزل يحتاج تغيير في ابواب الالممنيوم جميعاً حيث ان المنزل يمتلئ غبار بشكل سريع.",plumbing
@@ -6780,6 +6792,7 @@ text,label
 "توصيل سلك كات 6 للباب الخارجي مع تمديد اسلاك الكاميرات",electricity
 "الشجره تالفه",doors_windows
 "تهريب من السطح لغرفة العامله",waterproofing
+"زجاج البلكونه مكسور يحتاج تغير",doors_windows
 "لا تغلق بشكل صحيح الغرفة بجنب الماستر",doors
 "صوت عالي في مروحة الحمام (اول حمام في الوجه الدور الاول حق الصالة)",ac_ventilation
 "تم وجود صبة تحت احواض الزراعة",waterproofing
@@ -6788,7 +6801,6 @@ text,label
 "تسريب مياه بعد المطر..",waterproofing
 "تهريب من مياه الامطار في اكثر من موقع في المنزل كذلك الابواب تفتح مع الهواء الخفيف جدا تحتاج وزنية تهريب ماء من الالمنيوم على الرغم انه مغلق تهريب ماء من فتحات تمديدات المكيف في اكثر من موقع",waterproofing
 "دخلت موية المطر للغرفه من تحت البلاط",waterproofing
-"زجاج البلكونه مكسور يحتاج تغير",doors_windows
 "دخلت موية المطر للغرفه من تحت البلاط",waterproofing
 "دخلت موية المطر للغرفه من تحت البلاط",waterproofing
 "تسريب مياه",plumbing
@@ -6808,6 +6820,7 @@ text,label
 "حمام المجلس كل اذا جلس يوم بدون استخدام تطلع منه ريحه صرف صحي شديده",drainage
 "السلام عليكم .. يرجى اصلاح التالي : بلاط الحوش متكسر غطا الخزان بالحوش متكسر نعلات حوش متكسر",ceramics
 "دخول مياه من النوافذ و الابواب",waterproofing
+"سبق واخبرت المهندسين عن عيوب في دورات المياه بوجود فراغ مابين صفايات الشور وماسورة التصريف حيث ان المبلطين لم يوزنو الصفايه بحيث تكون راكبه على التصريف . احد المهندسين اقترح اضافة ايبوكسي بحيث يمنع تهريب المياه ولا أعلم مدى جودة وفعالية هذا الحل. لذلك الرجاء الزياره بشكل عاجل بكره انا متواجد طول اليوم  https://retal-objects.yukiroad.ovh/tickets/pictures/msyl0mkp405gzw1msyl0mkq1msyl0mkr.png",plumbing
 "السلام عليكم يوجد تهريب ماء من النوافذ و الابواب و تمديدات التكييف ممى تسبب باضرار مادية",waterproofing
 "بسبب المطر تهرب الماء لداخل البيت",waterproofing
 "يوجد تهريب مياة داخل المنزل من الابواب والنوافذ",waterproofing
@@ -6816,6 +6829,7 @@ text,label
 "تسريبات بعد المطر في الدور الأرضي والسطح بسبب العزل",waterproofing
 "هام ومستعجل  ميول سراميك",ceramics
 "موجود مشكله في ميول الحوش",grading
+"باب غرفه الماستر مايقفل المفتاح",doors
 "تسرب مياه",plumbing
 "يوجد انتفاخ في البلاط الخارجي",ceramics
 "وجود تسرب في الشباك وعدم تصريف المياه في السطح",doors_windows
@@ -6825,6 +6839,7 @@ text,label
 "وجود فراغات حول فتحات محابس الماء مما يسبب دخول الماء خلف البلاط، وجود معجون اضافي  انسداد في الصرف الصحي وجود تهريب اسفل المغسلة",ceramics
 "تصريف مويه السطح الرئيسي  والخدمات مقفله",grading
 "تهريب مويه الامطار لداخل المنزل",waterproofing
+"روائح كريهه",plumbing
 "تسريب مياه من النوافذ والباب السحب وباب المدخل  الجانبي",waterproofing
 "تهريب",waterproofing
 "مشاكل في تسريب ابواب المنزل الاثنين، مشكلة في دهان الحوش ، مشكلة في مروحة الشفط لحمام السطح العلوي منذ السكن هي مكسورة",doors_windows
@@ -6845,7 +6860,6 @@ text,label
 "تسريب شديد من بعد الامطار امس",waterproofing
 "دخول الامطار مع باب الفله الداخلي دخول الماء مع باب السطح لسان باب السطح انفك والباب لايغلق",waterproofing
 "خروج الترويبه  https://retal-objects.yukiroad.ovh/tickets/pictures/mstlqpml405gzw1mstlqpmm1mstlqpmn.png",ceramics
-"تكسر الزجاج لم يتم العمل على حلها او التوريد  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mr0wsclq405gzw1mr0wsclr1mr0wscls.png",doors_windows
 "يوجد روائح فالحمامات والصرف الصحي في   الحوش تهريب ماء مع الامطار والنوافذ          شريف",drainage
 "ميول الحمام غير مناسب يوجد تجمع في المياة، شباك العلوي يهرب مويه بعد المطر",grading
 "تكرر تهريب في غرفة النوم",waterproofing
@@ -6854,7 +6868,9 @@ text,label
 "تسريب خارج ماصورة تصريف الامطار",drainage
 "رطوبة على السور الخارجي",waterproofing
 "دخول الماء من الدريشة الخلفية عبورًا من سقف الدريشة ودخوله على المنزل",waterproofing
+"عاجل كرماً الماء في السطح بعد مشكلة الخزان وتسربه سبب مشاكل في الجدران بسبب عدم وجود عزل مائي.",waterproofing
 "'شقوق في شبك الالمونيوم",doors_windows
+"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله وبركاته  ارفع لكم هذا الطلب المستعجل جدا حول  مشكلة شطاف الحمامات في الدور الثالث  وعددها ٢ حيث انها تعمل فقط على الحار ارجو حل هذه المشكلة عاجلا ولكم الشكر",plumbing
 "تسرب الماء من نوافذ الالمنيوم وزن باب المنيوم",waterproofing
 "عطل في سيفون حمام الرجال وتسريب مياه المطر من نوافذ غرف النوم والمطبخ وحمام وباب السحب غرفة السطح",drainage
 "تم تعطل مضخة المياه للمره الثانيه على التوالي. في جميع المرات السابقه تم الاصلاح فقط مع وعود عدم تكرارها مره اخرى. يجب تغييرها من الاساس لان المشكلةسوف تتكرر في المستقبل بكثره وهذا شيء غير مقبول اطلاقاً",pumps
@@ -6864,7 +6880,6 @@ text,label
 "تهريب في الالمنيوم مع الامطار",waterproofing
 "وجود تسريب كبير للمياه في عدد من النوافذ بعد الامطار",waterproofing
 "عدد من المكيفات لم يتم ايصال تصريف الماء مما ادى الى رجوع الماء الى الداخل",ac_ventilation
-"احتاج الى زيارة فني الغملاس لوجود عطل باحد الابواب ويوجد عدة ابواب لا تغلق بسهوله",doors_windows
 "وجود بلاطة مكسورة بسبب عدم توفر اسمنت كافي تحتها",structural
 "مروحة الشفط لدورة المياه يوجد فيها صوت عالي",ac_ventilation
 "عدم تصريف مياه سطح الصاله",drainage
@@ -6937,11 +6952,12 @@ text,label
 "الماء لا يمشي في مجراء المياه فالحمام https://retal-objects.yukiroad.ovh/tickets/pictures/msrkzlmd405gzw1msrkzlme1msrkzlmf.png https://retal-objects.yukiroad.ovh/tickets/pictures/msrkzory405gzw1msrkzorz1msrkzos0.png",plumbing
 "مروحة الشفط في غرفة الخادمة تسريب من شباك غرفة السطح تسريب من شباك غرفة الخادمة باب الكراج فيه مشكله باب المدخل الرئيسي يحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته باب غرفة النوم الرئيسية تحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته ترويب انترلوك مدخل الشارع ( الارضيات ) يوجد ميول في رصيف الشارع عند الباب الرئيسي للڤيلا بما يتسبب بتجمع مياه الامطار عند الباب وجود مشاكل في غطاء الخزان الارضي بما لا يجعله يعمل بالشكل الصحيح وجود مشاكل في الدرج كما في الصورة ويحتاج اصلاح وترويب",ac_ventilation
 "انسداد في ماصورة صرف المياه في السطح . وتجمع المياه",drainage
+"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله وبركاته  افيدكم بانقطاع المياه عن وحدتي السكنيه ارجو حل آلمشكله عاجلا للضروره",plumbing
 "باب الفيلا الرئيسي لايفتح على الاطلاق سواء بمفتاح او بدون !",doors_windows
 "توجد فراغات وعدم احكام في بعض ابواب والنوافذ يودي لدخول الهواء والغبار",doors_windows
+"كسر في الخزان  https://retal-objects.yukiroad.ovh/tickets/pictures/msrn6h3s405gzw1msrn6h3t1msrn6h3u.png",plumbing
 "مروحة الشفط في غرفة الخادمة تسريب من شباك غرفة السطح تسريب من شباك غرفة الخادمة باب الكراج فيه مشكله باب المدخل الرئيسي يحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته باب غرفة النوم الرئيسية تحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته ترويب انترلوك مدخل الشارع ( الارضيات ) يوجد ميول في رصيف الشارع عند الباب الرئيسي للڤيلا بما يتسبب بتجمع مياه الامطار عند الباب وجود مشاكل في غطاء الخزان الارضي بما لا يجعله يعمل بالشكل الصحيح وجود مشاكل في الدرج كما في الصورة ويحتاج اصلاح وترويب تنظيف الحدائق الخارجية واصلاحها",ac_ventilation
 "انسداد في ماصورة صرف المياه في السطح . وتجمع المياه",drainage
-"كسر في الخزان  https://retal-objects.yukiroad.ovh/tickets/pictures/msrn6h3s405gzw1msrn6h3t1msrn6h3u.png",plumbing
 "الكهربائي حاول يوزن الافياش ولكن الفتحة اكبر من الحجم المطلوب وتحتاج الى معجون لاغلاقها وبوية عشان يطلع شكلها نظيف ، وايضا فيه اسطح فوق بجانب الافياش كما هو موضح بالصور تحتاج الى معجون .",paints
 "1. إزالة الجراوت الضعيف بالكامل. 2. تنظيف الفواصل. 3. إعادة تعبئة الترويبة من جديد بمادة مناسبة",ceramics
 "عدد دورات المياه لا يوجد فيها ميلان  وتتجمع المياه ، تحتاج صيانه في ٣ اماكن",ceramics
@@ -7114,7 +7130,6 @@ text,label
 "خشونة عاليه عند الفتح أو الاغلاق",doors_windows
 "تهريب في شطافات الحمامات",plumbing
 "روايح من الحمامات  تشققات بالجدران",drainage
-"كسر في الخزان الارضي ، الرجاء رفع طلب  طلب للزامل لتبديل الخزان حيث التلحيم لايعد فائده بسبب اشكاليه الدفان https://retal-objects.yukiroad.ovh/tickets/pictures/msrucoxn405gzw1msrucoxo1msrucoxp.png",plumbing
 "تهريب في شطافات الحمامات",plumbing
 "يوجد تسريب  في الصاله",plumbing
 "معجون وبوبه",paints
@@ -7124,6 +7139,8 @@ text,label
 "باب الشارع مع الحرارة والشمس يصعب فتحه",doors_windows
 "تسريب في الشبابيك + روائح في الحمام + مشكلة في العوامة",waterproofing
 "الغطاس لا يعمل",pumps
+"يوجد كسور في الجبس في عدة مناطق. حول اضاءات السبوت لايت وفتحات التكييف. وذلك بسبب تركيبها قبل التشطيب النهائي https://retal-objects.yukiroad.ovh/tickets/pictures/mspuk2q1405gzw1mspuk2q21mspuk2q3.png https://retal-objects.yukiroad.ovh/tickets/pictures/mspuk4b2405gzw1mspuk4b31mspuk4b4.png https://retal-objects.yukiroad.ovh/tickets/pictures/mspuk5f1405gzw1mspuk5f21mspuk5f3.png",gypsum
+"المكيف بالممرات في الدور الثاني لايعمل بشكل جيد.",ac_ventilation
 "الغطاس لايعمل",pumps
 "انسداد سطح الخدمه",drainage
 "الباب لا يعمل",doors
@@ -7133,6 +7150,7 @@ text,label
 "تحية طيبه لا يعمل",plumbing
 "تهريب متكرر للهراب في حمام الغرفة الرئيسية",plumbing
 "تشققات الدهان خارجي",paints
+"فتحة الكاميرا في المدخل التي تحتوي على اسلاك CAT6 مخفية بالحجر.",electricity
 "السلام عليكم عندي مشكلة في افياش الكهرباء واضح عليها علامات اختراق . و لدي مشكلة في شطافات المياة و محبسها لا يعمل",electricity
 "تهريب من حمام الدورالاول",plumbing
 "انكسار شطاف المجلس والذي تسبب في تسرب المياه",ceramics
@@ -7175,6 +7193,7 @@ text,label
 "للاسف الجدار في الحوش عندي بدت تتقشع البوية بسبب الرطوبة في الحديقة وهذي بعد الفحص تبين انها مشكلة عزل. ارجوا منكم حل المشكلة بازالة البوية المتقشعة ووضع عزل ثم صباغتها من جديد",waterproofing
 "'الجدار والبويه فيها تكسير '",paints
 "امل التواصل معي قبل القدوم ويفضل بوقت واحد مع اعمال السباكه",plumbing
+"السلام عليكم   بعض تركيبات المطبخ غير موزونه او غير مركبة بالشكل الصحيح   احتاج ايضا مساعدة في تركيب فرن مدخنه    https://retal-objects.yukiroad.ovh/tickets/pictures/mswsji9w405gzw1mswsji9x1mswsji9y.png https://retal-objects.yukiroad.ovh/tickets/pictures/mswsjjbd405gzw1mswsjjbe1mswsjjbf.png https://retal-objects.yukiroad.ovh/tickets/pictures/mswsjjvn405gzw1mswsjjvo1mswsjjvp.png https://retal-objects.yukiroad.ovh/tickets/pictures/mswsjkup405gzw1mswsjkuq1mswsjkur.png",plumbing
 "توجد تشققات وتاكل في الدهانات في جدار  الحوش الخارجي الرجاء التواصل مع قريبي عبدالرحمن السيد على الرقم  0555168770  نظراً لسفري",waterproofing
 "تشققات البوية للسور الداخلي في عدة مواقع.",paints
 "يوجد لدي بابين تحتاج الى قص",doors_windows
@@ -7201,6 +7220,7 @@ text,label
 "باب الكراج وتحتاج صيانه المشكله الاولى خيوط الباب متقطعه من الجهه اليسرى المشكلة الثانيه الباب احيانا يفتح من تلقاء نفسه في منتصف الليل.",garage_door
 "دهان الحوش بدا يتشقق ويخرب من الرطوبه. العزل جدا سيئ. تم رفع نفس المشكله عند الاستلام والان رجعت مره اخرى.",paints
 "أواجه مشكله في الكهرباء حيث أن اغلب الاجهزه تشتعل او تخرب عند ايصالها ب افياش المنزل",electricity
+"بعد حل مشكلة التسريب بالمياه يوجد بقعة ماء على الجبس (مكان التسريب)  نأمل منكم اعادة طلاء المنطقة الموضحة  https://retal-objects.yukiroad.ovh/tickets/pictures/mswtmy3w405gzw1mswtmy3x1mswtmy3y.png",paints
 "أواجه مشكلة تجمع الماء عند باب المنزل الخارجي وباب القراج",grading
 "انتفاخ بجدار الحوش للمرة الرابعة ايضا تشققات بالجدار ارجو حل المشكله",cracks
 "انتفاخ بجدار الحوش للمرة الرابعة ايضا تشققات بالجدار ارجو حل المشكله",cracks
@@ -7262,6 +7282,7 @@ text,label
 "باب الكراج يعلق ومروحه الشفط يطلع منها صوت",garage_door
 "تهريب في الشطافات",plumbing
 "مشكلة في نافذة المطبخ لا يمكن اغلاقها",doors_windows
+"تحتاج المنطقة إلى تكسير البلاطة بشكل موضعي لتمديد الكهرباء إلى منطقة خدمة الشاور، وذلك لتوفير نقطة كهرباء مناسبة وتركيب لمبة LED، مع إعادة إغلاق وترميم البلاطة بعد الانتهاء من التمديد بحيث يكون التشطيب النهائي مطابقًا للموجود. للإحاطه حمام غرفه الماستر   https://retal-objects.yukiroad.ovh/tickets/pictures/msx35fc4405gzw1msx35fc51msx35fc6.png",electricity
 "١- ترويبه المجلس ٢ - ترويبه الدرج الرخام",grading
 "تشققات البوية في جدران الحوش الخارجي تتطلب معالجة كيميائية.. كل مره يتم الصيانه وترجع نفس المشكله",waterproofing
 "الماء ما يصرف في دوره المياه",drainage
@@ -7271,6 +7292,7 @@ text,label
 "غطاء الصرف الخارجي لا يمكن اغلاقة ومتسخ",drainage
 "رائحة في الحمام",drainage
 "احتاج موعد لمتابعة الصيانة",plumbing
+"الحمام بجانب المطبخ (الكرسي)  يهرب كما هو ظاهر في الصور  https://retal-objects.yukiroad.ovh/tickets/pictures/msx9n6gt405gzw1msx9n6gu1msx9n6gv.png https://retal-objects.yukiroad.ovh/tickets/pictures/msx9n7pd405gzw1msx9n7pe1msx9n7pf.png https://retal-objects.yukiroad.ovh/tickets/pictures/msx9n8qu405gzw1msx9n8qv1msx9n8qw.png",drainage
 "رائحة مزعجة من دورات المياة اتمنى معالجتها من قبل المختصين عندكم",drainage
 "مضخة الخزان",pumps
 "يوجد رائحة في الحمام ايضاً  شطاف و مرواحة",drainage
@@ -7281,6 +7303,7 @@ text,label
 "السلام عليكم يوجد اماكن تحتاج لاعادة الدهان",paints
 "الشباك الالمنيوم السحب لااستطيع اغلاقه",doors_windows
 "السلام عليكم ارجو تلميع ارضية المنطقة الخارجية من اثار دهان المنزل الخارجي حسب ماهو موضح في الصور حيث تم ذكر الملاحظة هذه اثناء التسليم",type_1782144360722
+"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله وبركاته  ارفع هذه  التذكره لصيانة باب الحمام  حيث انه لايقفل  بتاتا ويوجد  شرخ في حلق نفس  الباب الخشب من الاعلى  بحاجه لصيانه ايضا وقفل  احدى  الغرف بحاجه لصيانه  شاكره لكم",doors
 "خلل لياسة بالجدران الخلفيه",paints
 "وزنية باب الحوش + الباب الداخلي للفلة معلق ما يفتح!!",doors_windows
 "تعديل مكان القفيز في الباب الالمنيوم للباب الخارجي",doors_windows
@@ -7334,6 +7357,7 @@ text,label
 "تشققات في السور الداخلي وايضا تشققات الفيلا من الخارج",cracks
 "الشطاف وتسكيرة الزاوية يوجد بها مشكلة وتحتاج تغيير حسب كلام الفني المختص من قبلكم في الزيارة",plumbing
 "هناك كسر في البلاطولا يوجد الترويبة للبلاط  https://retal-objects.yukiroad.ovh/tickets/pictures/mspweu6t405gzw1mspweu6u1mspweu6v.png https://retal-objects.yukiroad.ovh/tickets/pictures/mspwevcv405gzw1mspwevcw1mspwevcx.png",ceramics
+"نقص في تركيب عدد لمبة  واحدة اسبوت لايت لم يتم تركيبه ولم يتم فتحه في الجبس مرفق لكم المخطط الانشائي  https://retal-objects.yukiroad.ovh/tickets/pictures/msyeqa9l405gzw1msyeqa9m1msyeqa9n.png",electricity
 "مغسلة حمام الماستر الرئسية مسدودة + تهريب مريه",drainage
 "1_ لدي تشققات خارجية تحتاج الى معالجة وعزل واعادة دهان     ايمن 2_ الانتركوم يحتاج الى صيانة الكاميرة غير واضحه 3_ درابزين الدرج مرتخي 4_ مروحة الشفط للغرفة الماستر تم اصلاحها مرتين ولا زالت نفس المشكلة تحتاج تغيير 5_ باب يحتاج الى وزنية للإغلاق بسلاسة                 ايمن 6_كرسي افرنجي في تقشير",cracks
 "اشكاليه في مسكة النافذه",doors_windows
@@ -7351,6 +7375,7 @@ text,label
 "تشققات متفرقه في جدران السطح",cracks
 "يخرج نمل (اسود وكبير الحجم) بكميات كبيرة من تحت السيراميك ويحتاج لمعالجة عاجلة !",pest_control
 "تسرب مياه الامطار",waterproofing
+"استكمال الاعمال بعد ملاحظة التسريب  اعمال الجبس و البوية و البلاط والترويبة",paints
 "مشاكل في ترويبة البلاط في عدد من الغرف ودورات المياه والمطبخ",ceramics
 "البلاط يحتاج ترويبه ( جميع البلاط ) حيث ان النمل منتشر بسبب سوء الترويبه",ceramics
 "يوجد رائحة كريهه في حمامين",drainage
@@ -7457,6 +7482,7 @@ text,label
 "مكافحة الحشرات والنمل الأبيض",pest_control
 "يوجد عدد خمس بلاطات داخل الفله مكسوره تحتاج تغير",ceramics
 "تشققات بوية خارجية اللون البني",paints
+"تسريب ماء من كرسي الحمام https://retal-objects.yukiroad.ovh/tickets/pictures/msu3rurq405gzw1msu3rurr1msu3rurs.png",plumbing
 "الباب الخارجي عندي مع الحرارة تغير علي وصار ما يتسكر زين وينعفط في النهار مع الحر الجرس عندي ما يشتغل ولا الكاميرا في الانتركم من يوم سكنت وهو ما يشتغل الموية عندي وصخة ويطلع منها تراب من يوم سكنت في البداية قلت لان توني ساكن بس الحين مر شهر وهي نفس الشي",doors_windows
 "ميلان بلاط الحمامات في مشكله",ceramics
 "الباب الالمنيوم لا يمكن اقفالة و الشبك منقطع",doors_windows
@@ -7465,7 +7491,6 @@ text,label
 "البروفايل يوجد به رطوبه وتمت المعلاجه بشكل مختلف",paints
 "يحتاج وزن",plumbing
 "يوجد رايحه كريهه فالمنزل",drainage
-"تسريب ماء من كرسي الحمام https://retal-objects.yukiroad.ovh/tickets/pictures/msu3rurq405gzw1msu3rurr1msu3rurs.png",plumbing
 "مشاكل متعددة في البويه وشقوق مع وجود رائحة سية في دورات المياه",plumbing
 "رائحة في جميع الحمامات",drainage
 "بحاجة لتغيير زجاجة النافذة الثابتة لغرفة النوم",doors_windows
@@ -7599,19 +7624,23 @@ text,label
 "الغطاس ما يرقي الماء لفوق  تم السكن و لكن بدون ماء للأسف حتى مع وجود الماء داخل الخزان اتمنى حل المشكلة باسرع وقت ممكن",pumps
 "حجم فتحة طبلون الكهرباء بالحوش (مقابل الحديقة) غير متناسب مع حجم الطبلون نفسه، ارجو تعديل هذا الخطأ ومعالجة الشكل واغلاق الفتحات المحيطة بالطبلون لتجنب خطر دخول الماء وقت المطر",electricity
 "الأبواب والشبابيك طلبنا من البدايه الشبك خربان ولم يتم تبديله",doors_windows
+"نود إفادتكم بأنه أثناء إجراءات تسليم الفيلا بتاريخ 5 أغسطس 2026م، لوحظ وجود اتساخات شديدة من الإسمنت والغبار على الانترلوك الخاص بالفيلا، وتم التقدم بطلب لتنظيفه في حينه. وبناءً عليه، بدأ العامل بالتنظيف على أن يستكمل العمل في اليوم التالي لانتهاء ساعات عمله الرسمية. وعند معاينة الموقع في اليوم التالي، تبين أن الانترلوك لا يمكن معالجته بالتنظيف. وبحسب توجيهات مشرف التسليم، تم رفع طلب صيانة عبر التطبيق برقم (00203198) لتغيير الجزء التالف. وعلى إثر ذلك، حضر فني الصيانة للمعاينة وأفاد بأنه تم رفع طلب للإدارة، إلا أنه لم يتم اتخاذ أي إجراء حتى تاريخه. وحيث إن هذا الضرر سابق لعملية الاستلام الفعلية ولم ينتج عن الاستخدام، نأمل منكم التكرم بالاطلاع والتوجيه بسرعة معالجة الضرر واستبدال الانترلوك التالف في أقرب وقت ممكن. (مرفق لكم الصور التوضيحية)  مع خالص الشكر والتقدير،",interlocking
+"عتبات دورات المياه غير موزونه ولم يتم اصلاحها  فضلا الالتزام بالمصداقية والامانة في العمل",grading
+"١. مكيف المطبخ والصالة يطلع اهتزاز وصوت ٢. مكيف سبيلت مايشتغل ٣. مكيف سبيلت يطلع موية",ac_ventilation
 "EXTERNAL: This is an external email received from the Internet.  السلام عليكم سلمان العصيمي نساج النرجس فيلا 340  يوجد ريحة قوية تخرج من حمام غرفة الماستر ارجو ايجاد حل مناسب وسريع  وشكرا لكم",drainage
 "انسداد في الافرنجي الدور الأول الحمام المشترك كذلك نوافذ الغرفة الرئيسية واللتي بجانبها لا تغلق بشكل كامل كذلك غطاء الفيش في غرفة السطح يوجد روائح في الحمام مع تشغل مروحة الشفط كذلك جدار الفيلا الخارجي الجنب الايمن فيه طرطشة بوية  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjtsnhui405gzp1mjtsnhuj1mjtsnhuk.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjtsnj41405gzp1mjtsnj421mjtsnj43.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjtsnjpz405gzp1mjtsnjq01mjtsnjq1.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjtsnk8z405gzp1mjtsnk901mjtsnk91.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjtsnkwh405gzp1mjtsnkwi1mjtsnkwj.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjtsnli0405gzp1mjtsnli11mjtsnli2.png h",drainage
 "السلام عليكم ورحمة الله وبركاته  لا يمكن تمديد الكاميرا الخارجية بالسور الخارجي وذلك بسبب ان تمديد الكاميرا للسور الخارجي  'تمديد الكهرب للكاميرا ' مسدود . عليه امل التكرم بارسال الفني لعمل اللازم لفتح هذا الانسداد .",electricity
 "تم رفع اكثر من طلب لتعديل ميول الحوش و تحمع المياة حيث سوف يسبب في مشاكل في الجدران و البلاط و الرطوبة.",grading
 "لمبة حمام مدخل العائلة لم يتم صبغ اطرافها بشكل جيد https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjzmpvv9405gzp1mjzmpvva1mjzmpvvb.png",paints
-"عتبات دورات المياه غير موزونه ولم يتم اصلاحها  فضلا الالتزام بالمصداقية والامانة في العمل",grading
 "وجود تسريب فالخزان السفلي https://retal-objects.yukiroad.ovh/tickets/pictures/msu36mj3405gzw1msu36mj41msu36mj5.png",plumbing
+"السلام عليكم ،، أسلاك المرايا عفير متوفره ،، وأسلاك المغاسل ليست منده للمفاتيح ،، احضرت شركة لتمديد اللمبات المخفيه ولم يجدوا اي تمديدات للكهرباء ،، فقط أسلاك كعلقه ،، أرجو دعمكم العاجل للملاحظات المذكوره مع الطلب السابق    https://retal-objects.yukiroad.ovh/tickets/pictures/msyy8pyk405gzw1msyy8pyl1msyy8pym.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyy8qyq405gzw1msyy8qyr1msyy8qys.png",electricity
 "سبق و رفعت لكم تذكره بانه عندي تشققات في الجدار  و ارسلتوا الصيانه عملوا جزء من الشغل و الباقي ما كملوه الان لهم اكثر من اسبوع ولا احد جاء يكمل الشغل !!  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjuyrkwa405gzp1mjuyrkwb1mjuyrkwc.png",cracks
 "EXTERNAL: This is an external email received from the Internet.  تحية طيبة  لدي بعض الملاحظات تحتاج صيانة، مع العلم التطبيق فيه خلل لا يمكنني حجز موعد: - يوجد تهريب من لي الشطاف لحمام الصالة في الدور الارضي، تم ملاحظته في وقت الاستلام ولم يتم اصلاحة. - يوجد بلاطتين مكسورة، واحدة بجانب الصفاية وواحدة عند المحبس الرئيسي. - نافذة غرفة الماستر غير موزونة بشكل جيد. - جميع النوافذ المطلة على الشارع تهرب هواء خفيف وصوت.  تحياتي سعود العقيل 0564489445",plumbing
 "يوجد مشاكل في دورات المياه تسريب مياه  وايضا يوجد رطوبه في الجدران الخارجية وتلف في البويه",plumbing
 "يوجد مشكله بتصريف الماء حيث انه توجد صبه اسفل الحديقه ولاتسمح بمرور الماء",drainage
 "مروحة التهوية لاحدى الحمامات العلويه لم تعد تعمل",plumbing
 "الماء مسدود والحمام الاخر كوع ريحه مسدود او مطلع ريحه  https://retal-objects.yukiroad.ovh/tickets/pictures/msuq06il405gzw1msuq06im1msuq06in.png",plumbing
+"نامل تكليف من يلزم بمعالجة البويا نظرا لوجود اشكالية سابقة https://retal-objects.yukiroad.ovh/tickets/pictures/msz28rvb405gzw1msz28rvc1msz28rvd.png",paints
 "تسريب من مغسلة المجلس",plumbing
 "خلال في وزن الابواب والنوافذ حامي الحشرات ممزق تسريب ماء من الشطفات  مضخة الخزان لا تعمل  روائح كريها تصدر من دورات المياه",doors_windows
 "السلام عليكم ورحمة الله  تحية طيبة  ارغب بتعديل فتحة مقدار النوافذ ليكون صغير ومناسب للاطفال.  شكراً لكم",doors_windows
@@ -7634,8 +7663,10 @@ text,label
 "جميع اعمال الدهانات الداخلية سيئة و فيها مشاكل كثيرة ، مناطق فيها سوء في اللياسة و مناطق يوجد فيها تقشر في البوية و مناطق يوجد فيها تعرجات و انتفاخات في البوية هذه شكوى عاجلة و المشكلة تسبب عدم القدرة على استخدام المنزل",paints
 "سبق ان تم  دهن الجدار الانه يتقشر بسبب الماء وتم طلب دهان بسبب تقشر البوية وبعد معاينة المهندس تم افادته باني ساقوم بوضع نعلة من البلاط لوقف  تقشر البوية مره اخرى وافادني بانه يتطلب رفع طلب جديد بعد الانتهاء من التبليط. يوجد كذالك انتفاخ في البروفايل الخارجي للمنزل بسبب الماء",paints
 "رخام مغسله عرفة الماستر  تهرب من تحت  مويه",ceramics
-"استكمال اعمال اللياسةًوالدهان",paints
+"المكرمين شركة ريتال للتطوير العقاري  السلام عليكم ورحمة الله  ارفع هده التذكره للقسم المختص لانهاء الجبس والدهان بعد صيانة التكييف المركزي مع أ. مصعب",gypsum
 "الخزان السفلي مكسور",plumbing
+"استكمال اعمال اللياسةًوالدهان",paints
+"قفل شباك المطبخ  لا يعمل",doors_windows
 "العزل معدوم داخل المنزل ، جميع الاصوات الخارجية واصله الى اخر البيت.  فني النوافذ زار المنزل و تاكد من سلامتها ولا تزال الاصوات مزعجه جدا.",doors_windows
 "ارغب بمفتاح لباب علبة الكهرباء",electricity
 "باب الكراج معلق على الوضع اليدوي",garage_door
@@ -7645,18 +7676,21 @@ text,label
 "تنظيف غرف التفتيش",drainage
 "تطبيل بالجدران  https://retal-objects.yukiroad.ovh/tickets/pictures/msj8cb2d405gzw1msj8cb2e1msj8cb2f.png",cracks
 "السلام عليكم مشروع نساج تاون النرجس فيلا رقم 340 العمل / سلمان العصيمي رقم الجوال / 0566929996  عندي تهريب في نفس المغسله اللي صلحتوها للمره ثانيه تهرب وشطاف خربان  ارجو حل المشكلة والوقت المناسب لي يوم السبت القادم الساع ١ ظهرا حيث تم التنسيق مع فريقكم في تذكره اخرى لعمل ترويب يوم السبت الساعة ١ الظهر ارجو ان كلهم ياتون في نفس الوقت",plumbing
+"كسر في الخزان الارضي ، الرجاء رفع طلب  طلب للزامل لتبديل الخزان حيث التلحيم لايعد فائده بسبب اشكاليه الدفان https://retal-objects.yukiroad.ovh/tickets/pictures/msrucoxn405gzw1msrucoxo1msrucoxp.png",plumbing
+"كسر في الخزان الارضي https://retal-objects.yukiroad.ovh/tickets/pictures/msu1calz405gzw1msu1cam01msu1cam1.png https://retal-objects.yukiroad.ovh/tickets/pictures/msu1cbsm405gzw1msu1cbsn1msu1cbso.png",plumbing
 "التواصل معي ويفضل ان تقام مع الطلبات المتبقية وزنية والميول وكذلك ترويبات",grading
 "ريحه لدورات المياه",smells
-"كسر في الخزان الارضي https://retal-objects.yukiroad.ovh/tickets/pictures/msu1calz405gzw1msu1cam01msu1cam1.png https://retal-objects.yukiroad.ovh/tickets/pictures/msu1cbsm405gzw1msu1cbsn1msu1cbso.png",plumbing
 "صدع بجدار الحوش الداخلي",cracks
 "ظهور النمل في اماكن متفرقة من البيت",pest_control
 "تصغير النوافذ",doors_windows
+"الصفايات في دورات المياة مسدودة واحد دورات المياة بدون شخال على الصفاية  https://retal-objects.yukiroad.ovh/tickets/pictures/msueg0se405gzw1msueg0sf1msueg0sg.png",plumbing
+"خزان المياه السفلي يوجد به تسريب لان امس الليل عبيته فل واليوم الصباح ناقص  حوالي متر والخزان العلوي مليان مليان من قبل ما اعبي  الخزان السفلي اتمنى سرعة الصيانه لانه  تسبب لي بطلب وايت بشكل يومي",plumbing
 "وجود تصدعات وهبوط ورطوبة مما يوثر على قشرت الجدار والمنظر الخارجي",cracks
 "صوت ضرب عالي متكرر غير معروف سببه في دورة مياه الصالة",plumbing
 "تم رفع تذكرة وتم اغلاقها بدون حل المشكلة ، الحديده من الداخل لتامين باب القراج فيها ميول يمنع الانتفاع منها ، تم زيارة فني من قبل شركة اليمامة وذهب بدون يحل المشكلة والاستاذ ايمن عنده خبر في الموضع",garage_door
 "اصلاح العوامة وإصلاح الرطوبة في الجدر وباب المجلس",pumps
 "تهريب من السطح العلوي بسبب وجود تهريب في العزل  مما اثر على حمام الدور الثاني",waterproofing
-"الصفايات في دورات المياة مسدودة واحد دورات المياة بدون شخال على الصفاية  https://retal-objects.yukiroad.ovh/tickets/pictures/msueg0se405gzw1msueg0sf1msueg0sg.png",plumbing
+"تذكرة. عاجله. جداً وهام ...  في ترسيب  خزان المويه. (شق )بحجم كبير جداً.   ) وتعطل. دينمو. الموية.                   شاكرين ومقدرين. تفهمكم  https://retal-objects.yukiroad.ovh/tickets/pictures/msyid15a405gzw1msyid15b1msyid15c.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyid2en405gzw1msyid2eo1msyid2ep.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyid379405gzw1msyid37a1msyid37b.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyid3st405gzw1msyid3su1msyid3sv.png",tank_broken
 "تم اغلاق الطلب السابق بعذر اعمال تكسير!! العزل غير مطابق للمواصفات. يجي عمل العزل لدورات المياه الثلاث المطلوبه",waterproofing
 "يوجد شطاف يهرب  ويوجد مرحاض تفيض منه المويه",plumbing
 "السلام عليكم طلب طاري انا ساكن وتم تعبية المياه ولكن لايوجد مويه فالفيلا اعتقد ان الخلل في العوامه  لايوجد مياه موصله للفيلا مع العلم انني ساكن ارجو التواصل حالاً",pumps
@@ -7672,6 +7706,7 @@ text,label
 "صفايه المطبخ طفحت و قدرت اطلع منها كمية بلاط و باقي كثير ماقدرت اطلعه،",drainage
 "يوجد كسر في الرخام على مدخل الباب https://retal-objects.yukiroad.ovh/tickets/pictures/msue7va7405gzw1msue7va81msue7va9.png",ceramics
 "السلام عليكم الحاجز الزجاجي في الحمام (اعزكم الله) غير ثابت ايضاً يوجد رائحة قوية سيئة في الحمام بالاعلى نأمل اصلاحه",plumbing
+"المغسله ما تصرف المويه",plumbing
 "تغيير البلاط لوجود خدش في البلاط تغيير البلاط لوجود كسر سابقة تم تغطيتها بمعجون https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mltcrf5m405h031mltcrf5n1mltcrf5o.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mltcrggl405h031mltcrggm1mltcrggn.png",ceramics
 "كسور في بلاط https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrdq7c405h031mlxrdq7d1mlxrdq7e.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrdrbg405h031mlxrdrbh1mlxrdrbi.png",ceramics
 "الالمنيوم مكسور، الالمنيوم غير مركب بشكل صحيح ، المعجون والدهان موضوع بشكل سيء  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmfa6405h031mlxrmfa71mlxrmfa8.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmovr405h031mlxrmovs1mlxrmovt.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmp9x405h031mlxrmp9y1mlxrmp9z.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmpnk405h031mlxrmpnl1mlxrmpnm.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmq2j405h031mlxrmq2k1mlxrmq2l.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxrmqm0405h031mlxrmqm11mlxrmqm2.png",doors_windows
@@ -7694,11 +7729,13 @@ text,label
 "نرفق لكم أدناه قائمة الملاحظات المطلوب استكمالها ومعالجتها، ونأمل التكرم بالتنسيق لإقفالها وفق المواصفات المعتمدة وجودة التنفيذ المطلوبة: - معالجة وإصلاح البلاطة المطبّلة في الدور الأرضي مع التأكد من معالجة سبب المشكلة بشكل نهائي. - تأسيس وتجهيز نقاط كهربائية لمرايا الحمامات وتمديد الأسلاك اللازمة، علماً بأن هذا البند منفذ في فلل أخرى من نفس النموذج. - تركيب وتفعيل إنارة رف الشاور في حمامات الدور الأول بما يتوافق مع الفلل الأخرى من نفس النموذج. - تنظيف جميع وحدات الإضاءة وإزالة آثار الدهان والتشطيبات عنها. - تنفيذ أعمال المعجون وإعادة الدهان الداخلي والخارجي لمعالجة الكسور والعيوب الظاهرة وإعادة التشطيب بالشكل المطلوب. - إصلاح الانترلوك الخارجي ومعالجة أو استبدال القطع التي تظهر عليها كسور أو تلف. - تنظيف لوحة رقم المنزل وإزالة أي آثار أو شوائب لضمان جاهزيتها بالمظهر النهائي. - صيانة وإعادة دهان جميع الأبواب الخشبية ومعالجة الخدوش والعيوب الموجودة عليها. - استبدال الرخامة السفلية في حمام الدور الأرضي لعدم مطابقة المقاس والتنفيذ بالشكل الصحيح. - معالجة جميع الجروح والعيوب الموجودة في رخ",type_1782144360722
 "انتشار النمل الاسود في صالة الفيلا .. وظهوره من اسفل البلاط من خلال فتحات في الروبة !!",ceramics
 "الملاحظات: ظهور تشققات في جدار المجلس بعد الاستلام عدم ثبات زجاج الدرج (درابزين) مع وجود خدوش أعمال صبغ في احد غرف النوم ضعف تكيف غرفة النوم الرئيسية فراغات وفجوة في نافذة غرفة نوم العاملة وباب سطح الخدمات",paints
+"لي شطاف يهرب مويه  بزبوز الحوش الخلفي مكسور  الافرنجي العلوي يهرب ماء  المغسلة اللي تحت تهرب مويه  بعد التنظيف الدرج فيه فتحات يحتاج ترويبه  المغسلة العلوية تحتاج سلكون  https://retal-objects.yukiroad.ovh/tickets/pictures/msyde3x9405gzw1msyde3xa1msyde3xb.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyde4zc405gzw1msyde4zd1msyde4ze.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyde5o1405gzw1msyde5o21msyde5o3.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyde636405gzw1msyde6371msyde638.png",plumbing
 "تغيير الحذوة https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsju13405h031mlxsju141mlxsju15.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsjuy7405h031mlxsjuy81mlxsjuy9.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxsjvip405h031mlxsjviq1mlxsjvir.png",doors_windows
 "اولا . سبق وتم طلب الصيانه تسريب  للمغسله الموجوده بالحمام القريب من المطبخ ولم يتم معالجة الامر بالطريقه الصحيحه نأمل منكم اصلاحها او تغيير المغسلة بالكامل حيث ان التسريب في مكان آخر غير الذي تم العمل عليه  ثانيا . الحمام الموجود في الغرفه  الماستر رقم 2 ليس الماستر الرئيسيه   يوجد ريحه بالمرحاض يجيب معالجتها بكوع ريحه او بأي طريقه حيث ان الريحه لا تطاق  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mly6pnd7405h031mly6pnd81mly6pnd9.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mly6pqu9405h031mly6pqua1mly6pqub.png الوليد",plumbing
 "اولا . سبق وتم طلب الصيانه تسريب  للمغسله الموجوده بالحمام القريب من المطبخ ولم يتم معالجة الامر بالطريقه الصحيحه نأمل منكم اصلاحها او تغيير المغسلة بالكامل حيث ان التسريب في مكان آخر غير الذي تم العمل عليه  ثانيا . الحمام الموجود في الغرفه  الماستر رقم 2 ليس الماستر الرئيسيه   يوجد ريحه بالمرحاض يجيب معالجتها بكوع ريحه او بأي طريقه حيث ان الريحه لا تطاق  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mly6pr40405h031mly6pr411mly6pr42.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mly6puz3405h031mly6puz41mly6puz5.png",plumbing
 "يوجد ٤ ابواب خشبية تحتاج ميزانية حيث انها حالياً لا تغلق بسهولة، بالاضافة الى باب المنيوم واحد كذلك نفس المشكلة",cracks
 "أرفق لكم الصور ذات العلاقة، وآمل منكم الاطلاع عليها والتكرم بإفادتنا",cracks
+"كرسي المرحاض في أحد دورات المياه يحتاج إلى صيانة",plumbing
 "قطع في سلك الشبك لنافذة الصاله وقطع في سلك الشبك للغرفه العلويه في السطح https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mm1e75q1405h031mm1e75q21mm1e75q3.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mm1e7bnz405h031mm1e7bo01mm1e7bo1.png",doors_windows
 "جرجور الكاميره والانتركوم عالق https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mm0wuh28405h031mm0wuh291mm0wuh2a.png",electricity
 "ارجو التحقق من جميع الشطافات تنظيف وغرف التفتيش من مخلفات البناء",drainage
@@ -7713,6 +7750,7 @@ text,label
 "تم تغيير مروش الحمام الماستر وتبين بان من قام بتثبيت قواعد المروش المستلم من قبل المطور قام بكسر البلاط. ام اصلاح البلاط https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mm70dpic405h031mm70dpid1mm70dpie.png",ceramics
 "الابواب فيها اختلال في السقف العلوي  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mm85pvg6405h031mm85pvg71mm85pvg8.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mm85pwlz405h031mm85pwm01mm85pwm1.png",doors_windows
 "'السلام عليكم،  يوجد ملاحظة على العزل المائي في الحمام، حيث إن العزل غير مكتمل في بعض الزوايا وحول إطار الزجاج، كما هو موضح في الصور المرفقة، ويحتاج إلى استكمال وتنفيذ بشكل صحيح لضمان عدم حدوث أي تسرب للمياه مستقبلاً.  نأمل إرسال الفني لمعاينة الموقع واستكمال العزل المائي وفق الأصول، مع التأكد من معالجة جميع النقاط الناقصة قبل إغلاق الطلب",ceramics
+"يوجد رائحة كريهة في المطبخ وقد تكون بسبب الصراصير او كوع الريحه",plumbing
 "معالجة ترطيب السور الخارجي كذلك تعديل ميول حمام الماستر",waterproofing
 "بعد عمل نظافة للمنزل تبين بانه يحتاج لعمل ترويبة للدرج وبعض الارضيات كما انه يوجد نافذة تحتاج اقفال فتحات يمر من خلالها النور https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mm9c7sy0405h031mm9c7sy11mm9c7sy2.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mm9c7x5l405h031mm9c7x5m1mm9c7x5n.png",ceramics
 "التصريف من السطح مقفل وتجمع المياة في السطح  وتجمع المياة",drainage
@@ -7749,6 +7787,7 @@ text,label
 "غطاء حامل الدش في عدد ٢ من الحمامات غير موجود",plumbing
 "وجود رطوبه في وجهه البيت",waterproofing
 "تصليح تشققات في جدران الحوش الخارجي تصليح تشققات في عزل الاسطح غطاء فتحة تفتيش الحوش           الوليد مفاتيح غطاء خزانات فحص تطبيل البلاط في كامل المنزل  تشطيب المغاسل ( مغسلة المجلس)",cracks
+"ترويبة الانتر لوك",ceramics
 "احد نوافذ الالمنيوم لا تقفل",doors_windows
 "مشكلة في بطأ تصريف الماء في بعض المغاسل",plumbing
 "بحاجة الى صنبور اضافي في منطقة الزراعة الخلفية",plumbing
@@ -7902,6 +7941,7 @@ text,label
 "وجود مشكله في الجدار لم يتم حلها بالشكل المطلوب واتضح لي بان عمال الصيانه لم يقومو بوضع معجون. https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mmmjgfcu405h031mmmjgfcv1mmmjgfcw.png",paints
 "مروحة الشفط في المطبخ لا يوجد لها مخرج خارجي للارتداد الخلفي والرائحة تبقى داخل الجبس بالمطبخ",ac_ventilation
 "عندي مشكله في صنبور المياة  الموجود في الحوش  بجانب القراج يسرب ماء ،، وايضاً حديده موجوده بالحمام موجود بها صدأ اوجو منكم التواصل واصلاح المشكله وشكراً",plumbing
+"السلام عليكم ورحمة الله وبركاته  فريق دعم رتال  لدي مشكلة مستمرة بالتهريب بالخزان، وصحيح بكل مره يتم تلحيم الخزان، لكن هل هذا حل منطقي وآمن لأم وثقت واشترت منزل من مطور معروف لتستقر به هي واطفالها!؟  تم تجاهل تذكرتي الاخيرة بطلبي لتقارير الزامل وكما ذكرت مسبقاً تلحيم الخزان ليس حل دائم وانا ملتزمة بتمويل عقاري لهذا المنزل ولا يوجد لدي سيولة تساعدني باصلاح الخلل بنفسي،،  لذلك، ارغب من حضراتكم التكرم بالتوجيه بهذا الأمر حيث ان السكن بمنزل لا نأمن ارضه ووضع اساساته يعرض اهل البيت للخطر وينافي اهداف شركتكم المرموقة واهداف وجهة الفرسان تحت اشراف الشركة الوطنية للاسكان  هذا الموضوع جداً مهم ولن يهدأ لي بال ولا منام حتى آمن منزلي",tank_broken
 "السلام عليكم تم وجود ملاحظات وقت الاستلام وطلب فريق ريتال برفع تذكره ليتم العمل على معالجتها, الملاحظات:- 1- صبغ الجدار الخارجي للفله لتوحيد اللون 2- أمن وسلامة الكهرباء الخارجي, عدم وجود غطاء حماية 3- غطاء الصرف في الحوش 4- غطاء الإنارة الخارجي ملطخ بالبويه 5- باب القراج يحتاج صيانه كاملة, الخيوط الجانبية مقطعة, الميول, وبالاضافه يوجد عليه تصبغات من البويه الخارجيه 4- الالمنيوم الدرايش 5- تشققات بالجار الداخلي 6- الأبواب 6- ملاحظات خارجية بالأسطح 7- التطبيل وكسور في بعض بلاط أرضية الفيلا وتم وضع علامة عليها.  أرجو منكم التكرم ومعالجة الملاحظات في أقرب وقت.  وشكرا",paints
 "عدم عزل الأسطح و عدم وجود صفائه في سطح الصاله",waterproofing
 "مشروع نساج تاون النرجس فيلا رقم 340 العمل / سلمان العصيمي رقم الجوال / 0566929996 مشكلة في تثبيت أطراف باب صالة الدور الثاني (العلوي) مشروع نساج تاون النرجس فيلا رقم 340 العمل / سلمان العصيمي رقم الجوال / 0566929996 مشكلة في غطا المرحاض المعلق في غرفة النوم الماستر ومشكلة في خلاط مغسلة غرفة النوم الماستر",doors
@@ -7913,6 +7953,7 @@ text,label
 "كما يتضح بالصوره ،، غطاء مفتاح وحدة التحكم في باب الكراج مفقوده ويصعب كبس الزر  في هذه الحاله اتضح ذلك بعد المقارنه مع الوحدات المجاوره حيث يوجد مفتاح  (زر) بارز باللون الاحمر  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mioiewn7405gzx1mioiewn81mioiewn9.png",garage_door
 "يوجد على الجدرات تشققات  من الدهان في اكثر من غرفه https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjs1pct3405gzp1mjs1pct41mjs1pct5.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjs1pdpg405gzp1mjs1pdph1mjs1pdpi.png",paints
 "سوء النظافه وتحتاج تلقطيات صبغ https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjyksfd0405gzp1mjyksfd11mjyksfd2.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjyksgpo405gzp1mjyksgpp1mjyksgpq.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjyksia3405gzp1mjyksia41mjyksia5.png",cleaning
+"البويات خربانة بحاجة لضرب بوية حيث انه لا يمكن تنظيف الجدران لذلك اطلب منكم ضرب المنزل بالكامل بويات داخلية حيث ان الموجوده حاليا بوية وجه على الارجح نرجوا دعمكم . https://retal-objects.yukiroad.ovh/tickets/pictures/mst41bqi405gzw1mst41bqj1mst41bqk.png",paints
 "يوجد فتحة في احد احواض الزراعة القريبة من الباب الخارجي بحاجة الى اغلاق باسمنت",tank_insulation
 "خزانات المياه الأرضيه والعلوية متسخة جداً ولون الماء اصفر ويحتوي على الكثير من الاتربة حتى بعد استخدامة لمدة اسبوعين، ارجو تنظيفة للمحافظة على مواصير ومخارج المياه في المنزل",cleaning
 "تحية طيبة  الاول - الشباك الطويل بالصالة الأرضية  لا يغلق بشكل صحيح ويبقى مفتوح  الثاني - الشباك الطويل بالدور العلوي كذلك لا يغلق بشكل صحيح و يبغا مفتوح و يسرب الغبار من خلاله  الثالث - الكهرباء انقطعت ( تم رفع بلاغ )  الرابع - الماء و منسوبها ، كيف أتعرف على منسوب الماء لكي اطلب وايت قبل الانتهاء  بيانات الفلة خزام نساج تاون فلة رقم 006 جوال رقم / 0559434885  Thanks Ahmed 0559434885",doors_windows
@@ -7922,6 +7963,8 @@ text,label
 "السلام عليكم ورحمة الله وبركاته إلحاقاً للطلب السابق رقم (١٦٥٨٨٧) وتاريخ (٢٠٢٥/١٢/٠٢) بشأن اختلاف لون مغسلة دورة المياه للغرفة الرئيسية. افيدكم بأنه حتى تاريخه لم يتم عمل المطلوب. آمل توجيه المختصين لديكم باكمال اللازم والسلام عليكم",ceramics
 "ارتفاع منسوب أنبوب تصريف مياه المكيف عن مستوى المكيف مما يستلزم التكسير في الهيكل الانشائي لتنزيل منسوبها ليتم تصريف المياه بشكل صحيح.",ac_ventilation
 "سلام عليكم ورحمة الله وبركاته      ١- يوجد اثر صدى بالماء الخارج من صنبور غسالة الملابس في الدور العلوي مما ادى اتلاف عدد كبير من الملبوسات  ٢- يوجد تهريب مياه من السيفون المعلق في حمام غرفة الماستر الرئيسية  ٣- براغي غطاء الخزان الارضي متأكلة وبعضها مقفله من اثر اسمنتي لا يمكن فتحه بسهولة   ٤- يوجد مفتاح واحد فقط لغطاء الخزان وغرف التفتيش ارغب بتزويدي بمفاتيح اضافية لكل غطاء   ٥- يوجد صوت عند تشغيل شفاط حمام غرفة الماستر الثانية في الدور الاول",plumbing
+"احتاج الى زيارة فني الغملاس لوجود عطل باحد الابواب ويوجد عدة ابواب لا تغلق بسهوله",doors_windows
+"تكسر الزجاج لم يتم العمل على حلها او التوريد  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mr0wsclq405gzw1mr0wsclr1mr0wscls.png",doors_windows
 "يوجد صوت في التكييف العلوي في غرفة النوم الرئيسية الباب الخشب الرئيسي لا يمكن اغلاقه",ac_ventilation
 "تهريب من صنبور الغسالة",plumbing
 "مكيف عطلان",ac_ventilation
@@ -7930,15 +7973,18 @@ text,label
 "احد اجهزة الكشف عن الحريق مفتوحة وتطلع صوت",electricity
 "توجد ملاحظات عند التسليم، وقعت أستلام على أساس يتم تعديل كافة الملاحظات حسب ما دونت لهم وحسب تقرير الفاحص في وقت الاستلام. بعض الملاحظات لم تعالج والبعض الآخر معالجة سيئة غير مقبولة، ارسلتها لمهندس المشروع المسؤول وقت التسليم وتعهد بمعالجتها وبعد فترة طلبت منه مراجعتها وتعديلها حيث انها لم تعدل ولم تستكمل الملاحظات وتفاجأت بانه في إجازة ولم تتم المعالجة وطلب مني رفع الشكوى في التطبيق مضى اكثر من شهر او شهرين دون معالجة او تنظيف بعد التعديل المزعوم. حيث أنني ارفق ما تم واطلب اعادة المعالجة والتعديل وفق التقرير المرفق والملاحظات المسجلة لهم. املا منكم توجيه من يلزم بمعالجة الموضوع فورا. لكامل النقاط التي طلبت معالجتها او اعادة تنفيذها وفق أصول الصنعة مع اعادة تنظيف الفيلا",paints
 "وجود تكسير لعمل فتحت الصرف. للمكيف حيث لم يتم العثور عليها ونحتاج إغلاقها مع اللياسة  والدهان",ac_ventilation
+"1- كسر مفاجئ لحاجز زجاج حمام الصاله العلويه 2- باب المدخل الجانبي للفيلا يدخل من خلاله التراب  3-باب الكراج لايعمل  4- بعض النوافذ لاتغلق بسهوله  https://retal-objects.yukiroad.ovh/tickets/pictures/msxskvyx405gzw1msxskvyy1msxskvyz.png https://retal-objects.yukiroad.ovh/tickets/pictures/msxskx70405gzw1msxskx711msxskx72.png https://retal-objects.yukiroad.ovh/tickets/pictures/msxskxod405gzw1msxskxoe1msxskxof.png",doors_windows
 "التحكم في درجة الحرارة وتوجيه التكييف",ac_ventilation
 "التحكم في درجة الحرارة وتوجيه التكييف",ac_ventilation
 "مكيف غرفة النوم الرئيسيه غير بارد. وطلبت فحصه وابلغوني بان الفريون ناقص! ولم يتم اصلاحه!  علما بأن نقص الفريون لمكيف جديد يشير الى مشكله اعمق. فأرجو معالجة المشكله بشكل عاجل ولكم الشكر",electricity
 "مجرى تصريف مياه المكيف وغير قابل للستخدام لوجوده من اليمين يجب ان يكون من اسفل  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlkypfur405h031mlkypfus1mlkypfut.png",ac_ventilation
+"يوجد رائحة كريهة في المطبخ وقد تكون من تجمع الصراصير وكذلك يوجد نمل ابيض بكثرة في المنزل",plumbing
 "رائحة دورة المياة سيئة جداً",plumbing
 "لا يمكن تركيب غسالة الصحون بسبب مساحة صنبور الماء وغطاء فيش الكهرباء",plumbing
 "تغيير غطاء المروحة الخارجي لاحد دورات المياه بحاجة الى سلم طويل كما تجدر الاشارة الى ان هذه الملاحظة تم التنويه عليها في مرحلة المعاينة ولم يتم معالجتها وتم رفع طلب بذلك وتم اغلاق التذكرة دون حل",plumbing
 "السلام عليكم ، البيت يحتاج صيانه :- - المكيف الماستر + الغرف - ⁠الرخام الحمام الدور الثاني مكسوره - ⁠الأفياش - ⁠الربل تبع الحمام الماستر - ⁠الكرسي مايل. - ⁠حشرات يحتاج مبيدات . - ⁠ريحه البيت مجاري ، سبق التنويه عنها وأفادوا بسبب كون المياه راكده ،ولكن لا تزال المشكله موجوده",plumbing
 "السلام عليكم ، احتاج صيانه لباب الزجاج الخاص بدورات المياه لا يوجد عازل لحجب المياه من الرموش ، مفتاح النافذه مفكوك ، النوافذ الكبيره لا تغلق",cracks
+"يوجد انسدادات في السباكه ومصخات الماء بطيئه نافذه مكسوره منذو ثلاث او اربعه اشهر",plumbing
 "وحود زوائد او حفر في الجدار في حمام الماستر فوق المغسلة  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxr03oz405h031mlxr03p01mlxr03p1.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxr0524405h031mlxr05251mlxr0526.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mlxr05j3405h031mlxr05j41mlxr05j5.png",paints
 "١ يوجد فراغ بنوافذ السحب ٢ يوجد كسر في كوع تمديد النحاس في سطح الملحق ٣ يوجد شبك غير مركب في شباك غرفة الخادمة ٤ يوجد رطوبة في جدران الحوش ويلزم عمل عازل ورفعه للجدار ٥ تجمع للمياه بالحوش وعدم تصريفها للشارع ٦ عدم تثبيت لسان الباب بشكل سليم",doors_windows
 "السور الخارجي",plumbing
@@ -7998,6 +8044,7 @@ text,label
 "مروحة الشفط في غرفة الخادمة تسريب من شباك غرفة السطح تسريب من شباك غرفة الخادمة باب الكراج فيه مشكله باب المدخل الرئيسي يحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته باب غرفة النوم الرئيسية تحتاج تبديل بالكامل لوجود تلف لا يمكن معالجته ترويب انترلوك مدخل الشارع ( الارضيات ) يوجد ميول في رصيف الشارع عند الباب الرئيسي للڤيلا بما يتسبب بتجمع مياه الامطار عند الباب وجود مشاكل في غطاء الخزان الارضي بما لا يجعله يعمل بالشكل الصحيح وجود مشاكل في الدرج كما في الصورة ويحتاج اصلاح وترويب",ac_ventilation
 "انسداد في ماصورة صرف المياه في السطح . وتجمع المياه",drainage
 "1/الصرف الصحي فائض وخرج من الفتحه يبدو ان هناك انسداد 2/باب الكراج يوجد ميول في الباب وخروج القماش الجانبي من الجهتين من مكانه واصبح يعيق اقفال الباب. 3/ يوجد 3 غرف بالدور الاول مشكله في اغلاق النوافذ اثناء اغلاقها لاتغلق بشكل صحيح يوجد فراغات(غرفتين ماستر) + غرفه غير ماستر     شريف التوصل 0554201450",drainage
+"يوجد فراغ في الالمنيوم ممت يسبب دخول الهواء الخارجي https://retal-objects.yukiroad.ovh/tickets/pictures/mt18vta2405gzw1mt18vta31mt18vta4.png",doors_windows
 "النور المخفي في احد ادراج المطبخ تعطل",electricity
 "السلام عليكم ورحمة الله وبركاته، أود التقدم بطلب صيانة للجدار الموضح في الصور، حيث توجد آثار تآكل في الدهان واحتمال رطوبة. كما تبين وجود تسريب مياه من النوافذ بعد الامطار. واضرار على الترويبات. نأمل إرسال فريق فني لفحص الموقع وتحديد سبب المشكلة ومعالجتها. شاكرين تعاونكم.",paints
 "السلام عليكم ورحمة الله وبركاته، أود التقدم بطلب صيانة للجدار الموضح في الصور، حيث توجد آثار تآكل في الدهان واحتمال رطوبة. كما تبين وجود تسريب مياه من النوافذ بعد الامطار. واضرار على الترويبات. نأمل إرسال فريق فني لفحص الموقع وتحديد سبب المشكلة ومعالجتها. شاكرين تعاونكم.",paints
@@ -8029,8 +8076,10 @@ text,label
 "مشكلة في افياش الكهرب ومشكلة في الابواب",electricity
 "رائحة كريهة من الحمام المشترك بين الغرفتين لا تذهب",drainage
 "الحشرات في الحوش متواجده بشكل كبير ودخولها الى البيت ايضا الشطاف في الحمام عطلان وايضا كرسي الحمام حجمه صغير جدا ومختلف عن بقيه الحمامات تنظيف خزان المياه",pest_control
+"تشققات في السور الداخلي للبيت https://retal-objects.yukiroad.ovh/tickets/pictures/mt1fghvx405gzw1mt1fghvy1mt1fghvz.png https://retal-objects.yukiroad.ovh/tickets/pictures/mt1fgj69405gzw1mt1fgj6a1mt1fgj6b.png",paints
 "التكييف في الصاله لا يبرد تكييف بعض الغرف يثلج التكييف كامل محتاج تشييك وصيانه ما يحتاج له صيانه",ac_ventilation
 "اصلاح  الزر الاحمر لجهاز فتح الكراج اصلاح ربل مجرى باب الكراج إصلاح تشققات السطح تعديل بلاط عتبة مقابل مدخل السيارة للتواصل رقم 0564889988",garage_door
+"يوجد حفرة تحت السور تحتاج اسمنت بسيط  جلدة النافذة يحتاج تثبيت  شفاط حمام غرفة الماستر ضعيف  قلب باب الغرفة ثقيل يحتاج وزنية وتزييت",structural
 "ريحة البيت صرف صحي ، ومتمركزه في الأدوار الأرضي ، والدور الثاني بشكل كبييير ، اما استخدام الأجهزة للكشف عنها ، حيث تم زايره اكثر من مره ولم تحل المشكلة",plumbing
 "اصلاح صنبور الغسالة",plumbing
 "قمت بإحضار كهربائي لغرض تركيب نور ليد مخفي في منطقة الشور لدورات المياه في الدور الثاني وواجهنا مشكلة في التركيب حيث ان اسلاك الكهرباء مكشوفة ولا يوجد مكان لها وهذا يشكل خطر. عليه يرجى التكرم بتكليف احد المهندسين لزيارة الفيلا وايجاد حل آمن",electricity
@@ -8061,6 +8110,7 @@ text,label
 "الفيلا لم تسكن بعد، توجد بعض الملاحظات من تسرب مياه الأمطار من خلال النوافذ وبعض الابواب، وقد يكون بعضها خطير (حيث تم رصد فيش كهرباء خرج منه ماء، وظاهر الآثر على الجدار اسفل المقبس/ الفيش في صالون الرجال) بعد الأمطار الأخيرة على الرياض..  اختصرت المواقع المطلوبة بالشرح في الصور المرفقة. للتكرم باكمال اللازم. في الغالب يحتاج التكرم بإعادة ومراجعة إغلاقات النوافذ / الالمونيوم بالسيليكون رجاءً اغلق الطلب السابق  -دون معالجة- نظرا لعدم تواجدي في الرياض وقت الفحص مع العلم بإبلاغي للموظف بوصولي بعد يوم.",waterproofing
 "تشققات في جدار الحوش الخارجي والعزل للحوش الخارجي سيي حيث ان الدهان تساقط",cracks
 "السلام عليكم الرجاء التكرم بارسال فريق الصيانة لاستبدال الزجاج المكسور مع الشكر",doors_windows
+"خزان المويه الأرضي مكسور من الداخل   https://retal-objects.yukiroad.ovh/tickets/pictures/mt1bi66h405gzw1mt1bi66i1mt1bi66j.png",tank_broken
 "أود إفادتكم بوجود روائح كريهة تنبعث بشكل مستمر من فتحات تصريف دورات المياه، مما تسبب في إزعاج وأثر على مستوى النظافة والراحة داخل الفله. نأمل منكم التكرم بالتحقق من أسباب هذه المشكلة واتخاذ الإجراءات التصحيحية اللازمة بشكل عاجل، بما في ذلك فحص شبكة الصرف الصحي وفتحات التصريف والتأكد من سلامة أنظمة التهوية وعدم وجود انسدادات أو أعطال قد تكون سبباً في هذه الروائح. نقدر تعاونكم ونتطلع إلى معالجة الموضوع في أقرب وقت ممكن، مع إفادتنا بالإجراءات المتخذة حيال ذلك.",drainage
 "السلام عليكم ورحمة الله وبركاته هذه رابع مرة اطلب صيانة للحمام المشترك بالدور الأول، الرائحة الصادرة من هذا الحمام شديدة جداً وسيئة، الرجاء ايجاد حل جذري لهذه المشكلة حيث أنها تؤثر على رائحة البيت بالكامل، مكيف غرفة ابنتي موصل بهذا الحمام ويصل منه للغرفة روائح جداً سيئة. اذا كان الحل في اغلاق فتحة الكلين اوت الرجاء إغلاقها بالكامل لهذا الحمام من الممكن التأكد هل الكرسي به جلبة أو شحمة تؤدي لهذه الرائحة السيئة لا اعرف ما هو الحل، ولكن الرجاء حل هذه المشكلة بأي طريقة. تحياتي...",drainage
 "عندي باب الكراج مايشتغل واحيانا يشتغل بالريموت فقط وعندي نمل في البيت اسفل البلاط",garage_door
@@ -8082,6 +8132,7 @@ text,label
 "بلاط الحمام الجداري حبه واحد تحتاج تغيير ، شطاف المياه خربان ، مروحه تم صيانتها سابقا ولاتزال المشكله تهويه سيئه داخل الحمام ، غطاء الخزان الاسمنتي غير مخروم لااستطيع فتح الغطاء لعدم وجود فتحه ، التربه في الحوش الامامي سيئه احتاج استبعادها             ايمن",ceramics
 "الملاحظات  - عدم ثبات وظهور كسر خلف سيفون الحمام            الوليد - خراب شطاف دورات المياه                                    الوليد - تكسرات اسفل جدار دورة المياه الرئيسية - تكسرات وفراغ في الترويبات في دورة مياه الغرفة الرئيسية الثانية - متواجد يوم السبت للصيانة واواجه صعوبة بتنسيق ذلك امل دعمكم ، نظرًا لعدم التواجد باقي ايام الاسبوع ووجود الاطفال",plumbing
 "تم اغلاق التذكرتين السابقه بدون اكمال أعمال الصيانة و الدهان و العزل بالشكل الصحيح. تم تجاهل بعض الملاحظات تشقق في دهان الفله الخارجي لم يتم العزل بالشكل الصحيح والموضح خلف منتج العزل الذي وفره قسم الصيانه واهو عزل جدار الحديقه طبقتين على الاقل والاكتفاء بطبقه واحدة تم معالجه تشققات الجدار واستخدام الدهان العادي الاملس في اجزاء من الجدران وتجاهل الدهان بالبروفايل الخشن كما هو معمول سابقا دهان التشققات اختلف لونه عن باقي الجدار مماتسبب في تشوه في المنظر العام واختلاف في دراجات اللون في اجزاء متفرقه —— ارجو من قسم الصيانه الالتزام باكمال الاعمال بالشكل الصحيح استخدام دهان البروفايل في جميع الجدان الخارجيه اذا لم يتم مطابقة اللون عزل طبقه ثانيه كما هو موضح في المنتج المستخدم اصلاح باقي الملاحظات التي تم تجاهلها",paints
+"تركيب رقبة الخزان",tank_neck
 "يوجد تشققات جدار البيت الأمامي وكذلك جدران الحوش كامله بالإضافه إلى نقرات على نفس الجدران الداخليه تحتاج إلى معالجه .. ووجود تقشير في بعض البلاط الداخلي بالدور الأرضي والعلوي",cracks
 "يوجد الكثير من الرمل والأحجار الصغيرة في السطح (تحت البحص) والتي تمنع مرور الماء اثناء المطر الى فتحات التصريف او التصفية، مما يتسبب في تراكم الماء فوق السطح واغلاق فتحات التصريف وبالتالي التسبب بتشققات الجدران والأسقف  أجو تنظيف و ازالة الرمل والأحجار الصغيرة الموجودة اسفل البحص في السطح  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mj2ot18r405gzx1mj2ot18s1mj2ot18t.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mj2ot3jd405gzx1mj2ot3je1mj2ot3jf.png",drainage
 "يوجد تسريب مياه اثر الأمطار خلال يوم امس واليوم ١٤-١٥ ديسمبر ٢٠٢٥. حتى الان أثار الترسيب في غرفتين النوم الماستر احدها من بداية السقف، والآخر من لمبة المدخل لغرفة النوم الرئيسية الأخرى، حيث يوجد نقع ماء كبير وخطر جسيم من الالتماس وأثر الماء والرطوبة على الجدران، ارجوا عمل اللازم بشكل عاجل لمعالجة هذا التسريب وعمل الفحص اللازم والعزل المناسب ومعالجة هذه المشكلة وآثارها الجانبية لهذا التسريب.  مرفق لكم الصور",waterproofing
@@ -8095,6 +8146,7 @@ text,label
 "يوجد مشاكل في دورات المياه تسريب مياه  وايضا يوجد رطوبه في الجدران الخارجية وتلف في البويه  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjysk8ck405gzp1mjysk8cl1mjysk8cm.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjyskb8y405gzp1mjyskb8z1mjyskb90.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjyskcp1405gzp1mjyskcp21mjyskcp3.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjyskdqx405gzp1mjyskdqy1mjyskdqz.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mjyskfjk405gzp1mjyskfjl1mjyskfjm.png",plumbing
 "تحية طيبة - يوجد تشققات وتكسر في الدهان الخارجي بالحوش - وايضا معالجة تشققات سابقه بطريقه غير جيدة - معالجة البروفايل غير جيدة تحياتي",paints
 "توجد ملاحظات عند التسليم، وقعت أستلام على أساس يتم تعديل كافة الملاحظات حسب ما دونت لهم وحسب تقرير الفاحص في وقت الاستلام. بعض الملاحظات لم تعالج والبعض الآخر معالجة سيئة غير مقبولة، ارسلتها لمهندس المشروع المسؤول وقت التسليم وتعهد بمعالجتها وبعد فترة طلبت منه مراجعتها وتعديلها حيث انها لم تعدل ولم تستكمل الملاحظات وتفاجأت بانه في إجازة ولم تتم المعالجة وطلب مني رفع الشكوى في التطبيق مضى اكثر من شهر او شهرين دون معالجة او تنظيف بعد التعديل المزعوم. حيث أنني ارفق ما تم واطلب اعادة المعالجة والتعديل وفق التقرير المرفق والملاحظات المسجلة لهم. املا منكم توجيه من يلزم بمعالجة الموضوع فورا. لكامل النقاط التي طلبت معالجتها او اعادة تنفيذها وفق أصول الصنعة مع اعادة تنظيف الفيلا",paints
+"‏العوامة في الخزان العلوي لا تعمل ويتم تسرب الماء من الخزان إلى السطح  ‏وجود فتحات في الأرضيات الداخلية والخارجية مما يسبب تواجد الحشرات والنمل في البيت بشكل هائل ￼￼",plumbing
 "ميول السطح تعبان",ceramics
 "يوجد عدد ٣ مراوح في دورات المياه صوتها عالي مقارنةً بدورات المياه الاخرى اعزكم الله",plumbing
 "'وجود اكثر من نقطه لا يوجد فيها حبل لسحب الكهرباء  كيبل الفايبر من الخارج للداخل  مرايات الحمامات'",electricity
@@ -8121,17 +8173,23 @@ text,label
 "يوجد تشققات كبيرة في السور الخارجي تحتاج اللي معالجة كبيرة  https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mmbzdz64405h031mmbzdz651mmbzdz66.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mmbzfktn405h031mmbzfkto1mmbzfktp.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mmbzfmfb405h031mmbzfmfc1mmbzfmfd.png",cracks
 "كرسي المرحاض المعلق بغرفة الماستر فيه ريحه خايسه من اسفل الكرسي ايضاً فتحة السيفون يبدو ان فيها تسريب و يوجد ريحة عفن و اسمنت تخرج من مكان ضغط السيفون للكرسي المعلق بغرفة الماستر وبحكم ان الحمام لا يوجد ايه نافذه فالريحه مزعجه جدا و مؤذيه",plumbing
 "لم يتم تمديد الكهرباء لجميع مفاتيح الاضاءه للمرايات و للرفوف الجداريه في اماكن الاستحمام في الحمامات. بالاضافه الى عدم تمديد الكهرباء للديكورات الجداريه المحفوره في المجلس والصاله!",electricity
+"اضاءة البيت عطلانه",electricity
 "بعض قواعد الرخام في المغاسل مكسورة",ceramics
 "'الريحه لازالت موجووووووده !! التذكره رقم ٤! لازالت صرف الصحي موجود! غير طبيعي الرجاء حل المشكله بأسرع وقت  تجمع مياه في الحمامات'",plumbing
 "'تشييك كامل على مكيفات الاسبلت لانها ما تبرد   في تسريب موية يحتاج يتعدل'",ac_ventilation
 "طلبت المرة السابقة تصليح باب الكراج واخبرني المهندس انه سوف يتواصلون معي والى الان أنا اسبوعين ولا فيه اي تواصل .. إلى الان مقدر استخدم باب الكراج.  باب المدخل الرئيسي في مشكلة في الفتح والإغلاق",garage_door
 "تم اغلاق التذكره بدون حلها #00178247 جا السباك و ما عرف يحل مشكلة الريحة و قال راح يجي المشرف او المهندس و طلع بدون ما يحل المشكله عندي الحمام الي بغرفة الماستر ريحته و انت بكرامه خايسه و فتحته ال clean out يتجمع فيها الوصخ و ما يمشي مع السيفون وفي فتحت الصرف الصحي الي عند القراج فتحها ولقا فيها وصخ كثير عالق وما قدر يخليه يمشي بسطل مويه ولازم وايت مويه علشان يتصرف",drainage
+"جهاز الحريق عطلان",electricity
 "المضخه تعمل بشكل متواصل دون توقف مما قد يكون بسبب تسرب خفي",plumbing
+"- دوراة المياه تحتاج تسليك ، المويه ماتتصرف .  - بوابه الكراج معطله",drainage
 "لمبة سبوت لايت خربانة",electricity
 "ارجوا تأسيس صنابير المياه للحديقة الامامية مثل باقي الفلل. تم تسليمنا من غير وجودها. الرجاء اصلاح المشكلة مرفق صورة لفلتنا من غير صنابير وصورة لفلة اخرى من نفس النموذج بصنابير مياه",plumbing
 "بعض اضاءة الشوارع الخارجية في الحي zone B لا تعمل",electricity
 "تفتح في الترويبه",ceramics
+"اعمال الصيانه - الروائح - 3 سيفونات لاتعمل - اعمال الالمنيوم يوجد فيها فضاوه - بابا السحاب الصاله لايعمل- قطعه سيراميك الصاله السفليه اللي تحت منكسره- الدور2 بالممر يوجد كسر بقطعه سيراميك - البروفايل متقشر-",drainage
 "لوحظ انفصال جلدة العزل المطاطية المثبتة على إطار الباب من مكانها، مما أدى إلى عدم تثبيتها بشكل صحيح وتدليها. يرجى إعادة تثبيتها أو استبدالها إذا لزم الأمر https://retal-objects.yukiroad.ovh/tickets/pictures/msfnjtha405gzz1msfnjthb1msfnjthc.png https://retal-objects.yukiroad.ovh/tickets/pictures/msfnjus3405gzz1msfnjus41msfnjus5.png",doors_windows
+"الاضاءه الخارجية https://retal-objects.yukiroad.ovh/tickets/pictures/mt0url70405gzw1mt0url711mt0url72.png",electricity
+"سيفون الحمام يسرب مياه مصديه  https://retal-objects.yukiroad.ovh/tickets/pictures/mt0uwwot405gzw1mt0uwwou1mt0uwwov.png",plumbing
 "افياش الحوش كلها ماتشتغل https://retal-objects.yukiroad.ovh/tickets/pictures/msfqyuzf405gzz1msfqyuzg1msfqyuzh.png",electricity
 "عندي تسريب بالمغسلة https://retal-objects.yukiroad.ovh/tickets/pictures/msfpe01d405gzz1msfpe01e1msfpe01f.png",plumbing
 "انفجرت لميه في الغرفة الرئيسية",plumbing
@@ -8140,6 +8198,7 @@ text,label
 "السلام عليكم ورحمة الله وبركاته وجود رائحة صرف صحي من حمامات الدور السفلي  علماً  لم اسكن بعد    وتم التنظيف  اكثر من  3  مرات   كذلك مضخة المياة العلوية لا تعمل  مجرد صوت المشكله   سبق  و اوضحتها  قبل الاستلام",drainage
 "فجأه انفجر رشاش المويه وصار يهرب مويه..",plumbing
 "مشاكل بويه خارجية ومشكله في صنبور علوي في السطح https://retal-objects.yukiroad.ovh/tickets/pictures/msexf3bg405gzz1msexf3bh1msexf3bi.png https://retal-objects.yukiroad.ovh/tickets/pictures/msexf5p8405gzz1msexf5p91msexf5pa.png https://retal-objects.yukiroad.ovh/tickets/pictures/msexf7u7405gzz1msexf7u81msexf7u9.png",paints
+"السلام عليكم ورحمة الله وبركاته   عندي مشكلة في شفاطات دورات المياه اكرمكم الله لا تعمل بشكل ممتاز ولا تشفط",ac_ventilation
 "لا يوجد مويه في الخزان العلوي",plumbing
 "باب السحب في غرفة الماستر لا يتحرك",doors_windows
 "ظهور شقوق في جدار دورة المياه مجلس الرجال",paints
@@ -8147,6 +8206,8 @@ text,label
 "المكيف يطلع هوا حار",ac_ventilation
 "الحنفية مخدشة كرسي الحمام مكسور",plumbing
 "السلام عليكم ورحمة الله وبركاته  يوجد انسداد تام في ماصورة الخاصة بالنحاس النازلة من السطح الى غرفة المعيشة . حيث حاول عمالة تركيب المكيفات فك الانسداد ولم يستطيعوا .  وحيث انها تعتبر من العيوب المخفيه ، نأمل منكم عمل اللازم من الاصلاحات المطلوبة   #ارجوا منكم التواصل معي قبل حضوركم بساعة على الاقل .. حتى اتمكن من المجيء اليكم ، لأنني لم انتقل للمنزل الى الان. #  شاكر لكم تعاونكم المعهود مقدما ً  https://retal-objects.yukiroad.ovh/tickets/pictures/msaluf7g405gzz1msaluf7h1msaluf7i.png",ac_ventilation
+"رااائحة كريهة في الحمام",plumbing
+"فتحات التهوية في سطح السطح  تالفه ومتكسرة وبعضها قصير وبعضها طويل  المفترض طويله لتفادي التهريب اثناء المساء والأمطار  يوجد تصوير  https://retal-objects.yukiroad.ovh/tickets/pictures/mszuysig405gzw1mszuysih1mszuysii.png https://retal-objects.yukiroad.ovh/tickets/pictures/mszuyuwr405gzw1mszuyuws1mszuyuwt.png",ac_ventilation
 "يوجد تهريب في احد الحمامات وكذلك المغسلة مسدودة علما بأن هذا اول استخدام للحمامات وعند فتح رخامة المغسلة اتضح انها مكسورة",plumbing
 "لايغلق",doors_windows
 "اعمال خشب للمطبخ",paints
@@ -8276,8 +8337,8 @@ text,label
 "رطوبة بالحدار الخارجي للبيت والحدار الذي بواحهج الفيلا",paints
 "الرف الخشبي مهترئ ويحتاج الى تغيير https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mo49wamw405gzz1mo49wamx1mo49wamy.png",plumbing
 "الرف الخشبي مهترئ ويحتاج الى تغيير https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mo49x306405gzz1mo49x3071mo49x308.png",plumbing
-"توجد رائحه كويهه في دورات المياه ولم يتم الاستجابه على الطلب الرجاء تغير الافرنجي",plumbing
 "اشكالية في تمديدات الكهرباء",electricity
+"توجد رائحه كويهه في دورات المياه ولم يتم الاستجابه على الطلب الرجاء تغير الافرنجي",plumbing
 "رخام المغسلة يحتاج لقص",plumbing
 "صيانه روائح دورات المياه",plumbing
 "إكمال إضافة البلاط في الحوش الخلفي + دهان المنزل بعد أعمال الصيانة + الباب الرئيسي بخاجة إلى إصلاح https://retal-objects.yukiroad.ovh/tickets/pictures/msvowqdz405gzw1msvowqe01msvowqe1.png https://retal-objects.yukiroad.ovh/tickets/pictures/msvowsa7405gzw1msvowsa81msvowsa9.png https://retal-objects.yukiroad.ovh/tickets/pictures/msvowt78405gzw1msvowt791msvowt7a.png",paints
@@ -8365,8 +8426,8 @@ text,label
 "عندي أعمال اللياصه لم تتم بافضل جوده و احتاج اعادة لياصه وتنظيف الأسمنت، عندي بلاط خارجي مكسور",paints
 "يوجد ميلان واضح في جدار دورة المياه وقد يسبب سقوط الجدار https://retal-objects.yukiroad.ovh/tickets/pictures/msvrhg2g405gzw1msvrhg2h1msvrhg2i.png https://retal-objects.yukiroad.ovh/tickets/pictures/msvrhhrp405gzw1msvrhhrq1msvrhhrr.png",cracks
 "مراوح الشفط لاتعمل بشكل جيد يجب فحص التمديدات",ac_ventilation
-"يوجد شق في الخزان الارضي للمرة الثانية وفي مكان مختلف يرجى العمل علي حل المشكلة بشكل جذري https://retal-objects.yukiroad.ovh/tickets/pictures/msvy6lcm405gzw1msvy6lcn1msvy6lco.png",tank_broken
 "تسريب فالخزان الأرضي وهاذا ثاني تذكره ارجو الرد في اسرع وقت https://retal-objects.yukiroad.ovh/tickets/pictures/msvu2zco405gzw1msvu2zcp1msvu2zcq.png",plumbing
+"يوجد شق في الخزان الارضي للمرة الثانية وفي مكان مختلف يرجى العمل علي حل المشكلة بشكل جذري https://retal-objects.yukiroad.ovh/tickets/pictures/msvy6lcm405gzw1msvy6lcn1msvy6lco.png",tank_broken
 "رائحه في دورات المياه + عطل في كرسي الافرنجي",plumbing
 "السيفون يسرب ويخر مويه ، كذلك الروائح في البيت مؤذية جدا.",plumbing
 "روائح كريهه جدا- شبك لنوافذ",plumbing
@@ -8888,8 +8949,6 @@ text,label
 "لاحظت وجود لون بني مختلف عن الإطار الخشبي في بعض أبواب غرف النوم (الصور المرفقة توضح الملاحظات) h",paints
 "مشكله في فتحة الخزان العلوي",plumbing
 "باب الحمام الماستر يحتاج تغير الكفرات للمسار",plumbing
-"التماس  ب الكهرباء",electricity
-"تسريب في مغاسل غرفة النوم الماستر و كرسي الحمام",plumbing
 "يوجد رائحة كريهة من مرحاض الحمام في المجلس والحمام في غرفة العاملة السطح ، امل التشييك على مرحاض الحمام بين غرفتين النوم يوجد صوت بعد سحب السيفون",cracks
 "المكيف فيه اشارة للماء ويحتاج تغير الصرف لصعوبة فتح منطقة الصيانه بالجبس",ac_ventilation
 "التكيف المخفي حار في بعض الغرف و توزيع الهواء يوحد مشكله فيه",ac_ventilation
@@ -9210,12 +9269,12 @@ text,label
 "لابد من عمل ديكور بعد عمل صيانة لبعض الهوايات وهناك اماكن كثيرة تحتاج لاعادة دهان من سقف ديكور وجدران ويوجد كراك في بعض الغرف وهناك شبك نافذة السطح يحتاج صيانة ،تم تصوير بعض المشاكل واخرى لم يتسنى لي تصويرها لكن عند حضور الفني للاصلاح سيتم ارشاده اليها وهذي عينة من بعض الصور وشكرا لكم ..",paints
 "يوجد كتابه على مدخل الباب الرئيسي لم يتم معالجتها بالشكل الصحيح",paints
 "صيانه لفله 708 دورات المياه الروائح الكريهه و تنظيف البالوعات مشكله مراوح الشفط و ورطوبه الجدران مع البويه تم الاتفاق سابقا باصلاحها قبل السكن .",plumbing
+"الريموت لا يعمل ولا يفتح الباب حق الكراج https://retal-objects.yukiroad.ovh/tickets/pictures/mstwy5yt405gzw1mstwy5yu1mstwy5yv.png",garage_door
 "تششقات بالاخشاب لديكور مغسلة دورة المياه لسوء الجوده  https://retal-objects.yukiroad.ovh/tickets/pictures/msxgbtwv405gzw1msxgbtww1msxgbtwx.png",plumbing
 "مراوح الشفط - الخزان الارضي ( الغطا العلوي) تنظيف مواسير- باب مدخل الرجال يحتاج تنظيف او تغيير - كوالين بعض الابواب جودتها رديئة وارغب بنفس الكوالين القديمه-كراسي الحمامات تحتاج تنظيف -- ملاحظه الزياره يوم السبت بسبب ظروف العمل",ac_ventilation
 "تسريب مياه في دورات المياه",plumbing
 "السلام عليكم ورحمة الله وبركاته   انا سكنت في المنزل و مع الاسف دائماً اواجه رائحة كريهة من دورات المياه اعزكم الله و مهما استخدمت من عطور او منظفات الريحة تختفي فترة بسيطة وترجع مرة اخرى",plumbing
 "السلام عليكم احتاج تنظيف مجاري التكييف بالكامل واحتاج وزن الشباك باب الصاله الزجاج واحتاج تصليح باب مدخل الفله وليس الشارع",doors_windows
-"الريموت لا يعمل ولا يفتح الباب حق الكراج https://retal-objects.yukiroad.ovh/tickets/pictures/mstwy5yt405gzw1mstwy5yu1mstwy5yv.png",garage_door
 "هناك مشكلة في نظام الري في الحديقة الأمامية حيث أن الماء غزير ويطفو على كامل الشارع باستمرار https://retal-objects.yukiroad.ovh/tickets/pictures/msrjks09405gzw1msrjks0a1msrjks0b.png",plumbing
 "١. بلاط مكسور في مواقف السيارة ٢. بلاط متسخ داخل الحوش الجانبي  https://retal-objects.yukiroad.ovh/tickets/pictures/msrkvt4d405gzw1msrkvt4e1msrkvt4f.png https://retal-objects.yukiroad.ovh/tickets/pictures/msrkvx9p405gzw1msrkvx9q1msrkvx9r.png https://retal-objects.yukiroad.ovh/tickets/pictures/msrkvzd8405gzw1msrkvzd91msrkvzda.png https://retal-objects.yukiroad.ovh/tickets/pictures/msrkw0c7405gzw1msrkw0c81msrkw0c9.png https://retal-objects.yukiroad.ovh/tickets/pictures/msrkw12r405gzw1msrkw12s1msrkw12t.png https://retal-objects.yukiroad.ovh/tickets/pictures/msrkw1pp405gzw1msrkw1pq1msrkw1pr.png https://retal-objects.yukiroad.ovh/tickets/pictures/msrkw29s405gzw1msrkw29t1msrkw29u.png",ceramics
 "تحية طيبة،  نأمل إعادة تركيب باب دورة المياه في غرفة الماستر بالشكل الصحيح، مع معالجة وإغلاق الفتحات وآثار الفك والتركيب الظاهرة أعلى وحول إطار الباب، واستكمال أعمال التشطيب والدهان وإعادة الموقع إلى حالته الأصلية.  https://retal-objects.yukiroad.ovh/tickets/pictures/msx9f0v8405gzw1msx9f0v91msx9f0va.png",doors
@@ -9227,28 +9286,27 @@ text,label
 "تحية طيبة،  نأمل التكرم بفحص وإصلاح التكييف، حيث يوجد صوت غير طبيعي (وَنّة) يظهر بشكل واضح عند تشغيل الوحدة.  يرجى إرسال فني مختص للكشف على الوحدة وتحديد مصدر الصوت ومعالجة السبب بشكل نهائي، والتأكد من أن التكييف يعمل دون أصوات غير طبيعية.  شاكرين لكم تعاونكم.",ac_ventilation
 "جميع مكيفات الاسبلت لا يوجد بها فلاتر  يوجد تشققات في جدار السلم زجاج الدرج غير ثابت  https://retal-objects.yukiroad.ovh/tickets/pictures/msukytpc405gzw1msukytpd1msukytpe.png https://retal-objects.yukiroad.ovh/tickets/pictures/msukz49l405gzw1msukz49m1msukz49n.png https://retal-objects.yukiroad.ovh/tickets/pictures/msukzdms405gzw1msukzdmt1msukzdmu.png https://retal-objects.yukiroad.ovh/tickets/pictures/msukzu11405gzw1msukzu121msukzu13.png",cracks
 "فيه ارتفاع  بمنسوب المنهول بالموقع https://retal-objects.yukiroad.ovh/tickets/pictures/msxga5lx405gzw1msxga5ly1msxga5lz.png",drainage
-"رخام المغسلة للمجلس يتسرب منه الماء ويحتاج عزل. المشكلة ما لها علاقة بالسباكة سبق وجاء الفريق مرتين ومشكلة التهريب من الرخام  https://retal-objects.yukiroad.ovh/tickets/pictures/msx49q34405gzw1msx49q351msx49q36.png https://retal-objects.yukiroad.ovh/tickets/pictures/msx49r9g405gzw1msx49r9h1msx49r9i.png",ceramics
 "الخزان الارضي فيه كسر داخلي ،، وسبق وتم رفع تذكره ولم تتم المعالجة وتم اغلاق التذكره بدون زيارة ،، نرجو التعاون والا سيتم رفع الطلب للوطنية  https://retal-objects.yukiroad.ovh/tickets/pictures/msvskm02405gzw1msvskm031msvskm04.png",tank_broken
+"رخام المغسلة للمجلس يتسرب منه الماء ويحتاج عزل. المشكلة ما لها علاقة بالسباكة سبق وجاء الفريق مرتين ومشكلة التهريب من الرخام  https://retal-objects.yukiroad.ovh/tickets/pictures/msx49q34405gzw1msx49q351msx49q36.png https://retal-objects.yukiroad.ovh/tickets/pictures/msx49r9g405gzw1msx49r9h1msx49r9i.png",ceramics
 "رائحة مجاري",drainage
+"سكر زاويه + تهريب الخزان العلوي",plumbing
 "تشقق في الدار https://retal-objects.yukiroad.ovh/tickets/pictures/msx9ihmd405gzw1msx9ihme1msx9ihmf.png",cracks
 "قفل باب الالمونيوم",doors_windows
-"سكر زاويه + تهريب الخزان العلوي",plumbing
 "الجهاز مولع لمبه خضراء على غير العاده https://retal-objects.yukiroad.ovh/tickets/pictures/msxeunsn405gzw1msxeunso1msxeunsp.png",electricity
 "خلاط المياة يحتاج صيانه https://retal-objects.yukiroad.ovh/tickets/pictures/msx609k9405gzw1msx609ka1msx609kb.png",plumbing
 "تهريب ماء من  الكرسي مع رائحة كريهه  https://retal-objects.yukiroad.ovh/tickets/pictures/msx4niin405gzw1msx4niio1msx4niip.png",plumbing
-"تفعيل ريموت الكراج",structural
 "تصريف المكيف وتاثيرها على الجدران والتسريب و الاصباغ",plumbing
 "اغلب الخلاطات تهرب المياه  و الشطافات رديئة وتحتاج تغيير",plumbing
+"تفعيل ريموت الكراج",structural
 "عندي مشكلة في تمديد الكاميرات الخارجيه",electricity
 "باب الكسب الخاص بالمجلس القاعدة الي تحت مفكوكه وقت سحاب الباب يظهر سوت وغير ثابت https://retal-objects.yukiroad.ovh/tickets/pictures/mswwrco8405gzw1mswwrco91mswwrcoa.png",doors_windows
 "يوجد انسدادات في السباكه ومصخات الماء بطيئه https://retal-objects.yukiroad.ovh/tickets/pictures/msxs4ryx405gzw1msxs4ryy1msxs4ryz.png",plumbing
+"خلاط الحمام لا يعمل  المغسله",plumbing
 "تشققات في الجدران وأعمال دهان ومعجون",paints
 "تشققات بالجدران السقفيه والبويه والدرابزين  والأبواب والنوافذ",paints
 "الدينمو شغال  بشكل دائم والعوامه تعمل بشكل ممتاز بس الدينمو لا يتوقف  https://retal-objects.yukiroad.ovh/tickets/pictures/msx6vtin405gzw1msx6vtio1msx6vtip.png https://retal-objects.yukiroad.ovh/tickets/pictures/msx6vuyp405gzw1msx6vuyq1msx6vuyr.png",pumps
 "يوجد رائحه صرف صحي داخل الحمام",plumbing
-"خلاط الحمام لا يعمل  المغسله",plumbing
 "تكسر في البلاط والأبواب  خربانه وشبك الباب مخروم",ceramics
-"1- كسر مفاجئ لحاجز زجاج حمام الصاله العلويه 2- باب المدخل الجانبي للفيلا يدخل من خلاله التراب  3-باب الكراج لايعمل  4- بعض النوافذ لاتغلق بسهوله  https://retal-objects.yukiroad.ovh/tickets/pictures/msxskvyx405gzw1msxskvyy1msxskvyz.png https://retal-objects.yukiroad.ovh/tickets/pictures/msxskx70405gzw1msxskx711msxskx72.png https://retal-objects.yukiroad.ovh/tickets/pictures/msxskxod405gzw1msxskxoe1msxskxof.png",doors_windows
 "باب الكراج معلق والحبل مقطوع لمبة الحمام مكينه باب الحمام https://retal-objects.yukiroad.ovh/tickets/pictures/msxfgpem405gzw1msxfgpen1msxfgpeo.png",garage_door
 "٣ من الحمامات فيها روائح، هي حمام الماستر وحمام الغرفة المجاورة وحمام الرجال. حمام الرجال والماستر الرئيسي قد تم رفع اكثر من تذكرة، وقد اجراء بعض التغييرات على حسابي وهي تركيب رداد عند البالوعة وتركيب جرجور مغسلة شامل للرداد، وللحين المشكلة غير محلولة بالكامل.",plumbing
 "يوجد روائح كريهه صادره من الصفايات",plumbing
@@ -9273,21 +9331,20 @@ text,label
 "لدي الكهرباء تفصل من العداد الداخلي للدور الارضي",electricity
 "باب النساء الرئيسي ما يفتح القفل حقه وبعض غطاء الكراسي الافرنجي ما تركب بشكل صحيح",doors
 "سويتش بيت الدرج مقلوب يعمل بالعكس وسويتش غرفة الطعام خربان رجاء التشييك على جميع المفاتيح داخل الفلة  وشكرا",electricity
-"١- فيه حشره السمكه تطلع من فتحه الخزان ( يتحتاح عزل وتسكير الفتحتات) ٢- الباب الزلاق فيه نشاره خشب تطلع منه حتى بعد التنضيف( يحتاج مبيد للنمل الابيض او تشوفن وش داخله)  https://retal-objects.yukiroad.ovh/tickets/pictures/msyw8js5405gzw1msyw8js61msyw8js7.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyw8ku5405gzw1msyw8ku61msyw8ku7.png",doors_windows
-"توجد عدة صيانات في الفله الدينمو لم يشتغل ويوجد ملاحظات على الألمنيوم لم يتقفل كذالك وجود روائح في دورات المياه وانسداد",plumbing
 "رائحة الحمامات ورطوبه عاليه فب غرفة النوم الرئيسيه   اريد حل لمشكلتي الى الان لم استع السكن في منزلي بسبب الرائحه الكرهه والقويه جدا والله لا يمكن دخول البيت من قوة الرائحه وانا كل يوم ادخله مجبرا حتى اقوم بتشغيل المياه في المواصير ، الذي اراه ليس طبيعي احتاج لحلل ضروري و سريع",plumbing
+"توجد عدة صيانات في الفله الدينمو لم يشتغل ويوجد ملاحظات على الألمنيوم لم يتقفل كذالك وجود روائح في دورات المياه وانسداد",plumbing
+"١- فيه حشره السمكه تطلع من فتحه الخزان ( يتحتاح عزل وتسكير الفتحتات) ٢- الباب الزلاق فيه نشاره خشب تطلع منه حتى بعد التنضيف( يحتاج مبيد للنمل الابيض او تشوفن وش داخله)  https://retal-objects.yukiroad.ovh/tickets/pictures/msyw8js5405gzw1msyw8js61msyw8js7.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyw8ku5405gzw1msyw8ku61msyw8ku7.png",doors_windows
 "السلام عليكم ورحمة الله وبركاته  لدي تشققات في جدران المنزل https://retal-objects.yukiroad.ovh/tickets/pictures/msymx3ck405gzw1msymx3cl1msymx3cm.png https://retal-objects.yukiroad.ovh/tickets/pictures/msymx4j0405gzw1msymx4j11msymx4j2.png",paints
-"تذكرة. عاجله. جداً وهام ...  في ترسيب  خزان المويه. (شق )بحجم كبير جداً.   ) وتعطل. دينمو. الموية.                   شاكرين ومقدرين. تفهمكم  https://retal-objects.yukiroad.ovh/tickets/pictures/msyid15a405gzw1msyid15b1msyid15c.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyid2en405gzw1msyid2eo1msyid2ep.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyid379405gzw1msyid37a1msyid37b.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyid3st405gzw1msyid3su1msyid3sv.png",tank_broken
 "المحبس منكسر يحتاج تغيير  https://retal-objects.yukiroad.ovh/tickets/pictures/msyhf6lx405gzw1msyhf6ly1msyhf6lz.png",plumbing
-"تهريب تحت المغسلة",plumbing
 "النافذة ما تتقفل   https://retal-objects.yukiroad.ovh/tickets/pictures/msyoe7jt405gzw1msyoe7ju1msyoe7jv.png",doors_windows
-"عدد ٤ بلاطات مكسورة + الترويبة لمعظم بلاط البيت   الموعد المناسب : يوم الخميس بعد الظهر",ceramics
 "يوجد عطل واصوات قويه في جهار الشفط الخاص بالمطبخ  ويلزم استبداله بشفاط جديد",plumbing
-"فحص الخزان الارضي سبب فضي المياه",plumbing
+"عدد ٤ بلاطات مكسورة + الترويبة لمعظم بلاط البيت   الموعد المناسب : يوم الخميس بعد الظهر",ceramics
+"تهريب تحت المغسلة",plumbing
 "المقبض لا يعمل  https://retal-objects.yukiroad.ovh/tickets/pictures/msye7ok9405gzw1msye7oka1msye7okb.png",doors
 "تهريب في المغسله الدور الاول",plumbing
 "رائحة كريه جدا   تخرج من الحمام في الغرفة التي بجانب الغرفة الماستر",drainage
 "مخوش وجلد غير متوفره https://retal-objects.yukiroad.ovh/tickets/pictures/msyuxksd405gzw1msyuxkse1msyuxksf.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyuxof0405gzw1msyuxof11msyuxof2.png https://retal-objects.yukiroad.ovh/tickets/pictures/msyuxqwv405gzw1msyuxqww1msyuxqwx.png",doors_windows
+"فحص الخزان الارضي سبب فضي المياه",plumbing
 "روائح كريهة للمرة المليون https://retal-objects.yukiroad.ovh/tickets/pictures/msyseh1b405gzw1msyseh1c1msyseh1d.png",plumbing
 "اعاني من روائح كريهة بدورات المياه وكان السبب من الكراسي تركيبها جداً سيء وتم زيارة فنيين الصيانه لاكثر من خمس مرات ولكن دون جدوى او حل جذري لها ولا زالت الرائحة مزعجة جداً",plumbing
 "تهريب في جرجور دورة مياه https://retal-objects.yukiroad.ovh/tickets/pictures/msyuxjtn405gzw1msyuxjto1msyuxjtp.png",plumbing
@@ -9297,20 +9354,16 @@ text,label
 "لم يتم المعالجة ومازالت رائحة المجاري والتشققات والتصدعات موجودة ولم يتم اصلا الشبك ووضع نافذة شبك للمطبخ ولم يتم وضع شبك للحمامات ولم يتم اصلاح يد او مفتاح النوافذ للاسف يتم اغلاق المذكرة دون التاكد من عمل المهندس والمقاول بشكل صحيح",drainage
 "الخزان العلوي فيه عفن اخضر هو سبب الريحة اتمنى احد يجي ينظفة",cleaning
 "المغسله  تسرب مويه  https://retal-objects.yukiroad.ovh/tickets/pictures/msyn5wm1405gzw1msyn5wm21msyn5wm3.png",plumbing
-"لم يتم إصلاح النوافذ و الزجاج و يتم اغلاق التذاكر بدون زيارة أصلا  التذاكر تغلق دون زيارة او إصلاح.  نامل التعاون بمتابعة اعمال فرق الصيانه و إيقاف التلاعب. https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mrvyfgem405gzw1mrvyfgen1mrvyfgeo.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mrvyfi94405gzw1mrvyfi951mrvyfi96.png",doors_windows
-"الشطافات والليات في الحمامات ضعيفة ومن نوعية رديئة لا تتحمل دفع الماء من المضخة مما سبب تلفها وتسريب الماء منها",plumbing
-"سبق واخبرت المهندسين عن عيوب في دورات المياه بوجود فراغ مابين صفايات الشور وماسورة التصريف حيث ان المبلطين لم يوزنو الصفايه بحيث تكون راكبه على التصريف . احد المهندسين اقترح اضافة ايبوكسي بحيث يمنع تهريب المياه ولا أعلم مدى جودة وفعالية هذا الحل. لذلك الرجاء الزياره بشكل عاجل بكره انا متواجد طول اليوم  https://retal-objects.yukiroad.ovh/tickets/pictures/msyl0mkp405gzw1msyl0mkq1msyl0mkr.png",plumbing
 "مجاري السباكة لم يتم تنظيفها جيداً من مخلفات البناء",plumbing
 "لدي طلب سابق برقم 00204186 يوجد بلاط مكسور وتم اقفال الطلب ولم يتم الاصلاح  https://retal-objects.yukiroad.ovh/tickets/pictures/msz2ja1u405gzw1msz2ja1v1msz2ja1w.png",ceramics
 "السلام عليكم سبق وان تم رفع اكثر من تذكرة بسبب روائح دورات المياه كرما التكرم بحل الموضوع بشكل نهائي شاكر حسن تعاونكم",plumbing
-"تكملة المناطق الغير مبلطة بالحوش .",ceramics
-"خروج روائح كريهة مزعجة  من الحمامات والصفايات   تجعل من الجلوس في المكان صعب",plumbing
+"لم يتم إصلاح النوافذ و الزجاج و يتم اغلاق التذاكر بدون زيارة أصلا  التذاكر تغلق دون زيارة او إصلاح.  نامل التعاون بمتابعة اعمال فرق الصيانه و إيقاف التلاعب. https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mrvyfgem405gzw1mrvyfgen1mrvyfgeo.png https://eu2.contabostorage.com/c92d1ab223ed43358d4f98ca65e087d6:eth.retal/tickets/pictures/mrvyfi94405gzw1mrvyfi951mrvyfi96.png",doors_windows
 "ريحة مجاري في الحمامات",plumbing
 "مشكلة في بايبات المغاسل",plumbing
-"يوجد رايحة سيئة من الحمام",plumbing
+"تكملة المناطق الغير مبلطة بالحوش .",ceramics
 "السلام عليكم  عوامة الخزان العلوي اكثر من ثلاث مرات تعلق و لا تعبي مويه و المويه لا تنزل  مويه  مما سبب لي ازمه  ارجوا حل مشكلتي في اسرع وقت",pumps
+"يوجد رايحة سيئة من الحمام",plumbing
 "وجود بقعه تهريب https://retal-objects.yukiroad.ovh/tickets/pictures/msyxaw2r405gzw1msyxaw2s1msyxaw2t.png",waterproofing
-"السلام عليكم ورحمة الله وبركاته   يوجد ريحة صرف صحي في الدور الثاني اجلكم الله و تهريب الشطاف و لا يمكن اغلاقة الا عند طريق الحنفية الرئيسية ودورة المياة خارجة عن الخدمة حاليا  و تشقاقات البوية في السور الخارجي و الداخي كما هو موضح في الصورة https://retal-objects.yukiroad.ovh/tickets/pictures/msytkxvw405gzw1msytkxvx1msytkxvy.png https://retal-objects.yukiroad.ovh/tickets/pictures/msytkzlh405gzw1msytkzli1msytkzlj.png https://retal-objects.yukiroad.ovh/tickets/pictures/msytl0km405gzw1msytl0kn1msytl0ko.png https://retal-objects.yukiroad.ovh/tickets/pictures/msytl1ed405gzw1msytl1ee1msytl1ef.png",drainage
 "السلام عليكم   اعاني من بعض المشاكل ، كرماً المساعده بها  ١- قفل باب الالمنيوم دائماً يغلق ويعلق ٢- فتحات ترويبه في البلاط للأرضيات والجدار  ٣- الخزان العلوي لا يسحب ماء الا باقل من النصف من مساحة الخزان العلوي. ٤- تسرب تصريف سابق افسد البويه لاحد الاسقف بحاجة للمعالجة    وشكراً لكم",doors_windows
 "استكمال سابق لعمليه عزل السور",waterproofing
 "وجود رطوبه في وجهه البيت",waterproofing
