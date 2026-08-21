@@ -190,7 +190,7 @@ const TICKET_TYPES: {
   {
     key: "garage_door",
     nameAr: "باب كراج",
-    specialtyKey: "mechanics",
+    specialtyKey: "general",
     sortOrder: 16,
     subTypes: [
       { nameAr: "موتور كراج" },
