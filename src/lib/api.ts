@@ -413,7 +413,7 @@ export const appointmentsApi = {
       return r.json();
     }),
   deleteAppointment: (id: string) => del<any>(`/appointments/${id}`),
-  migrate: () => post<{ ok: boolean; created: number }>('/appointments/migrate', {}),
+  getById: (id: string) => get<any>(`/appointments/${id}`),
   getByClient: (clientId: string) => get<any[]>(`/appointments/by-client/${clientId}`),
   getByUnit: (projectId: string, villaNumber: string) => get<any[]>(`/appointments/by-unit/${projectId}/${villaNumber}`),
 };

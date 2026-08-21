@@ -27,7 +27,6 @@ import appointmentRoutes from "./routes/appointments.js";
 import ocrRoutes from "./routes/ocr.js";
 import importExcelRoutes from "./routes/import-excel.js";
 import contractorRoutes from "./routes/contractors.js";
-import salesforceImportRoutes from "./routes/salesforce-import.js";
 import warrantiesRoutes from "./routes/warranties.js";
 import techAuthRoutes from "./routes/tech-auth.js";
 import attendanceRoutes from "./routes/attendance.js";
@@ -97,7 +96,6 @@ async function startServer() {
   app.use("/api/ocr", ocrRoutes);
   app.use("/api/import-excel", importExcelRoutes);
   app.use("/api/contractors", contractorRoutes);
-  app.use("/api/salesforce", salesforceImportRoutes);
   app.use("/api/warranties", warrantiesRoutes);
 
   // ── Legacy client routes under projects (for backward compat) ──────────

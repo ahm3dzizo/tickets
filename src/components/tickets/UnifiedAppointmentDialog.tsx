@@ -432,27 +432,51 @@ export function UnifiedAppointmentDialog({
       setSelectedTechId(editGroup.technicianId || editGroup.technician?.id || null);
 
     } else if (isTicketMode && primaryTicket) {
-      const existing = primaryTicket.appointmentTime;
-      if (existing) {
-        const [d, t] = existing.split(' ');
-        const parsed = new Date(d);
-        if (!isNaN(parsed.getTime())) {
-          setStartDate(d); setDate(d);
-          if (t) { setCustomTime(t); setTimeMode('custom'); }
-        } else {
-          setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
-        }
-      } else {
-        setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
-      }
-      setNotes(primaryTicket.appointmentNotes || '');
       setRangeDays(2);
       setShowPreview(false);
       setConflicts([]);
-      setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length
-        ? [...primaryTicket.assignedSupervisorIds]
-        : []);
-      setSelectedTechId(null);
+
+      const existingApptId = primaryTicket.appointmentId;
+      if (existingApptId) {
+        // Ticket already has an appointment — fetch and pre-fill in edit mode
+        appointmentsApi.getById(existingApptId)
+          .then((appt: any) => {
+            const d = appt.date || todayStr();
+            const t = appt.time || '';
+            setDate(d); setStartDate(d);
+            if (t) { setCustomTime(t); setTimeMode('custom'); } else setTimeMode('morning');
+            setNotes(appt.notes || '');
+            const supIds: string[] = appt.supervisorIds || [];
+            setSelectedSupIds(supIds.length ? supIds : (primaryTicket.assignedSupervisorIds ? [...primaryTicket.assignedSupervisorIds] : []));
+            setSelectedTechId(appt.technicianId || appt.technician?.id || null);
+          })
+          .catch(() => {
+            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
+            setNotes('');
+            setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length ? [...primaryTicket.assignedSupervisorIds] : []);
+            setSelectedTechId(null);
+          });
+      } else {
+        // New appointment
+        const existing = primaryTicket.appointmentTime;
+        if (existing) {
+          const [d, t] = existing.split(' ');
+          const parsed = new Date(d);
+          if (!isNaN(parsed.getTime())) {
+            setStartDate(d); setDate(d);
+            if (t) { setCustomTime(t); setTimeMode('custom'); }
+          } else {
+            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
+          }
+        } else {
+          setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
+        }
+        setNotes('');
+        setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length
+          ? [...primaryTicket.assignedSupervisorIds]
+          : []);
+        setSelectedTechId(null);
+      }
 
     } else if (isCalendarMode) {
       setDate(dateStr || todayStr());
@@ -774,15 +798,19 @@ export function UnifiedAppointmentDialog({
 
   // ── Title ──────────────────────────────────────────────────────────────────
 
+  const hasExistingAppt = isTicketMode && !!(primaryTicket?.appointmentId);
+
   const dialogTitle = isEditMode
     ? `تعديل موعد — فيلا ${editGroup?.villaNumber}`
     : isCalendarMode
     ? 'إضافة موعد'
+    : hasExistingAppt
+    ? `تعديل موعد — فيلا ${primaryTicket!.villaNumber}`
     : canSendWhatsApp
     ? `تحديد موعد ${tickets!.length > 1 ? `لـ${tickets!.length} تذاكر` : 'الزيارة'}`
     : 'إضافة موعد داخلي';
 
-  const TitleIcon = isEditMode
+  const TitleIcon = (isEditMode || hasExistingAppt)
     ? CalendarClock
     : isCalendarMode
     ? CalendarPlus
@@ -796,7 +824,7 @@ export function UnifiedAppointmentDialog({
       >
         <DialogHeader>
           <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2 break-words">
-            <TitleIcon className={cn('w-5 h-5 shrink-0', isEditMode ? 'text-amber-400' : 'text-blue-400')} />
+            <TitleIcon className={cn('w-5 h-5 shrink-0', (isEditMode || hasExistingAppt) ? 'text-amber-400' : 'text-blue-400')} />
             {dialogTitle}
           </DialogTitle>
 
@@ -1436,7 +1464,7 @@ export function UnifiedAppointmentDialog({
                 ? <Loader2 className="w-4 h-4 animate-spin" />
                 : <Save className="w-4 h-4 me-1.5" />
               }
-              {isEditMode ? 'حفظ التعديلات' : 'حفظ الموعد'}
+              {(isEditMode || hasExistingAppt) ? 'حفظ التعديلات' : 'حفظ الموعد'}
             </Button>
 
             {canSendWhatsApp && (

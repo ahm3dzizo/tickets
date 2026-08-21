@@ -117,7 +117,7 @@ export default function Appointments() {
   };
 
   const [directApptDate, setDirectApptDate] = useState<string | null>(null);
-  const [clientTicketsModal, setClientTicketsModal] = useState<{ villa: string, project: string, notes: string } | null>(null);
+  const [clientTicketsModal, setClientTicketsModal] = useState<{ villa: string, project: string } | null>(null);
   const [editApptGroup, setEditApptGroup] = useState<any>(null);
   const [refDate, setRefDate] = useState(() => {
     const stored = sessionStorage.getItem('appointments_refDate');
@@ -388,7 +388,7 @@ export default function Appointments() {
       const dtStart = `${year}${month}${day}T${hour}${minute}00`;
       const dtEnd   = `${year}${month}${day}T${endHour}${minute}00`;
       const types   = Array.from(group.types).map((t: any) => mergedTypes[t] || t).join(' - ');
-      const note    = group.notes || group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
+      const note    = group.notes || '';
       const phone   = group.clientPhone ? `هاتف: ${group.clientPhone}` : '';
       const desc    = [note ? `ملاحظات: ${note}` : '', phone].filter(Boolean).join('\n');
 
@@ -840,7 +840,7 @@ export default function Appointments() {
                           });
 
                           const renderCard = (group: any, key: any) => {
-                            const note = group.notes || group.tickets.find((t: any) => t.appointmentNotes)?.appointmentNotes || '';
+                            const note = group.notes || '';
                             const time = (group.appointmentTime || '').split(' ')[1] || '---';
                             const clientKey = group.villaNumber + '_' + (group.projectId || '');
                             const totalOpen = openTicketsMap[clientKey] || 0;
@@ -858,7 +858,7 @@ export default function Appointments() {
                                 onClick={e => {
                                   if (isCenter) {
                                     e.stopPropagation();
-                                    setClientTicketsModal({ villa: group.villaNumber, project: group.projectId, notes: note });
+                                    setClientTicketsModal({ villa: group.villaNumber, project: group.projectId });
                                   }
                                 }}
                               >
@@ -1253,7 +1253,6 @@ export default function Appointments() {
           onOpenChange={(open) => !open && setClientTicketsModal(null)}
           villaNumber={clientTicketsModal.villa}
           projectId={clientTicketsModal.project}
-          initialNotes={clientTicketsModal.notes}
           onSuccess={loadAppointments}
         />
       )}

@@ -483,6 +483,24 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── GET /api/appointments/:id ────────────────────────────────────────────────
+router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
+  const { id } = req.params;
+  try {
+    const appointment = await prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
+        tickets: { select: { id: true, ticketId: true, status: true, type: true, detectedTypes: true, assignedSupervisorIds: true, assignedSupervisors: true } },
+      },
+    });
+    if (!appointment) { res.status(404).json({ error: "Appointment not found" }); return; }
+    res.json(appointment);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── PUT /api/appointments/:id ────────────────────────────────────────────────
 router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   const { id } = req.params;
