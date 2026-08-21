@@ -191,6 +191,7 @@ model Ticket {
   techSessions       TicketTimeSession[]
 
   @@index([projectId, status])
+  @@index([projectId, villaNumber])
   @@index([unitId])
   @@index([clientId])
 }
