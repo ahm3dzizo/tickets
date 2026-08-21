@@ -69,49 +69,44 @@ def normalize(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
-# ── Load Excel ──────────────────────────────────────────────────────────────
-print(f"📂 Reading {EXCEL_PATH.name} ...")
-df_raw = pd.read_excel(EXCEL_PATH, sheet_name=0, header=None, engine="openpyxl")
-
-# find header row
-header_row = None
-for i, row in df_raw.iterrows():
-    if row.astype(str).str.contains("الوصف").any():
-        header_row = i
-        break
-
-if header_row is None:
-    raise ValueError("Header row not found")
-
-df = df_raw.iloc[header_row + 1:].copy()
-df.columns = df_raw.iloc[header_row].tolist()
-df = df.reset_index(drop=True)
-
-desc_col = next(c for c in df.columns if "الوصف" in str(c))
-type_col = next(c for c in df.columns if "تصنيف" in str(c))
-
-print(f"✅ Header at row {header_row+1} — desc='{desc_col}' type='{type_col}'")
-
-# ── Build dataset ───────────────────────────────────────────────────────────
+# ── Load Excel (optional seed data) ─────────────────────────────────────────
 records = []
-for _, row in df.iterrows():
-    raw_type = str(row.get(type_col, "") or "").strip()
-    raw_desc = str(row.get(desc_col, "") or "").strip()
+if EXCEL_PATH.exists():
+    print(f"📂 Reading {EXCEL_PATH.name} ...")
+    df_raw = pd.read_excel(EXCEL_PATH, sheet_name=0, header=None, engine="openpyxl")
 
-    if not raw_desc or not raw_type:
-        continue
-    if raw_type in ("مكرره", "nan") or "خارج" in raw_type:
-        continue
+    header_row = None
+    for i, row in df_raw.iterrows():
+        if row.astype(str).str.contains("الوصف").any():
+            header_row = i
+            break
 
-    label = resolve_type(raw_type)
-    if not label:
-        continue
+    if header_row is not None:
+        df = df_raw.iloc[header_row + 1:].copy()
+        df.columns = df_raw.iloc[header_row].tolist()
+        df = df.reset_index(drop=True)
 
-    text = normalize(raw_desc)
-    if len(text) < 5:
-        continue
+        desc_col = next((c for c in df.columns if "الوصف" in str(c)), None)
+        type_col = next((c for c in df.columns if "تصنيف" in str(c)), None)
 
-    records.append({"text": text, "label": label})
+        if desc_col and type_col:
+            print(f"✅ Header at row {header_row+1} — desc='{desc_col}' type='{type_col}'")
+            for _, row in df.iterrows():
+                raw_type = str(row.get(type_col, "") or "").strip()
+                raw_desc = str(row.get(desc_col, "") or "").strip()
+                if not raw_desc or not raw_type:
+                    continue
+                if raw_type in ("مكرره", "nan") or "خارج" in raw_type:
+                    continue
+                label = resolve_type(raw_type)
+                if not label:
+                    continue
+                text = normalize(raw_desc)
+                if len(text) < 5:
+                    continue
+                records.append({"text": text, "label": label})
+else:
+    print(f"⚠️  {EXCEL_PATH.name} not found — training on DB + extra CSV only")
 
 dataset = pd.DataFrame(records)
 
