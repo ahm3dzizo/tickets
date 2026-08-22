@@ -122,9 +122,16 @@ const [closeType, setCloseType] = useState<CloseType>('normal');
 const [loading, setLoading] = useState(false);
 const [copying, setCopying] = useState(false);
 const [notes, setNotes] = useState('');
-const [maintItems, setMaintItems] = useState<{ description: string; status: string }[]>(
-selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم' }))
-);
+  const [maintItems, setMaintItems] = useState<{ description: string; status: string }[]>(
+    selectedTickets.map(t => ({
+      description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(),
+      status: 'تم'
+    }))
+  );
+
+  // Display-only value. Unit relationships use unitId.
+  const currentVilla = selectedTickets[0]?.villaNumber || '';
+
 const [showSaveModal, setShowSaveModal] = useState(false);
 const [savingReport, setSavingReport] = useState<'image' | 'pdf' | null>(null);
 const [cardStatus, setCardStatus] = useState('تم');
@@ -147,8 +154,8 @@ whatsappApi.getStatus().then(s => setWaConnected(s.connected)).catch(() => setWa
 }
 }, [open]);
 
-const currentVilla = selectedTickets[0]?.villaNumber;
-const targetClient = clients.find(c => String(c.villaNumber) === String(currentVilla));
+const currentUnitId = selectedTickets[0]?.unitId;
+const targetClient = clients.find(c => String(c.unitId) === String(currentUnitId));
 const mainTicket = selectedTickets[0];
 const waIds = selectedTickets.map(t => t.ticketId || t.refNumber).join('، ');
 

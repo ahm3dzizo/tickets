@@ -692,12 +692,12 @@ export function TicketTable({
     if (!selectedIds || selectedIds.length === 0) return null;
     const sel = baseTickets.filter(t => selectedIds?.includes(t.id));
     if (sel.length === 0) return null;
-    const keys = new Set(sel.map(t => t.clientId || t.villaNumber || t.id));
+    const keys = new Set(sel.map(t => t.clientId || t.unitId || t.id));
     return keys.size === 1 ? [...keys][0] : null;
   }, [selectedIds, baseTickets]);
 
   const focalClientName = useMemo(() => focalClientKey
-    ? (baseTickets.find(t => (t.clientId || t.villaNumber || t.id) === focalClientKey)?.clientName ?? '')
+    ? (baseTickets.find(t => (t.clientId || t.unitId || t.id) === focalClientKey)?.clientName ?? '')
     : '', [focalClientKey, baseTickets]);
 
   const displayTickets = useMemo(() => {
@@ -746,7 +746,7 @@ export function TicketTable({
 
   const focalCount = useMemo(() => {
     if (!focalClientKey) return 0;
-    return baseTickets.filter(t => (t.clientId || t.villaNumber || t.id) === focalClientKey).length;
+    return baseTickets.filter(t => (t.clientId || t.unitId || t.id) === focalClientKey).length;
   }, [baseTickets, focalClientKey]);
 
   const otherTicketsCount = baseTickets.length - focalCount;

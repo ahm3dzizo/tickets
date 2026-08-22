@@ -258,7 +258,7 @@ function autoMatch(columns: string[], aliases: string[]): string {
   return "";
 }
 
-function normalizeVillaNumber(raw: string): string {
+function normalizeUnitNumber(raw: string): string {
   if (!raw) return "";
 
   const value = String(raw).trim();
@@ -489,7 +489,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     
     const fieldAliases: Record<string, string[]> = {
       ticketId:    ["رقم التذكرة", "ID", "id", "الرقم", "#", "رقم الطلب", "Case Number"],
-      villaNumber: ["رقم الفيلا", "فيلا", "villa", "رقم الوحدة", "الوحدة", "Unit"],
+      excelUnitReference: ["رقم الفيلا", "فيلا", "villa", "رقم الوحدة", "الوحدة", "Unit"],
       createdAt:   [
         "التاريخ",
         "date",
@@ -543,10 +543,41 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     };
 
     const existingMap = new Map(existingRows.map((t) => [normalizeTicketId(String(t.ticketId).trim()), t]));
-    const clientMap = new Map(unitRows.map((u) => {
-      const primaryClient = u.clients.find(c => c.isPrimary)?.client || u.clients[0]?.client;
-      return [normalizeVillaNumber(String(u.unitNumber)), { unitId: u.id, clientId: primaryClient?.id || null, name: primaryClient?.name || "" }];
-    }));
+    // Excel-only lookup:
+// The Excel value is used ONLY to resolve the real Unit record.
+// After resolution, the system works exclusively with Unit.id.
+const excelUnitLookup = new Map<string, {
+      id: string;
+      clientId: string | null;
+    }>();
+
+    const duplicateExcelUnitReferences = new Set<string>();
+
+    for (const u of unitRows) {
+      const excelReference = normalizeUnitNumber(String(u.unitNumber));
+      if (!excelReference) continue;
+
+      const primaryClient =
+        u.clients.find(c => c.isPrimary)?.client ||
+        u.clients[0]?.client;
+
+      if (excelUnitLookup.has(excelReference)) {
+        duplicateExcelUnitReferences.add(excelReference);
+        continue;
+      }
+
+      excelUnitLookup.set(excelReference, {
+        id: u.id,
+        clientId: primaryClient?.id || null,
+      });
+    }
+
+    if (duplicateExcelUnitReferences.size > 0) {
+      console.warn(
+        "[ImportExcel] Duplicate Excel unit references detected:",
+        [...duplicateExcelUnitReferences].join(", ")
+      );
+    }
 
     // ── Build waiting-status map to inherit for new tickets ───────────────
     const waitingByUnit = new Map<string, boolean>();
@@ -600,8 +631,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         // تجاهل صفوف الـ Subtotal/Total في تقارير Salesforce:
         // هذه الصفوف تحتوي على رقم تذكرة (مثل 86) لكن بدون تاريخ ووحدة سكنية
         const rawDate = get("createdAt");
-        const rawVillaForCheck = String(get("villaNumber") || "").trim();
-        if (!rawDate && !rawVillaForCheck) { skippedInFile++; continue; }
+        const rawUnitForCheck = String(get("excelUnitReference") || "").trim();
+        if (!rawDate && !rawUnitForCheck) { skippedInFile++; continue; }
 
         // كشف مكررات الملف نفسه
         if (seenInFile.has(ticketId)) { skippedInFile++; continue; }
@@ -615,8 +646,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
           continue;
         }
 
-        const rawVilla = String(get("villaNumber") || "").trim();
-        const cleanVilla = normalizeVillaNumber(rawVilla);
+        const rawUnitReference = String(get("excelUnitReference") || "").trim();
+        const cleanUnitReference = normalizeUnitNumber(rawUnitReference);
 
         const rawStatus = get("status");
         const status = normalizeStatus(rawStatus);
@@ -646,9 +677,9 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         if (!finalType) finalType = "unclassified";
         const finalTypeId = typeIdMap.get(finalType) || null;
 
-        const unitData = clientMap.get(cleanVilla);
-        const clientId = unitData?.clientId || null;
-        const unitId = unitData?.unitId || null;
+        const unit = excelUnitLookup.get(cleanUnitReference);
+        const unitId = unit?.id || null;
+        const clientId = unit?.clientId || null;
 
         // ── Assign Supervisors based on Final Types ──────────────────────────
         const requiredSpecialties = [...new Set(finalTypes.map((t: string) => typeToSpecialty[t] || "general"))];

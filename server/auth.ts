@@ -140,8 +140,20 @@ export function normalizePhoneNumber(value: string | null): string | null {
 
 export function toPublicUser<T extends Record<string, unknown> | null>(user: T) {
   if (!user) return user;
-  const { passwordHash: _passwordHash, ...safeUser } = user as Record<string, unknown> & { passwordHash?: string | null };
-  return safeUser;
+
+  const record = user as Record<string, unknown> & {
+    passwordHash?: string | null;
+  };
+
+  const {
+    passwordHash,
+    ...safeUser
+  } = record;
+
+  return {
+    ...safeUser,
+    hasPassword: Boolean(passwordHash),
+  };
 }
 
 export function toPublicUsers<T extends Array<Record<string, unknown>>>(users: T) {

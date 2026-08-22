@@ -405,7 +405,7 @@ router.post("/import", requireAuth, async (req, res) => {
       projectId: string;
       tickets: {
         ticketId?: string; refNumber?: string; clientId?: string;
-        clientName?: string; villaNumber?: string; description?: string;
+        clientName?: string; unitNumber?: string; description?: string;
         type?: string; priority?: number | string; issuedAt?: string;
       }[];
     };
@@ -419,11 +419,11 @@ router.post("/import", requireAuth, async (req, res) => {
       where: { projectId },
       include: { clients: { include: { client: true } } },
     });
-    const clientByVilla: Record<string, any> = {};
+    const clientByUnitNumber: Record<string, any> = {};
     for (const u of projectUnits) {
       const c = u.clients.find((c: any) => c.isPrimary)?.client || u.clients[0]?.client;
       if (c) {
-        clientByVilla[u.unitNumber] = { id: c.id, villaNumber: u.unitNumber, name: c.name, phone: c.phone, unitId: u.id };
+        clientByUnitNumber[u.unitNumber] = { id: c.id, unitNumber: u.unitNumber, name: c.name, phone: c.phone, unitId: u.id };
       }
     }
 
@@ -450,11 +450,11 @@ router.post("/import", requireAuth, async (req, res) => {
     for (let i = 0; i < rawTickets.length; i++) {
       const raw = rawTickets[i];
       const description = (raw.description || "").trim();
-      const villaNumber = (raw.villaNumber || "").trim();
+      const unitNumber = (raw.unitNumber || "").trim();
       const clientId = (raw.clientId || "").trim();
 
       let matchedClientId = clientId;
-      if (!matchedClientId && villaNumber) matchedClientId = clientByVilla[villaNumber]?.id || "";
+      if (!matchedClientId && unitNumber) matchedClientId = clientByUnitNumber[unitNumber]?.id || "";
 
       const classification = classifyFromKeywordsDB(description, keywords);
       const rawType = classification.primaryType === "unclassified" ? null : classification.primaryType;
@@ -471,7 +471,7 @@ router.post("/import", requireAuth, async (req, res) => {
       ticketsToCreate.push({
         ticketId: raw.ticketId || String(Date.now() + i).slice(-6),
         projectId, clientId: matchedClientId || null,
-        unitId: clientByVilla[villaNumber]?.unitId || null,
+        unitId: clientByUnitNumber[unitNumber]?.unitId || null,
         issuedAt: raw.issuedAt || null,
         description, type, status: "open",
         priority: isNaN(priorityNum) ? 3 : priorityNum,

@@ -50,7 +50,13 @@ export default function App() {
 }
 
 function AppContent() {
-  const { user, loading, requiresProfileCompletion, completeProfile } = useAuth();
+  const {
+    user,
+    loading,
+    requiresProfileCompletion,
+    isFirstLogin,
+    completeProfile,
+  } = useAuth();
   const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => {
@@ -69,13 +75,21 @@ function AppContent() {
     );
   }
 
-  const handleProfileComplete = async (data: { displayName: string; email: string; password: string }) => {
+  const handleProfileComplete = async (data: {
+    displayName: string;
+    phoneNumber: string;
+    employeeId: string;
+    idNumber: string;
+    clothingSize: string;
+    shoeSize: string;
+    email?: string;
+    password: string;
+    photo?: File | null;
+  }) => {
     try {
       await completeProfile(data);
       setShowProfileModal(false);
-      // المستخدم بقى نشط، التطبيق هيعمل re-render تلقائي
     } catch (error) {
-      // الخطأ هيظهر جوه الموديول
       throw error;
     }
   };
@@ -172,7 +186,18 @@ function AppContent() {
         {showProfileModal && (
           <ProfileCompletionModal
             open={showProfileModal}
-            pendingUser={user ? { displayName: user.displayName, role: user.role, specialty: (user as any).specialty, phoneNumber: (user as any).phoneNumber } : null}
+            isFirstLogin={isFirstLogin}
+            pendingUser={user ? {
+              displayName: user.displayName,
+              role: user.role,
+              specialty: (user as any).specialty,
+              phoneNumber: (user as any).phoneNumber,
+              employeeId: (user as any).employeeId,
+              idNumber: (user as any).idNumber,
+              clothingSize: (user as any).clothingSize,
+              shoeSize: (user as any).shoeSize,
+              photoURL: (user as any).photoURL,
+            } : null}
             onComplete={handleProfileComplete}
           />
         )}

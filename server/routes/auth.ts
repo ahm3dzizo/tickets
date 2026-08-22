@@ -47,22 +47,25 @@ router.post("/login", loginLimiter, async (req, res) => {
   if (email) {
     user = await prisma.user.findUnique({ where: { email } });
   } else if (phoneNumber) {
-    // Multiple users may share a phone (e.g. admin + pending employee)
-    // Priority: 1) non-pending with matching password  2) pending (first login)
-    const allByPhone = await prisma.user.findMany({ where: { phoneNumber } });
+    // Multiple users may share a phone.
+    // Priority: password match first, then first-login account.
+    const allByPhone = await prisma.user.findMany({
+      where: { phoneNumber }
+    });
 
-    // Try non-pending users first — check password match
-    const nonPending = allByPhone.filter(u => !u.uid.startsWith("pending_"));
-    for (const u of nonPending) {
+    // Existing users: verify password first.
+    for (const u of allByPhone) {
       if (u.passwordHash && await bcrypt.compare(password, u.passwordHash)) {
         user = u;
         break;
       }
     }
 
-    // If no non-pending matched, fall back to pending (new employee activation)
+    // First login behavior stays unchanged:
+    // if the account has no password yet, the entered password
+    // becomes its initial password.
     if (!user) {
-      user = allByPhone.find(u => u.uid.startsWith("pending_")) ?? null;
+      user = allByPhone.find(u => !u.passwordHash) ?? null;
     }
   }
 
@@ -71,21 +74,35 @@ router.post("/login", loginLimiter, async (req, res) => {
     return;
   }
 
-  const isPending = user.uid.startsWith("pending_");
+  const needsProfileCompletion = !user.profileCompleted;
 
-  // First login for new employee — set their chosen password
-  if (isPending && !user.passwordHash) {
-    const passwordHash = await bcrypt.hash(password, 10);
-    await prisma.user.update({ where: { uid: user.uid }, data: { passwordHash } });
-    const token = signAppToken({ uid: user.uid, email: user.email, type: "app" });
-    res.json({ token, user: toPublicUser(user), requiresProfileCompletion: true, isFirstLogin: true });
+  // First login for a new employee.
+  //
+  // IMPORTANT:
+  // Do NOT save the temporary login password here.
+  // The user must choose their permanent password inside
+  // ProfileCompletionModal during profile completion.
+  if (!user.passwordHash) {
+    const token = signAppToken({
+      uid: user.uid,
+      email: user.email,
+      type: "app",
+    });
+
+    res.json({
+      token,
+      user: toPublicUser(user),
+      requiresProfileCompletion: true,
+      isFirstLogin: true,
+    });
+
     return;
   }
 
   // Regular login — verify password
   if (user.passwordHash && await bcrypt.compare(password, user.passwordHash)) {
     const token = signAppToken({ uid: user.uid, email: user.email, type: "app" });
-    res.json({ token, user: toPublicUser(user), requiresProfileCompletion: isPending, isFirstLogin: false });
+    res.json({ token, user: toPublicUser(user), requiresProfileCompletion: !user.profileCompleted, isFirstLogin: false });
     return;
   }
 
@@ -110,7 +127,7 @@ router.post("/forgot-password", loginLimiter, async (req, res) => {
   const user = await prisma.user.findFirst({
     where: { 
       phoneNumber,
-      uid: { not: { startsWith: "pending_" } }
+      profileCompleted: true
     }
   });
 
@@ -180,7 +197,7 @@ router.post("/reset-password", async (req, res) => {
   const user = await prisma.user.findFirst({
     where: { 
       phoneNumber,
-      uid: { not: { startsWith: "pending_" } }
+      profileCompleted: true
     }
   });
 

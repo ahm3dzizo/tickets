@@ -153,7 +153,7 @@ export default function Clients() {
     if (!selectedClient) { setClientTickets([]); return; }
     setTicketsLoading(true);
     ticketsApi.getAll({ projectId: selectedClient.projectId })
-      .then((all: any[]) => setClientTickets(all.filter((t: any) => String(t.villaNumber) === String(selectedClient.villaNumber)) as ClientTicket[]))
+      .then((all: any[]) => setClientTickets(all.filter((t: any) => String(t.unitId) === String(selectedClient.unitId)) as ClientTicket[]))
       .catch(() => {})
       .finally(() => setTicketsLoading(false));
   }, [selectedClient]);

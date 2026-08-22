@@ -9,6 +9,17 @@ interface LoginResponse {
   isFirstLogin?: boolean;
 }
 
+interface CompleteProfileData {
+  displayName: string;
+  phoneNumber: string;
+  employeeId: string;
+  idNumber: string;
+  clothingSize: string;
+  shoeSize: string;
+  email?: string;
+  photo?: File | null;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -17,7 +28,7 @@ interface AuthContextType {
   login: (identifier: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  completeProfile: (data: { displayName: string; email: string; password: string }) => Promise<void>;
+  completeProfile: (data: CompleteProfileData) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,8 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const profile = await usersApi.getMe();
         setUser(profile as User);
         
-        const isPending = profile.uid?.startsWith('pending_') || false;
-        setRequiresProfileCompletion(isPending);
+        setRequiresProfileCompletion(profile.profileCompleted === false);
       } catch {
         authStorage.clearToken();
         setUser(null);
@@ -64,8 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profile = await usersApi.getMe();
       setUser(profile as User);
       
-      const isPending = profile.uid?.startsWith('pending_') || false;
-      setRequiresProfileCompletion(isPending);
+      setRequiresProfileCompletion(profile.profileCompleted === false);
     } catch {
       // keep existing user state
     }
@@ -76,8 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authStorage.setToken(result.token);
     setUser(result.user as User);
     
-    const needsCompletion = result.requiresProfileCompletion ?? 
-                           (result.user?.uid?.startsWith('pending_') || false);
+    const needsCompletion = result.requiresProfileCompletion ??
+                           (result.user?.profileCompleted === false);
     setRequiresProfileCompletion(needsCompletion);
     setIsFirstLogin(result.isFirstLogin || false);
   };
@@ -89,14 +98,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsFirstLogin(false);
   };
 
-  const completeProfile = async (data: { displayName: string; email: string; password: string }) => {
+  const completeProfile = async (data: CompleteProfileData) => {
     try {
       const result = await usersApi.completeProfile(data);
-      
+
       if (result.token) {
         authStorage.setToken(result.token);
       }
-      
+
       setUser(result.user as User);
       setRequiresProfileCompletion(false);
       setIsFirstLogin(false);

@@ -162,11 +162,7 @@ async function reclassifyForKeyword(
         ] as string[];
         const supervisors = await findSupervisorsDB(ticket.projectId, specialties);
         if (supervisors.length > 0) {
-          updateData.assignedSupervisorId  = supervisors[0].id;
-          updateData.assignedSupervisorIds = supervisors.map((s) => s.id);
-          updateData.assignedSupervisors   = supervisors.map((s) => ({
-            id: s.id, name: s.name, specialty: s.specialties[0] || "general",
-          }));
+                    updateData.assignedSupervisorIds = supervisors.map((s) => s.id);
         }
       } catch { /* non-fatal — type still updated */ }
     }

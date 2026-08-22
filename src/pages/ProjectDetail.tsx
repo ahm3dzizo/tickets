@@ -98,23 +98,23 @@ export default function ProjectDetail() {
     const byVilla: Record<string, Ticket[]> = {};
     
     selectedTickets.forEach(t => {
-      if (!byVilla[t.villaNumber]) byVilla[t.villaNumber] = [];
-      byVilla[t.villaNumber].push(t);
+      if (!byVilla[t.unitId]) byVilla[t.unitId] = [];
+      byVilla[t.unitId].push(t);
     });
 
     // For now, let's process the first villa's tickets to avoid pop-up blockers
-    const villaNumbers = Object.keys(byVilla);
-    if (villaNumbers.length > 1) {
+    const unitIds = Object.keys(byVilla);
+    if (unitIds.length > 1) {
       toast.info('سيتم فتح واتساب لأول فيلا مختارة فقط حالياً');
     }
 
-    const targetVilla = villaNumbers[0];
+    const targetUnitId = unitIds[0];
     const villaTickets = byVilla[targetVilla];
     const firstTicket = villaTickets[0];
     const client = clients.find(c => c.id === firstTicket.clientId || c.phone === firstTicket.clientId); // Fallback handle
     
     // We might need to find client by villa if ID is missing or mismatched
-    const targetClient = client || clients.find(c => String(c.villaNumber) === String(targetVilla));
+    const targetClient = client || clients.find(c => String(c.unitId) === String(targetUnitId));
 
     if (!targetClient?.phone) {
       toast.error('لم يتم العثور على رقم هاتف لهذا العميل');
@@ -190,7 +190,7 @@ export default function ProjectDetail() {
         {/* Action Bar for selected tickets */}
         {selectedTicketIds.length > 0 && (() => {
           const selTickets = tickets.filter(t => selectedTicketIds.includes(t.id));
-          const uniqueClientKeys = new Set(selTickets.map(t => t.clientId || t.villaNumber || 'unknown'));
+          const uniqueClientKeys = new Set(selTickets.map(t => t.clientId || t.unitId || t.id));
           const isMultiClient = uniqueClientKeys.size > 1;
           return (
             <BulkActionBar

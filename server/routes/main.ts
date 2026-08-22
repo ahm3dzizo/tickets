@@ -6,37 +6,37 @@ import { createServer as createViteServer } from "vite";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import ticketTypesAdminRoutes from "./routes/ticket-types-admin.ts";
-import { PORT, __dirname } from "./config.js";
-import prisma from "./db.js";
-import { setupSocket } from "./socket.js";
-import authRoutes from "./routes/auth.js";
-import userRoutes from "./routes/users.js";
-import projectRoutes from "./routes/projects.js";
-import clientRoutes from "./routes/clients.js";
-import ticketRoutes from "./routes/tickets.js";
-import technicianRoutes from "./routes/technicians.js";
-import classifyRoutes from "./routes/classify.js";
-import reportRoutes from "./routes/report.js";
-import reportsStatsRoutes from "./routes/reports.js";
-import auditRoutes from "./routes/audit.js";
-import dashboardRoutes from "./routes/dashboard.js";
-import whatsappRoutes from "./routes/whatsapp.js";
-import whatsappBotRoutes from "./routes/whatsapp-bot.js";
-import settingsRoutes from "./routes/settings.js";
-import appointmentRoutes from "./routes/appointments.js";
-import ocrRoutes from "./routes/ocr.js";
-import importExcelRoutes from "./routes/import-excel.js";
-import contractorRoutes from "./routes/contractors.js";
-import warrantiesRoutes from "./routes/warranties.js";
-import techAuthRoutes from "./routes/tech-auth.js";
-import attendanceRoutes from "./routes/attendance.js";
-import translationRoutes from "./routes/translation.js";
-import { initAllSessions } from "./baileys.js";
-import { requireAuth } from "./auth.js";
-import { startGeminiWorker } from "./classifier/gemini-worker.js";
-import { startReclassifyWorker, stopReclassifyWorker } from "./classifier/reclassify-worker.js";
-import { startTrainWorker, stopTrainWorker } from "./classifier/train-worker.js";
-import { seedSubTypes } from "./classifier/seed-subtypes.js";
+import { PORT, __dirname } from "./config.ts";
+import prisma from "./db.ts";
+import { setupSocket } from "./socket.ts";
+import authRoutes from "./routes/auth.ts";
+import userRoutes from "./routes/users.ts";
+import projectRoutes from "./routes/projects.ts";
+import clientRoutes from "./routes/clients.ts";
+import ticketRoutes from "./routes/tickets.ts";
+import technicianRoutes from "./routes/technicians.ts";
+import classifyRoutes from "./routes/classify.ts";
+import reportRoutes from "./routes/report.ts";
+import reportsStatsRoutes from "./routes/reports.ts";
+import auditRoutes from "./routes/audit.ts";
+import dashboardRoutes from "./routes/dashboard.ts";
+import whatsappRoutes from "./routes/whatsapp.ts";
+import whatsappBotRoutes from "./routes/whatsapp-bot.ts";
+import settingsRoutes from "./routes/settings.ts";
+import appointmentRoutes from "./routes/appointments.ts";
+import ocrRoutes from "./routes/ocr.ts";
+import importExcelRoutes from "./routes/import-excel.ts";
+import contractorRoutes from "./routes/contractors.ts";
+import warrantiesRoutes from "./routes/warranties.ts";
+import techAuthRoutes from "./routes/tech-auth.ts";
+import attendanceRoutes from "./routes/attendance.ts";
+import translationRoutes from "./routes/translation.ts";
+import { initAllSessions } from "./baileys.ts";
+import { requireAuth } from "./auth.ts";
+import { startGeminiWorker } from "./classifier/gemini-worker.ts";
+import { startReclassifyWorker, stopReclassifyWorker } from "./classifier/reclassify-worker.ts";
+import { startTrainWorker, stopTrainWorker } from "./classifier/train-worker.ts";
+import { seedSubTypes } from "./classifier/seed-subtypes.ts";
 
 let globalIo: any = null;
 
@@ -114,7 +114,7 @@ async function startServer() {
           projectId: primaryUnit?.projectId || req.params.projectId,
           name: c.name,
           phone: c.phone,
-          villaNumber: primaryUnit?.unitNumber || '',
+          unitNumber: primaryUnit?.unitNumber || '',
           blockNumber: primaryUnit?.block?.blockNumber || '',
           handoverDate: primaryUnit?.handoverDate || null,
           warrantyExpiryDate: primaryUnit?.warrantyExpiryDate || null,
@@ -135,8 +135,8 @@ async function startServer() {
       const phone = data.phone?.trim() || `unknown-${Date.now()}`;
       
       const unit = await prisma.unit.upsert({
-        where: { projectId_unitNumber: { projectId, unitNumber: data.villaNumber || '0' } },
-        create: { projectId, unitNumber: data.villaNumber || '0', handoverDate: data.handoverDate, warrantyExpiryDate: data.warrantyExpiryDate },
+        where: { projectId_unitNumber: { projectId, unitNumber: data.unitNumber || '0' } },
+        create: { projectId, unitNumber: data.unitNumber || '0', handoverDate: data.handoverDate, warrantyExpiryDate: data.warrantyExpiryDate },
         update: { handoverDate: data.handoverDate, warrantyExpiryDate: data.warrantyExpiryDate }
       });
 
@@ -152,7 +152,7 @@ async function startServer() {
         update: {}
       });
 
-      res.status(201).json({ ...client, projectId, villaNumber: unit.unitNumber });
+      res.status(201).json({ ...client, projectId, unitNumber: unit.unitNumber });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

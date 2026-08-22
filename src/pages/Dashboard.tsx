@@ -59,14 +59,14 @@ export default function Dashboard() {
     if (selected.length === 0) return;
     const byClient = new Map<string, Ticket[]>();
     selected.forEach(t => {
-      const key = t.clientId || t.villaNumber || 'unknown';
+      const key = t.clientId || t.unitId || t.id;
       if (!byClient.has(key)) byClient.set(key, []);
       byClient.get(key)!.push(t);
     });
     byClient.forEach(clientTickets => {
       const first = clientTickets[0];
       const phone = clients[first?.clientId]?.phone ??
-        Object.values(clients).find(c => String(c.villaNumber) === String(first?.villaNumber))?.phone ?? '';
+        Object.values(clients).find(c => String(c.unitId) === String(first?.unitId))?.phone ?? '';
       const ids = clientTickets.map(t => t.ticketId || t.refNumber || t.id).join('، ');
       WhatsAppService.sendUpdate(phone,
         `السلام عليكم، بخصوص بلاغ الصيانة رقم ${ids}، نرجو إفادتنا بمواعيد تواجدكم في الفيلا لتنسيق موعد الصيانة. شكراً لتعاونكم.`
@@ -75,7 +75,7 @@ export default function Dashboard() {
   };
 
   const selectedInView = allTickets.filter(t => selectedTicketIds.includes(t.id));
-  const uniqueClientIds = new Set(selectedInView.map(t => t.clientId || t.villaNumber || 'unknown'));
+  const uniqueClientIds = new Set(selectedInView.map(t => t.clientId || t.unitId || t.id));
 
   useEffect(() => {
     if (!user) return;

@@ -100,7 +100,7 @@ export async function learnSpecialtyFromCorrections(
   const tickets = await prisma.ticket.findMany({
     where: { type: typeKey, assignedSupervisorIds: { isEmpty: false } },
     select: { assignedSupervisorIds: true },
-    orderBy: { updatedAt: 'desc' },
+    orderBy: { createdAt: 'desc' },
     take: sampleSize,
   });
 
@@ -156,7 +156,7 @@ export async function findSupervisorsDB(projectId: string, requiredSpecialties: 
     },
   });
 
-  const activeUsers = allUsers.filter((u: any) => u.uid && !u.uid.startsWith("pending_") && !u.disabled && !u.onLeave);
+  const activeUsers = allUsers.filter((u: any) => u.uid && !u.disabled && !u.onLeave);
 
   let projectSups = activeUsers.filter(
     (u: any) => u.projects && u.projects.some((p: any) => p.id === projectId)

@@ -1,0 +1,966 @@
+import { Router } from "express";
+import prisma from "../db.js";
+import { AuthRequest, requireAuth, requireAdmin, getRequesterRole, asTrimmedString } from "../auth.js";
+import { getIO } from "../socket.js";
+import { classifyTicket } from "../classifier/classify.js";
+import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
+import { invalidateKeywordCache } from "../classifier/keywords.js";
+import { sendWAText, buildOpeningMsg, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from "../baileys.js";
+
+const router = Router();
+
+// إزالة الأصفار البادئة من رقم التذكرة (مثال: "0019350" → "19350")
+function normalizeTicketId(raw: string): string {
+  if (!raw) return raw;
+  const trimmed = raw.trim();
+  // فقط للأرقام النقية — نزيل الأصفار البادئة
+  if (/^\d+$/.test(trimmed)) return String(parseInt(trimmed, 10));
+  return trimmed;
+}
+
+// ── Compute virtual fields and enrich supervisor names ───────────────────────
+async function enrichTickets<T extends {
+  assignedSupervisorIds?: string[];
+  unit?: { unitNumber: string; block?: { blockNumber: string } | null } | null;
+  client?: { name: string; phone?: string | null } | null;
+  project?: { abbreviation: string } | null;
+  contractor?: { name: string } | null;
+}>(tickets: T[]): Promise<(T & {
+  unitNumber: string;
+  refNumber: string;
+  clientName: string;
+  contractorName: string;
+  assignedSupervisorId: string | null;
+  assignedSupervisors: { id: string; name: string; specialty?: string }[];
+})[]> {
+  const allIds = new Set<string>();
+  for (const t of tickets) {
+    for (const id of (t.assignedSupervisorIds || [])) {
+      if (id) allIds.add(id);
+    }
+  }
+
+  const nameMap = new Map<string, { uid: string; displayName: string; specialtiesRef: { key: string }[] }>();
+  if (allIds.size > 0) {
+    const users = await prisma.user.findMany({
+      where: { uid: { in: [...allIds] } },
+      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
+    });
+    users.forEach(u => nameMap.set(u.uid, u));
+  }
+
+  return tickets.map(t => {
+    const unitNumber = t.unit?.unitNumber || '';
+    const projAbbr   = t.project?.abbreviation || '';
+    const refNumber   = projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber;
+    const clientName  = t.client?.name || '';
+    const contractorName = t.contractor?.name || '';
+    const ids = t.assignedSupervisorIds || [];
+    const assignedSupervisorId = ids[0] || null;
+    const assignedSupervisors = ids
+      .map(id => {
+        const u = nameMap.get(id);
+        return u ? { id: u.uid, name: u.displayName, specialty: u.specialtiesRef?.[0]?.key || 'general' } : null;
+      })
+      .filter((s): s is { id: string; name: string; specialty: string } => s !== null);
+    return { ...t, unitNumber, refNumber, clientName, contractorName, assignedSupervisorId, assignedSupervisors };
+  });
+}
+
+// backward-compat alias
+const enrichSupervisorNames = enrichTickets;
+
+async function shouldAutoSendWA(uid: string): Promise<boolean> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { uid },
+      select: { notifPrefs: true },
+    });
+    const prefs = user?.notifPrefs as Record<string, boolean> | null;
+    return prefs?.whatsapp !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function autoSendOpening(uid: string, ticket: any) {
+  try {
+    if (!(await shouldAutoSendWA(uid))) return;
+    const client = await prisma.client.findUnique({
+      where: { id: ticket.clientId },
+      select: { phone: true, name: true },
+    });
+    if (!client?.phone) return;
+    const msg = await buildOpeningMsg({
+      ticketId: ticket.ticketId,
+      clientName: client.name,
+      description: ticket.description,
+      unitNumber: ticket.unit?.unitNumber || '' '',
+      date: new Date().toLocaleDateString('ar-EG'),
+    });
+    await sendWAText(uid, client.phone, msg);
+  } catch {}
+}
+
+async function autoSendClosing(uid: string, ticket: any) {
+  try {
+    if (!(await shouldAutoSendWA(uid))) return;
+    const client = await prisma.client.findUnique({
+      where: { id: ticket.clientId },
+      select: { phone: true, name: true },
+    });
+    if (!client?.phone) return;
+    const msg = await buildClosingMsg({
+      ticketId: ticket.ticketId,
+      clientName: client.name,
+      description: ticket.description,
+      unitNumber: ticket.unit?.unitNumber || '' '',
+      closureNotes: ticket.closureNotes,
+    });
+    await sendWAText(uid, client.phone, msg);
+  } catch {}
+}
+
+async function autoSendAbsent(uid: string, ticket: any) {
+  try {
+    if (!(await shouldAutoSendWA(uid))) return;
+    const client = await prisma.client.findUnique({ where: { id: ticket.clientId }, select: { phone: true, name: true } });
+    if (!client?.phone) return;
+    const msg = await buildAbsentMsg({ ticketId: ticket.ticketId, clientName: client.name, description: ticket.description, unitNumber: ticket.unit?.unitNumber || '' '' });
+    await sendWAText(uid, client.phone, msg);
+  } catch {}
+}
+
+async function autoSendOutOfScope(uid: string, ticket: any) {
+  try {
+    if (!(await shouldAutoSendWA(uid))) return;
+    const client = await prisma.client.findUnique({ where: { id: ticket.clientId }, select: { phone: true, name: true } });
+    if (!client?.phone) return;
+    const msg = await buildOutOfScopeMsg({ ticketId: ticket.ticketId, clientName: client.name, description: ticket.description, unitNumber: ticket.unit?.unitNumber || '' '' });
+    await sendWAText(uid, client.phone, msg);
+  } catch {}
+}
+
+async function classifyInBackground(
+  description: string,
+  ticketId: string,
+  projectId?: string,
+  keepManualSupervisors?: boolean,
+  opts?: { skipGemini?: boolean; forceGemini?: boolean }
+): Promise<string | null> { // returns the classification source used
+  try {
+    // لا نُعيد تصنيف التذاكر التي لها تصنيف موثوق — إلا إذا كان طلب إعادة تصنيف بـ AI صريح
+    const existing = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { type: true },
+    });
+    if (!opts?.forceGemini && existing?.type && existing.type !== "unclassified") return null;
+
+    const classification = await classifyTicket(description, projectId, opts);
+    if (classification.primaryType === "unclassified") return null;
+
+    // لو forceGemini وكانت النتيجة من ML (مش AI) → لا تحفظ، انتظر جولة قادمة
+    if (opts?.forceGemini && classification.source !== "gemini") return classification.source;
+
+    const typeToSpecialty = await buildTypeToSpecialtyMap();
+    const allTypes: string[] = classification.allTypes;
+    const requiredSpecialties = [...new Set(allTypes.map((t: string) => typeToSpecialty[t] || "general"))] as string[];
+
+    let supervisorIds: string[] = [];
+    let primarySupId: string | null = null;
+    let supervisorList: { id: string; name: string; specialty: string }[] = [];
+
+    if (projectId) {
+      const matchedSups = await findSupervisorsDB(projectId, requiredSpecialties);
+      supervisorList = matchedSups.map((s: any) => ({
+        id: s.id, name: s.name,
+        specialty: Array.isArray(s.specialties) ? s.specialties[0] || "general" : "general",
+      }));
+      supervisorIds = supervisorList.map((s: any) => s.id);
+      primarySupId = supervisorList[0]?.id || null;
+    }
+
+    // حل typeId من قاعدة البيانات
+    const typeRecord = classification.typeId
+      ? null
+      : await prisma.ticketType.findFirst({ where: { key: classification.primaryType }, select: { id: true } });
+    const resolvedTypeId = classification.typeId || typeRecord?.id || null;
+
+    const updateData: any = {
+      type: classification.primaryType,
+      detectedTypes: classification.allTypes,
+      typeId: resolvedTypeId,
+      subTypeId: classification.subTypeId || null,
+      detectedSubTypeIds: classification.allSubTypeIds ?? [],
+    };
+
+    if (!keepManualSupervisors) {
+      updateData.assignedSupervisorIds = supervisorIds;
+    }
+
+    await prisma.ticket.updateMany({ where: { id: ticketId }, data: updateData });
+    invalidateReferenceCache();
+    invalidateKeywordCache();
+    return classification.source;
+  } catch (err) {
+    console.warn(` ⚠️ Background classify failed for ticket ${ticketId}:`, err);
+    return null;
+  }
+}
+
+// Processes a large list of tickets for background classification with limited concurrency.
+// 1st pass: bynara first (rate-limited) → ML fallback when quota full.
+// 2nd pass: after 65s (quota reset), retry ML-classified tickets with bynara only.
+async function bulkClassifyInBackground(tickets: Array<{ id: string; description: string; projectId: string | null }>) {
+  const CONCURRENCY = 5;
+  const DELAY_MS = 300;
+  const mlClassifiedIds: { id: string; description: string; projectId: string | null }[] = [];
+
+  // ── 1st pass: bynara when quota available, ML as fallback ───────────────
+  for (let i = 0; i < tickets.length; i += CONCURRENCY) {
+    const batch = tickets.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map(t => classifyInBackground((t.description || "").trim(), t.id, t.projectId || undefined, false))
+    );
+    // collect tickets that fell back to ML (bynara quota was full)
+    results.forEach((result, idx) => {
+      const source = result.status === "fulfilled" ? result.value : null;
+      if (source && (source === "ml" || source === "ml_low_confidence" || source === "keywords")) {
+        mlClassifiedIds.push(batch[idx]);
+      }
+    });
+    if (i + CONCURRENCY < tickets.length) {
+      await new Promise(r => setTimeout(r, DELAY_MS));
+    }
+  }
+
+  // ── 2nd pass: retry ML-classified tickets with bynara after quota resets ─
+  if (mlClassifiedIds.length > 0) {
+    console.log(`[bulk classify] Scheduling bynara retry for ${mlClassifiedIds.length} ML-classified tickets in 65s...`);
+    setTimeout(async () => {
+      console.log(`[bulk classify] Starting bynara retry pass for ${mlClassifiedIds.length} tickets...`);
+      let upgraded = 0;
+      for (let i = 0; i < mlClassifiedIds.length; i += CONCURRENCY) {
+        const batch = mlClassifiedIds.slice(i, i + CONCURRENCY);
+        const results = await Promise.allSettled(
+          batch.map(t => classifyInBackground((t.description || "").trim(), t.id, t.projectId || undefined, false, { forceGemini: true }))
+        );
+        results.forEach(r => { if (r.status === "fulfilled" && r.value === "gemini") upgraded++; });
+        if (i + CONCURRENCY < mlClassifiedIds.length) {
+          await new Promise(r => setTimeout(r, DELAY_MS));
+        }
+      }
+      console.log(`[bulk classify] Retry complete: ${upgraded}/${mlClassifiedIds.length} upgraded to bynara AI.`);
+    }, 65_000);
+  }
+}
+
+// GET /api/tickets
+router.get("/", requireAuth, async (req: AuthRequest, res) => {
+  const role = await getRequesterRole(req.uid!);
+  const currentUser = await prisma.user.findUnique({
+    where: { uid: req.uid! },
+    select: { projects: { select: { id: true } } }
+  });
+  const userProjectIds = currentUser?.projects.map(p => p.id) || [];
+
+  const { projectId, projectIds, supervisorId, status, clientId, unitId, contractorId } = req.query as Record<string, string>;
+  const where: any = {};
+  if (projectId) where.projectId = projectId;
+  if (projectIds) where.projectId = { in: projectIds.split(",") };
+  if (supervisorId) where.assignedSupervisorIds = { has: supervisorId };
+  if (status) where.status = status;
+  if (clientId) where.clientId = clientId;
+  if (unitId) where.unitId = unitId;
+  if (contractorId) where.contractorId = contractorId;
+
+  if (req.query.includeDirectAppts !== 'true') {
+    where.NOT = { description: { startsWith: 'موعد صيانة مجدول يدوياً للمشرف' } };
+  }
+
+  if (role !== "admin") {
+    // Only allow tickets in user's projects
+    if (where.projectId && typeof where.projectId === 'string') {
+      if (!userProjectIds.includes(where.projectId)) where.projectId = { in: [] };
+    } else if (where.projectId && where.projectId.in) {
+      where.projectId.in = where.projectId.in.filter((id: string) => userProjectIds.includes(id));
+      if (where.projectId.in.length === 0) where.projectId.in = ["__none__"];
+    } else {
+      where.projectId = { in: userProjectIds.length ? userProjectIds : ["__none__"] };
+    }
+  }
+
+  const tickets = await prisma.ticket.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: {
+      unit:          { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+      client:        { select: { id: true, name: true, phone: true } },
+      project:       { select: { id: true, abbreviation: true } },
+      contractor:    { select: { name: true } },
+      ticketSubType: { select: { id: true, nameAr: true } },
+      appointment:   { select: { id: true, date: true, time: true, notes: true } },
+    },
+  });
+  const enriched = await enrichTickets(tickets);
+  const now = new Date();
+  res.json(enriched.map(t => {
+    const appt = (t as any).appointment;
+    const apptTime = appt ? [appt.date, appt.time].filter(Boolean).join(' ') : null;
+    const apptInFuture = apptTime ? new Date(apptTime.replace(' ', 'T') || apptTime) > now : false;
+    return {
+      ...t,
+      appointmentTime:  apptInFuture ? apptTime : null,
+      appointmentNotes: appt?.notes ?? null,
+      appointment:      appt ? { id: appt.id, date: appt.date, time: appt.time ?? null } : null,
+      subTypeName:      (t as any).ticketSubType?.nameAr ?? null,
+      clientPhone:      (t as any).client?.phone         ?? null,
+      ticketSubType:    undefined,
+    };
+  }));
+});
+
+// GET /api/tickets/ticketids — للكشف عن المكررات في الاستيراد (خفيف)
+router.get("/ticketids", requireAuth, async (req, res) => {
+  const { projectId } = req.query as { projectId?: string };
+  const where: any = projectId ? { projectId } : {};
+  const rows = await prisma.ticket.findMany({
+    where,
+    select: { ticketId: true, id: true, type: true, status: true, closedAt: true },
+  });
+  res.json(rows);
+});
+
+// GET /api/tickets/next-id
+router.get("/next-id", requireAuth, async (req, res) => {
+  const { projectId } = req.query as { projectId?: string };
+  try {
+    // Fetch all ticketIds globally to safely find the maximum numeric ID
+    const tickets = await prisma.ticket.findMany({
+      select: { ticketId: true },
+    });
+    
+    let maxId = 0;
+    for (const t of tickets) {
+      const trimmed = (t.ticketId || '').trim();
+      if (!trimmed) continue;
+      // Only consider pure numeric IDs to avoid parsing prefixes unexpectedly
+      if (/^\d+$/.test(trimmed)) {
+        const parsed = parseInt(trimmed, 10);
+        if (!isNaN(parsed) && parsed > maxId) {
+          maxId = parsed;
+        }
+      }
+    }
+    
+    const nextId = maxId + 1;
+    res.json({ nextId: nextId.toString() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:id/special-close  — عدم تواجد أو خارج الاختصاص
+router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => {
+  const { closeType, notes } = req.body as { closeType: 'absent' | 'out_of_scope'; notes?: string };
+  if (!['absent', 'out_of_scope'].includes(closeType)) {
+    res.status(400).json({ error: "closeType غير صالح" }); return;
+  }
+  const status = closeType === 'out_of_scope' ? 'out_of_scope' : 'closed';
+  try {
+    const uid = req.uid!;
+    
+    // جلب بيانات التذكرة والعميل قبل الإغلاق
+    const ticketInfo = await prisma.ticket.findUnique({
+      where: { id: req.params.id },
+      include: {
+        client: { select: { phone: true, name: true } },
+        unit:   { select: { unitNumber: true } },
+      }
+    });
+
+    if (!ticketInfo) {
+      res.status(404).json({ error: "التذكرة غير موجودة" }); return;
+    }
+
+    // محاولة إرسال الرسالة أولاً إذا كانت الخدمة مفعلة
+    if (await shouldAutoSendWA(uid)) {
+      const phone = ticketInfo.client?.phone;
+      if (phone) {
+        let msg = '';
+        if (closeType === 'absent') {
+          msg = await buildAbsentMsg({ ticketId: ticketInfo.ticketId, clientName: ticketInfo.client?.name || '', description: ticketInfo.description || '', unitNumber: ticketInfo.unit?.unitNumber || '' '' });
+        } else {
+          msg = await buildOutOfScopeMsg({ ticketId: ticketInfo.ticketId, clientName: ticketInfo.client?.name || '', description: ticketInfo.description || '', unitNumber: ticketInfo.unit?.unitNumber || '' '' });
+        }
+        
+        const sendResult = await sendWAText(uid, phone, msg);
+        if (!sendResult.sent && sendResult.error === 'NOT_ON_WHATSAPP') {
+          res.status(400).json({ error: "تعذر إغلاق التذكرة: رقم العميل غير مسجل في الواتساب. يرجى تصحيح الرقم أو تغيير الحالة يدوياً." });
+          return;
+        } else if (!sendResult.sent && sendResult.error === 'NOT_CONNECTED') {
+          res.status(400).json({ error: "تعذر إغلاق التذكرة: خدمة الواتساب غير متصلة. يرجى توصيل الواتساب أو الإغلاق يدوياً." });
+          return;
+        }
+      } else {
+        res.status(400).json({ error: "لا يوجد رقم هاتف مسجل للعميل. يرجى إضافة رقم أو تغيير الحالة يدوياً." });
+        return;
+      }
+    }
+
+    const ticket = await prisma.ticket.update({
+      where: { id: req.params.id },
+      data: { status, closureNotes: notes || null, closedAt: closeType === 'out_of_scope' ? new Date() : null },
+      select: { id: true, ticketId: true, clientId: true, description: true, unitId: true, status: true },
+    });
+
+    res.json({ ok: true, status });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/tickets/:id
+router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
+  const role = await getRequesterRole(req.uid!);
+  const currentUser = await prisma.user.findUnique({
+    where: { uid: req.uid! },
+    select: { projects: { select: { id: true } } }
+  });
+  const userProjectIds = currentUser?.projects.map(p => p.id) || [];
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: req.params.id },
+    include: {
+      unit:          { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+      client:        { select: { id: true, name: true, phone: true } },
+      project:       { select: { id: true, abbreviation: true } },
+      contractor:    { select: { name: true } },
+      ticketSubType: { select: { id: true, nameAr: true } },
+    },
+  });
+  if (!ticket) { res.status(404).json({ error: "Not found" }); return; }
+
+  if (role !== "admin" && ticket.projectId && !userProjectIds.includes(ticket.projectId)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const [enriched] = await enrichTickets([ticket]);
+  res.json({ ...enriched, subTypeName: (ticket as any).ticketSubType?.nameAr ?? null });
+});
+
+// POST /api/tickets
+router.post("/", requireAuth, async (req, res) => {
+  const data = req.body;
+  try {
+    const projectId = asTrimmedString(data.projectId);
+    const clientId = asTrimmedString(data.clientId);
+
+    if (!projectId) {
+      res.status(400).json({ error: "يجب تحديد المشروع لإنشاء التذكرة" });
+      return;
+    }
+
+    let resolvedUnitId: string | undefined = data.unitId;
+
+    if (clientId) {
+      const clientHasUnitInProject = await prisma.clientUnit.findFirst({
+        where: { clientId, unit: { projectId } },
+        select: { unitId: true }
+      });
+      if (!clientHasUnitInProject) {
+        res.status(400).json({ error: "العميل المحدد غير موجود أو لا يملك وحدة في هذا المشروع" });
+        return;
+      }
+      resolvedUnitId = clientHasUnitInProject.unitId;
+    }
+
+    if (!resolvedUnitId && data.villaNumber) {
+      const unit = await prisma.unit.findUnique({
+        where: { projectId_unitNumber: { projectId, unitNumber: String(data.villaNumber).trim() } }
+      });
+      if (unit) {
+        resolvedUnitId = unit.id;
+      }
+    }
+
+    const assignedSupervisorIds = Array.isArray(data.assignedSupervisorIds)
+      ? data.assignedSupervisorIds.filter((id: unknown) => typeof id === "string" && id.trim().length > 0)
+      : [];
+
+    let priority = 3;
+    if (data.priority !== undefined) {
+      const parsed = parseInt(data.priority, 10);
+      priority = isNaN(parsed) ? 3 : parsed;
+    }
+
+    // حل typeId تلقائيًا من key
+    const typeKey = data.type || "general";
+    const typeRecord = await prisma.ticketType.findFirst({ where: { key: typeKey }, select: { id: true } });
+
+    const ticketIdToUse = normalizeTicketId(data.ticketId || String(Date.now()).slice(-6));
+
+    const existingTicket = await prisma.ticket.findUnique({
+      where: { ticketId: ticketIdToUse },
+      select: { id: true }
+    });
+
+    if (existingTicket) {
+      res.status(400).json({ error: `رقم التذكرة (${ticketIdToUse}) مستخدم مسبقاً. يرجى اختيار رقم آخر أو تركه فارغاً ليتم توليده تلقائياً.` });
+      return;
+    }
+
+    const ticket = await prisma.ticket.create({
+      data: {
+        ticketId: ticketIdToUse,
+        projectId, unitId: resolvedUnitId || null, clientId: clientId || null,
+        issuedAt: data.issuedAt || null,
+        description: data.description,
+        type: typeKey,
+        typeId: data.typeId || typeRecord?.id || null,
+        status: data.status || "open", priority,
+        assigneeName: data.assigneeName || null,
+        assignedSupervisorIds,
+        detectedTypes: data.detectedTypes || [],
+        closureNotes: data.closureNotes || null,
+        maintenanceItems: data.maintenanceItems ?? undefined,
+        closedAt: data.closedAt ? new Date(data.closedAt) : null,
+      },
+      include: {
+        unit:       { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+        client:     { select: { id: true, name: true, phone: true } },
+        project:    { select: { id: true, abbreviation: true } },
+        contractor: { select: { name: true } },
+      },
+    });
+
+    const hasManualSups = assignedSupervisorIds.length > 0;
+
+    const description = (data.description || "").trim();
+    if (description.length >= 5) {
+      classifyInBackground(description, ticket.id, projectId, hasManualSups).catch(() => {});
+    }
+
+    const senderUid = (req as AuthRequest).uid;
+    // بناءً على طلب المستخدم: تم إيقاف إرسال رسالة الترحيب التلقائية عند إنشاء التذكرة
+    // if (senderUid) autoSendOpening(senderUid, ticket).catch(() => {});
+
+    const [enrichedTicket] = await enrichTickets([ticket]);
+    getIO().emit("ticket:created", enrichedTicket);
+    res.status(201).json(enrichedTicket);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/bulk
+router.post("/bulk", requireAuth, async (req, res) => {
+  const tickets: any[] = req.body.tickets;
+  if (!Array.isArray(tickets)) { res.status(400).json({ error: "tickets must be array" }); return; }
+  try {
+    // جلب خريطة typeId مرة واحدة لكل الطلب
+    const allTicketTypes = await prisma.ticketType.findMany({ select: { id: true, key: true } });
+    const typeIdMap = new Map(allTicketTypes.map(t => [t.key, t.id]));
+
+    const now = Date.now();
+    const normalized = tickets.map((t, index) => {
+      const assignedSupervisorIds = Array.isArray(t.assignedSupervisorIds)
+        ? t.assignedSupervisorIds.filter((id: string) => !!id)
+        : [];
+
+      let priority = 3;
+      if (t.priority !== undefined) {
+        const parsed = parseInt(t.priority, 10);
+        priority = isNaN(parsed) ? 3 : parsed;
+      }
+
+      return {
+        index,
+        ticketId: normalizeTicketId(t.ticketId || String(now + Math.random()).slice(-6)),
+        projectId: asTrimmedString(t.projectId) || "",
+        unitId: asTrimmedString(t.unitId) || null,
+        clientId: asTrimmedString(t.clientId) || "",
+        villaNumber: t.villaNumber || null, // kept only for unitId resolution below
+        issuedAt: t.issuedAt || null,
+        description: t.description, type: t.type || "general",
+        typeId:   (t.typeId   && typeof t.typeId   === 'string' && t.typeId.length > 0) ? t.typeId   : (typeIdMap.get(t.type) || null),
+        subTypeId:(t.subTypeId && typeof t.subTypeId === 'string' && t.subTypeId.length > 0) ? t.subTypeId : null,
+        status: t.status || "open", priority,
+        assigneeName: t.assigneeName || null,
+        assignedSupervisorIds,
+        detectedTypes: t.detectedTypes || [],
+        closedAt: t.closedAt ? new Date(t.closedAt) : null,
+        closureNotes: t.closureNotes || null,
+      };
+    });
+
+    // Resolve unitId from villaNumber for tickets that don't have it
+    const unitCache = new Map<string, string | null>();
+    for (const t of normalized) {
+      if (!t.unitId && t.villaNumber && t.projectId) {
+        const cacheKey = `${t.projectId}:${t.villaNumber}`;
+        if (!unitCache.has(cacheKey)) {
+          const unit = await prisma.unit.findUnique({
+            where: { projectId_unitNumber: { projectId: t.projectId, unitNumber: t.villaNumber } },
+            select: { id: true },
+          });
+          unitCache.set(cacheKey, unit?.id || null);
+        }
+        t.unitId = unitCache.get(cacheKey) || null;
+      }
+    }
+
+    const invalidClientRefs: any[] = [];
+    const clientCache = new Map<string, boolean>();
+    for (const t of normalized) {
+      if (t.projectId && t.clientId) {
+        const cacheKey = `${t.projectId}:${t.clientId}`;
+        let valid = clientCache.get(cacheKey);
+        if (valid === undefined) {
+          const clientLink = await prisma.clientUnit.findFirst({
+            where: { clientId: t.clientId, unit: { projectId: t.projectId } },
+            select: { id: true }
+          });
+          valid = !!clientLink;
+          clientCache.set(cacheKey, valid);
+        }
+        if (!valid) invalidClientRefs.push(t);
+      } else if (!t.projectId) {
+        invalidClientRefs.push(t);
+      }
+    }
+
+    if (invalidClientRefs.length > 0) {
+      const sample = invalidClientRefs.slice(0, 5).map(t => t.ticketId || `row-${t.index+1}`).join(", ");
+      res.status(400).json({ error: `هناك ${invalidClientRefs.length} تذاكر بدون عميل أو لا تنتمي لهذا المشروع (نماذج: ${sample})` });
+      return;
+    }
+
+    const created = await prisma.ticket.createMany({
+      data: normalized.map(t => ({
+        ticketId: t.ticketId,
+        projectId: t.projectId, unitId: t.unitId || null, clientId: t.clientId || null,
+        issuedAt: t.issuedAt, description: t.description,
+        type: t.type, typeId: t.typeId, subTypeId: t.subTypeId,
+        status: t.status, priority: t.priority,
+        assigneeName: t.assigneeName,
+        assignedSupervisorIds: t.assignedSupervisorIds, detectedTypes: t.detectedTypes,
+        closedAt: t.closedAt,
+        closureNotes: t.closureNotes,
+      })),
+      skipDuplicates: true,
+    });
+
+    if (created.count > 0) {
+      const ticketIds = normalized.map(t => t.ticketId);
+      const createdTickets = await prisma.ticket.findMany({
+        where: { ticketId: { in: ticketIds } },
+        select: { id: true, description: true, projectId: true, type: true },
+        take: tickets.length,
+      });
+
+      // نصنف في الخلفية فقط التذاكر غير المصنفة — بتزامن محدود لتفادي تحميل زائد على Gemini/ML
+      const toClassify = createdTickets.filter(t => t.type === "unclassified" && (t.description || "").trim().length >= 5);
+      if (toClassify.length > 0) {
+        bulkClassifyInBackground(toClassify).catch(() => {});
+      }
+    }
+
+    res.status(201).json({ count: created.count });
+  } catch (err: any) {
+    console.error("Bulk import error:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /api/tickets/:id
+router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
+  const data = req.body;
+  try {
+    // ── Build base update payload ──────────────────────────────────────────
+    const updatePayload: Record<string, any> = {
+      status:                data.status               ?? undefined,
+      priority:              data.priority !== undefined ? Number(data.priority) : undefined,
+      assigneeName:          data.assigneeName         ?? undefined,
+      assignedSupervisorIds: data.assignedSupervisorIds
+        ? (data.assignedSupervisorIds as string[]).filter((id: string) => id && id.trim())
+        : undefined,
+      closureNotes:          data.closureNotes         ?? undefined,
+      maintenanceItems:      data.maintenanceItems     ?? undefined,
+      closedAt:              data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
+      description:           data.description          ?? undefined,
+      type:                  data.type                 ?? undefined,
+      detectedTypes:         data.detectedTypes        ?? undefined,
+      clientId:              data.clientId             ?? undefined,
+      unitId:                data.unitId               ?? undefined,
+      contractorId:          data.contractorId         ?? undefined,
+      contractorNote:        data.contractorNote       ?? undefined,
+    };
+
+    // ── Auto-reassign supervisor when classification changes ───────────────
+    const typeChanged = data.type !== undefined || data.detectedTypes !== undefined;
+    const supervisorExplicit = data.assignedSupervisorIds !== undefined;
+
+    if (typeChanged && !supervisorExplicit) {
+      const existing = await prisma.ticket.findUnique({
+        where: { id: req.params.id },
+        select: { projectId: true, type: true },
+      });
+
+      const newTypes: string[] = data.detectedTypes?.length
+        ? data.detectedTypes
+        : data.type && data.type !== "unclassified"
+          ? [data.type]
+          : [];
+
+      if (existing?.projectId && newTypes.length > 0) {
+        try {
+          const typeToSpecialty = await buildTypeToSpecialtyMap();
+          const specialties     = [...new Set(newTypes.map((t) => typeToSpecialty[t] || "general"))];
+          const supervisors     = await findSupervisorsDB(existing.projectId, specialties);
+
+          if (supervisors.length > 0) {
+            updatePayload.assignedSupervisorIds = supervisors.map((s) => s.id);
+          }
+        } catch { /* non-fatal */ }
+      }
+    }
+
+    // ── Fetch old values for audit trail ────────────────────────────────────
+    const oldTicket = await prisma.ticket.findUnique({
+      where: { id: req.params.id },
+      select: { status: true, type: true, assignedSupervisorIds: true, priority: true },
+    });
+
+    const ticket = await prisma.ticket.update({
+      where: { id: req.params.id },
+      data:  updatePayload,
+    });
+
+    // ── Log audit entries ────────────────────────────────────────────────────
+    if (req.uid && oldTicket) {
+      const AUDIT_FIELDS: Record<string, string> = {
+        status: 'الحالة', type: 'التصنيف', priority: 'الأولوية',
+      };
+      const auditRows: { ticketId: string; field: string; oldValue: string | null; newValue: string | null; changedBy: string }[] = [];
+      for (const [key, label] of Object.entries(AUDIT_FIELDS)) {
+        const oldVal = String((oldTicket as any)[key] ?? '');
+        const newVal = String((updatePayload as any)[key] ?? (oldTicket as any)[key] ?? '');
+        if (updatePayload[key] !== undefined && oldVal !== newVal) {
+          auditRows.push({ ticketId: ticket.id, field: label, oldValue: oldVal || null, newValue: newVal || null, changedBy: req.uid });
+        }
+      }
+      // audit supervisor change via array comparison
+      if (updatePayload.assignedSupervisorIds !== undefined) {
+        const oldSups = JSON.stringify(oldTicket.assignedSupervisorIds ?? []);
+        const newSups = JSON.stringify(updatePayload.assignedSupervisorIds);
+        if (oldSups !== newSups) {
+          auditRows.push({ ticketId: ticket.id, field: 'المشرف', oldValue: oldSups, newValue: newSups, changedBy: req.uid });
+        }
+      }
+      if (auditRows.length > 0) {
+        prisma.ticketAudit.createMany({ data: auditRows }).catch(() => {});
+      }
+    }
+
+    // ── Learn from manual classification ─────────────────────────────────────
+    if (data.type && oldTicket?.type && data.type !== oldTicket.type && ticket.description) {
+      import('../classifier/gemini.js').then(m => {
+        m.learnFromGeminiResult(ticket.description!, [data.type!]).catch(() => {});
+      }).catch(() => {});
+    }
+
+    // ── Learn specialty from manual supervisor correction ─────────────────────
+    const supervisorsChanged =
+      data.assignedSupervisorIds !== undefined &&
+      JSON.stringify((oldTicket as any)?.assignedSupervisorIds ?? []) !==
+      JSON.stringify(data.assignedSupervisorIds);
+
+    if (supervisorsChanged && ticket.type && ticket.type !== 'unclassified') {
+      import('../classifier/db-helpers.js').then(m => {
+        m.learnSpecialtyFromCorrections(ticket.type!).catch(() => {});
+      }).catch(() => {});
+    }
+
+    const closingStatuses = ['closed', 'completed'];
+    if (data.status && closingStatuses.includes(data.status) && req.uid) {
+      // autoSendClosing(req.uid, ticket).catch(() => {});
+    }
+
+    // ── إشعار المشرفين الآخرين عند تحديد موعد ──────────────────────────────
+    const apptChanged = data.appointmentId !== undefined &&
+      data.appointmentId !== (oldTicket as any)?.appointmentId;
+
+    if (apptChanged && data.appointmentId && ticket.assignedSupervisorIds?.length) {
+      const senderUid = req.uid!;
+      const io = getIO();
+
+      const [sender, appt, ticketWithUnit] = await Promise.all([
+        prisma.user.findUnique({ where: { uid: senderUid }, select: { displayName: true } }).catch(() => null),
+        prisma.appointment.findUnique({ where: { id: data.appointmentId }, select: { date: true, time: true } }).catch(() => null),
+        prisma.ticket.findUnique({
+          where: { id: ticket.id },
+          include: {
+            unit:    { select: { unitNumber: true } },
+            client:  { select: { name: true } },
+            project: { select: { abbreviation: true } },
+          }
+        }).catch(() => null),
+      ]);
+
+      const appointmentTime = appt ? `${appt.date}${appt.time ? ' ' + appt.time : ''}` : null;
+      const unitNumber = ticketWithUnit?.unit?.unitNumber || '';
+      const projAbbr   = ticketWithUnit?.project?.abbreviation || '';
+
+      for (const supId of ticket.assignedSupervisorIds) {
+        io.emit(`notification:supervisor:${supId}`, {
+          type: 'appointment_set',
+          ticketId: ticket.id,
+          ticketRef: ticket.ticketId,
+          clientName: ticketWithUnit?.client?.name || '',
+          unitNumber,
+          refNumber: projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber,
+          appointmentTime,
+          setBy: sender?.displayName || 'مشرف',
+          setByUid: senderUid,
+          isShared: ticket.assignedSupervisorIds.length > 1,
+        });
+      }
+    }
+
+    const ticketWithRel = await prisma.ticket.findUnique({
+      where: { id: ticket.id },
+      include: {
+        unit:       { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+        client:     { select: { id: true, name: true, phone: true } },
+        project:    { select: { id: true, abbreviation: true } },
+        contractor: { select: { name: true } },
+      },
+    });
+    const [enrichedResult] = await enrichTickets([ticketWithRel!]);
+    res.json(enrichedResult);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/tickets/bulk-status
+router.patch("/bulk-status", requireAuth, async (req, res) => {
+  const { ids, status } = req.body as { ids: string[]; status: any };
+  await prisma.ticket.updateMany({ where: { id: { in: ids } }, data: { status } });
+  res.json({ count: ids.length });
+});
+
+// POST /api/tickets/bulk-update-imported
+router.post("/bulk-update-imported", requireAuth, async (req, res) => {
+  const { updates } = req.body as {
+    updates: { id: string; status: any; closedAt?: string | null; type?: string; detectedTypes?: string[] }[]
+  };
+  if (!Array.isArray(updates)) { res.status(400).json({ error: "updates must be array" }); return; }
+  try {
+    // جلب typeId map مرة واحدة
+    const allTypes = await prisma.ticketType.findMany({ select: { id: true, key: true } });
+    const typeIdMap = new Map(allTypes.map(t => [t.key, t.id]));
+
+    const updatePromises = updates.map(u =>
+      prisma.ticket.update({
+        where: { id: u.id },
+        data: {
+          status:        u.status,
+          closedAt:      u.closedAt ? new Date(u.closedAt) : null,
+          ...(u.type && u.type !== 'unclassified' ? {
+            type:          u.type,
+            typeId:        typeIdMap.get(u.type) || null,
+            detectedTypes: u.detectedTypes ?? [u.type],
+          } : {}),
+        },
+      })
+    );
+    await Promise.all(updatePromises);
+    res.json({ count: updates.length });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/import-log — تسجيل نتائج كل عملية استيراد
+router.post("/import-log", requireAuth, async (req, res) => {
+  try {
+    const log = req.body;
+    const logEntry = {
+      ...log,
+      savedAt: new Date().toISOString(),
+    };
+    // حفظ في SystemSetting (آخر 50 استيراد)
+    const existing = await prisma.systemSetting.findUnique({ where: { key: 'importHistory' } });
+    const history: any[] = (existing?.value as any[]) || [];
+    history.unshift(logEntry);
+    const trimmed = history.slice(0, 50);
+    await prisma.systemSetting.upsert({
+      where: { key: 'importHistory' },
+      create: { key: 'importHistory', value: trimmed },
+      update: { value: trimmed },
+    });
+    // طباعة في اللوج للمتابعة الفورية
+    console.log(
+      `[Import] ${logEntry.project} | ` +
+      `ملف: ${logEntry.fileRows} صف (${logEntry.uniqueInFile} فريد) | ` +
+      `جديد: ${logEntry.newTickets} | ` +
+      `موجود: ${logEntry.duplicatesFound} (تحديث حالة: ${logEntry.statusUpdates}, تصنيف: ${logEntry.typeUpdates}, بدون تغيير: ${logEntry.unchangedDuplicates}) | ` +
+      `${logEntry.timestamp}`
+    );
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/auto-link
+router.post("/auto-link", requireAuth, async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    const where: any = { clientId: null };
+    if (projectId) where.projectId = projectId;
+
+    const unlinkedTickets = await prisma.ticket.findMany({
+      where,
+      select: { id: true, projectId: true }
+    });
+
+    if (unlinkedTickets.length === 0) {
+      return res.json({ count: 0, message: "لا توجد تذاكر غير مربوطة." });
+    }
+
+    const projectsToFetch = projectId ? [projectId] : [...new Set(unlinkedTickets.map(t => t.projectId))];
+    const units = await prisma.unit.findMany({
+      where: { projectId: { in: projectsToFetch } },
+      include: { clients: { include: { client: true } } }
+    });
+
+    // Can't auto-link without villaNumber — log and skip
+    let linkedCount = 0;
+    for (const ticket of unlinkedTickets) {
+      // Tickets without unitId but we have no villaNumber text anymore;
+      // linkage must happen via unitId directly (this endpoint is now a no-op for orphan tickets)
+      void ticket; void units;
+    }
+
+    res.json({ count: linkedCount, message: `تم ربط ${linkedCount} تذاكر بنجاح.` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/tickets/:id
+router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
+  await prisma.ticket.delete({ where: { id: req.params.id } });
+  res.json({ success: true });
+});
+
+// DELETE /api/tickets (all)
+router.delete("/", requireAuth, requireAdmin, async (_req, res) => {
+  const result = await prisma.ticket.deleteMany();
+  res.json({ count: result.count });
+});
+
+export default router;

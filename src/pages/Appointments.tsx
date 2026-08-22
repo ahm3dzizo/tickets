@@ -217,7 +217,7 @@ export default function Appointments() {
 
       allTickets.forEach((t: any) => {
         if (t.status !== 'closed' && t.status !== 'out-of-scope') {
-          const key = t.villaNumber + '_' + (t.projectId || '');
+          const key = t.unitId + '_' + (t.projectId || '');
           map[key] = (map[key] || 0) + 1;
         }
       });
@@ -842,7 +842,7 @@ export default function Appointments() {
                           const renderCard = (group: any, key: any) => {
                             const note = group.notes || '';
                             const time = (group.appointmentTime || '').split(' ')[1] || '---';
-                            const clientKey = group.villaNumber + '_' + (group.projectId || '');
+                            const clientKey = group.unitId + '_' + (group.projectId || '');
                             const totalOpen = openTicketsMap[clientKey] || 0;
                             const isCompleted = group.status === 'completed';
                             const apptId = group.appointmentId || group.tickets?.find((t: any) => t.appointmentId)?.appointmentId;
@@ -858,7 +858,7 @@ export default function Appointments() {
                                 onClick={e => {
                                   if (isCenter) {
                                     e.stopPropagation();
-                                    setClientTicketsModal({ villa: group.villaNumber, project: group.projectId });
+                                    setClientTicketsModal({ unitId: group.unitId, project: group.projectId });
                                   }
                                 }}
                               >

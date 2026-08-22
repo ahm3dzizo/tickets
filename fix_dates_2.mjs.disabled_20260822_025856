@@ -1,0 +1,26 @@
+﻿import { PrismaClient } from '@prisma/client';
+const p = new PrismaClient();
+async function run() {
+  const proj = await p.project.findFirst({where:{name:{contains:'النرجس'}}});
+  const tickets = await p.ticket.findMany({where:{projectId:proj.id, createdAt:{gte: new Date('2026-08-01T00:00:00Z')}}});
+  let count = 0;
+  for (const t of tickets) {
+    if (t.issuedAt && typeof t.issuedAt === 'string') {
+       // Only split if it looks like YYYY-MM-DD
+       if (t.issuedAt.includes('-')) {
+         const parts = t.issuedAt.split('T')[0].split('-');
+         if (parts.length === 3) {
+           const [year, month, day] = parts;
+           // If the parsed day is '08' (which means it was originally the month of August), we swap it.
+           if (year === '2026' && day === '08') {
+             const newDateStr = \2026-08-\\;
+             await p.ticket.update({ where: { id: t.id }, data: { issuedAt: newDateStr } });
+             count++;
+           }
+         }
+       }
+    }
+  }
+  console.log('Fixed dates for ' + count + ' tickets.');
+}
+run().then(() => process.exit(0)).catch(console.error);

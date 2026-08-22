@@ -209,7 +209,7 @@ export default function TicketsList() {
   const showProjectColumn = user?.role === 'admin' || distinctProjectIds.size > 1;
 
   const selectedTickets = tickets.filter(t => selectedTicketIds?.includes(t.id));
-  const uniqueClientIds = new Set(selectedTickets.map(t => t.clientId || t.villaNumber || 'unknown'));
+  const uniqueClientIds = new Set(selectedTickets.map(t => t.clientId || t.unitId || t.id));
 
   return (
     <Layout>
@@ -518,7 +518,7 @@ export default function TicketsList() {
             }))}
             clientPhone={
               clients[apptTicket[0].clientId || '']?.phone ||
-              Object.values(clients).find(c => String(c.villaNumber) === String(apptTicket[0].villaNumber))?.phone
+              Object.values(clients).find(c => String(c.unitId) === String(apptTicket[0].unitId))?.phone
             }
             onSuccess={() => { setApptOpen(false); setSelectedTicketIds([]); loadData(); }}
           />

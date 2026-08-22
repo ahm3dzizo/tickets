@@ -1,0 +1,8 @@
+﻿import { PrismaClient } from '@prisma/client';
+const p = new PrismaClient();
+async function run() {
+  const proj = await p.project.findFirst({where:{name:{contains:'النرجس'}}});
+  const t = await p.ticket.findMany({where:{projectId:proj.id}, take:5, select:{id:true, issueDate:true, assigneeName:true, assignedSupervisorId:true}});
+  console.log(JSON.stringify(t, null, 2));
+}
+run().then(() => p.\$disconnect());

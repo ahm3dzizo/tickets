@@ -18,6 +18,10 @@ export interface User {
   disabled?: boolean;
   onLeave?: boolean;
   substituteUid?: string | null;
+  idNumber?: string | null;
+  clothingSize?: string | null;
+  shoeSize?: string | null;
+
 }
 
 export interface Project {

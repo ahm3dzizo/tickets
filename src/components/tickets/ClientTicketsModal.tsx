@@ -9,7 +9,7 @@ import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 interface ClientTicketsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  villaNumber: string;
+  unitId: string;
   projectId: string;
   onSuccess?: () => void;
 }
@@ -34,7 +34,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 export function ClientTicketsModal({
   open,
   onOpenChange,
-  villaNumber,
+  unitId,
   projectId,
   onSuccess,
 }: ClientTicketsModalProps) {
@@ -46,7 +46,7 @@ export function ClientTicketsModal({
   const [projects, setProjects] = useState<any>({});
 
   const fetchTickets = () => {
-    if (!open || !villaNumber) return;
+    if (!open || !unitId) return;
     setFetching(true);
     Promise.all([
       ticketsApi.getAll({ projectId, includeDirectAppts: true }),
@@ -55,7 +55,7 @@ export function ClientTicketsModal({
     ]).then(([resTickets, resClients, resProjects]) => {
         const tks = resTickets.filter(
           (t: any) =>
-            String(t.villaNumber || '').trim() === String(villaNumber || '').trim() &&
+            String(t.unitId || '').trim() === String(unitId || '').trim() &&
             !['closed', 'out_of_scope', 'completed'].includes(t.status),
         );
         setTickets(tks);
@@ -72,7 +72,7 @@ export function ClientTicketsModal({
 
   useEffect(() => {
     fetchTickets();
-  }, [open, villaNumber, projectId]);
+  }, [open, unitId, projectId]);
 
 
   return (
@@ -88,7 +88,7 @@ export function ClientTicketsModal({
               <Wrench className="w-4 h-4 text-blue-500" />
             </div>
             <span>التذاكر المفتوحة</span>
-            <span className="text-muted-foreground font-normal">— فيلا {villaNumber}</span>
+            <span className="text-muted-foreground font-normal">— وحدة {tickets[0]?.villaNumber || '---'}</span>
             {tickets.length > 0 && (
               <span className="mr-auto text-xs font-bold bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full">
                 {tickets.length}

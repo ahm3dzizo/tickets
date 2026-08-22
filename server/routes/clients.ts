@@ -33,7 +33,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       projectId:   primaryUnit?.projectId  || null,
       projectName: primaryUnit?.project?.name || null,
       projectCode: primaryUnit?.project?.abbreviation || null,
-      villaNumber: primaryUnit?.unitNumber  || null,
+      unitNumber: primaryUnit?.unitNumber  || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
       handoverDate: primaryUnit?.handoverDate || null,
       warrantyExpiryDate: primaryUnit?.warrantyExpiryDate || null,
@@ -85,7 +85,7 @@ router.get("/by-project/:projectId", requireAuth, async (req, res) => {
       projectId:   primaryUnit?.projectId  || null,
       projectName: primaryUnit?.project?.name || null,
       projectCode: primaryUnit?.project?.abbreviation || null,
-      villaNumber: primaryUnit?.unitNumber  || null,
+      unitNumber: primaryUnit?.unitNumber  || null,
       blockNumber: primaryUnit?.block?.blockNumber || null,
       handoverDate: primaryUnit?.handoverDate || null,
       warrantyExpiryDate: primaryUnit?.warrantyExpiryDate || null,
@@ -113,7 +113,7 @@ router.post("/by-project/:projectId", requireAuth, async (req, res) => {
 router.put("/:id", requireAuth, async (req, res) => {
   try {
     const data = req.body;
-    const { name, phone, villaNumber, blockNumber, handoverDate, warrantyExpiryDate } = data;
+    const { name, phone, unitId, blockNumber, handoverDate, warrantyExpiryDate } = data;
 
     // Update client name/phone
     const client = await prisma.client.update({
@@ -125,7 +125,7 @@ router.put("/:id", requireAuth, async (req, res) => {
     });
 
     // Update the primary unit if unit fields are provided
-    if (villaNumber !== undefined || blockNumber !== undefined || handoverDate !== undefined || warrantyExpiryDate !== undefined) {
+    if (unitId !== undefined || blockNumber !== undefined || handoverDate !== undefined || warrantyExpiryDate !== undefined) {
       const clientUnit = await prisma.clientUnit.findFirst({
         where: { clientId: req.params.id, isPrimary: true },
         include: { unit: { include: { block: true } } },
@@ -153,7 +153,6 @@ router.put("/:id", requireAuth, async (req, res) => {
         await prisma.unit.update({
           where: { id: unitId },
           data: {
-            ...(villaNumber !== undefined ? { unitNumber: String(villaNumber) } : {}),
             ...(blockId !== undefined ? { blockId } : {}),
             ...(handoverDate !== undefined ? { handoverDate: handoverDate || null } : {}),
             ...(warrantyExpiryDate !== undefined ? { warrantyExpiryDate: warrantyExpiryDate || null } : {}),
