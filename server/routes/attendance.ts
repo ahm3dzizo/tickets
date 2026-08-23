@@ -424,10 +424,10 @@ router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthReq
   try {
     const { ticketId, notes } = req.body;
     const session = await prisma.ticketTimeSession.findFirst({
-      where: { ticketId, technicianId: req.technicianId!, status: 'IN_PROGRESS' }
+      where: { ticketId, technicianId: req.technicianId!, status: { in: ['IN_PROGRESS', 'PAUSED'] } }
     });
     if (!session) {
-      res.status(404).json({ error: 'In progress session not found' });
+      res.status(404).json({ error: 'Active session not found' });
       return;
     }
     
@@ -473,7 +473,7 @@ router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthReq
         where: {
           appointmentId: completedTicket.appointmentId,
           status: {
-            not: 'completed'
+            in: ['open', 'pending', 'in_progress', 'waiting', 'contractor']
           }
         }
       });
@@ -500,8 +500,9 @@ router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthReq
         });
       }
     }
-    
-    res.json(updated);
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    res.json({ session: updated, ticket });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -746,8 +747,8 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
 
     const result = await prisma.$transaction(async (tx) => {
       const eligibleTickets = appointment.tickets.filter((ticket) => {
-        // Only currently open tickets.
-        if (ticket.status !== 'open') return false;
+        // Accept open or pending tickets (pending = appointment was scheduled but not yet started).
+        if (!['open', 'pending'].includes(ticket.status)) return false;
 
         const assignedToTech =
           ticket.assigneeName &&
@@ -1024,10 +1025,19 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
         Array.isArray(appointment.supervisorIds) &&
         appointment.supervisorIds.includes(technician.supervisorId);
 
+      const isClaimed = appointment.tickets?.some(
+        (t: any) =>
+          t.status === 'in_progress' ||
+          t.techSessions?.some(
+            (s: any) => s.status === 'IN_PROGRESS' || s.status === 'PAUSED'
+          )
+      ) ?? false;
+
       return {
         ...appointment,
         isAssignedToMe,
         isSupervisorAppointment,
+        isClaimed,
         appointmentPriority: isAssignedToMe ? 1 : 2
       };
     });
@@ -1053,6 +1063,35 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
     res.status(500).json({
       error: err.message
     });
+  }
+});
+
+router.get('/tech/tickets/:id', requireTechAuth, async (req: TechAuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: {
+        unit: { select: { unitNumber: true } },
+        project: { select: { name: true } },
+        client: { select: { name: true, phone: true } }
+      }
+    });
+
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket not found' });
+      return;
+    }
+
+    res.json({
+      ...ticket,
+      unitNumber: ticket.unit?.unitNumber,
+      projectName: ticket.project?.name,
+      clientName: ticket.client?.name,
+      clientPhone: ticket.client?.phone
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -719,28 +719,6 @@ function AppointmentCard({
       const result = await techApi.claimAppointment(appt.id);
 
       setClaimed(true);
-
-      if (Array.isArray(result?.tickets)) {
-        const claimedIds = new Set(
-          result.tickets.map((t: any) => t.ticketId)
-        );
-
-        appt.tickets = tickets.map((ticket: any) => ({
-          ...ticket,
-          status: claimedIds.has(ticket.ticketId)
-            ? 'in_progress'
-            : ticket.status,
-        }));
-      } else {
-        appt.tickets = tickets.map((ticket: any) => ({
-          ...ticket,
-          status:
-            ticket.status === 'open'
-              ? 'in_progress'
-              : ticket.status,
-        }));
-      }
-
       toast.success('تم استلام الموعد وبدأ العمل فورًا');
 
     } catch (err: any) {

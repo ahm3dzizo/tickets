@@ -54,7 +54,8 @@ router.post('/login', async (req, res) => {
       APP_JWT_SECRET,
       { expiresIn: '30d' }
     );
-    res.json({ token, technician: tech });
+    const { passwordHash: _ph, ...techProfile } = tech;
+    res.json({ token, technician: techProfile });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

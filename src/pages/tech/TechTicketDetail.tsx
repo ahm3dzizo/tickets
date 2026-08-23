@@ -68,23 +68,24 @@ interface Ticket {
 }
 
 const statusLabel = (status?: string) => {
-  switch (status) {
-    case 'CLAIMED':
+  switch (status?.toLowerCase()) {
+    case 'claimed':
+    case 'assigned':
+    case 'open':
+    case 'pending':
       return 'مخصصة للفني';
-    case 'ASSIGNED':
-      return 'مخصصة للفني';
-    case 'EN_ROUTE':
-    case 'TRAVELING':
+    case 'en_route':
+    case 'traveling':
       return 'في الطريق';
-    case 'ARRIVED':
+    case 'arrived':
       return 'وصل للموقع';
-    case 'IN_PROGRESS':
+    case 'in_progress':
       return 'جاري التنفيذ';
-    case 'PAUSED':
+    case 'paused':
       return 'متوقفة مؤقتًا';
-    case 'COMPLETED':
+    case 'completed':
       return 'مكتملة';
-    case 'CLOSED':
+    case 'closed':
       return 'مغلقة';
     default:
       return status || 'غير معروف';
@@ -92,17 +93,17 @@ const statusLabel = (status?: string) => {
 };
 
 const statusClass = (status?: string) => {
-  switch (status) {
-    case 'EN_ROUTE':
-    case 'TRAVELING':
+  switch (status?.toLowerCase()) {
+    case 'en_route':
+    case 'traveling':
       return 'tech-status-info';
-    case 'ARRIVED':
-    case 'IN_PROGRESS':
+    case 'arrived':
+    case 'in_progress':
       return 'tech-status-success';
-    case 'PAUSED':
+    case 'paused':
       return 'tech-status-warning';
-    case 'COMPLETED':
-    case 'CLOSED':
+    case 'completed':
+    case 'closed':
       return 'tech-status-success';
     default:
       return 'tech-status-info';
@@ -135,7 +136,7 @@ export default function TechTicketDetail() {
       const authToken =
         token || localStorage.getItem('tech_token') || '';
 
-      const res = await fetch(`/api/tickets/${id}`, {
+      const res = await fetch(`/api/tech/tickets/${id}`, {
         headers: {
           Authorization: `Bearer ${authToken}`,
         },
@@ -168,13 +169,14 @@ export default function TechTicketDetail() {
 
   const currentStatus = ticket?.status || '';
 
+  const normalizedStatus = currentStatus.toLowerCase();
+
   const isCompleted =
-    currentStatus === 'COMPLETED' ||
-    currentStatus === 'CLOSED';
+    normalizedStatus === 'completed' ||
+    normalizedStatus === 'closed';
 
   const canComplete =
-    currentStatus === 'in_progress' ||
-    currentStatus === 'IN_PROGRESS';
+    normalizedStatus === 'in_progress';
 
   const locationUrl = useMemo(() => {
     if (
@@ -221,10 +223,7 @@ export default function TechTicketDetail() {
       setTicket((prev) => ({
         ...(prev || {}),
         ...(result?.ticket || {}),
-        status:
-          result?.ticket?.status ||
-          result?.status ||
-          'COMPLETED',
+        status: result?.ticket?.status || 'completed',
       }));
 
       setShowCompleteModal(false);
@@ -559,16 +558,8 @@ export default function TechTicketDetail() {
             />
 
             <WorkflowStep
-              active={
-                currentStatus === 'IN_PROGRESS' ||
-                currentStatus === 'in_progress' ||
-                isCompleted
-              }
-              completed={
-                currentStatus === 'IN_PROGRESS' ||
-                currentStatus === 'in_progress' ||
-                isCompleted
-              }
+              active={canComplete || isCompleted}
+              completed={canComplete || isCompleted}
               label="جاري التنفيذ"
             />
 
