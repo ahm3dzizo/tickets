@@ -1,7 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  useNavigate,
-} from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
 import { techApi } from '@/lib/api';
@@ -13,7 +11,6 @@ import {
   Coffee,
   Clock,
   RefreshCw,
-  MapPin,
   Phone,
   MessageCircle,
   ChevronDown,
@@ -22,24 +19,41 @@ import {
   User,
   CheckCircle2,
   Play,
-  Navigation,
   Timer,
+  Sun,
+  Moon,
+  Monitor,
+  Globe,
+  Settings,
+  Briefcase,
+  Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import './tech.css';
 
 type Tab = 'home' | 'appointments' | 'profile';
+type Theme = 'light' | 'dark' | 'system';
+
+function getStoredTheme(): Theme {
+  try {
+    const v = localStorage.getItem('tech-theme');
+    if (v === 'light' || v === 'dark' || v === 'system') return v;
+  } catch {}
+  return 'system';
+}
 
 export default function TechApp() {
-  const { token, techProfile, logout } = useTechAuth();
+  const { token, techProfile, logout, setProfile } = useTechAuth() as any;
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [theme, setTheme] = useState<Theme>(getStoredTheme);
   const [shift, setShift] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [expandedApptId, setExpandedApptId] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
@@ -53,13 +67,24 @@ export default function TechApp() {
   const lang = (techProfile?.language || 'ar') as TechLang;
   const isRtl = lang === 'ar' || lang === 'ur';
 
-  const fetchData = async () => {
+  // Apply data-theme attribute
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    if (theme === 'system') {
+      el.removeAttribute('data-theme');
+    } else {
+      el.setAttribute('data-theme', theme);
+    }
+    try { localStorage.setItem('tech-theme', theme); } catch {}
+  }, [theme]);
+
+  const fetchData = useCallback(async () => {
     try {
       const [shiftData, apptsData] = await Promise.all([
         techApi.getTodayShift().catch(() => null),
         techApi.getAppointments().catch(() => []),
       ]);
-
       setShift(shiftData);
       setAppointments(apptsData || []);
     } catch (err) {
@@ -67,19 +92,17 @@ export default function TechApp() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!token) {
       navigate('/tech/login');
       return;
     }
-
     fetchData();
-
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, [token, navigate]);
+  }, [token, navigate, fetchData]);
 
   const handleLogout = () => {
     logout();
@@ -88,58 +111,42 @@ export default function TechApp() {
 
   const handleClockIn = async () => {
     setActionLoading(true);
-
     try {
       let lat: number | undefined;
       let lng: number | undefined;
       let accuracy: number | undefined;
-
       if (navigator.geolocation) {
         try {
-          const pos = await new Promise<GeolocationPosition>(
-            (resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(resolve, reject, {
-                timeout: 10000,
-                enableHighAccuracy: true,
-              });
-            }
-          );
-
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 10000,
+              enableHighAccuracy: true,
+            });
+          });
           lat = pos.coords.latitude;
           lng = pos.coords.longitude;
           accuracy = pos.coords.accuracy;
-        } catch {
-          // Location is optional.
-        }
+        } catch {}
       }
-
-      await techApi.clockIn({
-        lat,
-        lng,
-        accuracy,
-        projectId: techProfile?.projectId,
-      });
-
+      await techApi.clockIn({ lat, lng, accuracy, projectId: techProfile?.projectId });
       toast.success(t(lang, 'shiftActive'));
       await fetchData();
     } catch (err: any) {
-      toast.error(err.message || 'فشل تسجيل الحضور');
+      toast.error(err.message || t(lang, 'clockInFail'));
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleClockOut = async () => {
-    if (!window.confirm('هل أنت متأكد من تسجيل الانصراف؟')) return;
-
+    if (!window.confirm(t(lang, 'clockOutConfirm'))) return;
     setActionLoading(true);
-
     try {
       await techApi.clockOut();
-      toast.success('تم تسجيل الانصراف بنجاح');
+      toast.success(t(lang, 'clockOutSuccess'));
       await fetchData();
     } catch (err: any) {
-      toast.error(err.message || 'فشل تسجيل الانصراف');
+      toast.error(err.message || t(lang, 'clockOutFail'));
     } finally {
       setActionLoading(false);
     }
@@ -147,63 +154,68 @@ export default function TechApp() {
 
   const handleToggleBreak = async () => {
     setActionLoading(true);
-
     try {
       if (shift?.status === 'ON_BREAK') {
         await techApi.endBreak();
-        toast.success('تم إنهاء الاستراحة');
+        toast.success(t(lang, 'endBreakSuccess'));
       } else {
         await techApi.startBreak('MEAL');
-        toast.success('تم بدء الاستراحة');
+        toast.success(t(lang, 'startBreakSuccess'));
       }
-
       await fetchData();
     } catch (err: any) {
-      toast.error(err.message || 'فشل تغيير حالة الاستراحة');
+      toast.error(err.message || t(lang, 'breakFail'));
     } finally {
       setActionLoading(false);
     }
   };
 
+  const handleLangChange = async (newLang: TechLang) => {
+    if (newLang === lang) return;
+    try {
+      const res = await fetch('/api/tech/language', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ language: newLang }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      if (setProfile && techProfile) {
+        setProfile({ ...techProfile, language: newLang });
+      }
+    } catch {
+      toast.error('Failed to update language');
+    }
+  };
+
   const filteredAppointments = useMemo(
-    () =>
-      appointments.filter(
-        (appointment) =>
-          !selectedDate || appointment.date === selectedDate
-      ),
+    () => appointments.filter((a) => !selectedDate || a.date === selectedDate),
     [appointments, selectedDate]
   );
 
   const todayCount = filteredAppointments.length;
-
   const ticketCount = filteredAppointments.reduce(
-    (total, appointment) =>
-      total + (appointment.tickets?.length || 0),
+    (total, a) => total + (a.tickets?.length || 0),
     0
   );
-
   const completedCount = filteredAppointments.filter(
-    (appointment) => appointment.status === 'completed'
+    (a) => a.status === 'completed'
   ).length;
 
-  const activeShift =
-    shift?.status === 'ACTIVE' || shift?.status === 'ON_BREAK';
+  const activeShift = shift?.status === 'ACTIVE' || shift?.status === 'ON_BREAK';
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-
-    if (hour < 12) return 'صباح الخير';
-    if (hour < 17) return 'مساء الخير';
-    return 'مساء الخير';
+    if (hour < 12) return t(lang, 'greeting_morning');
+    if (hour < 17) return t(lang, 'greeting_afternoon');
+    return t(lang, 'greeting_evening');
   };
 
   const formatTime = (value?: string) => {
     if (!value) return '--:--';
-
-    return new Date(value).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const renderHome = () => (
@@ -212,26 +224,18 @@ export default function TechApp() {
       <section className="tech-hero slide-up">
         <div className="tech-hero-top">
           <div>
-            <div className="tech-eyebrow">
-              {getGreeting()} 👋
-            </div>
-
-            <h1 className="tech-hero-title">
-              {techProfile?.name || 'الفني'}
-            </h1>
-
+            <div className="tech-eyebrow">{getGreeting()} 👋</div>
+            <h1 className="tech-hero-title">{techProfile?.name || t(lang, 'maintenanceTech')}</h1>
             <div className="tech-hero-subtitle">
-              <span>{techProfile?.specialty || 'فني صيانة'}</span>
-
+              <span>{techProfile?.specialty || t(lang, 'maintenanceTech')}</span>
               {techProfile?.supervisor?.name && (
                 <>
                   <span className="tech-dot">•</span>
-                  <span>بإشراف {techProfile.supervisor.name}</span>
+                  <span>{t(lang, 'supervisedBy')} {techProfile.supervisor.name}</span>
                 </>
               )}
             </div>
           </div>
-
           <div className="tech-avatar">
             {techProfile?.name?.charAt(0) || '👷'}
           </div>
@@ -242,26 +246,22 @@ export default function TechApp() {
             <span
               className={`tech-live-dot ${
                 activeShift
-                  ? shift?.status === 'ON_BREAK'
-                    ? 'break'
-                    : 'active'
+                  ? shift?.status === 'ON_BREAK' ? 'break' : 'active'
                   : 'offline'
               }`}
             />
-
             <span>
               {shift?.status === 'ON_BREAK'
-                ? 'في الاستراحة'
+                ? t(lang, 'shiftLiveBreak')
                 : activeShift
-                ? 'الدوام نشط'
-                : 'لم يبدأ الدوام'}
+                ? t(lang, 'shiftLive')
+                : t(lang, 'shiftLiveOff')}
             </span>
           </div>
-
           {activeShift && shift?.clockInAt && (
             <div className="tech-shift-time">
               <Clock size={14} />
-              منذ {formatTime(shift.clockInAt)}
+              {t(lang, 'sinceTime')} {formatTime(shift.clockInAt)}
             </div>
           )}
         </div>
@@ -271,7 +271,7 @@ export default function TechApp() {
       <section className="tech-shift-card slide-up">
         <div className="tech-section-label">
           <Timer size={15} />
-          حالة الدوام
+          {t(lang, 'shiftStatus')}
         </div>
 
         {activeShift ? (
@@ -280,27 +280,17 @@ export default function TechApp() {
               <div>
                 <div className="tech-shift-title">
                   {shift?.status === 'ON_BREAK'
-                    ? 'أنت في الاستراحة'
-                    : 'أنت على رأس العمل'}
+                    ? t(lang, 'shiftOnBreakTitle')
+                    : t(lang, 'shiftActiveTitle')}
                 </div>
-
                 <div className="tech-shift-description">
                   {shift?.status === 'ON_BREAK'
-                    ? 'يمكنك إنهاء الاستراحة والعودة للعمل'
-                    : 'الدوام مسجل وحالتك الحالية نشطة'}
+                    ? t(lang, 'shiftOnBreakDesc')
+                    : t(lang, 'shiftActiveDesc')}
                 </div>
               </div>
-
-              <div
-                className={`tech-shift-icon ${
-                  shift?.status === 'ON_BREAK' ? 'break' : ''
-                }`}
-              >
-                {shift?.status === 'ON_BREAK' ? (
-                  <Coffee size={23} />
-                ) : (
-                  <CheckCircle2 size={23} />
-                )}
+              <div className={`tech-shift-icon ${shift?.status === 'ON_BREAK' ? 'break' : ''}`}>
+                {shift?.status === 'ON_BREAK' ? <Coffee size={23} /> : <CheckCircle2 size={23} />}
               </div>
             </div>
 
@@ -309,24 +299,19 @@ export default function TechApp() {
                 onClick={handleToggleBreak}
                 disabled={actionLoading}
                 className={`tech-btn ${
-                  shift?.status === 'ON_BREAK'
-                    ? 'tech-btn-success'
-                    : 'tech-btn-warning'
+                  shift?.status === 'ON_BREAK' ? 'tech-btn-success' : 'tech-btn-warning'
                 }`}
               >
                 <Coffee size={17} />
-                {shift?.status === 'ON_BREAK'
-                  ? 'إنهاء الاستراحة'
-                  : 'بدء الاستراحة'}
+                {shift?.status === 'ON_BREAK' ? t(lang, 'endBreak') : t(lang, 'startBreak')}
               </button>
-
               <button
                 onClick={handleClockOut}
                 disabled={actionLoading}
                 className="tech-btn tech-btn-danger-outline"
               >
                 <LogOut size={17} />
-                انصراف
+                {t(lang, 'clockOut')}
               </button>
             </div>
           </>
@@ -334,27 +319,20 @@ export default function TechApp() {
           <>
             <div className="tech-shift-main">
               <div>
-                <div className="tech-shift-title">
-                  لم يتم تسجيل الحضور
-                </div>
-
-                <div className="tech-shift-description">
-                  سجّل حضورك لبدء يوم العمل
-                </div>
+                <div className="tech-shift-title">{t(lang, 'shiftIdleTitle')}</div>
+                <div className="tech-shift-description">{t(lang, 'shiftIdleDesc')}</div>
               </div>
-
               <div className="tech-shift-icon idle">
                 <Clock size={23} />
               </div>
             </div>
-
             <button
               onClick={handleClockIn}
               disabled={actionLoading}
               className="tech-btn tech-btn-success tech-clock-btn"
             >
               <Play size={17} fill="currentColor" />
-              {actionLoading ? 'جاري التسجيل...' : 'تسجيل الحضور'}
+              {actionLoading ? t(lang, 'registering') : t(lang, 'clockIn')}
             </button>
           </>
         )}
@@ -366,71 +344,55 @@ export default function TechApp() {
           <div className="tech-stat-icon blue">
             <Calendar size={18} />
           </div>
-
           <div>
             <strong>{todayCount}</strong>
-            <span>مواعيد</span>
+            <span>{t(lang, 'appointmentsCount')}</span>
           </div>
         </div>
-
         <div className="tech-stat-card">
           <div className="tech-stat-icon amber">
             <Ticket size={18} />
           </div>
-
           <div>
             <strong>{ticketCount}</strong>
-            <span>تذاكر</span>
+            <span>{t(lang, 'ticketsCount')}</span>
           </div>
         </div>
-
         <div className="tech-stat-card">
           <div className="tech-stat-icon emerald">
             <CheckCircle2 size={18} />
           </div>
-
           <div>
             <strong>{completedCount}</strong>
-            <span>مكتملة</span>
+            <span>{t(lang, 'completedCount')}</span>
           </div>
         </div>
       </section>
 
-      {/* Today */}
+      {/* Today Appointments Preview */}
       <section className="tech-section slide-up">
         <div className="tech-section-heading">
           <div>
             <div className="tech-section-title">
               <Calendar size={17} />
-              مواعيد اليوم
+              {t(lang, 'todayAppointments')}
             </div>
-
             <div className="tech-section-subtitle">
               {todayCount
-                ? `${todayCount} موعد مخصص لك`
-                : 'لا توجد مواعيد حالياً'}
+                ? `${todayCount} ${t(lang, 'appointmentsCount')}`
+                : t(lang, 'noAppointments')}
             </div>
           </div>
-
-          <button
-            className="tech-link-btn"
-            onClick={() => setActiveTab('appointments')}
-          >
-            عرض الكل
+          <button className="tech-link-btn" onClick={() => setActiveTab('appointments')}>
+            {t(lang, 'viewAll')}
           </button>
         </div>
 
         {filteredAppointments.length === 0 ? (
           <div className="tech-empty">
-            <div className="tech-empty-icon">
-              <Calendar size={24} />
-            </div>
-
-            <strong>لا توجد مواعيد</strong>
-
-            <span>
-              لا توجد مواعيد مخصصة لك في هذا التاريخ
-            </span>
+            <div className="tech-empty-icon"><Calendar size={24} /></div>
+            <strong>{t(lang, 'noAppointments')}</strong>
+            <span>{t(lang, 'noAppointmentsDesc')}</span>
           </div>
         ) : (
           <div className="tech-mini-list">
@@ -438,11 +400,10 @@ export default function TechApp() {
               <AppointmentCard
                 key={appt.id}
                 appt={appt}
+                lang={lang}
                 expanded={expandedApptId === appt.id}
                 onToggle={() =>
-                  setExpandedApptId(
-                    expandedApptId === appt.id ? null : appt.id
-                  )
+                  setExpandedApptId(expandedApptId === appt.id ? null : appt.id)
                 }
                 navigate={navigate}
               />
@@ -457,53 +418,40 @@ export default function TechApp() {
     <>
       <div className="tech-page-title">
         <div>
-          <h1>المواعيد</h1>
-          <p>المواعيد والتذاكر المخصصة لك</p>
+          <h1>{t(lang, 'appointments')}</h1>
+          <p>{t(lang, 'appointmentSubtitle')}</p>
         </div>
-
         <button
-          onClick={() => {
-            setLoading(true);
-            fetchData();
-          }}
+          onClick={() => { setLoading(true); fetchData(); }}
           className="tech-icon-btn"
         >
-          <RefreshCw
-            size={18}
-            className={loading ? 'animate-spin' : ''}
-          />
+          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
       <div className="tech-date-bar">
         <Calendar size={17} />
-
         <input
           type="date"
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
         />
-
         {selectedDate && (
-          <button onClick={() => setSelectedDate('')}>
-            الكل
-          </button>
+          <button onClick={() => setSelectedDate('')}>{t(lang, 'all')}</button>
         )}
       </div>
 
       <div className="tech-section">
         <div className="tech-list-count">
-          <span>المواعيد</span>
+          <span>{t(lang, 'appointments')}</span>
           <strong>{filteredAppointments.length}</strong>
         </div>
 
         {filteredAppointments.length === 0 ? (
           <div className="tech-empty">
-            <div className="tech-empty-icon">
-              <Calendar size={24} />
-            </div>
-            <strong>لا توجد مواعيد</strong>
-            <span>لا توجد مواعيد لهذا التاريخ</span>
+            <div className="tech-empty-icon"><Calendar size={24} /></div>
+            <strong>{t(lang, 'noAppointments')}</strong>
+            <span>{t(lang, 'noAppointmentsDesc')}</span>
           </div>
         ) : (
           <div className="tech-mini-list">
@@ -511,11 +459,10 @@ export default function TechApp() {
               <AppointmentCard
                 key={appt.id}
                 appt={appt}
+                lang={lang}
                 expanded={expandedApptId === appt.id}
                 onToggle={() =>
-                  setExpandedApptId(
-                    expandedApptId === appt.id ? null : appt.id
-                  )
+                  setExpandedApptId(expandedApptId === appt.id ? null : appt.id)
                 }
                 navigate={navigate}
               />
@@ -526,73 +473,137 @@ export default function TechApp() {
     </>
   );
 
-  const renderProfile = () => (
-    <>
-      <div className="tech-page-title">
-        <div>
-          <h1>حسابي</h1>
-          <p>بيانات الفني والحساب</p>
+  const renderProfile = () => {
+    const LANGUAGES: { code: TechLang; label: string; native: string }[] = [
+      { code: 'ar', label: 'Arabic', native: 'العربية' },
+      { code: 'en', label: 'English', native: 'English' },
+      { code: 'hi', label: 'Hindi', native: 'हिंदी' },
+      { code: 'ur', label: 'Urdu', native: 'اردو' },
+    ];
+
+    const THEMES: { value: Theme; labelKey: string; icon: React.ReactNode }[] = [
+      { value: 'light', labelKey: 'themeLight', icon: <Sun size={18} /> },
+      { value: 'dark', labelKey: 'themeDark', icon: <Moon size={18} /> },
+      { value: 'system', labelKey: 'themeSystem', icon: <Monitor size={18} /> },
+    ];
+
+    return (
+      <>
+        {/* Profile Hero */}
+        <div className="tech-profile-hero slide-up">
+          <div className="tech-profile-avatar-lg">
+            {techProfile?.name?.charAt(0)?.toUpperCase() || '👷'}
+          </div>
+          <div className="tech-profile-info">
+            <h2>{techProfile?.name || t(lang, 'maintenanceTech')}</h2>
+            <div className="tech-profile-badge">
+              <Briefcase size={13} />
+              {techProfile?.specialty || t(lang, 'maintenanceTech')}
+            </div>
+            {techProfile?.supervisor?.name && (
+              <div className="tech-profile-badge" style={{ marginTop: '4px', opacity: 0.8 }}>
+                <Shield size={13} />
+                {t(lang, 'supervisedBy')} {techProfile.supervisor.name}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      <section className="tech-profile-card">
-        <div className="tech-profile-avatar">
-          {techProfile?.name?.charAt(0) || '👷'}
-        </div>
+        {/* Quick Stats */}
+        <section className="tech-stats-grid slide-up">
+          <div className="tech-stat-card">
+            <div className="tech-stat-icon blue"><Calendar size={18} /></div>
+            <div>
+              <strong>{todayCount}</strong>
+              <span>{t(lang, 'appointmentsCount')}</span>
+            </div>
+          </div>
+          <div className="tech-stat-card">
+            <div className="tech-stat-icon amber"><Ticket size={18} /></div>
+            <div>
+              <strong>{ticketCount}</strong>
+              <span>{t(lang, 'ticketsCount')}</span>
+            </div>
+          </div>
+          <div className="tech-stat-card">
+            <div className="tech-stat-icon emerald"><CheckCircle2 size={18} /></div>
+            <div>
+              <strong>{completedCount}</strong>
+              <span>{t(lang, 'completedCount')}</span>
+            </div>
+          </div>
+        </section>
 
-        <h2>{techProfile?.name || 'الفني'}</h2>
+        {/* Language switcher */}
+        <section className="tech-settings-card slide-up">
+          <div className="tech-settings-header">
+            <Globe size={16} />
+            {t(lang, 'langLabel')}
+          </div>
+          <div className="tech-lang-grid">
+            {LANGUAGES.map((l) => (
+              <button
+                key={l.code}
+                className={`tech-lang-item ${lang === l.code ? 'active' : ''}`}
+                onClick={() => handleLangChange(l.code)}
+              >
+                <span className="tech-lang-native">{l.native}</span>
+                <span className="tech-lang-label">{l.label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
 
-        <span>
-          {techProfile?.specialty || 'فني صيانة'}
-        </span>
-      </section>
+        {/* Theme switcher */}
+        <section className="tech-settings-card slide-up">
+          <div className="tech-settings-header">
+            <Sun size={16} />
+            {t(lang, 'themeLabel')}
+          </div>
+          <div className="tech-theme-grid">
+            {THEMES.map((th) => (
+              <button
+                key={th.value}
+                className={`tech-theme-item ${theme === th.value ? 'active' : ''}`}
+                onClick={() => setTheme(th.value)}
+              >
+                {th.icon}
+                <span>{t(lang, th.labelKey)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
 
-      <section className="tech-info-card">
-        <InfoRow
-          icon={<User size={17} />}
-          label="الاسم"
-          value={techProfile?.name}
-        />
+        {/* Account Info */}
+        <section className="tech-info-card slide-up">
+          <div className="tech-settings-header">
+            <Settings size={16} />
+            {t(lang, 'accountInfo')}
+          </div>
+          <InfoRow icon={<User size={17} />} label={t(lang, 'name')} value={techProfile?.name} />
+          <InfoRow icon={<Phone size={17} />} label={t(lang, 'phone')} value={techProfile?.phoneNumber || techProfile?.username} />
+          <InfoRow icon={<Briefcase size={17} />} label={t(lang, 'specialty')} value={techProfile?.specialty || t(lang, 'maintenanceTech')} />
+          {techProfile?.employeeId && (
+            <InfoRow icon={<Shield size={17} />} label={t(lang, 'employeeId')} value={techProfile.employeeId} />
+          )}
+          {techProfile?.supervisor?.name && (
+            <InfoRow icon={<User size={17} />} label={t(lang, 'supervisor')} value={techProfile.supervisor.name} />
+          )}
+        </section>
 
-        <InfoRow
-          icon={<Phone size={17} />}
-          label="رقم الهاتف"
-          value={techProfile?.phone}
-        />
-
-        <InfoRow
-          icon={<Ticket size={17} />}
-          label="التخصص"
-          value={techProfile?.specialty || 'فني صيانة'}
-        />
-
-        {techProfile?.supervisor?.name && (
-          <InfoRow
-            icon={<User size={17} />}
-            label="المشرف"
-            value={techProfile.supervisor.name}
-          />
-        )}
-      </section>
-
-      <button
-        onClick={handleLogout}
-        className="tech-logout-btn"
-      >
-        <LogOut size={18} />
-        تسجيل الخروج
-      </button>
-    </>
-  );
+        <button onClick={handleLogout} className="tech-logout-btn">
+          <LogOut size={18} />
+          {t(lang, 'logout')}
+        </button>
+      </>
+    );
+  };
 
   return (
-    <div className="tech-app" dir={isRtl ? 'rtl' : 'ltr'}>
+    <div className="tech-app" dir={isRtl ? 'rtl' : 'ltr'} ref={rootRef}>
       <header className="tech-header">
         <div className="tech-brand">
-          <div className="tech-brand-mark">
-            R
-          </div>
-
+          <div className="tech-brand-mark">R</div>
           <div>
             <strong>RETAL</strong>
             <span>Technician</span>
@@ -601,25 +612,18 @@ export default function TechApp() {
 
         <div className="tech-header-actions">
           <button
-            onClick={() => {
-              setLoading(true);
-              fetchData();
-            }}
+            onClick={() => { setLoading(true); fetchData(); }}
             className="tech-icon-btn"
-            aria-label="تحديث"
+            aria-label={t(lang, 'refresh')}
           >
-            <RefreshCw
-              size={18}
-              className={loading ? 'animate-spin' : ''}
-            />
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
-
           <button
-            onClick={handleLogout}
-            className="tech-icon-btn danger"
-            aria-label="خروج"
+            onClick={() => setActiveTab('profile')}
+            className={`tech-icon-btn ${activeTab === 'profile' ? 'active' : ''}`}
+            aria-label={t(lang, 'myAccount')}
           >
-            <LogOut size={18} />
+            <User size={18} />
           </button>
         </div>
       </header>
@@ -630,7 +634,7 @@ export default function TechApp() {
             <div className="tech-loading-spinner">
               <RefreshCw size={25} />
             </div>
-            <span>جاري تحميل البيانات...</span>
+            <span>{t(lang, 'loadingData')}</span>
           </div>
         ) : (
           <>
@@ -643,37 +647,28 @@ export default function TechApp() {
 
       <nav className="tech-bottom-nav">
         <button
-          className={`tech-nav-item ${
-            activeTab === 'home' ? 'active' : ''
-          }`}
+          className={`tech-nav-item ${activeTab === 'home' ? 'active' : ''}`}
           onClick={() => setActiveTab('home')}
         >
           <Home size={21} />
-          <span>الرئيسية</span>
+          <span>{t(lang, 'home')}</span>
         </button>
 
         <button
-          className={`tech-nav-item ${
-            activeTab === 'appointments' ? 'active' : ''
-          }`}
+          className={`tech-nav-item ${activeTab === 'appointments' ? 'active' : ''}`}
           onClick={() => setActiveTab('appointments')}
         >
           <Calendar size={21} />
-          <span>المواعيد</span>
-
-          {todayCount > 0 && (
-            <b className="tech-nav-badge">{todayCount}</b>
-          )}
+          <span>{t(lang, 'appointments')}</span>
+          {todayCount > 0 && <b className="tech-nav-badge">{todayCount}</b>}
         </button>
 
         <button
-          className={`tech-nav-item ${
-            activeTab === 'profile' ? 'active' : ''
-          }`}
+          className={`tech-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
           onClick={() => setActiveTab('profile')}
         >
           <User size={21} />
-          <span>حسابي</span>
+          <span>{t(lang, 'myAccount')}</span>
         </button>
       </nav>
     </div>
@@ -682,11 +677,13 @@ export default function TechApp() {
 
 function AppointmentCard({
   appt,
+  lang,
   expanded,
   onToggle,
   navigate,
 }: {
   appt: any;
+  lang: TechLang;
   expanded: boolean;
   onToggle: () => void;
   navigate: ReturnType<typeof useNavigate>;
@@ -702,8 +699,7 @@ function AppointmentCard({
         ticket.status === 'IN_PROGRESS' ||
         ticket.techSessions?.some(
           (session: any) =>
-            session.status === 'CLAIMED' ||
-            session.status === 'IN_PROGRESS'
+            session.status === 'CLAIMED' || session.status === 'IN_PROGRESS'
         )
     );
 
@@ -712,49 +708,40 @@ function AppointmentCard({
 
   const handleClaimAppointment = async () => {
     if (claiming || claimed || isCompleted) return;
-
     setClaiming(true);
-
     try {
-      const result = await techApi.claimAppointment(appt.id);
-
+      await techApi.claimAppointment(appt.id);
       setClaimed(true);
-      toast.success('تم استلام الموعد وبدأ العمل فورًا');
-
+      toast.success(t(lang, 'appointmentClaimed'));
     } catch (err: any) {
-      console.error('CLAIM APPOINTMENT UI ERROR:', err);
-
-      toast.error(
-        err?.message || 'فشل استلام الموعد'
-      );
+      toast.error(err?.message || t(lang, 'claimTicket'));
     } finally {
       setClaiming(false);
     }
   };
 
+  const statusLabel = (status?: string) => {
+    switch (status?.toLowerCase()) {
+      case 'open': return t(lang, 'status_CLAIMED').replace('محجوزة', 'مفتوحة') || 'Open';
+      case 'pending': return 'Pending';
+      case 'in_progress': return t(lang, 'status_IN_PROGRESS');
+      case 'completed': return t(lang, 'status_COMPLETED');
+      case 'paused': return t(lang, 'status_PAUSED');
+      default: return status || '';
+    }
+  };
+
   return (
-    <article
-      className={`tech-appointment ${
-        isCompleted ? 'completed' : ''
-      }`}
-    >
+    <article className={`tech-appointment ${isCompleted ? 'completed' : ''}`}>
       <div className="tech-appointment-top">
         <div className="tech-villa-icon">
           <Home size={18} />
         </div>
 
         <div className="tech-appointment-info">
-          <strong>
-            فيلا {appt.unitNumber || '---'}
-          </strong>
-
-          {appt.projectName && (
-            <span>{appt.projectName}</span>
-          )}
-
-          {appt.clientName && (
-            <small>{appt.clientName}</small>
-          )}
+          <strong>{t(lang, 'villa')} {appt.unitNumber || '---'}</strong>
+          {appt.projectName && <span>{appt.projectName}</span>}
+          {appt.clientName && <small>{appt.clientName}</small>}
         </div>
 
         <div className="tech-appointment-time">
@@ -771,33 +758,22 @@ function AppointmentCard({
         </div>
       )}
 
-      {appt.notes && (
-        <div className="tech-note">
-          {appt.notes}
-        </div>
-      )}
+      {appt.notes && <div className="tech-note">{appt.notes}</div>}
 
       <div className="tech-appointment-actions">
         <div className="tech-contact-actions">
           {appt.clientPhone && (
             <>
               <a
-                href={`https://wa.me/${appt.clientPhone.replace(
-                  /\D/g,
-                  ''
-                )}`}
+                href={`https://wa.me/${appt.clientPhone.replace(/\D/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="tech-contact whatsapp"
               >
                 <MessageCircle size={14} />
-                واتساب
+                {t(lang, 'whatsapp')}
               </a>
-
-              <a
-                href={`tel:${appt.clientPhone}`}
-                className="tech-contact call"
-              >
+              <a href={`tel:${appt.clientPhone}`} className="tech-contact call">
                 <Phone size={14} />
               </a>
             </>
@@ -808,50 +784,33 @@ function AppointmentCard({
           <button
             onClick={handleClaimAppointment}
             disabled={claiming || claimed}
-            className={`tech-ticket-toggle ${
-              claimed
-                ? 'opacity-70 cursor-default'
-                : ''
-            }`}
-            style={{
-              minWidth: '120px',
-              justifyContent: 'center',
-            }}
+            className={`tech-ticket-toggle ${claimed ? 'opacity-70 cursor-default' : ''}`}
+            style={{ minWidth: '120px', justifyContent: 'center' }}
           >
             {claiming ? (
               <>
-                <Loader2
-                  size={14}
-                  className="animate-spin"
-                />
-                جاري الاستلام...
+                <Loader2 size={14} className="animate-spin" />
+                {t(lang, 'claimingAppointment')}
               </>
             ) : claimed ? (
               <>
                 <CheckCircle2 size={14} />
-                تم الاستلام
+                {t(lang, 'appointmentClaimed')}
               </>
             ) : (
               <>
                 <CheckCircle2 size={14} />
-                استلام الموعد
+                {t(lang, 'claimAppointment')}
               </>
             )}
           </button>
         )}
 
         {tickets.length > 0 && (
-          <button
-            onClick={onToggle}
-            className="tech-ticket-toggle"
-          >
+          <button onClick={onToggle} className="tech-ticket-toggle">
             <Ticket size={14} />
-            {tickets.length} تذاكر
-            {expanded ? (
-              <ChevronUp size={14} />
-            ) : (
-              <ChevronDown size={14} />
-            )}
+            {tickets.length} {t(lang, 'ticketsCount')}
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         )}
       </div>
@@ -861,25 +820,14 @@ function AppointmentCard({
           {tickets.map((ticket: any) => (
             <button
               key={ticket.id}
-              onClick={() =>
-                navigate(`/tech/ticket/${ticket.id}`)
-              }
+              onClick={() => navigate(`/tech/ticket/${ticket.id}`)}
               className="tech-ticket-item"
             >
               <div>
-                <strong>
-                  {ticket.itemCode ||
-                    ticket.id?.slice(0, 8)}
-                </strong>
-
-                <span>
-                  {ticket.description || 'لا يوجد وصف'}
-                </span>
+                <strong>{ticket.itemCode || ticket.id?.slice(0, 8)}</strong>
+                <span>{ticket.description || t(lang, 'noDescription')}</span>
               </div>
-
-              <span className="tech-ticket-status">
-                {ticket.status}
-              </span>
+              <span className="tech-ticket-status">{statusLabel(ticket.status)}</span>
             </button>
           ))}
         </div>
@@ -900,10 +848,9 @@ function InfoRow({
   return (
     <div className="tech-info-row">
       <div className="tech-info-icon">{icon}</div>
-
       <div>
         <span>{label}</span>
-        <strong>{value || 'غير متوفر'}</strong>
+        <strong>{value || '—'}</strong>
       </div>
     </div>
   );
