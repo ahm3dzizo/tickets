@@ -32,8 +32,10 @@ import warrantiesRoutes from "./routes/warranties.js";
 import techAuthRoutes from "./routes/tech-auth.js";
 import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
+import pushRoutes from "./routes/push.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
+import { startCronJobs } from "./cronJobs.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
 import { startReclassifyWorker, stopReclassifyWorker } from "./classifier/reclassify-worker.js";
 import { startTrainWorker, stopTrainWorker } from "./classifier/train-worker.js";
@@ -98,6 +100,7 @@ async function startServer() {
   app.use("/api/import-excel", importExcelRoutes);
   app.use("/api/contractors", contractorRoutes);
   app.use("/api/warranties", warrantiesRoutes);
+  app.use("/api/push", pushRoutes);
 
   // ── Legacy client routes under projects (for backward compat) ──────────
   app.get("/api/projects/:projectId/clients", requireAuth, async (req, res) => {
@@ -195,6 +198,8 @@ app.use(express.static(distPath));
 
   // Ensure critical sub-types exist (e.g. روائح كريهة under drainage)
   seedSubTypes().catch((e) => console.error('⚠️  Sub-type seed failed:', e.message));
+
+  startCronJobs();             // push notification scheduled jobs
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);

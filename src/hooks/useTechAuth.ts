@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { registerPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
 
 interface TechProfile {
   id: string;
@@ -75,7 +76,12 @@ export function useTechAuth() {
     if (data.technician?.language) {
       localStorage.setItem('tech_language', data.technician.language);
     }
-    
+
+    // Register browser push notifications (best-effort, non-blocking)
+    if (isPushSupported() && getPushPermission() !== 'denied') {
+      registerPush(`Bearer ${data.token}`, true).catch(() => {});
+    }
+
     return data;
   };
 

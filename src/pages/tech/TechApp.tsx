@@ -30,6 +30,33 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import './tech.css';
+import { registerPush, unregisterPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
+import { Bell, BellRing, BellOff } from 'lucide-react';
+
+// Push notification button for the TechApp header
+function TechPushButton({ token }: { token: string | null }) {
+  const [perm, setPerm] = React.useState<NotificationPermission>('default');
+  React.useEffect(() => { if (isPushSupported()) setPerm(getPushPermission()); }, []);
+  if (!isPushSupported() || !token) return null;
+  const toggle = async () => {
+    if (perm === 'granted') {
+      await unregisterPush();
+      setPerm('default');
+      toast.info('تم إيقاف الإشعارات');
+    } else {
+      const ok = await registerPush(`Bearer ${token}`, true);
+      const p = getPushPermission();
+      setPerm(p);
+      if (ok) toast.success('✅ تم تفعيل الإشعارات');
+      else if (p === 'denied') toast.error('تم رفض الإشعارات من المتصفح');
+    }
+  };
+  return (
+    <button onClick={toggle} className="tech-icon-btn" title={perm === 'granted' ? 'إيقاف الإشعارات' : 'تفعيل الإشعارات'}>
+      {perm === 'granted' ? <BellRing size={18} style={{ color: '#22c55e' }} /> : perm === 'denied' ? <BellOff size={18} style={{ opacity: 0.5 }} /> : <Bell size={18} style={{ opacity: 0.5 }} />}
+    </button>
+  );
+}
 
 type Tab = 'home' | 'appointments' | 'profile';
 type Theme = 'light' | 'dark' | 'system';
@@ -611,6 +638,7 @@ export default function TechApp() {
         </div>
 
         <div className="tech-header-actions">
+          <TechPushButton token={token} />
           <button
             onClick={() => { setLoading(true); fetchData(); }}
             className="tech-icon-btn"

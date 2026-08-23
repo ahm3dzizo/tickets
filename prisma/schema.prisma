@@ -529,6 +529,19 @@ model TranslationCache {
   @@index([targetLang])
 }
 
+model PushSubscription {
+  id        String   @id @default(cuid())
+  uid       String   // Firebase UID for app users, technician id for techs
+  role      String   // admin | engineer | supervisor | technician
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([uid])
+  @@index([role])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ENUMS
 // ─────────────────────────────────────────────────────────────────────────────
