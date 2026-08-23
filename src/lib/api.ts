@@ -643,4 +643,11 @@ export const warrantiesApi = {
   },
 };
 
+// ── Notifications ─────────────────────────────────────────────────────────────
+export const notificationsApi = {
+  getAll: () => get<any[]>('/notifications'),
+  readAll: () => post<{ ok: boolean }>('/notifications/read-all', {}),
+  read: (id: string) => post<{ ok: boolean }>(`/notifications/${id}/read`, {}),
+};
+
 

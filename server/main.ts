@@ -33,6 +33,7 @@ import techAuthRoutes from "./routes/tech-auth.js";
 import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
 import pushRoutes from "./routes/push.js";
+import notificationRoutes from "./routes/notifications.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { startCronJobs } from "./cronJobs.js";
@@ -101,6 +102,7 @@ async function startServer() {
   app.use("/api/contractors", contractorRoutes);
   app.use("/api/warranties", warrantiesRoutes);
   app.use("/api/push", pushRoutes);
+  app.use("/api/notifications", notificationRoutes);
 
   // ── Legacy client routes under projects (for backward compat) ──────────
   app.get("/api/projects/:projectId/clients", requireAuth, async (req, res) => {

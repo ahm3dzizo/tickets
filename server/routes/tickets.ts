@@ -6,6 +6,7 @@ import { classifyTicket } from "../classifier/classify.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
 import { invalidateKeywordCache } from "../classifier/keywords.js";
 import { sendWAText, buildOpeningMsg, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from "../baileys.js";
+import { createNotification } from "../notificationService.js";
 
 const router = Router();
 
@@ -1005,19 +1006,47 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       const unitNumber = ticketWithUnit?.unit?.unitNumber || '';
       const projAbbr   = ticketWithUnit?.project?.abbreviation || '';
 
+      const refLabel = projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber;
       for (const supId of ticket.assignedSupervisorIds) {
+        if (supId === senderUid) continue;
         io.emit(`notification:supervisor:${supId}`, {
           type: 'appointment_set',
           ticketId: ticket.id,
           ticketRef: ticket.ticketId,
           clientName: ticketWithUnit?.client?.name || '',
           unitNumber,
-          refNumber: projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber,
+          refNumber: refLabel,
           appointmentTime,
           setBy: sender?.displayName || 'مشرف',
           setByUid: senderUid,
           isShared: ticket.assignedSupervisorIds.length > 1,
         });
+        createNotification(
+          supId,
+          'appointment_set',
+          'موعد جديد',
+          `تم تحديد موعد للتذكرة ${refLabel || ticket.ticketId}${appointmentTime ? ' — ' + appointmentTime : ''}`,
+          ticket.id,
+        ).catch(() => {});
+      }
+    }
+
+    // ── إشعار المشرف عند تعيينه لتذكرة ─────────────────────────────────────
+    if (updatePayload.assignedSupervisorIds !== undefined) {
+      const oldIds: string[] = (oldTicket as any)?.assignedSupervisorIds ?? [];
+      const newIds: string[] = updatePayload.assignedSupervisorIds as string[];
+      const addedIds = newIds.filter((id: string) => !oldIds.includes(id));
+      if (addedIds.length > 0) {
+        const ticketRef = ticket.ticketId || ticket.id;
+        for (const supId of addedIds) {
+          createNotification(
+            supId,
+            'ticket_assigned',
+            'تم تعيينك على تذكرة',
+            `تم تعيينك مشرفاً على التذكرة ${ticketRef}`,
+            ticket.id,
+          ).catch(() => {});
+        }
       }
     }
 

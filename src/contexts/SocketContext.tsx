@@ -22,6 +22,15 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !user?.uid) return;
+    const joinRoom = () => socket.emit('join:user', user.uid);
+    if (socket.connected) joinRoom();
+    socket.on('connect', joinRoom);
+    return () => { socket.off('connect', joinRoom); };
+  }, [user?.uid]);
+
   return (
     <SocketContext.Provider value={socketRef.current}>
       <AppointmentNotificationListener socket={socketRef.current} />

@@ -530,6 +530,20 @@ model TranslationCache {
   @@index([targetLang])
 }
 
+model AppNotification {
+  id        String   @id @default(cuid())
+  uid       String
+  type      String
+  title     String
+  body      String
+  ticketId  String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([uid])
+  @@index([uid, read])
+}
+
 model PushSubscription {
   id        String   @id @default(cuid())
   uid       String   // Firebase UID for app users, technician id for techs
