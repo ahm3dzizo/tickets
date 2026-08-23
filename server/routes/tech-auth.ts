@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import prisma from '../db.js';
 import { APP_JWT_SECRET } from '../config.js';
 import { requireAuth } from '../auth.js';
+import { sendWAText, getWAStatus } from '../baileys.js';
+import { BOT_USER_ID } from '../whatsappBot.js';
 
 const router = Router();
 
@@ -147,7 +149,16 @@ router.post('/invite', requireAuth, async (req: any, res) => {
         isActive: true,
       }
     });
-    res.json({ technicianId: tech.id, tempPassword });
+
+    // Send WhatsApp invite automatically — from requester's connected session,
+    // or fall back to the shared bot session if the requester is not connected.
+    const requesterUid: string = req.uid!;
+    const senderUid = getWAStatus(requesterUid) === 'CONNECTED' ? requesterUid : BOT_USER_ID;
+    const origin = process.env.APP_ORIGIN || 'https://tickets.knot-sys.com';
+    const inviteMsg = `Hello ${name} 👋,\nWelcome to Retal Maintenance Team!\n\nYour Technician Portal Login:\n🔗 ${origin}/tech/login\n👤 Username: ${phoneNumber}\n🔑 Temp PIN: ${tempPassword}\n\nPlease login and complete your profile setup.`;
+    const waResult = await sendWAText(senderUid, phoneNumber, inviteMsg).catch(() => ({ sent: false, fallback: false }));
+
+    res.json({ technicianId: tech.id, tempPassword, waSent: waResult.sent });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

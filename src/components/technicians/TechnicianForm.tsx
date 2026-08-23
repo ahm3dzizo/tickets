@@ -174,22 +174,26 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved, ope
           supervisorId
         });
 
-        toast.success(`تم إنشاء حساب الفني! كلمة المرور المؤقتة: ${data.tempPassword}`, {
-          duration: 10000
-        });
-
-        // WhatsApp invite link — open and always show fallback toast
-        const cleanPhone = phone.replace(/[^0-9]/g, '');
-        const origin = window.location.origin;
-        const msg = `Hello ${name} 👋,\nWelcome to Retal Maintenance Team!\n\nYour Technician Portal Login:\n🔗 ${origin}/tech/login\n👤 Username: ${phone}\n🔑 Temp PIN: ${data.tempPassword}\n\nPlease login and complete your profile setup.`;
-        const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
-        const opened = window.open(waUrl, '_blank');
-        // Show persistent toast so supervisor can manually send if popup was blocked
-        toast.info('تم إنشاء رابط الدعوة عبر واتساب', {
-          description: !opened || opened.closed ? 'لم يتم فتح واتساب تلقائياً — اضغط لإرسال الدعوة يدوياً' : 'اضغط لإعادة إرسال الدعوة إذا لزم',
-          action: { label: 'فتح واتساب', onClick: () => window.open(waUrl, '_blank') },
-          duration: 20000,
-        });
+        if (data.waSent) {
+          toast.success(`تم إنشاء الحساب وإرسال الدعوة عبر واتساب تلقائياً! PIN: ${data.tempPassword}`, {
+            duration: 10000
+          });
+        } else {
+          toast.success(`تم إنشاء حساب الفني! كلمة المرور المؤقتة: ${data.tempPassword}`, {
+            duration: 10000
+          });
+          // Server couldn't auto-send — give manual fallback
+          const cleanPhone = phone.replace(/[^0-9]/g, '');
+          const origin = window.location.origin;
+          const msg = `Hello ${name} 👋,\nWelcome to Retal Maintenance Team!\n\nYour Technician Portal Login:\n🔗 ${origin}/tech/login\n👤 Username: ${phone}\n🔑 Temp PIN: ${data.tempPassword}\n\nPlease login and complete your profile setup.`;
+          const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+          const opened = window.open(waUrl, '_blank');
+          toast.info('لم يتم إرسال الدعوة تلقائياً', {
+            description: !opened || opened.closed ? 'اضغط لفتح واتساب وإرسال الدعوة يدوياً' : 'تم فتح واتساب — تأكد من الإرسال',
+            action: { label: 'فتح واتساب', onClick: () => window.open(waUrl, '_blank') },
+            duration: 20000,
+          });
+        }
       }
 
       setOpen(false);
