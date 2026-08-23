@@ -38,7 +38,7 @@ const userPhotoStorage = multer.diskStorage({
     const allowed = [".jpg", ".jpeg", ".png", ".webp"];
 
     if (!allowed.includes(ext)) {
-      return cb(new Error("صيغة الصورة غير مدعومة"));
+      return cb(new Error("صيغة الصورة غير مدعومة"), '');
     }
 
     cb(null, `${crypto.randomUUID()}${ext}`);

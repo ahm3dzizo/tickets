@@ -80,7 +80,6 @@ export interface Ticket {
   ticketId: string;
   projectId: string;
   unitId?: string | null;
-  unitNumber?: string;
   clientId?: string | null;
   issuedAt?: string;
   description: string;

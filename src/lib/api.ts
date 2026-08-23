@@ -440,7 +440,7 @@ export const appointmentsApi = {
   unsubscribePush: () =>
     del<{ ok: boolean }>('/appointments/push-unsubscribe'),
   create: (data: {
-    projectId: string; unitNumber: string; clientId?: string; clientName: string;
+    projectId: string; unitId?: string; unitNumber?: string; clientId?: string; clientName?: string;
     clientPhone?: string; date: string; time?: string; notes?: string;
     supervisorIds?: string[]; supervisors?: any[]; technicianId?: string | null; technicianIds?: string[];
     technicians?: any[]; types?: string[]; ticketIds?: string[];

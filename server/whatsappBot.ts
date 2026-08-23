@@ -1288,7 +1288,7 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
       }
       case 'close_villa_tickets': {
         const tickets = await prisma.ticket.findMany({
-          where: { unitNumber: intent.villa, status: { notIn: ['closed', 'out_of_scope'] }, ...projectWhere(projectIds), ...supervisorWhere(user) },
+          where: { unit: { unitNumber: intent.villa }, status: { notIn: ['closed', 'out_of_scope'] }, ...projectWhere(projectIds), ...supervisorWhere(user) },
         });
         if (tickets.length === 0) { reply = `مفيش تذاكر مفتوحة لفيلا ${intent.villa} في نطاق صلاحياتك.`; break; }
         pendingClosureChoices.set(senderJid, { kind: 'villa', villa: intent.villa, expiresAt: Date.now() + CONFIRM_TTL_MS });

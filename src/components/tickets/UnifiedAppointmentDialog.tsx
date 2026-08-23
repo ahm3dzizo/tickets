@@ -18,9 +18,9 @@ import { renderTableDescription } from './TicketTable';
 interface TicketLike {
   id: string;
   ticketId: string;
-  clientName: string;
+  clientName?: string;
   unitId?: string | null;
-  unitNumber: string;
+  unitNumber?: string;
   projectId: string;
   clientId?: string;
   appointmentId?: string | null;
