@@ -303,11 +303,12 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     },
   });
   const enriched = await enrichTickets(tickets);
-  const now = new Date();
+  const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" UTC
   res.json(enriched.map(t => {
     const appt = (t as any).appointment;
     const apptTime = appt ? [appt.date, appt.time].filter(Boolean).join(' ') : null;
-    const apptInFuture = apptTime ? new Date(apptTime.replace(' ', 'T') || apptTime) > now : false;
+    // Compare by date string so same-day appointments (no time) still show
+    const apptInFuture = appt?.date ? appt.date >= todayStr : false;
     return {
       ...t,
       appointmentTime:  apptInFuture ? apptTime : null,

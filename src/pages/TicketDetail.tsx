@@ -854,6 +854,7 @@ export default function TicketDetail() {
             ticketId: ticket.ticketId,
             clientName: ticket.clientName,
             unitNumber: ticket.unitNumber,
+            unitId: ticket.unitId ?? undefined,
             projectId: ticket.projectId,
             clientId: ticket.clientId,
             appointmentId: (ticket as any).appointmentId,

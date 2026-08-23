@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ticketsApi, clientsApi, projectsApi } from '@/lib/api';
-import { Loader2, FileImage, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
+import { Loader2, FileImage, ExternalLink, Wrench, CheckCircle2, MessageCircle, CalendarDays } from 'lucide-react';
+import { formatAppointmentDayTime } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
@@ -156,6 +157,27 @@ export function ClientTicketsModal({
                       <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
                         {text}
                       </p>
+                    )}
+
+                    {/* Waiting for client reply */}
+                    {t.status === 'waiting' && (
+                      <div className="flex items-center gap-2 rounded-lg border border-purple-500/20 bg-purple-500/10 px-3 py-2 text-purple-400">
+                        <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-xs font-bold">بانتظار رد العميل</span>
+                      </div>
+                    )}
+
+                    {/* Appointment card */}
+                    {t.appointmentTime && (
+                      <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
+                        <CalendarDays className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <div>
+                          <div className="text-[10px] text-slate-500 font-medium">موعد الزيارة</div>
+                          <div className="text-xs text-emerald-400 font-bold">
+                            {formatAppointmentDayTime(t.appointmentTime)}
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
                 );
