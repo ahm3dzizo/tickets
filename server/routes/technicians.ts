@@ -8,8 +8,12 @@ const hasTechnician = prismaModelExists('technician');
 
 if (hasTechnician) {
   // GET /api/technicians
-  router.get("/", requireAuth, async (_req, res) => {
-    const technicians = await prisma.technician.findMany({ orderBy: { name: "asc" } });
+  router.get("/", requireAuth, async (req, res) => {
+    const includeDisabled = req.query.includeDisabled === 'true';
+    const technicians = await prisma.technician.findMany({
+      where: includeDisabled ? {} : { isActive: true },
+      orderBy: { name: "asc" },
+    });
     res.json(technicians);
   });
 
@@ -53,6 +57,7 @@ if (hasTechnician) {
         documentUrls: data.documentUrls ?? undefined,
         clothingSize: data.clothingSize ?? undefined,
         shoeSize: data.shoeSize ?? undefined,
+        isActive: data.isActive !== undefined ? Boolean(data.isActive) : undefined,
       },
     });
     res.json(tech);

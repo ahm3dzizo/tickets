@@ -387,9 +387,14 @@ export const auditApi = {
 
 // ── Technicians ───────────────────────────────────────────────────────────────
 export const techniciansApi = {
-  getAll: ()                         => get<any[]>('/technicians'),
+  getAll: (params?: { includeDisabled?: boolean }) => {
+    const q = params?.includeDisabled ? '?includeDisabled=true' : '';
+    return get<any[]>(`/technicians${q}`);
+  },
   create: (data: any)                => post<any>('/technicians', data),
   update: (id: string, data: any)    => put<any>(`/technicians/${id}`, data),
+  disable: (id: string)              => put<any>(`/technicians/${id}`, { isActive: false }),
+  enable:  (id: string)              => put<any>(`/technicians/${id}`, { isActive: true }),
   delete: (id: string)               => del<any>(`/technicians/${id}`),
   invite: (data: { name: string; phoneNumber: string; projectId?: string | null; supervisorId?: string | null }) =>
     post<{ technician: any; tempPassword?: string }>('/tech/invite', data),

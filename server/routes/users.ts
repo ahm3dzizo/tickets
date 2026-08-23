@@ -333,11 +333,28 @@ router.put("/:uid", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    // Only admin can update any user; regular users can only update themselves
+    // Only admin can update any user; engineers can update supervisors in their projects
     const requesterRole = await getRequesterRole(req.uid!);
     if (req.uid !== uid && requesterRole !== "admin") {
-      res.status(403).json({ error: "ليس لديك صلاحية تعديل هذا المستخدم" });
-      return;
+      if (requesterRole === 'engineer') {
+        if (existing.role !== 'supervisor') {
+          res.status(403).json({ error: "المهندس يمكنه تعديل المشرفين فقط" });
+          return;
+        }
+        const engineerRecord = await prisma.user.findUnique({
+          where: { uid: req.uid! },
+          select: { projects: { select: { id: true } } },
+        });
+        const myProjectIds = new Set(engineerRecord?.projects.map(p => p.id) ?? []);
+        const supervisorInMyProject = existing.projects.some(p => myProjectIds.has(p.id));
+        if (!supervisorInMyProject) {
+          res.status(403).json({ error: "هذا المشرف ليس في مشاريعك" });
+          return;
+        }
+      } else {
+        res.status(403).json({ error: "ليس لديك صلاحية تعديل هذا المستخدم" });
+        return;
+      }
     }
 
     const displayName = asTrimmedString(data.displayName) ?? existing.displayName;

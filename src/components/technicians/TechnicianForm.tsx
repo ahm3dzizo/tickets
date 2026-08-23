@@ -30,14 +30,18 @@ interface TechnicianFormProps {
   nativeButton?: boolean;
   technician?: any;
   onSaved?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 const SHOE_SIZES = ['38', '39', '40', '41', '42', '43', '44', '45', '46', '47'];
 
-export function TechnicianForm({ trigger, nativeButton, technician, onSaved }: TechnicianFormProps) {
+export function TechnicianForm({ trigger, nativeButton, technician, onSaved, open: openProp, onOpenChange }: TechnicianFormProps) {
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openProp !== undefined ? openProp : openInternal;
+  const setOpen = (v: boolean) => { setOpenInternal(v); onOpenChange?.(v); };
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(technician?.name || '');
   const [phone, setPhone] = useState(technician?.phoneNumber || technician?.phone || '');
