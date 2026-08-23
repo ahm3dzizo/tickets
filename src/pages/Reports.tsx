@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 const COLORS = ['#6366f1','#22c55e','#f59e0b','#ec4899','#14b8a6','#f97316','#8b5cf6','#06b6d4','#84cc16','#ef4444','#a855f7','#0ea5e9','#d97706','#10b981','#e11d48'];
 
@@ -194,7 +195,7 @@ export default function Reports() {
   const fetchStats = async () => {
     setLoading(true);
     try { setData(await reportsApi.getStats({ projectId: filterProject||undefined, from: filterFrom||undefined, to: filterTo||undefined })); }
-    catch {}
+    catch (err: any) { toast.error(err?.message || 'حدث خطأ أثناء تحميل التقارير'); }
     finally { setLoading(false); }
   };
   useEffect(() => { fetchStats(); }, [filterProject, filterFrom, filterTo]);

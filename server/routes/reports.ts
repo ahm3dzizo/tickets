@@ -7,7 +7,7 @@ const router = Router();
 // Statuses treated as "done/closed" for aggregation purposes — matches the
 // ticket list's own "المغلقة" tab grouping (TicketTable.tsx closedStatuses),
 // so a ticket that counts as closed there also counts as closed here.
-const CLOSED_LIKE = new Set(['closed', 'out_of_scope', 'absent']);
+const CLOSED_LIKE = new Set(['closed', 'completed', 'out_of_scope', 'absent']);
 const isClosedLike = (status: string) => CLOSED_LIKE.has(status);
 
 // Parse issuedAt string → Date, fallback to createdAt
@@ -228,17 +228,19 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     // ── 12. Supervisor Performance ────────────────────────────────────────────
     const supMap: Record<string,{open:number;closed:number;days:number[];}> = {};
     for (const t of filtered) {
-      const primarySupId = (t as any).assignedSupervisorIds?.[0];
-      if (!primarySupId) continue;
-      if (!supMap[primarySupId]) supMap[primarySupId] = { open:0, closed:0, days:[] };
-      if (isClosedLike(t.status)) {
-        supMap[primarySupId].closed++;
-        if (t.closedAt) {
-          const days = (t.closedAt.getTime() - parseIssued(t.issuedAt, t.createdAt).getTime()) / 86_400_000;
-          if (days >= 0 && days < 3650) supMap[primarySupId].days.push(days);
+      const supIds = ((t as any).assignedSupervisorIds as string[] | undefined) ?? [];
+      for (const supId of supIds) {
+        if (!supId) continue;
+        if (!supMap[supId]) supMap[supId] = { open:0, closed:0, days:[] };
+        if (isClosedLike(t.status)) {
+          supMap[supId].closed++;
+          if (t.closedAt) {
+            const days = (t.closedAt.getTime() - parseIssued(t.issuedAt, t.createdAt).getTime()) / 86_400_000;
+            if (days >= 0 && days < 3650) supMap[supId].days.push(days);
+          }
+        } else {
+          supMap[supId].open++;
         }
-      } else {
-        supMap[primarySupId].open++;
       }
     }
     const supIds = Object.keys(supMap);
@@ -282,7 +284,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
       .sort((a,b) => b.avgDays - a.avgDays);
 
     res.json({
-      totals: { total, open:openCount, closed:closedLikeCount, avgDays, overdueCount, inProgress:inProgressCount, pending:pendingCount },
+      totals: { total, open:openCount, closed:closedLikeCount, avgDays, overdueCount, inProgress:inProgressCount, pending:pendingCount, waiting:waitingCount },
       sla, byStatus, byPriority,
       bySpecialty, byMainType, bySubType,
       byProject, byMonth,

@@ -114,8 +114,8 @@ export function AttendanceReportView({ initialProjectId }: AttendanceReportViewP
       const data = await attendanceApi.getReport({
         from: fromDate || undefined,
         to: toDate || undefined,
-        projectId: selectedProject,
-        technicianId: selectedTech,
+        projectId: selectedProject !== 'all' ? selectedProject : undefined,
+        technicianId: selectedTech !== 'all' ? selectedTech : undefined,
       });
       setShifts(data.shifts || []);
       setSummary(data.summary || {});

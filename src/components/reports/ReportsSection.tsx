@@ -53,11 +53,11 @@ type TimelinePoint = {
 };
 
 const priorityTranslations: Record<string, string> = {
-  '3': '3 - منخفض',
-  '4': '4 - عادي',
-  '6': '6 - متوسط',
-  '7': '7 - مرتفع',
-  '9': '9 - عاجل جداً',
+  '1': '1 - عاجل',
+  '2': '2 - عالي',
+  '3': '3 - متوسط عالي',
+  '4': '4 - متوسط',
+  '5': '5 - منخفض',
 };
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
@@ -138,9 +138,9 @@ function normalizeSpecialty(value?: string): 'MECHANICS' | 'ELECTRICITY' | 'GENE
   if (!value) return null;
   const v = value.toLowerCase();
 
-  if (v === 'MECHANICS' || v === 'plumbing' || v === 'tank_insulation') return 'MECHANICS';
-  if (v === 'ELECTRICITY') return 'ELECTRICITY';
-  if (v === 'GENERAL' || v === 'doors' || v === 'paints' || v === 'cracks' || v === 'ceramics') return 'GENERAL';
+  if (v === 'mechanics' || v === 'plumbing' || v === 'tank_insulation') return 'MECHANICS';
+  if (v === 'electricity') return 'ELECTRICITY';
+  if (v === 'general' || v === 'doors' || v === 'paints' || v === 'cracks' || v === 'ceramics') return 'GENERAL';
 
   return null;
 }
@@ -259,10 +259,10 @@ export function ReportsSection({ tickets, projects }: Props) {
   }, [tickets, customSearch, customStatus, customType, customPriority, customProject, dateFrom, dateTo]);
 
   const summary = useMemo(() => {
-    const closedStatuses = ['closed', 'completed', 'resolved'];
+    const closedStatuses = ['closed', 'completed', 'out_of_scope', 'absent'];
     const openCount = filteredTickets.filter((t) => t.status === 'open').length;
     const closedCount = filteredTickets.filter((t) => closedStatuses.includes(String(t.status))).length;
-    const highPriorityCount = filteredTickets.filter((t) => Number(t.priority) >= 7).length;
+    const highPriorityCount = filteredTickets.filter((t) => Number(t.priority) <= 2).length;
 
     return {
       total: filteredTickets.length,
@@ -766,7 +766,7 @@ export function ReportsSection({ tickets, projects }: Props) {
                 />
                 <DropdownMenuContent className="bg-card border-border text-slate-200">
                   <DropdownMenuItem onClick={() => setCustomPriority('')}>كل الأولويات</DropdownMenuItem>
-                  {(['9', '7', '6', '4', '3'] as const).map((p) => (
+                  {(['1', '2', '3', '4', '5'] as const).map((p) => (
                     <DropdownMenuItem key={p} onClick={() => setCustomPriority(p)}>
                       {priorityTranslations[p]}
                     </DropdownMenuItem>
