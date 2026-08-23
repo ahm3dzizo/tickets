@@ -658,9 +658,25 @@ if [ "$MODE" = "backend" ] || [ "$MODE" = "all" ]; then
 
 fi
 
-echo
-echo "Backup:"
-echo "$BACKUP_DIR"
+# ============================================================
+# 15) DEPLOY SUCCESS — REMOVE TEMP BACKUP
+# ============================================================
+
+if [ -d "$BACKUP_DIR" ]; then
+    echo
+    echo "============================================================"
+    echo "15) CLEANUP SUCCESSFUL DEPLOY BACKUP"
+    echo "============================================================"
+
+    sudo rm -rf "$BACKUP_DIR"
+
+    if [ -d "$BACKUP_DIR" ]; then
+        echo "⚠️ WARNING: Could not remove backup:"
+        echo "$BACKUP_DIR"
+    else
+        echo "✅ Temporary deploy backup removed"
+    fi
+fi
 
 echo
 echo "============================================================"
