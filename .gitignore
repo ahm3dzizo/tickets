@@ -1,0 +1,54 @@
+node_modules/
+dist/
+build/
+coverage/
+
+# Environment / secrets
+.env*
+!.env.example
+
+# Runtime / local data
+logs/
+uploads/
+db-backups/
+wa-sessions/
+.node-persist/
+scratch/
+open-wa-session.*
+Downloads/
+
+# Generated / local files
+*.log
+*.dump
+
+# Local analysis / temporary scripts
+*.mjs
+
+# Excel / local data
+*.xlsx
+*.xls
+*.xlsm
+
+# Backups / temporary files
+backups/
+*.bak
+*.backup
+*.old
+*.tmp
+
+# Generated Prisma
+/src/generated/prisma
+
+# Local tooling
+.claude/
+
+# Media / binaries
+*.exe
+*.mov
+*.mp4
+
+# Firebase local configuration
+firebase-applet-config.json
+
+# OS
+.DS_Store

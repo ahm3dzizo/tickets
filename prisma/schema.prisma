@@ -1,0 +1,547 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS & AUTH
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  uid                String    @id
+  email              String    @unique
+  passwordHash       String?
+  displayName        String
+  role               String    @default("engineer")
+  employeeId         String?
+  phoneNumber        String?
+  photoURL           String?
+  profileCompleted   Boolean   @default(false)
+  disabled           Boolean   @default(false)
+  notifPrefs         Json?
+  onLeave            Boolean   @default(false)
+  substituteUid      String?
+  resetCode          String?
+  resetCodeExpiresAt DateTime?
+  idNumber           String?
+  clothingSize       String?
+  shoeSize           String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  supervisedTechnicians Technician[] @relation("SupervisorTechnicians")
+  projects              Project[]    @relation("ProjectUsers")
+  specialtiesRef        Specialty[]  @relation("UserSpecialties")
+  substitute            User?        @relation("UserSubstitute", fields: [substituteUid], references: [uid])
+  substituteFor         User[]       @relation("UserSubstitute")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJECT STRUCTURE: Project → Block → Unit → Client
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Project {
+  id           String   @id @default(cuid())
+  name         String
+  location     String
+  abbreviation String
+  // موقع مكتب المشروع — لبصمة الحضور
+  officeLat    Float?
+  officeLng    Float?
+  officeAddress String?
+  googleMapsUrl String?
+  createdAt    DateTime @default(now())
+
+  blocks                Block[]
+  technicians           Technician[]
+  tickets               Ticket[]
+  users                 User[]                 @relation("ProjectUsers")
+  contractorAssignments ContractorAssignment[]
+  Unit                  Unit[]
+  appointments          Appointment[]
+  shiftLogs             ShiftLog[]
+}
+
+/// بلوك داخل مشروع — يضم مجموعة وحدات
+model Block {
+  id          String   @id @default(cuid())
+  projectId   String
+  blockNumber String // "1", "2", "14A" … فريد داخل المشروع
+  label       String? // اسم وصفي اختياري
+  createdAt   DateTime @default(now())
+
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  units                 Unit[]
+  contractorAssignments ContractorAssignment[]
+
+  @@unique([projectId, blockNumber])
+  @@index([projectId])
+}
+
+/// وحدة/فيلا داخل مشروع (تنتمي لبلوك اختياري) — تحمل بيانات التسليم والضمان
+model Unit {
+  id                 String   @id @default(cuid())
+  projectId          String
+  blockId            String?
+  unitNumber         String // رقم الوحدة/الفيلا — فريد داخل المشروع
+  handoverDate       String?
+  warrantyExpiryDate String?
+  createdAt          DateTime @default(now())
+
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  block                 Block?                 @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  clients               ClientUnit[] // عميل واحد أو أكثر (مشاركة)
+  tickets               Ticket[]
+  appointments          Appointment[]
+  contractorAssignments ContractorAssignment[]
+
+  @@unique([projectId, unitNumber])
+  @@index([projectId])
+  @@index([blockId])
+}
+
+/// عميل — مستقل عن المشروع، يمكنه امتلاك وحدات في مشاريع متعددة
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  createdAt DateTime @default(now())
+
+  units        ClientUnit[]
+  tickets      Ticket[]
+  appointments Appointment[]
+}
+
+/// جدول وصل بين Client و Unit (many-to-many)
+model ClientUnit {
+  id        String  @id @default(cuid())
+  clientId  String
+  unitId    String
+  isPrimary Boolean @default(true) // العميل الرئيسي للوحدة
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, unitId])
+  @@index([unitId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TICKETS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Ticket {
+  id                    String       @id @default(cuid())
+  ticketId              String       @unique
+  projectId             String
+  unitId                String? // FK → Unit
+  clientId              String? // FK → Client
+  issuedAt              String?
+  description           String
+  type                  String
+  typeId                String?
+  subTypeId             String?
+  status                TicketStatus @default(open)
+  priority              Int          @default(4)
+  assigneeName          String?
+  assignedSupervisorIds String[]     @default([])
+  detectedTypes         String[]     @default([])
+  detectedSubTypeIds    String[]     @default([])
+  closureNotes          String?
+  maintenanceItems      Json?
+  contractorId          String?
+  contractorNote        String?
+  createdAt             DateTime     @default(now())
+  closedAt              DateTime?
+  createdBy             String?
+  geminiClassifiedAt    DateTime?
+  appointmentId         String?
+
+  project       Project        @relation(fields: [projectId], references: [id])
+  unit          Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  client        Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  contractor    Contractor?    @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+  ticketType    TicketType?    @relation(fields: [typeId], references: [id])
+  ticketSubType TicketSubType? @relation(fields: [subTypeId], references: [id])
+  audits        TicketAudit[]
+  appointment   Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  techSessions  TicketTimeSession[]
+
+  @@index([projectId, status])
+  @@index([projectId, unitId])
+  @@index([unitId])
+  @@index([clientId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTRACTORS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Contractor {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets     Ticket[]
+  specialties ContractorSpecialty[]
+  assignments ContractorAssignment[]
+}
+
+model ContractorSpecialty {
+  id           String @id @default(cuid())
+  contractorId String
+  specialtyKey String
+
+  contractor Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  @@unique([contractorId, specialtyKey])
+}
+
+/// تعيين مقاول لبلوك كامل أو وحدة محددة (الوحدة تتغلب على البلوك)
+model ContractorAssignment {
+  id           String  @id @default(cuid())
+  contractorId String
+  specialtyKey String
+  projectId    String
+  blockId      String? // مسؤول عن كل وحدات البلوك
+  unitId       String? // مسؤول عن وحدة بعينها (أعلى أولوية)
+
+  contractor Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  block      Block?     @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  unit       Unit?      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, specialtyKey])
+  @@index([blockId, specialtyKey])
+  @@index([unitId, specialtyKey])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEAM
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Technician {
+  id               String   @id @default(cuid())
+  employeeId       String?  @unique
+  phoneNumber      String?  @unique
+  name             String
+  specialty        String?
+  experienceLevel  String?
+  supervisorId     String?
+  projectId        String?
+  idNumber         String?
+  idPhotoUrl       String?
+  documentUrls     String[] @default([])
+  clothingSize     String?
+  shoeSize         String?
+  // ── بيانات Login ──
+  username         String?  @unique   // رقم الجوال كاسم مستخدم
+  passwordHash     String?
+  language         String   @default("ar") // ar | en | hi | ur
+  profileCompleted Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project      Project?            @relation(fields: [projectId], references: [id])
+  supervisor   User?               @relation("SupervisorTechnicians", fields: [supervisorId], references: [uid])
+  shiftLogs    ShiftLog[]
+  sessions     TicketTimeSession[]
+  appointments Appointment[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TICKET CLASSIFICATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Specialty {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  nameAr    String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  ticketSubTypes TicketSubType[]
+  ticketTypes    TicketType[]
+  users          User[]          @relation("UserSpecialties")
+}
+
+model TicketType {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  nameAr      String
+  description String?
+  specialtyId String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tickets   Ticket[]
+  subTypes  TicketSubType[]
+  specialty Specialty?          @relation(fields: [specialtyId], references: [id])
+  keywords  TicketTypeKeyword[]
+}
+
+model TicketSubType {
+  id           String   @id @default(cuid())
+  nameAr       String
+  description  String?
+  parentTypeId String
+  specialtyId  String?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tickets    Ticket[]
+  parentType TicketType          @relation(fields: [parentTypeId], references: [id], onDelete: Cascade)
+  specialty  Specialty?          @relation(fields: [specialtyId], references: [id])
+  keywords   TicketTypeKeyword[]
+}
+
+model TicketTypeKeyword {
+  id                String   @id @default(cuid())
+  keyword           String
+  typeId            String?
+  subTypeId         String?
+  weight            Float    @default(1.0)
+  isLearned         Boolean  @default(false)
+  usageCount        Int      @default(0)
+  confidence        Float    @default(1.0)
+  source            String   @default("seed")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  pendingReclassify Boolean  @default(false)
+
+  subType    TicketSubType? @relation(fields: [subTypeId], references: [id], onDelete: Cascade)
+  ticketType TicketType?    @relation(fields: [typeId], references: [id], onDelete: Cascade)
+
+  @@unique([keyword, typeId])
+  @@unique([keyword, subTypeId])
+  @@index([keyword])
+  @@index([typeId])
+  @@index([subTypeId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT & SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model TicketAudit {
+  id        String   @id @default(cuid())
+  ticketId  String
+  field     String
+  oldValue  String?
+  newValue  String?
+  changedBy String
+  changedAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([changedAt])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// سجل أوامر بوت الواتساب — كل أمر جالي من رقم البوت، اتفهم ازاي، ورد بإيه
+model BotCommandLog {
+  id        String   @id @default(cuid())
+  senderUid String
+  jid       String
+  rawText   String
+  intent    String?
+  success   Boolean
+  reply     String
+  createdAt DateTime @default(now())
+
+  @@index([senderUid])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APPOINTMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Appointment {
+  id            String   @id @default(cuid())
+  projectId     String
+  unitId        String? // FK → Unit
+  clientId      String?
+  clientPhone   String?
+  date          String   // "2026-07-15"
+  time          String?  // "09:00"
+  notes         String?
+  supervisorIds String[] @default([])
+  technicianIds String[] @default([])
+  technicianId  String?
+  types         String[] @default([])
+  status        String   @default("scheduled") // scheduled, completed, cancelled
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit       Unit?       @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  client     Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  technician Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  tickets    Ticket[]
+
+  @@index([projectId, date])
+  @@index([projectId, unitId])
+  @@index([date])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ATTENDANCE & TIME TRACKING
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// وردية عمل يومية للفني
+model ShiftLog {
+  id                String     @id @default(cuid())
+  technicianId      String
+  projectId         String
+  shiftDate         DateTime   @db.Date
+  status            String     @default("ACTIVE")
+  // ACTIVE | ON_BREAK | COMPLETED | AUTO_CLOSED | FLAGGED
+
+  // بصمة الحضور
+  clockInAt         DateTime
+  clockInLat        Float?
+  clockInLng        Float?
+  clockInAccuracy   Float?                     // دقة الـ GPS بالمتر
+  clockInDistanceM  Float?                     // البُعد عن مكتب المشروع
+
+  // بصمة الانصراف
+  clockOutAt        DateTime?
+  clockOutLat       Float?
+  clockOutLng       Float?
+  clockOutNote      String?
+
+  // الحسابات (تُحسب تلقائياً)
+  totalWorkMinutes  Int        @default(0)
+  totalBreakMinutes Int        @default(0)
+  regularMinutes    Int        @default(0)
+  overtimeMinutes   Int        @default(0)
+
+  // تنبيهات
+  isFlagged         Boolean    @default(false)
+  flagReason        String?
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  technician        Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  project           Project    @relation(fields: [projectId], references: [id])
+  sessions          TicketTimeSession[]
+  breaks            ShiftBreakLog[]
+
+  @@unique([technicianId, shiftDate, projectId])
+  @@index([technicianId, shiftDate])
+  @@index([projectId, shiftDate])
+}
+
+/// استراحات داخل الوردية
+model ShiftBreakLog {
+  id           String    @id @default(cuid())
+  shiftLogId   String
+  breakType    String    @default("MEAL") // MEAL | REST | EMERGENCY
+  startedAt    DateTime
+  endedAt      DateTime?
+  durationMins Int?
+
+  shiftLog     ShiftLog  @relation(fields: [shiftLogId], references: [id], onDelete: Cascade)
+
+  @@index([shiftLogId])
+}
+
+/// جلسة عمل فني على تذكرة معينة
+model TicketTimeSession {
+  id                    String     @id @default(cuid())
+  ticketId              String
+  technicianId          String
+  shiftLogId            String?
+  specialtyKey          String?    // التخصص وقت العمل — لتحليلات الأداء
+  status                String     @default("CLAIMED")
+  // CLAIMED | EN_ROUTE | IN_PROGRESS | PAUSED | COMPLETED | CANCELLED
+
+  // توقيتات
+  claimedAt             DateTime   @default(now())
+  travelStartedAt       DateTime?
+  arrivedAt             DateTime?
+  workStartedAt         DateTime?
+  completedAt           DateTime?
+
+  // مدة بالدقائق
+  travelDurationMins    Int?
+  workDurationMins      Int?       // أساسي للتحليلات
+  pausedDurationMins    Int        @default(0)
+
+  // موقع الوصول
+  checkInLat            Float?
+  checkInLng            Float?
+  checkInAccuracy       Float?
+  checkInDistanceMeters Float?     // البُعد عن الوحدة / مكتب المشروع
+  isLocationVerified    Boolean    @default(true)
+
+  // موقع الإنهاء
+  checkOutLat           Float?
+  checkOutLng           Float?
+
+  pauseReason           String?
+  completionNotes       String?
+
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  ticket                Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  technician            Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  shiftLog              ShiftLog?  @relation(fields: [shiftLogId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([technicianId, status])
+  @@index([specialtyKey])  // للتحليلات
+  @@index([shiftLogId])
+}
+
+/// كاش الترجمات — لتجنب استدعاء AI لنفس النص مرتين
+model TranslationCache {
+  id           String   @id @default(cuid())
+  sourceText   String
+  targetLang   String   // en | hi | ur
+  translated   String
+  usageCount   Int      @default(1)
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime @default(now())
+
+  @@unique([sourceText, targetLang])
+  @@index([targetLang])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TicketStatus {
+  open
+  in_progress
+  pending
+  completed
+  closed
+  waiting
+  out_of_scope
+  absent
+  contractor
+  note
+}

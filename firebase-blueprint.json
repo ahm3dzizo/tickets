@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "specialty": { "type": "string", "enum": ["mechanics", "electricity", "general"] },
+        "role": { "type": "string", "enum": ["admin", "engineer", "supervisor"] },
+        "projectIds": { "type": "array", "items": { "type": "string" } },
+        "photoURL": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Maintenance project",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "abbreviation": { "type": "string" },
+        "engineerIds": { "type": "array", "items": { "type": "string" } },
+        "supervisorIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "abbreviation", "createdAt"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Client data (not a user account)",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "villaNumber": { "type": "string" },
+        "handoverDate": { "type": "string", "format": "date" },
+        "warrantyExpiryDate": { "type": "string", "format": "date" }
+      },
+      "required": ["projectId", "name", "phone", "villaNumber"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "Maintenance ticket",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "villaNumber": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["electricity", "plumbing", "doors", "paints", "cracks", "ceramics", "tank_insulation"] },
+        "status": { "type": "string", "enum": ["open", "in-progress", "pending", "completed", "closed"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+        "assignedSupervisorId": { "type": "string" },
+        "appointmentTime": { "type": "string", "format": "date-time" },
+        "appointmentNotes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "closedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectId", "clientId", "villaNumber", "description", "type", "status", "createdAt"]
+    },
+    "Technician": {
+      "title": "Technician",
+      "description": "Technician working under a supervisor",
+      "type": "object",
+      "properties": {
+        "supervisorId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "name": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "specialty": { "type": "string", "enum": ["mechanics", "electricity", "general"] },
+        "experienceLevel": { "type": "string", "enum": ["senior", "junior"] },
+        "idNumber": { "type": "string" },
+        "idPhotoUrl": { "type": "string" },
+        "documentUrls": { "type": "array", "items": { "type": "string" } },
+        "clothingSize": { "type": "string" },
+        "shoeSize": { "type": "string" }
+      },
+      "required": ["supervisorId", "projectId", "name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/projects/{projectId}": { "schema": "Project", "description": "Projects" },
+    "/projects/{projectId}/clients/{clientId}": { "schema": "Client", "description": "Clients in a project" },
+    "/tickets/{ticketId}": { "schema": "Ticket", "description": "Maintenance tickets" },
+    "/technicians/{techId}": { "schema": "Technician", "description": "Technicians" }
+  }
+}

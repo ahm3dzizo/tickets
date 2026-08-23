@@ -1,0 +1,155 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: uid, email, displayName, employeeId, phoneNumber, specialty, role (admin, engineer, supervisor), projectIds (array)
+    //
+    // Collection: projects
+    // Fields: name, location, abbreviation, engineerIds (array), supervisorIds (array)
+    //
+    // Collection: projects/{projectId}/clients
+    // Fields: projectId, name, phone, villaNumber, handoverDate, warrantyExpiryDate
+    //
+    // Collection: tickets
+    // Fields: projectId, clientId, villaNumber, description, type, status, priority, assignedSupervisorId, appointmentTime, appointmentNotes, createdAt, closedAt
+    //
+    // Collection: technicians
+    // Fields: supervisorId, projectId, name, employeeId, phoneNumber, specialty, experienceLevel, idNumber, idPhotoUrl, documentUrls, clothingSize, shoeSize
+    //
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "ahm3dzizo@gmail.com" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         getUserData().role == 'admin')
+      );
+    }
+
+    function getUserRole() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? getUserData().role
+        : 'engineer';
+    }
+
+    function getUserProjectIds() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             'projectIds' in getUserData()
+        ? getUserData().projectIds
+        : [];
+    }
+
+    function isEngineer() {
+      return isAuthenticated() && getUserRole() == 'engineer';
+    }
+
+    function isSupervisor() {
+      return isAuthenticated() && getUserRole() == 'supervisor';
+    }
+
+    function isEngineerOfProject(projectId) {
+      return isEngineer() && projectId in getUserProjectIds();
+    }
+
+    function isSupervisorOfProject(projectId) {
+      return isSupervisor() && projectId in getUserProjectIds();
+    }
+
+    // Rules
+
+    function isValidUser(data) {
+      return data.uid is string &&
+             data.email is string &&
+             data.displayName is string &&
+             data.role in ['admin', 'engineer', 'supervisor'] &&
+             (!('specialty' in data) || data.specialty in ['mechanics', 'electricity', 'general']) &&
+             (!('employeeId' in data) || data.employeeId is string) &&
+             (!('phoneNumber' in data) || data.phoneNumber is string);
+    }
+
+    function isValidTechnician(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.supervisorId is string &&
+             data.projectId is string &&
+             (!('specialty' in data) || data.specialty in ['mechanics', 'electricity', 'general']) &&
+             (!('experienceLevel' in data) || data.experienceLevel in ['senior', 'junior']);
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        (request.resource.data.role == 'supervisor') ||
+        isAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (isEngineer() && request.resource.data.role == 'supervisor' && areImmutableFieldsUnchanged(['role']))
+      );
+      allow delete: if isAdmin();
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    match /projects/{projectId} {
+      allow read: if isAdmin() || isEngineerOfProject(projectId) || isSupervisorOfProject(projectId);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isEngineerOfProject(projectId);
+
+      match /clients/{clientId} {
+        allow read: if isAdmin() || isEngineerOfProject(projectId) || isSupervisorOfProject(projectId);
+        allow write: if isAdmin() || isEngineerOfProject(projectId);
+      }
+    }
+
+    // Required for collectionGroup('clients') query used in Clients page
+    match /{path=**}/clients/{clientId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isAuthenticated();
+    }
+
+    match /tickets/{ticketId} {
+      allow read: if isAdmin() || 
+                    isEngineerOfProject(resource.data.projectId) || 
+                    isSupervisorOfProject(resource.data.projectId) ||
+                    (isSupervisor() && request.auth.uid in resource.data.get('assignedSupervisorIds', []));
+      allow create: if isAdmin() || isEngineerOfProject(request.resource.data.projectId);
+      allow update: if isAdmin() || 
+                    isEngineerOfProject(resource.data.projectId) || 
+                    (isSupervisor() && (
+                      isSupervisorOfProject(resource.data.projectId) ||
+                      request.auth.uid in resource.data.get('assignedSupervisorIds', [])
+                    ) && request.resource.data.projectId == resource.data.projectId);
+      allow delete: if isAdmin();
+    }
+
+    match /technicians/{techId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() || isSupervisor();
+      allow update: if isAdmin() || 
+                     isEngineerOfProject(resource.data.projectId) || 
+                     (isSupervisor() && request.auth.uid == resource.data.supervisorId);
+      allow delete: if isAdmin() || isEngineerOfProject(resource.data.projectId);
+    }
+
+    // Notifications: users read/manage their own; any auth user can create (to send to others)
+    match /notifications/{userId}/items/{notifId} {
+      allow read, update, delete: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated();
+    }
+  }
+}
