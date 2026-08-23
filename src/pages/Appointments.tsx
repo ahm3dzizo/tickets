@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
   Plus, Users, CalendarPlus, Printer, Pencil, Search, FileImage,
-  Phone, MessageCircle, CheckCircle2, RotateCcw, Wrench, Home
+  Phone, MessageCircle, CheckCircle2, RotateCcw, Wrench, Home,
+  ChevronDown, Download, AlertTriangle
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -166,6 +167,11 @@ export default function Appointments() {
   const [exportWithImagesMode, setExportWithImagesMode] = useState(false);
   const [exportLangs, setExportLangs] = useState<Record<string, boolean>>({ ar: true, ur: true, hi: true });
   const [isExporting, setIsExporting] = useState(false);
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
 
   const [addSpecOpen, setAddSpecOpen] = useState(false);
   const [addSpecData, setAddSpecData] = useState<any>(null);
@@ -263,6 +269,16 @@ export default function Appointments() {
       setTimeout(() => { window.scrollTo({ top: parseInt(savedY, 10), behavior: 'auto' }); sessionStorage.removeItem('appointmentsScrollY'); }, 100);
     }
     return () => { sessionStorage.setItem('appointmentsScrollY', String(window.scrollY)); };
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target as Node)) {
+        setExportDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const projectsMap = useMemo(() => {
@@ -620,20 +636,15 @@ export default function Appointments() {
   return (
     <Layout>
       <div className="print:hidden">
-        <div className="space-y-2 sm:space-y-6 page-in" dir="rtl">
+        <div className="space-y-1.5 sm:space-y-2 page-in" dir="rtl">
 
           {/* ── Header ── */}
           <div className="flex flex-row items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2 min-w-0">
-              <CalendarDays className="w-5 h-5 sm:w-7 sm:h-7 text-blue-500 shrink-0" />
-              <div>
-                <h1 className="text-lg sm:text-3xl font-extrabold text-foreground tracking-tight leading-tight">
-                  جدول المواعيد
-                </h1>
-                <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
-                  متابعة مواعيد الزيارات للعملاء وتخصصات الصيانة المطلوبة
-                </p>
-              </div>
+              <CalendarDays className="w-5 h-5 text-blue-500 shrink-0" />
+              <h1 className="text-base sm:text-xl font-extrabold text-foreground tracking-tight leading-tight">
+                جدول المواعيد
+              </h1>
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -690,7 +701,21 @@ export default function Appointments() {
           </div>
 
           {/* ── Carousel Hero UI ── */}
-          <div className="relative w-full h-[calc(100dvh-160px)] min-h-[420px] max-h-[950px] flex justify-center items-center overflow-hidden py-4">
+          <div
+            className="relative w-full h-[calc(100dvh-100px)] min-h-[420px] max-h-[1000px] flex justify-center items-center overflow-hidden py-2"
+            onTouchStart={(e) => {
+              touchStartX.current = e.touches[0].clientX;
+              touchStartY.current = e.touches[0].clientY;
+            }}
+            onTouchEnd={(e) => {
+              const dx = e.changedTouches[0].clientX - touchStartX.current;
+              const dy = e.changedTouches[0].clientY - touchStartY.current;
+              if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+                if (dx > 0) prevDay();
+                else nextDay();
+              }
+            }}
+          >
             {displayedDays.map((day, idx) => {
               const ds = dateStr(day);
               const groups = groupedByDay[ds] || [];
@@ -771,9 +796,9 @@ export default function Appointments() {
                       </Badge>
                     </div>
 
-                    {/* Row 2: search + action buttons (center only) */}
+                    {/* Row 2: search + add + export dropdown (center only) */}
                     {isCenter && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5">
                         <div className="relative">
                           <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                           <input
@@ -781,42 +806,55 @@ export default function Appointments() {
                             placeholder="بحث..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="bg-background border border-input rounded-xl pl-2 pr-8 h-8 text-xs text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[90px] sm:w-[140px]"
+                            className="bg-background border border-input rounded-xl pl-2 pr-8 h-8 text-xs text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[100px] sm:w-[150px]"
                             onClick={(e) => e.stopPropagation()}
                           />
                         </div>
                         <Button
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setDirectApptDate(ds); }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-8 px-2.5 shadow-lg flex items-center gap-1 text-xs"
+                          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-8 px-2.5 shadow-lg flex items-center gap-1 text-xs shrink-0"
                         >
-                          <CalendarPlus className="w-3.5 h-3.5" /> إضافة
+                          <CalendarPlus className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">إضافة</span>
                         </Button>
-                        <Button
-                          size="sm"
-                          onClick={(e) => handleOpenExport(e, false)}
-                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title="تصدير"
-                        >
-                          <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">تصدير</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={(e) => handleOpenExport(e, true)}
-                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title="تصدير بالصور"
-                        >
-                          <FileImage className="w-3.5 h-3.5" /> <span className="hidden sm:inline">تصدير بالصور</span>
-                        </Button>
-                        {/* ── Export to Calendar button ── */}
-                        <Button
-                          size="sm"
-                          onClick={downloadAllToCalendar}
-                          className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 shadow-lg flex items-center gap-1 text-xs"
-                          title="تصدير كل المواعيد للتقويم"
-                        >
-                          <CalendarPlus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">تقويم</span>
-                        </Button>
+                        {/* Export dropdown */}
+                        <div className="relative shrink-0" ref={exportDropdownRef}>
+                          <Button
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); setExportDropdownOpen(v => !v); }}
+                            className="bg-muted hover:bg-muted/80 text-foreground border border-input rounded-xl font-bold h-8 px-2 sm:px-2.5 flex items-center gap-1 text-xs"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">تصدير</span>
+                            <ChevronDown className="w-3 h-3 opacity-60" />
+                          </Button>
+                          {exportDropdownOpen && (
+                            <div className="absolute left-0 top-full mt-1 w-44 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden" dir="rtl">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setExportDropdownOpen(false); handleOpenExport(e, false); }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-muted/60 transition-colors text-foreground"
+                              >
+                                <Printer className="w-3.5 h-3.5 text-muted-foreground" />
+                                تصدير PDF
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setExportDropdownOpen(false); handleOpenExport(e, true); }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-muted/60 transition-colors text-foreground border-t border-border/50"
+                              >
+                                <FileImage className="w-3.5 h-3.5 text-muted-foreground" />
+                                PDF بالصور
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setExportDropdownOpen(false); downloadAllToCalendar(e); }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-muted/60 transition-colors text-foreground border-t border-border/50"
+                              >
+                                <CalendarPlus className="w-3.5 h-3.5 text-muted-foreground" />
+                                تصدير للتقويم
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1038,7 +1076,44 @@ export default function Appointments() {
 
                                 {/* Footer / Actions Toolbar */}
                                 {isCenter && (
-                                  <div className="p-2 pt-2 border-t border-border/40 bg-muted/15 flex items-center justify-between gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+                                  <div className="border-t border-border/40 bg-muted/15" onClick={e => e.stopPropagation()}>
+                                    {/* Inline confirm bar */}
+                                    {confirmingId === apptId && (
+                                      <div className="px-3 py-2 flex items-center gap-2 bg-amber-500/10 border-b border-amber-500/20">
+                                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                        <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 flex-1">
+                                          {isCompleted ? 'إعادة تنشيط الموعد؟' : 'تأكيد إنهاء الموعد؟'}
+                                        </span>
+                                        <button
+                                          onClick={async () => {
+                                            setConfirmingId(null);
+                                            if (!apptId) { toast.error('معرف الموعد غير متوفر'); return; }
+                                            try {
+                                              const [dPart, tPart] = (group.appointmentTime || '').split(' ');
+                                              await appointmentsApi.update(apptId, {
+                                                date: dPart, time: tPart || '', notes: group.notes,
+                                                supervisorIds: Array.from(group.sups), supervisors: group.supervisors,
+                                                technicianId: group.technicianId || null, technicianIds: group.technicianIds || [],
+                                                types: Array.from(group.types), clientPhone: group.clientPhone,
+                                                status: isCompleted ? 'scheduled' : 'completed'
+                                              });
+                                              toast.success(isCompleted ? 'تمت إعادة تنشيط الموعد' : 'تم إنهاء الموعد بنجاح');
+                                              loadAppointments();
+                                            } catch { toast.error('حدث خطأ'); }
+                                          }}
+                                          className="text-[11px] font-black px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+                                        >
+                                          تأكيد
+                                        </button>
+                                        <button
+                                          onClick={() => setConfirmingId(null)}
+                                          className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-muted hover:bg-muted/80 text-foreground border border-border transition-colors"
+                                        >
+                                          إلغاء
+                                        </button>
+                                      </div>
+                                    )}
+                                    <div className="p-2 flex items-center justify-between gap-1.5 flex-wrap">
                                     {/* Communication Buttons */}
                                     <div className="flex items-center gap-1.5">
                                       {group.clientPhone && (
@@ -1094,33 +1169,16 @@ export default function Appointments() {
 
                                       {!isCompleted ? (
                                         <button
-                                          onClick={async () => {
-                                            if (!apptId) {
-                                              toast.error('معرف الموعد غير متوفر');
-                                              return;
-                                            }
-                                            if (!window.confirm('هل أنت متأكد من إنهاء الموعد؟')) return;
-                                            try {
-                                              const [dPart, tPart] = (group.appointmentTime || '').split(' ');
-                                              await appointmentsApi.update(apptId, {
-                                                date: dPart,
-                                                time: tPart || '',
-                                                notes: group.notes,
-                                                supervisorIds: Array.from(group.sups),
-                                                supervisors: group.supervisors,
-                                                technicianId: group.technicianId || null,
-                                                technicianIds: group.technicianIds || [],
-                                                types: Array.from(group.types),
-                                                clientPhone: group.clientPhone,
-                                                status: 'completed'
-                                              });
-                                              toast.success('تم إنهاء الموعد بنجاح');
-                                              loadAppointments();
-                                            } catch {
-                                              toast.error('حدث خطأ أثناء إنهاء الموعد');
-                                            }
+                                          onClick={() => {
+                                            if (!apptId) { toast.error('معرف الموعد غير متوفر'); return; }
+                                            setConfirmingId(confirmingId === apptId ? null : apptId);
                                           }}
-                                          className="h-8 px-2.5 rounded-xl font-bold text-xs bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 text-blue-600 dark:text-blue-400 flex items-center gap-1 transition-all"
+                                          className={cn(
+                                            "h-8 px-2.5 rounded-xl font-bold text-xs border flex items-center gap-1 transition-all",
+                                            confirmingId === apptId
+                                              ? "bg-amber-500/20 border-amber-500/40 text-amber-600 dark:text-amber-400"
+                                              : "bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/25 text-blue-600 dark:text-blue-400"
+                                          )}
                                           title="إنهاء الموعد"
                                         >
                                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -1128,39 +1186,23 @@ export default function Appointments() {
                                         </button>
                                       ) : (
                                         <button
-                                          onClick={async () => {
-                                            if (!apptId) {
-                                              toast.error('معرف الموعد غير متوفر');
-                                              return;
-                                            }
-                                            if (!window.confirm('هل تريد إعادة تنشيط الموعد؟')) return;
-                                            try {
-                                              const [dPart, tPart] = (group.appointmentTime || '').split(' ');
-                                              await appointmentsApi.update(apptId, {
-                                                date: dPart,
-                                                time: tPart || '',
-                                                notes: group.notes,
-                                                supervisorIds: Array.from(group.sups),
-                                                supervisors: group.supervisors,
-                                                technicianId: group.technicianId || null,
-                                                technicianIds: group.technicianIds || [],
-                                                types: Array.from(group.types),
-                                                clientPhone: group.clientPhone,
-                                                status: 'scheduled'
-                                              });
-                                              toast.success('تمت إعادة تنشيط الموعد');
-                                              loadAppointments();
-                                            } catch {
-                                              toast.error('حدث خطأ أثناء إعادة تنشيط الموعد');
-                                            }
+                                          onClick={() => {
+                                            if (!apptId) { toast.error('معرف الموعد غير متوفر'); return; }
+                                            setConfirmingId(confirmingId === apptId ? null : apptId);
                                           }}
-                                          className="h-8 px-2.5 rounded-xl font-bold text-xs bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 flex items-center gap-1 transition-all"
+                                          className={cn(
+                                            "h-8 px-2.5 rounded-xl font-bold text-xs border flex items-center gap-1 transition-all",
+                                            confirmingId === apptId
+                                              ? "bg-amber-500/20 border-amber-500/40 text-amber-600 dark:text-amber-400"
+                                              : "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/25 text-emerald-600 dark:text-emerald-400"
+                                          )}
                                           title="إعادة تنشيط الموعد"
                                         >
                                           <RotateCcw className="w-3.5 h-3.5" />
                                           <span className="text-[11px]">تنشيط</span>
                                         </button>
                                       )}
+                                    </div>
                                     </div>
                                   </div>
                                 )}
@@ -1195,10 +1237,19 @@ export default function Appointments() {
                       </>
                     )}
                     {groups.length === 0 && !loading && isCenter && (
-                      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-60">
-                        <CalendarDays className="w-16 h-16 mb-4 opacity-50" />
-                        <p className="text-lg font-bold">{t.noAppts}</p>
-                        <p className="text-sm mt-2 opacity-80">{t.allAvailable}</p>
+                      <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center px-6">
+                        <div className="w-16 h-16 rounded-2xl bg-muted/60 border border-border/60 flex items-center justify-center mb-4">
+                          <CalendarDays className="w-8 h-8 text-muted-foreground/50" />
+                        </div>
+                        <p className="text-base font-black text-foreground/70">{t.noAppts}</p>
+                        <p className="text-xs text-muted-foreground mt-1.5 max-w-[200px] leading-relaxed">{t.allAvailable}</p>
+                        <button
+                          onClick={() => setDirectApptDate(dateStr(day))}
+                          className="mt-4 h-8 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-colors shadow"
+                        >
+                          <CalendarPlus className="w-3.5 h-3.5" />
+                          إضافة موعد
+                        </button>
                       </div>
                     )}
                   </div>
