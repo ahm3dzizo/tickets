@@ -160,6 +160,7 @@ model Ticket {
   createdBy             String?
   geminiClassifiedAt    DateTime?
   appointmentId         String?
+  lastWaSentAt          DateTime?
 
   project       Project        @relation(fields: [projectId], references: [id])
   unit          Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)

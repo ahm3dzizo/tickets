@@ -224,11 +224,13 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     const result = await sendWAText(uid, phone, msg);
     
     if (result.sent) {
+      const waSentNow = new Date();
       for (const t of tickets) {
         await prisma.ticket.update({
           where: { id: t.id },
           data: {
             ...(t.status !== 'closed' ? { status: 'waiting' } : {}),
+            lastWaSentAt: waSentNow,
           }
         });
         try {
