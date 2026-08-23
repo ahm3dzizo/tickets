@@ -78,7 +78,7 @@ router.get('/profile', requireTechAuth, async (req: TechAuthRequest, res) => {
 // 3. POST /api/tech/profile/complete
 router.post('/profile/complete', requireTechAuth, async (req: TechAuthRequest, res) => {
   try {
-    const { name, idNumber, employeeId, specialty, clothingSize, shoeSize, idPhotoUrl, language } = req.body;
+    const { name, idNumber, employeeId, experienceLevel, specialty, clothingSize, shoeSize, idPhotoUrl, language } = req.body;
     if (!name || !idNumber || !employeeId || !specialty || !clothingSize || !shoeSize || !idPhotoUrl || !language) {
       res.status(400).json({ error: 'All fields are required' });
       return;
@@ -87,6 +87,7 @@ router.post('/profile/complete', requireTechAuth, async (req: TechAuthRequest, r
       where: { id: req.technicianId },
       data: {
         name, idNumber, employeeId, specialty, clothingSize, shoeSize, idPhotoUrl, language,
+        experienceLevel: experienceLevel || null,
         profileCompleted: true
       }
     });

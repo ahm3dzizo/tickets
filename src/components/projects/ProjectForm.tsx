@@ -50,7 +50,8 @@ export function ProjectForm({
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const [abbreviation, setAbbreviation] = useState('');
-  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [officeLat, setOfficeLat] = useState('');
+  const [officeLng, setOfficeLng] = useState('');
   const [selectedEngineers, setSelectedEngineers] = useState<string[]>([]);
   const [engineers, setEngineers] = useState<User[]>([]);
 
@@ -70,7 +71,8 @@ export function ProjectForm({
       setName(project.name || '');
       setLocation(project.location || '');
       setAbbreviation(project.abbreviation || '');
-      setGoogleMapsUrl(project.googleMapsUrl || '');
+      setOfficeLat(project.officeLat != null ? String(project.officeLat) : '');
+      setOfficeLng(project.officeLng != null ? String(project.officeLng) : '');
       setSelectedEngineers(project.engineerIds || []);
     }
 
@@ -95,7 +97,8 @@ export function ProjectForm({
           name: name.trim(),
           location: location.trim(),
           abbreviation: abbreviation.trim(),
-          googleMapsUrl: googleMapsUrl.trim(),
+          officeLat: officeLat ? parseFloat(officeLat) : null,
+          officeLng: officeLng ? parseFloat(officeLng) : null,
           engineerIds: selectedEngineers,
         });
 
@@ -105,7 +108,8 @@ export function ProjectForm({
           name: name.trim(),
           location: location.trim(),
           abbreviation: abbreviation.trim(),
-          googleMapsUrl: googleMapsUrl.trim(),
+          officeLat: officeLat ? parseFloat(officeLat) : null,
+          officeLng: officeLng ? parseFloat(officeLng) : null,
           engineerIds: selectedEngineers,
           supervisorIds: [],
           createdAt: new Date().toISOString(),
@@ -140,7 +144,8 @@ export function ProjectForm({
     setName('');
     setLocation('');
     setAbbreviation('');
-    setGoogleMapsUrl('');
+    setOfficeLat('');
+    setOfficeLng('');
     setSelectedEngineers([]);
   };
 
@@ -254,17 +259,33 @@ export function ProjectForm({
 
           <div className="space-y-2">
             <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
-              موقع مكتب المشروع
+              إحداثيات مكتب المشروع
             </Label>
-
-            <div className="relative">
-              <Input
-                placeholder="24.7136, 46.6753 أو رابط Google Maps"
-                className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-12 text-right pr-12 font-mono text-xs"
-                value={googleMapsUrl}
-                onChange={e => setGoogleMapsUrl(e.target.value)}
-              />
-              <MapPin className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-400" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="relative">
+                <Input
+                  placeholder="خط العرض  24.7136"
+                  dir="ltr"
+                  type="number"
+                  step="any"
+                  className="bg-white/5 border-border focus:ring-2 focus:ring-emerald-500/20 text-white rounded-xl h-12 text-left pl-10 font-mono text-xs"
+                  value={officeLat}
+                  onChange={e => setOfficeLat(e.target.value)}
+                />
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <div className="relative">
+                <Input
+                  placeholder="خط الطول  46.6753"
+                  dir="ltr"
+                  type="number"
+                  step="any"
+                  className="bg-white/5 border-border focus:ring-2 focus:ring-emerald-500/20 text-white rounded-xl h-12 text-left pl-10 font-mono text-xs"
+                  value={officeLng}
+                  onChange={e => setOfficeLng(e.target.value)}
+                />
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400" />
+              </div>
             </div>
           </div>
 

@@ -29,6 +29,7 @@ export default function TechSetup() {
     fullName: '',
     idNumber: '',
     employeeId: '',
+    experienceLevel: '',
     specialty: SPECIALTIES[0],
     clothingSize: CLOTHING_SIZES[2],
     shoeSize: SHOE_SIZES[4],
@@ -81,6 +82,7 @@ export default function TechSetup() {
           name: formData.fullName,
           idNumber: formData.idNumber,
           employeeId: formData.employeeId,
+          experienceLevel: formData.experienceLevel || null,
           specialty: formData.specialty.split('/')[0],
           clothingSize: formData.clothingSize,
           shoeSize: formData.shoeSize,
@@ -175,6 +177,21 @@ export default function TechSetup() {
                   required
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-[var(--tech-text-muted)] mb-1 px-1">
+                {t(lang, 'experienceLevel')}
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="50"
+                className="tech-input"
+                placeholder={lang === 'ar' ? 'عدد سنوات الخبرة' : lang === 'en' ? 'Years of experience' : lang === 'hi' ? 'अनुभव के वर्ष' : 'تجربے کے سال'}
+                value={formData.experienceLevel}
+                onChange={e => setFormData({...formData, experienceLevel: e.target.value})}
+              />
             </div>
 
             <div>

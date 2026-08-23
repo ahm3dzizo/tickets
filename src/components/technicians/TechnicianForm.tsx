@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, HardHat, Phone, Briefcase, Loader2, Hash, CreditCard, Shirt, Footprints } from 'lucide-react';
+import { Plus, HardHat, Phone, Briefcase, Loader2, Hash, CreditCard, Shirt, Footprints, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +24,24 @@ import { typeTranslations } from '@/components/tickets/TicketTable';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+
+// Maps each specialty key to its group
+const SPECIALTY_TO_GROUP: Record<string, string> = {
+  electricity: 'electricity',
+  plumbing: 'mechanics', tank_insulation: 'mechanics', drainage: 'mechanics',
+  ac_ventilation: 'mechanics', pumps: 'mechanics', waterproofing: 'mechanics', mechanics: 'mechanics',
+  doors: 'general', paints: 'general', cracks: 'general', ceramics: 'general',
+  structural: 'general', painting: 'general', tiles: 'general', aluminum: 'general',
+  pest_control: 'general', cleaning: 'general', grading: 'general',
+  doors_windows: 'general', garage_door: 'general', general: 'general',
+};
+
+// All specialty keys available per group
+const GROUP_SPECIALTIES: Record<string, string[]> = {
+  electricity:  ['electricity'],
+  mechanics:    ['plumbing', 'tank_insulation', 'drainage', 'ac_ventilation', 'pumps', 'waterproofing'],
+  general:      ['doors', 'paints', 'cracks', 'ceramics', 'structural', 'painting', 'tiles', 'aluminum', 'pest_control', 'cleaning', 'grading', 'doors_windows', 'garage_door'],
+};
 
 interface TechnicianFormProps {
   trigger?: React.ReactNode;
@@ -81,6 +99,23 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved, ope
       .map(s => s.uid);
     if (supervisorId && !inProject.includes(supervisorId)) {
       setSupervisorId('');
+      setSpecialty('');
+    }
+  };
+
+  // When supervisor changes, reset specialty if it's no longer allowed
+  const handleSupervisorChange = (uid: string) => {
+    setSupervisorId(uid);
+    const sup = allSupervisors.find(s => s.uid === uid);
+    if (sup?.specialties?.length) {
+      const groups = new Set<string>();
+      for (const spec of sup.specialties as string[]) {
+        const g = SPECIALTY_TO_GROUP[spec];
+        if (g) groups.add(g);
+      }
+      const allowed: string[] = [];
+      for (const g of groups) allowed.push(...(GROUP_SPECIALTIES[g] || []));
+      if (specialty && !allowed.includes(specialty)) setSpecialty('');
     }
   };
 
@@ -90,6 +125,21 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved, ope
       ? allSupervisors.filter(s => (s.projectIds as string[] | undefined)?.includes(projectId))
       : allSupervisors,
   [allSupervisors, projectId]);
+
+  // Filter specialties based on selected supervisor's specialty group
+  const allowedSpecialties = useMemo(() => {
+    const sup = allSupervisors.find(s => s.uid === supervisorId);
+    if (!sup?.specialties?.length) return Object.keys(typeTranslations);
+    const groups = new Set<string>();
+    for (const spec of sup.specialties as string[]) {
+      const g = SPECIALTY_TO_GROUP[spec];
+      if (g) groups.add(g);
+    }
+    if (groups.size === 0) return Object.keys(typeTranslations);
+    const allowed: string[] = [];
+    for (const g of groups) allowed.push(...(GROUP_SPECIALTIES[g] || []));
+    return [...new Set(allowed)];
+  }, [allSupervisors, supervisorId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,12 +178,18 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved, ope
           duration: 10000
         });
 
-        // WhatsApp invite link
+        // WhatsApp invite link — open and always show fallback toast
         const cleanPhone = phone.replace(/[^0-9]/g, '');
         const origin = window.location.origin;
         const msg = `Hello ${name} 👋,\nWelcome to Retal Maintenance Team!\n\nYour Technician Portal Login:\n🔗 ${origin}/tech/login\n👤 Username: ${phone}\n🔑 Temp PIN: ${data.tempPassword}\n\nPlease login and complete your profile setup.`;
         const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
-        window.open(waUrl, '_blank');
+        const opened = window.open(waUrl, '_blank');
+        // Show persistent toast so supervisor can manually send if popup was blocked
+        toast.info('تم إنشاء رابط الدعوة عبر واتساب', {
+          description: !opened || opened.closed ? 'لم يتم فتح واتساب تلقائياً — اضغط لإرسال الدعوة يدوياً' : 'اضغط لإعادة إرسال الدعوة إذا لزم',
+          action: { label: 'فتح واتساب', onClick: () => window.open(waUrl, '_blank') },
+          duration: 20000,
+        });
       }
 
       setOpen(false);
@@ -208,7 +264,7 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved, ope
                 {filteredSupervisors.length === 0
                   ? <div className="px-3 py-2 text-slate-500 text-sm text-right">لا يوجد مشرفين في هذا المشروع</div>
                   : filteredSupervisors.map((s) => (
-                    <DropdownMenuItem key={s.uid} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setSupervisorId(s.uid)}>
+                    <DropdownMenuItem key={s.uid} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => handleSupervisorChange(s.uid)}>
                       {s.displayName}
                     </DropdownMenuItem>
                   ))
@@ -311,21 +367,26 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved, ope
             </div>
           </div>
 
-          {/* Specialty */}
+          {/* Specialty — filtered by selected supervisor's group */}
           <div className="space-y-2">
-            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">التخصص</Label>
+            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
+              التخصص
+              {!supervisorId && <span className="text-amber-400 mr-1 normal-case text-[9px]">(اختر المشرف أولاً)</span>}
+            </Label>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12" />}>
-                <span className="text-right flex-1">{typeTranslations[specialty as keyof typeof typeTranslations] || specialty || 'اختر التخصص'}</span>
+              <DropdownMenuTrigger render={<Button variant="outline" disabled={!supervisorId} className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12 disabled:opacity-50" />}>
+                <span className="text-right flex-1">{typeTranslations[specialty] || specialty || 'اختر التخصص'}</span>
                 <Briefcase className="w-3.5 h-3.5 opacity-50 shrink-0" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-card border-border text-slate-200 min-w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto" align="end">
-                <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setSpecialty('general')}>عام</DropdownMenuItem>
-                {(Object.keys(typeTranslations) as TicketType[]).map(t => (
-                  <DropdownMenuItem key={t} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setSpecialty(t)}>
-                    {typeTranslations[t]}
-                  </DropdownMenuItem>
-                ))}
+                {allowedSpecialties.length === 0
+                  ? <div className="px-3 py-2 text-slate-500 text-sm text-right">لا توجد تخصصات متاحة</div>
+                  : allowedSpecialties.map(t => (
+                    <DropdownMenuItem key={t} className={cn("hover:bg-white/5 cursor-pointer text-right justify-end", specialty === t && 'text-blue-400')} onClick={() => setSpecialty(t)}>
+                      {typeTranslations[t] || t}
+                    </DropdownMenuItem>
+                  ))
+                }
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
