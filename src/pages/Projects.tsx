@@ -66,7 +66,16 @@ export default function Projects() {
             </p>
           </div>
 
-          {user?.role === 'admin' && <ProjectForm />}
+          {user?.role === 'admin' && (
+            <ProjectForm
+              trigger={
+                <Button className="gap-2 shrink-0">
+                  <Plus className="w-4 h-4" />
+                  مشروع جديد
+                </Button>
+              }
+            />
+          )}
         </div>
 
         {/* Loading */}

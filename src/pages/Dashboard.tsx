@@ -15,6 +15,7 @@ import { ClientForm } from '@/components/clients/ClientForm';
 import { TechnicianForm } from '@/components/technicians/TechnicianForm';
 import { Button } from '@/components/ui/button';
 import { ticketsApi, projectsApi, clientsApi, techniciansApi, dashboardApi } from '@/lib/api';
+import { getCachedTickets, invalidateTicketCache } from '@/lib/ticketCache';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
@@ -48,6 +49,7 @@ export default function Dashboard() {
     if (selectedTicketIds.length === 0) return;
     try {
       await ticketsApi.bulkStatus(selectedTicketIds, newStatus);
+      invalidateTicketCache();
       toast.success(`تم تحديث ${selectedTicketIds.length} تذكرة`);
       setSelectedTicketIds([]);
       loadDashboard();
@@ -98,7 +100,18 @@ export default function Dashboard() {
       if (user.role === 'supervisor') params.supervisorId = user.uid;
       else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
 
-      const tickets: Ticket[] = (await ticketsApi.getAll(params)) as Ticket[];
+      const tickets: Ticket[] = (await getCachedTickets(
+        () => ticketsApi.getAll(params) as Promise<any[]>,
+        params as any,
+        (fresh) => {
+          setAllTickets(fresh as Ticket[]);
+          setStats(prev => ({
+            ...prev,
+            totalTickets: fresh.length,
+            openTickets: fresh.filter((t: any) => t.status === 'open').length,
+          }));
+        },
+      )) as Ticket[];
       setAllTickets(tickets);
       setStats(prev => ({
         ...prev,
@@ -241,10 +254,12 @@ export default function Dashboard() {
                 ))}
               </select>
             )}
-            {user?.role === 'admin' && <ProjectForm />}
-            {(user?.role === 'admin' || user?.role === 'engineer') && (
-              <TicketForm onSuccess={loadDashboard} />
-            )}
+            <div className="hidden sm:flex items-center gap-3">
+              {user?.role === 'admin' && <ProjectForm />}
+              {(user?.role === 'admin' || user?.role === 'engineer') && (
+                <TicketForm onSuccess={loadDashboard} />
+              )}
+            </div>
           </div>
         </div>
 

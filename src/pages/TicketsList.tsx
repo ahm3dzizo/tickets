@@ -15,6 +15,7 @@ import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmen
 import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
 import { ClientForm } from '@/components/clients/ClientForm';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
+import { getCachedTickets, invalidateTicketCache } from '@/lib/ticketCache';
 import { Ticket, Project, Client } from '@/types';
 import { classifyOnServer } from '@/services/classificationApi';
 import { WhatsAppService } from '@/services/whatsappService';
@@ -64,7 +65,11 @@ export default function TicketsList() {
       const params: Parameters<typeof ticketsApi.getAll>[0] = {};
       if (user.role === 'supervisor') params.supervisorId = user.uid;
       else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
-      const allTickets = await ticketsApi.getAll(params);
+      const allTickets = await getCachedTickets(
+        () => ticketsApi.getAll(params) as Promise<any[]>,
+        params as any,
+        (fresh) => setTickets(fresh as Ticket[]),
+      );
       setTickets(allTickets as Ticket[]);
     } catch (err) { console.error(err); }
     finally { 
@@ -86,6 +91,7 @@ export default function TicketsList() {
     setDeleteConfirm(false);
     try {
       const result = await ticketsApi.deleteAll();
+      invalidateTicketCache();
       toast.success(`تم حذف ${result.count} تذكرة`);
       loadData();
     } catch { toast.error('فشل حذف التذاكر'); }
@@ -140,6 +146,7 @@ export default function TicketsList() {
     if (selectedTicketIds.length === 0) return;
     try {
       await ticketsApi.bulkStatus(selectedTicketIds, newStatus);
+      invalidateTicketCache();
       toast.success(`تم تحديث ${selectedTicketIds.length} تذكرة`);
       setSelectedTicketIds([]); loadData();
     } catch { toast.error('فشل تحديث الحالة'); }

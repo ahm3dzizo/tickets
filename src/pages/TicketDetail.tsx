@@ -48,6 +48,7 @@ import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ticketsApi, projectsApi, clientsApi, whatsappApi, auditApi, settingsApi, appointmentsApi } from '@/lib/api';
+import { invalidateTicketCache } from '@/lib/ticketCache';
 import { learnFromCorrection, getAuthHeaders } from '@/services/classificationApi';
 import { toast } from 'sonner';
 
@@ -300,6 +301,7 @@ export default function TicketDetail() {
         assignedSupervisorIds:  editAssignedSupervisorIds,
         assignedSupervisors:    selectedSupervisors,
       });
+      invalidateTicketCache();
 
       if (typesChanged && editTypes.length > 0) {
         const primaryTypeKey = editTypes[0];
