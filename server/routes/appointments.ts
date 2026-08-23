@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { AppointmentStatus } from "@prisma/client";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, getRequesterRole } from "../auth.js";
 import { getIO } from "../socket.js";
@@ -788,8 +789,8 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         ...(technicianIds !== undefined ? { technicianIds } : {}),
         types: types || [],
         ...(clientPhone ? { clientPhone } : {}),
-        ...(status ? { status } : {}),
-      },
+        ...(status ? { status: status as AppointmentStatus } : {}),
+      } as any,
       include: {
         unit:      { select: { unitNumber: true } },
         client:    { select: { name: true } },

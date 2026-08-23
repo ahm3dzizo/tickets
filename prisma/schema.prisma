@@ -61,7 +61,7 @@ model Project {
   tickets               Ticket[]
   users                 User[]                 @relation("ProjectUsers")
   contractorAssignments ContractorAssignment[]
-  Unit                  Unit[]
+  units                 Unit[]
   appointments          Appointment[]
   shiftLogs             ShiftLog[]
 }
@@ -175,6 +175,7 @@ model Ticket {
   @@index([projectId, unitId])
   @@index([unitId])
   @@index([clientId])
+  @@index([appointmentId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -217,6 +218,7 @@ model ContractorAssignment {
   block      Block?     @relation(fields: [blockId], references: [id], onDelete: Cascade)
   unit       Unit?      @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
+  @@unique([contractorId, specialtyKey, projectId, blockId, unitId])
   @@index([projectId, specialtyKey])
   @@index([blockId, specialtyKey])
   @@index([unitId, specialtyKey])
@@ -388,7 +390,7 @@ model Appointment {
   technicianIds String[] @default([])
   technicianId  String?
   types         String[] @default([])
-  status        String   @default("scheduled") // scheduled, completed, cancelled
+  status        AppointmentStatus @default(scheduled)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -413,8 +415,7 @@ model ShiftLog {
   technicianId      String
   projectId         String
   shiftDate         DateTime   @db.Date
-  status            String     @default("ACTIVE")
-  // ACTIVE | ON_BREAK | COMPLETED | AUTO_CLOSED | FLAGGED
+  status            ShiftStatus @default(ACTIVE)
 
   // بصمة الحضور
   clockInAt         DateTime
@@ -473,8 +474,7 @@ model TicketTimeSession {
   technicianId          String
   shiftLogId            String?
   specialtyKey          String?    // التخصص وقت العمل — لتحليلات الأداء
-  status                String     @default("CLAIMED")
-  // CLAIMED | EN_ROUTE | IN_PROGRESS | PAUSED | COMPLETED | CANCELLED
+  status                SessionStatus @default(CLAIMED)
 
   // توقيتات
   claimedAt             DateTime   @default(now())
@@ -544,4 +544,27 @@ enum TicketStatus {
   absent
   contractor
   note
+}
+
+enum AppointmentStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum ShiftStatus {
+  ACTIVE
+  ON_BREAK
+  COMPLETED
+  AUTO_CLOSED
+  FLAGGED
+}
+
+enum SessionStatus {
+  CLAIMED
+  EN_ROUTE
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  CANCELLED
 }
