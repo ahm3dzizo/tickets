@@ -507,6 +507,7 @@ export default function TicketsList() {
               ticketId: t.ticketId,
               clientName: t.clientName,
               unitNumber: t.unitNumber,
+              unitId: t.unitId ?? undefined,
               projectId: t.projectId,
               clientId: t.clientId,
               appointmentId: (t as any).appointmentId,
