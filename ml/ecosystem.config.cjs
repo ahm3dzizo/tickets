@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name:        "retal-ml",
-    script:      "python3",
+    script:      "/opt/retal-api/ml/.venv/bin/python",
     args:        "ml/classifier_service.py",
     cwd:         "/opt/retal-api",
     interpreter: "none",
