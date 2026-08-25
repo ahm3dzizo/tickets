@@ -1060,7 +1060,7 @@ export function TicketTable({
             // Sub-types: show specific sub-type names when available, otherwise fall back to type names
             const subTypeIds: string[] = (ticket as any).detectedSubTypeIds ?? [];
             const displayLabels: { label: string; bg: string }[] = subTypeIds.length > 0
-              ? subTypeIds.map(id => ({ label: subTypeTranslations[id] ?? id, bg: subTypeBg[id] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }))
+              ? subTypeIds.map(id => ({ label: subTypeTranslations[id] ?? mergedTranslations[id] ?? id, bg: subTypeBg[id] ?? mergedTypeBg[id] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }))
               : typeList.map(t => ({ label: mergedTranslations[t] ?? t, bg: mergedTypeBg[t] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }));
             const supervisorNames = getSupervisorNames(ticket);
             const isSelected  = selectedIds?.includes(ticket.id) ?? false;
@@ -1434,7 +1434,7 @@ export function TicketTable({
                     : ticket.type ? [ticket.type as string] : [];
                 const subTypeIdsRow: string[] = (ticket as any).detectedSubTypeIds ?? [];
                 const displayLabelsRow: { label: string; bg: string }[] = subTypeIdsRow.length > 0
-                  ? subTypeIdsRow.map(id => ({ label: subTypeTranslations[id] ?? id, bg: subTypeBg[id] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }))
+                  ? subTypeIdsRow.map(id => ({ label: subTypeTranslations[id] ?? mergedTranslations[id] ?? id, bg: subTypeBg[id] ?? mergedTypeBg[id] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }))
                   : typeList.map(t => ({ label: mergedTranslations[t] ?? t, bg: mergedTypeBg[t] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20' }));
                 const supervisorNames = getSupervisorNames(ticket);
                 const isSelected = selectedIds?.includes(ticket.id) ?? false;
