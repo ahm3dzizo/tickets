@@ -3,11 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { warehouseApi, projectsApi } from '@/lib/api';
 import {
-  Package, Plus, Pencil, Trash2, AlertTriangle, Search, X, Check,
+  Package, Plus, Pencil, Trash2, AlertTriangle, Search, Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -251,62 +252,55 @@ export default function Warehouse() {
       </div>
 
       {/* Add / Edit Dialog */}
-      {showDialog && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" dir="rtl">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowDialog(false)} />
-          <div className="relative bg-card border border-border rounded-3xl shadow-2xl w-full max-w-md mx-4 sm:mx-0 p-6 space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <button onClick={() => setShowDialog(false)} className="w-8 h-8 rounded-xl hover:bg-muted flex items-center justify-center text-muted-foreground">
-                <X className="w-4 h-4" />
-              </button>
-              <h2 className="text-base font-bold">{editItem ? 'تعديل الصنف' : 'إضافة صنف جديد'}</h2>
-            </div>
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{editItem ? 'تعديل الصنف' : 'إضافة صنف جديد'}</DialogTitle>
+          </DialogHeader>
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">اسم الصنف *</label>
-                <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="مثال: سيراميك 60×60" className="rounded-xl" />
+          <div className="space-y-3 mt-2">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">اسم الصنف *</label>
+              <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                placeholder="مثال: سيراميك 60×60" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">التصنيف</label>
+              <Input value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
+                placeholder="مثال: بلاط، سباكة، كهرباء" className="rounded-xl" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">الكمية</label>
+                <Input type="number" min="0" value={form.quantity}
+                  onChange={e => setForm(p => ({ ...p, quantity: Number(e.target.value) }))}
+                  className="rounded-xl" />
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">التصنيف</label>
-                <Input value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                  placeholder="مثال: بلاط، سباكة، كهرباء" className="rounded-xl" />
+              <div className="col-span-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">الوحدة</label>
+                <Input value={form.unit} onChange={e => setForm(p => ({ ...p, unit: e.target.value }))}
+                  placeholder="قطعة" className="rounded-xl" />
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-1">
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">الكمية</label>
-                  <Input type="number" min="0" value={form.quantity}
-                    onChange={e => setForm(p => ({ ...p, quantity: Number(e.target.value) }))}
-                    className="rounded-xl" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">الوحدة</label>
-                  <Input value={form.unit} onChange={e => setForm(p => ({ ...p, unit: e.target.value }))}
-                    placeholder="قطعة" className="rounded-xl" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">حد التنبيه</label>
-                  <Input type="number" min="0" value={form.minQuantity}
-                    onChange={e => setForm(p => ({ ...p, minQuantity: e.target.value }))}
-                    placeholder="اختياري" className="rounded-xl" />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">ملاحظات</label>
-                <Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+              <div className="col-span-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">حد التنبيه</label>
+                <Input type="number" min="0" value={form.minQuantity}
+                  onChange={e => setForm(p => ({ ...p, minQuantity: e.target.value }))}
                   placeholder="اختياري" className="rounded-xl" />
               </div>
             </div>
-
-            <Button onClick={handleSave} disabled={saving} className="w-full rounded-xl gap-2">
-              <Check className="w-4 h-4" />
-              {saving ? 'جارٍ الحفظ...' : editItem ? 'حفظ التعديلات' : 'إضافة'}
-            </Button>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">ملاحظات</label>
+              <Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                placeholder="اختياري" className="rounded-xl" />
+            </div>
           </div>
-        </div>
-      )}
+
+          <Button onClick={handleSave} disabled={saving} className="w-full rounded-xl gap-2 mt-2">
+            <Check className="w-4 h-4" />
+            {saving ? 'جارٍ الحفظ...' : editItem ? 'حفظ التعديلات' : 'إضافة'}
+          </Button>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

@@ -963,6 +963,10 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
       where,
 
       include: {
+        unit: {
+          select: { unitNumber: true }
+        },
+
         project: {
           select: {
             id: true,
@@ -992,6 +996,10 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
             type: true,
             detectedTypes: true,
             priority: true,
+            supervisorNotes: true,
+
+            unit: { select: { unitNumber: true } },
+            client: { select: { name: true, phone: true } },
 
             techSessions: {
               where: {
@@ -1033,8 +1041,22 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
           )
       ) ?? false;
 
+      // Derive unitNumber from the appointment's own unit, fall back to first ticket's unit
+      const unitNumber =
+        (appointment as any).unit?.unitNumber ||
+        appointment.tickets?.find((tk: any) => tk.unit?.unitNumber)?.unit?.unitNumber ||
+        '';
+
+      // Derive client info from first ticket
+      const firstTicket = appointment.tickets?.[0] as any;
+      const clientName  = firstTicket?.client?.name  || appointment.clientName  || '';
+      const clientPhone = firstTicket?.client?.phone || appointment.clientPhone || '';
+
       return {
         ...appointment,
+        unitNumber,
+        clientName,
+        clientPhone,
         isAssignedToMe,
         isSupervisorAppointment,
         isClaimed,

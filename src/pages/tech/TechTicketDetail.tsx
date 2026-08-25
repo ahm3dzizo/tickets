@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
@@ -114,9 +114,19 @@ export default function TechTicketDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { token, techProfile } = useTechAuth();
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const lang = (techProfile?.language || 'ar') as TechLang;
   const isRtl = lang === 'ar' || lang === 'ur';
+
+  // Sync theme from localStorage (set by TechApp) to this page's root element
+  useEffect(() => {
+    const stored = (() => { try { return localStorage.getItem('tech-theme') || 'system'; } catch { return 'system'; } })();
+    const el = rootRef.current;
+    if (!el) return;
+    if (stored === 'system') el.removeAttribute('data-theme');
+    else el.setAttribute('data-theme', stored);
+  }, []);
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -248,6 +258,7 @@ export default function TechTicketDetail() {
       <div
         className="tech-app flex items-center justify-center min-h-[100dvh]"
         dir={isRtl ? 'rtl' : 'ltr'}
+        ref={rootRef}
       >
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -264,6 +275,7 @@ export default function TechTicketDetail() {
       <div
         className="tech-app min-h-[100dvh]"
         dir={isRtl ? 'rtl' : 'ltr'}
+        ref={rootRef}
       >
         <div className="tech-header">
           <button
@@ -329,6 +341,7 @@ export default function TechTicketDetail() {
     <div
       className="tech-app min-h-[100dvh]"
       dir={isRtl ? 'rtl' : 'ltr'}
+      ref={rootRef}
     >
       {/* Header */}
       <div className="tech-header">
@@ -520,19 +533,29 @@ export default function TechTicketDetail() {
             </span>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-muted/50 border border-border text-sm leading-7 whitespace-pre-wrap">
+          <div className="p-3.5 rounded-xl text-sm leading-7 whitespace-pre-wrap" style={{ background: 'var(--tech-card-bg, var(--tech-bg-secondary))', border: '1px solid var(--tech-border)' }}>
             {ticket.description ||
               'لا يوجد وصف للتذكرة'}
           </div>
 
           {ticket.notes && (
-            <div className="mt-3 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-              <div className="text-xs font-black text-amber-600 dark:text-amber-400 mb-1">
+            <div className="mt-3 p-3.5 rounded-xl" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
+              <div className="text-xs font-black mb-1" style={{ color: '#f59e0b' }}>
                 ملاحظات
               </div>
-
               <div className="text-sm leading-6">
                 {ticket.notes}
+              </div>
+            </div>
+          )}
+
+          {(ticket as any).supervisorNotes && (
+            <div className="mt-3 p-3.5 rounded-xl" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
+              <div className="text-xs font-black mb-1" style={{ color: '#818cf8' }}>
+                ملاحظة المشرف
+              </div>
+              <div className="text-sm leading-6">
+                {(ticket as any).supervisorNotes}
               </div>
             </div>
           )}
