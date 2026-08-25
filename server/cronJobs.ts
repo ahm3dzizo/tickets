@@ -145,7 +145,12 @@ async function notifyLateTickets() {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
   const lateTickets = await prisma.ticket.findMany({
     where: { status: 'open', createdAt: { lte: cutoff } },
-    select: { id: true, unitNumber: true, description: true, projectId: true },
+    select: {
+      id: true,
+      description: true,
+      projectId: true,
+      unit: { select: { unitNumber: true } },
+    },
   });
   if (!lateTickets.length) return;
 
@@ -161,7 +166,7 @@ async function notifyLateTickets() {
 
     await sendPushToUser(sup.uid, {
       title: `⚠️ تذاكر متأخرة (${mine.length})`,
-      body: mine.slice(0, 3).map(t => `فيلا ${t.unitNumber || '—'}: ${t.description?.slice(0, 50) || ''}`).join('\n'),
+      body: mine.slice(0, 3).map(t => `فيلا ${t.unit?.unitNumber || '—'}: ${t.description?.slice(0, 50) || ''}`).join('\n'),
       tag: 'late-tickets',
       url: '/tickets?status=open',
       requireInteraction: true,
