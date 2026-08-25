@@ -3,13 +3,13 @@ import { Router } from 'express';
 import { requireAuth, AuthRequest } from '../auth.js';
 import { requireTechAuth, TechAuthRequest } from './tech-auth.js';
 import prisma from '../db.js';
-import { VAPID_PUBLIC } from '../pushService.js';
+import { getVapidPublicKey } from '../pushService.js';
 
 const router = Router();
 
 // GET /api/push/vapid-public-key — no auth needed (needed before login to set up SW)
 router.get('/vapid-public-key', (_req, res) => {
-  res.json({ publicKey: VAPID_PUBLIC });
+  res.json({ publicKey: getVapidPublicKey() });
 });
 
 // POST /api/push/subscribe — for app users (admin / engineer / supervisor)
