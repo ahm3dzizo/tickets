@@ -35,10 +35,22 @@ interface TypesSelectorProps {
   label?: string;
   min?: number;
   className?: string;
+  showSubTypes?: boolean;
+  selectedSubTypeIds?: string[];
+  onSubTypeChange?: (ids: string[]) => void;
 }
 
-export function TypesSelector({ value, onChange, label, min = 1, className }: TypesSelectorProps) {
-  const { activeTypes, typeTranslations } = useTicketTypes();
+export function TypesSelector({
+  value,
+  onChange,
+  label,
+  min = 1,
+  className,
+  showSubTypes = false,
+  selectedSubTypeIds = [],
+  onSubTypeChange,
+}: TypesSelectorProps) {
+  const { activeTypes, typeTranslations, subTypes } = useTicketTypes();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -53,6 +65,11 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
   // merged label resolver: context first, static fallback
   const getLabel = (key: string) =>
     typeTranslations[key] ?? TYPE_LABELS_STATIC[key] ?? key;
+
+  // Subtypes relevant to the currently selected types
+  const relevantSubTypes = showSubTypes
+    ? subTypes.filter(st => value.includes(st.parentKey as TicketType))
+    : [];
 
   // close on outside click
   useEffect(() => {
@@ -84,6 +101,11 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
     if (value.includes(t)) {
       if (value.length <= min) return;
       onChange(value.filter(x => x !== t));
+      // Clear subtypes that belonged to this removed type
+      if (onSubTypeChange) {
+        const removedSubs = subTypes.filter(s => s.parentKey === key).map(s => s.id);
+        onSubTypeChange(selectedSubTypeIds.filter(id => !removedSubs.includes(id)));
+      }
     } else {
       onChange([...value, t]);
     }
@@ -93,6 +115,19 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
     e.stopPropagation();
     if (value.length <= min) return;
     onChange(value.filter(x => x !== t));
+    if (onSubTypeChange) {
+      const removedSubs = subTypes.filter(s => s.parentKey === t).map(s => s.id);
+      onSubTypeChange(selectedSubTypeIds.filter(id => !removedSubs.includes(id)));
+    }
+  };
+
+  const toggleSubType = (id: string) => {
+    if (!onSubTypeChange) return;
+    onSubTypeChange(
+      selectedSubTypeIds.includes(id)
+        ? selectedSubTypeIds.filter(x => x !== id)
+        : [...selectedSubTypeIds, id]
+    );
   };
 
   return (
@@ -205,6 +240,36 @@ export function TypesSelector({ value, onChange, label, min = 1, className }: Ty
           </div>
         )}
       </div>
+
+      {/* ── Sub-types section ── */}
+      {showSubTypes && relevantSubTypes.length > 0 && (
+        <div className="space-y-1.5 pt-1">
+          <label className="text-slate-500 text-[10px] uppercase font-bold tracking-widest block text-right">
+            التصنيفات الفرعية
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {relevantSubTypes.map(st => {
+              const isSel = selectedSubTypeIds.includes(st.id);
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => toggleSubType(st.id)}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all',
+                    isSel
+                      ? 'bg-amber-500/20 border-amber-500/30 text-amber-300'
+                      : 'bg-white/5 border-border text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                  )}
+                >
+                  {st.nameAr}
+                  {isSel && <X className="w-2.5 h-2.5 opacity-70" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

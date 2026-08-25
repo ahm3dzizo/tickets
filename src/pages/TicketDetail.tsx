@@ -160,6 +160,7 @@ export default function TicketDetail() {
   const [editPriority, setEditPriority] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editTypes, setEditTypes] = useState<TicketType[]>([]);
+  const [editSubTypeIds, setEditSubTypeIds] = useState<string[]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [availableSupervisors, setAvailableSupervisors] = useState<{uid: string; displayName: string; specialties: string[]}[]>([]);
   const [editAssignedSupervisorIds, setEditAssignedSupervisorIds] = useState<string[]>([]);
@@ -255,6 +256,7 @@ export default function TicketDetail() {
       ? (ticket.detectedTypes as TicketType[])
       : [ticket.type];
     setEditTypes(initTypes);
+    setEditSubTypeIds((ticket as any).detectedSubTypeIds ?? []);
     setEditAssignedSupervisorIds(
       (ticket.assignedSupervisorIds as string[] | undefined) ??
       (ticket.assignedSupervisorId ? [ticket.assignedSupervisorId as string] : [])
@@ -296,6 +298,7 @@ export default function TicketDetail() {
         priority:               isNaN(Number(editPriority)) ? editPriority : Number(editPriority),
         type:                   editTypes[0] as TicketType,
         detectedTypes:          editTypes,
+        detectedSubTypeIds:     editSubTypeIds,
         assigneeName:           selectedSupervisors[0]?.displayName ?? ticket.assigneeName ?? '',
         assignedSupervisorId:   editAssignedSupervisorIds[0] ?? '',
         assignedSupervisorIds:  editAssignedSupervisorIds,
@@ -798,6 +801,9 @@ export default function TicketDetail() {
               value={editTypes}
               onChange={setEditTypes}
               min={1}
+              showSubTypes
+              selectedSubTypeIds={editSubTypeIds}
+              onSubTypeChange={setEditSubTypeIds}
             />
 
             {/* المشرفون */}

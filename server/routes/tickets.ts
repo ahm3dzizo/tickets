@@ -885,6 +885,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       description:           data.description          ?? undefined,
       type:                  data.type                 ?? undefined,
       detectedTypes:         data.detectedTypes        ?? undefined,
+      detectedSubTypeIds:    data.detectedSubTypeIds   ?? undefined,
       clientId:              data.clientId             ?? undefined,
       unitId:                data.unitId               ?? undefined,
       contractorId:          data.contractorId         ?? undefined,

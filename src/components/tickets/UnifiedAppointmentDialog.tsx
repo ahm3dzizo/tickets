@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils';
 import { appointmentsApi, whatsappApi, usersApi, ticketsApi, clientsApi, projectsApi, settingsApi, techniciansApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
+import { TypesSelector } from './TypesSelector';
+import { TicketType } from '@/types';
 import { renderTableDescription } from './TicketTable';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -247,8 +249,9 @@ export function UnifiedAppointmentDialog({
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
 
-  // Edit mode — type selection
+  // Edit mode — type + subtype selection
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedSubTypeIds, setSelectedSubTypeIds] = useState<string[]>([]);
 
   // Calendar mode — client search & project selection
   const dropdownRef = React.useRef<HTMLDivElement>(null);
@@ -320,16 +323,8 @@ export function UnifiedAppointmentDialog({
   }, [isInsideWorkHours, effectiveMins, workHours]);
   const isTimeDisallowed = workHours.enabled && !isInsideWorkHours && suggestedCorrectionMins === null;
 
-  const mergedTypes: Record<string, string> = {
-    electricity: 'كهرباء', plumbing: 'سباكة', doors: 'أبواب', paints: 'دهانات',
-    ceramics: 'سيراميك', drainage: 'صرف صحي', ac_ventilation: 'تكييف وتهوية',
-    waterproofing: 'عزل مائي', pest_control: 'مكافحة حشرات', general: 'عام',
-    carpentry: 'نجارة', civil: 'مدني', aluminum: 'ألمنيوم', gypsum: 'جبس',
-    lighting: 'إضاءة', cracks: 'كراك', smart_home: 'نظام ذكي',
-    swimming_pool: 'مسبح', landscaping: 'زراعة وحدائق', garage_door: 'باب جراج',
-    ...typeTranslations,
-    ...subTypeTranslations,
-  };
+  // mergedTypes kept as fallback for any remaining references
+  const mergedTypes: Record<string, string> = { ...typeTranslations };
 
   const checkDate = isCalendarMode ? dateStr : (canSendWhatsApp ? startDate : date);
   const hasConflict = useMemo(() => {
@@ -417,6 +412,14 @@ export function UnifiedAppointmentDialog({
         });
       }
       setSelectedTypes(Array.from(typesSet));
+      // Pre-populate subtypes from editGroup tickets
+      const subTypesSet = new Set<string>(editGroup.subTypeIds ?? []);
+      if (subTypesSet.size === 0) {
+        (editGroup.tickets ?? []).forEach((tk: any) => {
+          (tk.detectedSubTypeIds ?? []).forEach((id: string) => subTypesSet.add(id));
+        });
+      }
+      setSelectedSubTypeIds(Array.from(subTypesSet));
       const supsSet: Set<string> = editGroup.sups instanceof Set
         ? editGroup.sups
         : new Set<string>(editGroup.supervisorIds || []);
@@ -432,6 +435,18 @@ export function UnifiedAppointmentDialog({
       setRangeDays(2);
       setShowPreview(false);
       setConflicts([]);
+      // Pre-populate types and subtypes from the ticket
+      const initTicketTypes = (tickets ?? []).reduce<string[]>((acc, t) => {
+        if (t.type && !acc.includes(t.type)) acc.push(t.type);
+        (t.detectedTypes ?? []).forEach((dt: string) => { if (!acc.includes(dt)) acc.push(dt); });
+        return acc;
+      }, []);
+      setSelectedTypes(initTicketTypes);
+      const initSubTypeIds = (tickets ?? []).reduce<string[]>((acc, t) => {
+        ((t as any).detectedSubTypeIds ?? []).forEach((id: string) => { if (!acc.includes(id)) acc.push(id); });
+        return acc;
+      }, []);
+      setSelectedSubTypeIds(initSubTypeIds);
 
       const existingApptId = primaryTicket.appointmentId;
       if (existingApptId) {
@@ -786,7 +801,7 @@ export function UnifiedAppointmentDialog({
   const isBusy = saving || sending;
   const canSave = !isBusy && !isTimeDisallowed && (
     isEditMode
-      ? (!!date && selectedTypes.length > 0)
+      ? !!date
       : isTicketMode
       ? (!!(canSendWhatsApp ? startDate : date) && !hasConflict)
       : isCalendarMode
@@ -1076,34 +1091,30 @@ export function UnifiedAppointmentDialog({
             </div>
           )}
 
+          {/* ── TICKET MODE: show current types + subtypes for review/edit ── */}
+          {isTicketMode && (
+            <TypesSelector
+              label="التخصصات المرتبطة بالتذكرة"
+              value={selectedTypes as TicketType[]}
+              onChange={v => setSelectedTypes(v as string[])}
+              min={0}
+              showSubTypes
+              selectedSubTypeIds={selectedSubTypeIds}
+              onSubTypeChange={setSelectedSubTypeIds}
+            />
+          )}
+
           {/* ── CALENDAR MODE + no tickets: type picker ── */}
           {isCalendarMode && selectedClientId && !fetchingTickets && !hasExistingTickets && (
-            <div className="space-y-2">
-              <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
-                تخصصات الصيانة المطلوبة
-              </Label>
-              <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
-                {Object.entries(mergedTypes).map(([k, v]) => {
-                  const isSel = newTicketTypes.includes(k);
-                  return (
-                    <button
-                      key={k}
-                      onClick={() => setNewTicketTypes(prev =>
-                        isSel ? prev.filter(x => x !== k) : [...prev, k]
-                      )}
-                      className={cn(
-                        'px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all',
-                        isSel
-                          ? 'bg-blue-500/20 border-blue-500/40 text-blue-700 dark:text-blue-300'
-                          : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30',
-                      )}
-                    >
-                      {v as React.ReactNode}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <TypesSelector
+              label="تخصصات الصيانة المطلوبة"
+              value={newTicketTypes as TicketType[]}
+              onChange={v => setNewTicketTypes(v as string[])}
+              min={0}
+              showSubTypes
+              selectedSubTypeIds={selectedSubTypeIds}
+              onSubTypeChange={setSelectedSubTypeIds}
+            />
           )}
 
           {/* ── WHATSAPP MODE: date range ─────────────────────────────── */}
@@ -1294,35 +1305,17 @@ export function UnifiedAppointmentDialog({
             )}
           </div>
 
-          {/* ── EDIT MODE: type selector ────────────────────────────────── */}
+          {/* ── EDIT MODE: type + subtype selector ────────────────────── */}
           {isEditMode && (
-            <div className="space-y-2">
-              <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block">
-                التخصصات المطلوبة
-              </Label>
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(mergedTypes).map(([k, v]) => {
-                  const isSel = selectedTypes.includes(k);
-                  return (
-                    <button
-                      key={k}
-                      onClick={() => setSelectedTypes(prev =>
-                        isSel ? prev.filter(x => x !== k) : [...prev, k]
-                      )}
-                      className={cn(
-                        'px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5',
-                        isSel
-                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 shadow-sm'
-                          : 'bg-muted/30 border-border text-muted-foreground hover:border-slate-400 hover:bg-muted/80'
-                      )}
-                    >
-                      <div className={cn('w-2 h-2 rounded-full shrink-0', isSel ? 'bg-amber-500' : 'bg-muted-foreground/30')} />
-                      {v as React.ReactNode}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <TypesSelector
+              label="التخصصات المطلوبة"
+              value={selectedTypes as TicketType[]}
+              onChange={v => setSelectedTypes(v as string[])}
+              min={0}
+              showSubTypes
+              selectedSubTypeIds={selectedSubTypeIds}
+              onSubTypeChange={setSelectedSubTypeIds}
+            />
           )}
 
           {/* ── SUPERVISORS (ALL MODES) ───────────────────────────────── */}
