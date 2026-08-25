@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  MapPin, 
-  Users, 
+import {
+  ArrowLeft,
+  MapPin,
+  Users,
   Ticket as TicketIcon,
   Plus,
   UserCheck,
   Clock,
+  Package,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -188,6 +189,14 @@ export default function ProjectDetail() {
               )}
               <ClientForm projectId={project.id} onSuccess={loadData} />
               <TicketForm  projectId={project.id} onSuccess={loadData} />
+              <Button
+                variant="outline"
+                className="border-border bg-white/5 text-slate-400 hover:text-white rounded-xl gap-1.5 h-9 px-3 text-sm"
+                onClick={() => navigate(`/warehouse?projectId=${project.id}`)}
+              >
+                <Package className="w-3.5 h-3.5" />
+                مخزن المشروع
+              </Button>
             </div>
           )}
         </div>

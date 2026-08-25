@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { warehouseApi, projectsApi } from '@/lib/api';
 import {
@@ -23,6 +24,7 @@ interface Item {
 const EMPTY_FORM = { name: '', category: '', quantity: 0, unit: 'قطعة', minQuantity: '', notes: '' };
 
 export default function Warehouse() {
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState('');
   const [items, setItems] = useState<Item[]>([]);
@@ -36,9 +38,11 @@ export default function Warehouse() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    const initProjectId = searchParams.get('projectId');
     projectsApi.getAll().then(p => {
       setProjects(p);
-      if (p.length > 0) setSelectedProject(p[0].id);
+      const match = initProjectId && p.find((x: any) => x.id === initProjectId);
+      setSelectedProject(match ? match.id : (p[0]?.id || ''));
     }).catch(() => toast.error('فشل تحميل المشاريع'));
   }, []);
 
