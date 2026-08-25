@@ -27,13 +27,22 @@ function today24() {
   return d;
 }
 
+function todayDateInRiyadh() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
 // ── 1. Technician morning: today's open appointments (08:00 SA = 05:00 UTC) ──
 async function notifyTechniciansAppointments() {
-  const start = today0();
-  const end   = today24();
   // Find all technicians with appointments today
   const appts = await prisma.appointment.findMany({
-    where: { scheduledAt: { gte: start, lte: end }, status: 'scheduled' },
+    where: { date: todayDateInRiyadh(), status: 'scheduled' },
     include: { technician: true, unit: { include: { block: true } } },
   });
   // Group by technician
@@ -46,7 +55,7 @@ async function notifyTechniciansAppointments() {
   for (const [techId, list] of Object.entries(byTech)) {
     await sendPushToUser(techId, {
       title: `📋 مواعيدك اليوم (${list.length})`,
-      body: list.slice(0, 3).map(a => `فيلا ${a.unit?.number || '—'} — ${a.description?.slice(0, 40) || ''}`).join('\n'),
+      body: list.slice(0, 3).map(a => `فيلا ${a.unit?.unitNumber || '—'} — ${a.notes?.slice(0, 40) || ''}`).join('\n'),
       tag: 'tech-daily-appointments',
       url: '/tech/appointments',
     });
