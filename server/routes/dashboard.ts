@@ -182,12 +182,13 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     });
     const supMap: Record<string, { open: number; inProgress: number; pending: number }> = {};
     for (const t of supTickets) {
-      const sid = t.assignedSupervisorIds[0];
-      if (!sid) continue;
-      if (!supMap[sid]) supMap[sid] = { open: 0, inProgress: 0, pending: 0 };
-      if (t.status === "open")        supMap[sid].open++;
-      if (t.status === "in_progress") supMap[sid].inProgress++;
-      if (t.status === "pending")     supMap[sid].pending++;
+      for (const sid of t.assignedSupervisorIds) {
+        if (!sid) continue;
+        if (!supMap[sid]) supMap[sid] = { open: 0, inProgress: 0, pending: 0 };
+        if (t.status === "open")        supMap[sid].open++;
+        if (t.status === "in_progress") supMap[sid].inProgress++;
+        if (t.status === "pending")     supMap[sid].pending++;
+      }
     }
     const supIds = Object.keys(supMap);
     const supUsers = supIds.length
