@@ -110,6 +110,7 @@ export interface Ticket {
   contractorNote?: string | null;
   appointmentId?: string | null;
   lastWaSentAt?: string | null;
+  warrantyExpiryDate?: string | null;
 }
 
 // ─── Contractor Types ─────────────────────────────────────────────────────────

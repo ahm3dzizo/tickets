@@ -2,11 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { warehouseApi, projectsApi } from '@/lib/api';
 import {
-  ClipboardList, Plus, Trash2, Download, X, Check, AlertTriangle, Clock,
+  ClipboardList, Plus, Trash2, Download, X, Check, Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -259,137 +260,129 @@ export default function WarehouseRequests() {
       </div>
 
       {/* Create Dialog */}
-      {showDialog && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" dir="rtl">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowDialog(false)} />
-          <div className="relative bg-card border border-border rounded-3xl shadow-2xl w-full max-w-lg mx-4 sm:mx-0 overflow-hidden flex flex-col max-h-[90vh]">
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-lg flex flex-col max-h-[90vh] p-0 gap-0" dir="rtl">
+          <DialogHeader className="px-5 py-4 border-b border-border shrink-0">
+            <DialogTitle>طلب احتياجات جديد</DialogTitle>
+          </DialogHeader>
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-              <button onClick={() => setShowDialog(false)} className="w-8 h-8 rounded-xl hover:bg-muted flex items-center justify-center text-muted-foreground">
-                <X className="w-4 h-4" />
-              </button>
-              <h2 className="text-base font-bold">طلب احتياجات جديد</h2>
+          {/* Body */}
+          <div className="overflow-y-auto flex-1 p-5 space-y-4">
+            {/* Project */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">المشروع *</label>
+              <select
+                value={form.projectId}
+                onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+              >
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
             </div>
 
-            {/* Body */}
-            <div className="overflow-y-auto flex-1 p-5 space-y-4">
-              {/* Project */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">المشروع *</label>
-                <select
-                  value={form.projectId}
-                  onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))}
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            {/* Title */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">عنوان الطلب</label>
+              <Input
+                value={form.title}
+                onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                placeholder="اختياري — مثال: احتياجات الطابق الثالث"
+                className="rounded-xl"
+              />
+            </div>
+
+            {/* Items */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  onClick={addFormItem}
+                  className="text-xs text-primary font-medium flex items-center gap-1 hover:underline"
                 >
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                  <Plus className="w-3.5 h-3.5" />
+                  بند جديد
+                </button>
+                <label className="text-xs font-medium text-muted-foreground">البنود *</label>
               </div>
 
-              {/* Title */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">عنوان الطلب</label>
-                <Input
-                  value={form.title}
-                  onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-                  placeholder="اختياري — مثال: احتياجات الطابق الثالث"
-                  className="rounded-xl"
-                />
-              </div>
-
-              {/* Items */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <button
-                    onClick={addFormItem}
-                    className="text-xs text-primary font-medium flex items-center gap-1 hover:underline"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    بند جديد
-                  </button>
-                  <label className="text-xs font-medium text-muted-foreground">البنود *</label>
-                </div>
-
-                <div className="space-y-2">
-                  {formItems.map((item, idx) => (
-                    <div key={idx} className="bg-muted/30 rounded-2xl p-3 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        {formItems.length > 1 && (
-                          <button
-                            onClick={() => removeFormItem(idx)}
-                            className="w-6 h-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-destructive shrink-0"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        )}
-                        <span className="text-xs font-medium text-muted-foreground mr-auto">بند {idx + 1}</span>
-                      </div>
-
-                      <Input
-                        value={item.name}
-                        onChange={e => updateFormItem(idx, 'name', e.target.value)}
-                        placeholder="اسم الخامة *"
-                        className="rounded-xl text-sm"
-                      />
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <Input
-                          type="number" min="0.5" step="0.5"
-                          value={item.quantity}
-                          onChange={e => updateFormItem(idx, 'quantity', e.target.value)}
-                          placeholder="الكمية"
-                          className="rounded-xl text-sm"
-                        />
-                        <Input
-                          value={item.unit}
-                          onChange={e => updateFormItem(idx, 'unit', e.target.value)}
-                          placeholder="الوحدة"
-                          className="rounded-xl text-sm"
-                        />
-                        <select
-                          value={item.urgency}
-                          onChange={e => updateFormItem(idx, 'urgency', e.target.value)}
-                          className="rounded-xl border border-border bg-background px-2 py-1.5 text-sm"
+              <div className="space-y-2">
+                {formItems.map((item, idx) => (
+                  <div key={idx} className="bg-muted/30 rounded-2xl p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      {formItems.length > 1 && (
+                        <button
+                          onClick={() => removeFormItem(idx)}
+                          className="w-6 h-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-destructive shrink-0"
                         >
-                          <option value="low">عادي</option>
-                          <option value="medium">متوسط</option>
-                          <option value="high">عاجل</option>
-                        </select>
-                      </div>
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                      <span className="text-xs font-medium text-muted-foreground mr-auto">بند {idx + 1}</span>
+                    </div>
 
+                    <Input
+                      value={item.name}
+                      onChange={e => updateFormItem(idx, 'name', e.target.value)}
+                      placeholder="اسم الخامة *"
+                      className="rounded-xl text-sm"
+                    />
+
+                    <div className="grid grid-cols-3 gap-2">
                       <Input
-                        value={item.notes}
-                        onChange={e => updateFormItem(idx, 'notes', e.target.value)}
-                        placeholder="ملاحظة (اختياري)"
+                        type="number" min="0.5" step="0.5"
+                        value={item.quantity}
+                        onChange={e => updateFormItem(idx, 'quantity', e.target.value)}
+                        placeholder="الكمية"
                         className="rounded-xl text-sm"
                       />
+                      <Input
+                        value={item.unit}
+                        onChange={e => updateFormItem(idx, 'unit', e.target.value)}
+                        placeholder="الوحدة"
+                        className="rounded-xl text-sm"
+                      />
+                      <select
+                        value={item.urgency}
+                        onChange={e => updateFormItem(idx, 'urgency', e.target.value)}
+                        className="rounded-xl border border-border bg-background px-2 py-1.5 text-sm"
+                      >
+                        <option value="low">عادي</option>
+                        <option value="medium">متوسط</option>
+                        <option value="high">عاجل</option>
+                      </select>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Notes */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">ملاحظات عامة</label>
-                <Input
-                  value={form.notes}
-                  onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                  placeholder="اختياري"
-                  className="rounded-xl"
-                />
+                    <Input
+                      value={item.notes}
+                      onChange={e => updateFormItem(idx, 'notes', e.target.value)}
+                      placeholder="ملاحظة (اختياري)"
+                      className="rounded-xl text-sm"
+                    />
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="px-5 py-4 border-t border-border shrink-0">
-              <Button onClick={handleSave} disabled={saving} className="w-full rounded-xl gap-2">
-                <Check className="w-4 h-4" />
-                {saving ? 'جارٍ الإرسال...' : 'إرسال الطلب'}
-              </Button>
+            {/* Notes */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">ملاحظات عامة</label>
+              <Input
+                value={form.notes}
+                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                placeholder="اختياري"
+                className="rounded-xl"
+              />
             </div>
           </div>
-        </div>
-      )}
+
+          {/* Footer */}
+          <div className="px-5 py-4 border-t border-border shrink-0">
+            <Button onClick={handleSave} disabled={saving} className="w-full rounded-xl gap-2">
+              <Check className="w-4 h-4" />
+              {saving ? 'جارٍ الإرسال...' : 'إرسال الطلب'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

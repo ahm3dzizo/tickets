@@ -31,6 +31,7 @@ import {
 import { toast } from 'sonner';
 import './tech.css';
 import { registerPush, unregisterPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
+import { TYPE_LABELS_STATIC } from '@/components/tickets/TypesSelector';
 import { Bell, BellRing, BellOff } from 'lucide-react';
 
 // Push notification button for the TechApp header
@@ -781,12 +782,18 @@ function AppointmentCard({
       {appt.types?.length > 0 && (
         <div className="tech-tags">
           {appt.types.map((type: string) => (
-            <span key={type}>{type}</span>
+            <span key={type}>{TYPE_LABELS_STATIC[type] ?? type}</span>
           ))}
         </div>
       )}
 
       {appt.notes && <div className="tech-note">{appt.notes}</div>}
+      {appt.supervisorNotes && (
+        <div className="tech-note" style={{ borderRight: '3px solid #f59e0b', background: 'rgba(245,158,11,0.08)', color: 'var(--tech-text-secondary)' }}>
+          <strong style={{ color: '#f59e0b', fontSize: '11px' }}>ملاحظة المشرف: </strong>
+          {appt.supervisorNotes}
+        </div>
+      )}
 
       <div className="tech-appointment-actions">
         <div className="tech-contact-actions">
@@ -813,7 +820,22 @@ function AppointmentCard({
             onClick={handleClaimAppointment}
             disabled={claiming || claimed}
             className={`tech-ticket-toggle ${claimed ? 'opacity-70 cursor-default' : ''}`}
-            style={{ minWidth: '120px', justifyContent: 'center' }}
+            style={{
+              minWidth: '120px',
+              justifyContent: 'center',
+              ...(!claimed && !claiming ? {
+                background: 'rgba(34,197,94,0.12)',
+                border: '1px solid rgba(34,197,94,0.3)',
+                borderRadius: '8px',
+                padding: '5px 10px',
+                color: '#16a34a',
+                fontWeight: 700,
+              } : {
+                background: 'rgba(100,116,139,0.1)',
+                borderRadius: '8px',
+                padding: '5px 10px',
+              }),
+            }}
           >
             {claiming ? (
               <>

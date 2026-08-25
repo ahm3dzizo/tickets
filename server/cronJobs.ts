@@ -84,7 +84,7 @@ async function notifySupervisorsAttendance() {
     const clockedIn = await prisma.shiftLog.findMany({
       where: {
         technicianId: { in: allTechs.map(t => t.id) },
-        clockIn: { gte: today0() },
+        clockInAt: { gte: today0() },
       },
       select: { technicianId: true },
     });
@@ -180,7 +180,7 @@ async function notifyAdminDailySummary() {
   const [openCount, closedToday, activeTechs] = await Promise.all([
     prisma.ticket.count({ where: { status: 'open' } }),
     prisma.ticket.count({ where: { status: { in: ['closed','absent','out_of_scope'] }, updatedAt: { gte: today0() } } }),
-    prisma.shiftLog.count({ where: { clockIn: { gte: today0() }, clockOut: null } }),
+    prisma.shiftLog.count({ where: { clockInAt: { gte: today0() }, clockOutAt: null } }),
   ]);
 
   await sendPushToRoles(['admin'], {

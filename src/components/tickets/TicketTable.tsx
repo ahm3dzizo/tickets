@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, ArrowUpDown, User, Filter, Archive } from 'lucide-react';
+import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, ShieldOff, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, ArrowUpDown, User, Filter, Archive } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
@@ -1066,6 +1066,8 @@ export function TicketTable({
             const isSelected  = selectedIds?.includes(ticket.id) ?? false;
             const isOverdue   = !isClosed && daysOpen > 6;
             const canSelect   = hasSelection;
+            const todayDateStr = new Date().toISOString().slice(0, 10);
+            const isOutOfWarranty = !isClosed && !!ticket.warrantyExpiryDate && ticket.warrantyExpiryDate < todayDateStr;
 
             const handleCardClick = () => {
               if (canSelect && inSelectionMode) { toggleOne(ticket.id); return; }
@@ -1145,7 +1147,13 @@ export function TicketTable({
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                      {isOutOfWarranty && (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full border bg-rose-500/10 text-rose-400 border-rose-500/25 flex items-center gap-0.5 shrink-0">
+                          <ShieldOff className="w-2.5 h-2.5" />
+                          خارج الضمان
+                        </span>
+                      )}
                       <span className={cn(
                         'text-[10px] font-bold px-2 py-0.5 rounded-full border max-w-[120px] truncate',
                         ticket.status === 'pending' && (ticket as any).appointmentTime
@@ -1439,6 +1447,8 @@ export function TicketTable({
                 const supervisorNames = getSupervisorNames(ticket);
                 const isSelected = selectedIds?.includes(ticket.id) ?? false;
                 const isOverdue  = !isClosed && daysOpen > 6;
+                const todayDateStrDt = new Date().toISOString().slice(0, 10);
+                const isOutOfWarrantyDt = !isClosed && !!ticket.warrantyExpiryDate && ticket.warrantyExpiryDate < todayDateStrDt;
 
                 return (
                   <React.Fragment key={ticket.id}>
@@ -1504,6 +1514,14 @@ export function TicketTable({
                         <span className="line-clamp-3">{renderTableDescription(ticket.description)}</span>
                       </td>
                       <td className="px-3 py-3 text-center w-28">
+                        {isOutOfWarrantyDt && (
+                          <div className="mb-1 flex justify-center">
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full border bg-rose-500/10 text-rose-400 border-rose-500/25 flex items-center gap-0.5 whitespace-nowrap">
+                              <ShieldOff className="w-2.5 h-2.5" />
+                              خارج الضمان
+                            </span>
+                          </div>
+                        )}
                         <span className={cn(
                           'inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border max-w-[110px] truncate',
                           statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20',

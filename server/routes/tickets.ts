@@ -295,7 +295,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     where,
     orderBy: { createdAt: "desc" },
     include: {
-      unit:          { select: { id: true, unitNumber: true, block: { select: { blockNumber: true } } } },
+      unit:          { select: { id: true, unitNumber: true, warrantyExpiryDate: true, block: { select: { blockNumber: true } } } },
       client:        { select: { id: true, name: true, phone: true } },
       project:       { select: { id: true, abbreviation: true } },
       contractor:    { select: { name: true } },
@@ -315,9 +315,10 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       appointmentTime:  apptInFuture ? apptTime : null,
       appointmentNotes: appt?.notes ?? null,
       appointment:      appt ? { id: appt.id, date: appt.date, time: appt.time ?? null } : null,
-      subTypeName:      (t as any).ticketSubType?.nameAr ?? null,
-      clientPhone:      (t as any).client?.phone         ?? null,
-      ticketSubType:    undefined,
+      subTypeName:          (t as any).ticketSubType?.nameAr ?? null,
+      clientPhone:          (t as any).client?.phone         ?? null,
+      warrantyExpiryDate:   (t as any).unit?.warrantyExpiryDate ?? null,
+      ticketSubType:        undefined,
     };
   }));
 });
