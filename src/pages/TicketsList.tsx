@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
-import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, ShieldAlert, Download } from 'lucide-react';
+import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, ShieldAlert, Download, ShieldOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -170,11 +170,21 @@ export default function TicketsList() {
     finally { setAutoLinking(false); }
   };
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const closedStatuses = new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']);
+
   const unlinkedTickets      = tickets.filter(t => !t.clientId);
   const linkedTickets        = tickets.filter(t => !!t.clientId && t.status !== 'contractor' && t.status !== 'note');
   const contractorTickets    = tickets.filter(t => t.status === 'contractor' || t.status === 'note');
   // Unclassified = no type OR explicitly "unclassified" (new fallback)
   const unclassifiedTickets  = tickets.filter(t => !t.type || t.type === 'unclassified');
+  // Out-of-warranty = linked, active tickets where unit's warranty has expired
+  const outOfWarrantyTickets = tickets.filter(t =>
+    !!t.clientId &&
+    !closedStatuses.has(t.status) &&
+    t.warrantyExpiryDate &&
+    t.warrantyExpiryDate < todayStr
+  );
 
   const [bulkClassifying, setBulkClassifying] = useState(false);
   const [ticketFormOpen, setTicketFormOpen] = useState(false);
@@ -328,6 +338,18 @@ export default function TicketsList() {
                     </Badge>
                   </TabsTrigger>
                 )}
+                {outOfWarrantyTickets.length > 0 && (
+                  <TabsTrigger
+                    value="out-of-warranty"
+                    className="rounded-xl h-9 text-sm font-bold px-3 border border-rose-500/20 bg-rose-500/5 text-rose-500 data-[state=active]:bg-rose-600 data-[state=active]:border-rose-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-1.5 transition-all"
+                  >
+                    <ShieldOff className="w-3.5 h-3.5" />
+                    خارج الضمان
+                    <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-rose-500 text-white border-0">
+                      {outOfWarrantyTickets.length}
+                    </Badge>
+                  </TabsTrigger>
+                )}
               </TabsList>
             </div>
 
@@ -423,6 +445,30 @@ export default function TicketsList() {
                 search={ticketSearch}
                 onSearchChange={setTicketSearch}
                 exportOpen={activeTab === 'unlinked' ? exportOpen : false}
+                onExportOpenChange={setExportOpen}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="out-of-warranty" className="mt-0">
+            <div className="bg-card border border-rose-500/25 rounded-3xl overflow-hidden shadow-sm">
+              <div className="p-3 bg-rose-500/8 border-b border-rose-500/20 flex items-center gap-2 text-rose-400 text-sm font-semibold">
+                <ShieldOff className="w-4 h-4 shrink-0" />
+                <span>هذه التذاكر خاصة بوحدات انتهى ضمانها — يُنصح بإخطار العميل قبل بدء الصيانة</span>
+              </div>
+              <TicketTable
+                clientMap={clients}
+                tickets={ticketSearch.trim() ? tickets.filter(t => !closedStatuses.has(t.status) && t.warrantyExpiryDate && t.warrantyExpiryDate < todayStr) : outOfWarrantyTickets}
+                selectedIds={selectedTicketIds}
+                onSelectionChange={setSelectedTicketIds}
+                hideProjectColumn={!showProjectColumn}
+                projects={projects}
+                showInlineFilters
+                onRefresh={loadData}
+                stateKey="tl_out_of_warranty"
+                search={ticketSearch}
+                onSearchChange={setTicketSearch}
+                exportOpen={activeTab === 'out-of-warranty' ? exportOpen : false}
                 onExportOpenChange={setExportOpen}
               />
             </div>
