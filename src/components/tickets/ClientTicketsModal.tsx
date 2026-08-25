@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ticketsApi, clientsApi, projectsApi } from '@/lib/api';
-import { Loader2, FileImage, ExternalLink, Wrench, CheckCircle2, MessageCircle, CalendarDays } from 'lucide-react';
+import { Loader2, FileImage, ExternalLink, Wrench, CheckCircle2, MessageCircle, CalendarDays, Square, CheckSquare } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -42,6 +42,8 @@ export function ClientTicketsModal({
   const [tickets, setTickets]   = useState<any[]>([]);
   const [fetching, setFetching] = useState(false);
   const [ticketToClose, setTicketToClose] = useState<any | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkCloseOpen, setBulkCloseOpen] = useState(false);
 
   const [clients, setClients] = useState<any[]>([]);
   const [projects, setProjects] = useState<any>({});
@@ -73,7 +75,24 @@ export function ClientTicketsModal({
 
   useEffect(() => {
     fetchTickets();
+    setSelectedIds(new Set());
   }, [open, unitId, projectId]);
+
+  const allSelected = tickets.length > 0 && selectedIds.size === tickets.length;
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(tickets.map(t => t.id)));
+    }
+  };
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
 
   return (
@@ -91,9 +110,21 @@ export function ClientTicketsModal({
             <span>التذاكر المفتوحة</span>
             <span className="text-muted-foreground font-normal">— وحدة {tickets[0]?.unitNumber || '---'}</span>
             {tickets.length > 0 && (
-              <span className="mr-auto text-xs font-bold bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full">
-                {tickets.length}
-              </span>
+              <>
+                <span className="text-xs font-bold bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full">
+                  {tickets.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="mr-auto flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  {allSelected
+                    ? <CheckSquare className="w-4 h-4 text-blue-400" />
+                    : <Square className="w-4 h-4" />}
+                  {allSelected ? 'إلغاء التحديد' : 'تحديد الكل'}
+                </button>
+              </>
             )}
           </DialogTitle>
         </DialogHeader>
@@ -116,10 +147,23 @@ export function ClientTicketsModal({
                 return (
                   <div
                     key={t.id}
-                    className="bg-background border border-border/60 rounded-xl p-3.5 space-y-2"
+                    className={cn(
+                      'bg-background border rounded-xl p-3.5 space-y-2 transition-colors cursor-pointer',
+                      selectedIds.has(t.id) ? 'border-blue-500/40 bg-blue-500/5' : 'border-border/60'
+                    )}
+                    onClick={() => toggleSelect(t.id)}
                   >
                     {/* Top row */}
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); toggleSelect(t.id); }}
+                        className="shrink-0 text-slate-500 hover:text-blue-400 transition-colors"
+                      >
+                        {selectedIds.has(t.id)
+                          ? <CheckSquare className="w-4 h-4 text-blue-400" />
+                          : <Square className="w-4 h-4" />}
+                      </button>
                       <span className="text-xs font-black text-blue-500">
                         #{t.ticketId || t.id.slice(0, 6)}
                       </span>
@@ -140,11 +184,11 @@ export function ClientTicketsModal({
                         className="mr-auto flex items-center gap-1 text-[11px] text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg font-bold transition-colors"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        إغلاق التذكرة
+                        إغلاق
                       </button>
                       <Link
                         to={`/tickets/${t.id}`}
-                        onClick={() => onOpenChange(false)}
+                        onClick={(e) => { e.stopPropagation(); onOpenChange(false); }}
                         className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-400 font-bold transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
@@ -187,6 +231,32 @@ export function ClientTicketsModal({
 
         </div>
 
+        {/* Bulk close footer */}
+        {selectedIds.size > 0 && (
+          <div className="px-5 py-3 border-t border-border/60 flex items-center justify-between gap-3 bg-blue-500/5">
+            <span className="text-xs text-blue-400 font-bold">
+              {selectedIds.size} تذكرة محددة
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkCloseOpen(true)}
+                className="flex items-center gap-1.5 text-[11px] text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg font-bold transition-colors"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                إغلاق التذاكر المحددة
+              </button>
+            </div>
+          </div>
+        )}
+
       </DialogContent>
 
       {ticketToClose && (
@@ -198,6 +268,22 @@ export function ClientTicketsModal({
           projects={projects}
           onSuccess={() => {
             setTicketToClose(null);
+            fetchTickets();
+            onSuccess?.();
+          }}
+        />
+      )}
+
+      {bulkCloseOpen && (
+        <CloseTicketDialog
+          open={bulkCloseOpen}
+          onOpenChange={(v) => !v && setBulkCloseOpen(false)}
+          selectedTickets={tickets.filter(t => selectedIds.has(t.id))}
+          clients={clients}
+          projects={projects}
+          onSuccess={() => {
+            setBulkCloseOpen(false);
+            setSelectedIds(new Set());
             fetchTickets();
             onSuccess?.();
           }}

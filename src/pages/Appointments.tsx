@@ -3,7 +3,7 @@ import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, RefreshCw,
   Plus, Users, CalendarPlus, Printer, Pencil, Search, FileImage,
   Phone, MessageCircle, CheckCircle2, RotateCcw, Wrench, Home,
-  ChevronDown, Download, AlertTriangle
+  ChevronDown, Download, AlertTriangle, X
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -798,25 +798,35 @@ export default function Appointments() {
 
                     {/* Row 2: search + add + export dropdown (center only) */}
                     {isCenter && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         <div className="relative">
-                          <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                          <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                           <input
                             type="text"
                             placeholder="بحث..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="bg-background border border-input rounded-xl pl-2 pr-8 h-8 text-xs text-foreground focus:outline-none focus:border-blue-500 transition-colors w-[100px] sm:w-[150px]"
+                            className="bg-background border border-input rounded-xl pr-8 h-9 text-xs text-foreground focus:outline-none focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/10 transition-all w-[130px] sm:w-[190px]"
+                            style={{ paddingLeft: searchQuery ? '1.75rem' : '0.5rem' }}
                             onClick={(e) => e.stopPropagation()}
                           />
+                          {searchQuery && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setSearchQuery(''); }}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                         <Button
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setDirectApptDate(ds); }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold h-8 px-2.5 shadow-lg flex items-center gap-1 text-xs shrink-0"
+                          className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-500/50 rounded-xl font-bold h-9 px-3 shadow-sm flex items-center gap-1.5 text-xs shrink-0 transition-all"
                         >
-                          <CalendarPlus className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">إضافة</span>
+                          <CalendarPlus className="w-4 h-4" />
+                          <span className="hidden sm:inline">إضافة موعد</span>
                         </Button>
                         {/* Export dropdown */}
                         <div className="relative shrink-0" ref={exportDropdownRef}>
