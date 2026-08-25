@@ -153,13 +153,15 @@ router.get('/requests/:id/export', requireAuth, async (req: AuthRequest, res) =>
   }));
 
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(rows, { origin: 'A3' });
+  const ws = XLSX.utils.json_to_sheet(rows);
 
-  // Header info rows
+  // Header info rows — prepend 2 rows above the data
   XLSX.utils.sheet_add_aoa(ws, [
     [`طلب مواد — ${request.project.name} (${request.project.abbreviation})`],
     [`المشرف: ${request.requester.displayName}    |    التاريخ: ${new Date(request.createdAt).toLocaleDateString('ar-EG')}    |    ${request.title || ''}`],
-  ], { origin: 'A1' });
+    Object.keys(rows[0] || {}), // column headers
+    ...rows.map(r => Object.values(r)),
+  ]);
 
   ws['!cols'] = [{ wch: 5 }, { wch: 30 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 30 }];
 
