@@ -38,6 +38,7 @@ import warehouseRoutes from "./routes/warehouse.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { startCronJobs } from "./cronJobs.js";
+import { initVapid } from "./pushService.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
 import { startReclassifyWorker, stopReclassifyWorker } from "./classifier/reclassify-worker.js";
 import { startTrainWorker, stopTrainWorker } from "./classifier/train-worker.js";
@@ -204,6 +205,7 @@ app.use(express.static(distPath));
   // Ensure critical sub-types exist (e.g. روائح كريهة under drainage)
   seedSubTypes().catch((e) => console.error('⚠️  Sub-type seed failed:', e.message));
 
+  await initVapid();           // load/generate stable VAPID keys from DB
   startCronJobs();             // push notification scheduled jobs
 
   httpServer.listen(PORT, "0.0.0.0", () => {
