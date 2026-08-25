@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, ShieldOff, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, ArrowUpDown, User, Filter, Archive } from 'lucide-react';
+import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, ShieldOff, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, User, Filter, Archive, SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { formatAppointmentDayTime } from '@/lib/utils';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
@@ -20,6 +20,7 @@ import { format, differenceInDays, parse, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ExportTicketsModal } from './ExportTicketsModal';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -366,6 +367,59 @@ function ExcelFilterMenu({
   );
 }
 
+function MobileFilterSection({
+  title,
+  options,
+  selected,
+  onToggle,
+  defaultOpen = false,
+}: {
+  title: string;
+  options: ExcelFilterOption[];
+  selected: string[];
+  onToggle: (value: string) => void;
+  defaultOpen?: boolean;
+}) {
+  if (options.length === 0) return null;
+
+  return (
+    <details open={defaultOpen} className="group rounded-2xl border border-border/60 bg-background/50 overflow-hidden">
+      <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-black text-foreground">{title}</span>
+          {selected.length > 0 && (
+            <span className="min-w-5 h-5 px-1.5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center">
+              {selected.length}
+            </span>
+          )}
+        </div>
+        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="flex flex-wrap gap-2 px-3 pb-3 pt-0 border-t border-border/40">
+        {options.map(option => {
+          const active = selected.includes(option.value);
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onToggle(option.value)}
+              className={cn(
+                'min-h-9 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5',
+                active
+                  ? 'border-blue-500/60 bg-blue-500/15 text-blue-600 dark:text-blue-300'
+                  : 'border-border/60 bg-card text-muted-foreground hover:text-foreground hover:border-border',
+              )}
+            >
+              {active && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
 // ─── TicketTable ──────────────────────────────────────────────────────────────
 
 interface TicketTableProps {
@@ -413,7 +467,7 @@ export function TicketTable({
   onSearchChange,
 }: TicketTableProps) {
   const navigate = useNavigate();
-  const [showMobileSort, setShowMobileSort] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // ── جلب الأنواع من DB (live) ──────────────────────────────────────────────
   const {
@@ -486,32 +540,61 @@ export function TicketTable({
     setLocalDates([]); setLocalDays([]); setLocalAppointments([]);
   };
 
-  const uniqueSupervisors = useMemo(() => {
-    const map = new Map<string, string>();
-    tickets.forEach(t => {
-      const sups = t.assignedSupervisors;
-      if (Array.isArray(sups)) {
-        sups.forEach(s => {
-          if (s && s.id && s.name) map.set(s.id, s.name);
-        });
-      } else if (sups && typeof sups === 'object') {
-        Object.values(sups).forEach((s: any) => {
-          if (s && s.id && s.name) map.set(s.id, s.name);
-        });
-      } else if (t.assignedSupervisorId && t.assigneeName && t.assigneeName !== '---') {
-        map.set(t.assignedSupervisorId, t.assigneeName);
-      }
-    });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-  }, [tickets]);
-
   // ── Sort state (default: oldest first) ───────────────────────────────────
   type SortKey = 'date' | 'days' | 'priority' | 'status' | 'ref' | 'client';
   const [sortKey, setSortKey] = useState<SortKey>(() => (stateKey ? (sessionStorage.getItem(`${stateKey}_sortKey`) as SortKey) : null) || 'date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() => (stateKey ? (sessionStorage.getItem(`${stateKey}_sortDir`) as 'asc'|'desc') : null) || 'asc');
 
+  // Mobile uses one staged filter sheet. Changes are only committed when the
+  // user taps "تطبيق", so closing the sheet never leaves a half-finished filter.
+  const [draftStatuses, setDraftStatuses] = useState<string[]>([]);
+  const [draftTypes, setDraftTypes] = useState<string[]>([]);
+  const [draftProjects, setDraftProjects] = useState<string[]>([]);
+  const [draftSupervisors, setDraftSupervisors] = useState<string[]>([]);
+  const [draftAppointments, setDraftAppointments] = useState<string[]>([]);
+  const [draftSortKey, setDraftSortKey] = useState<SortKey>('date');
+  const [draftSortDir, setDraftSortDir] = useState<'asc' | 'desc'>('asc');
+
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_sortKey`, sortKey); }, [sortKey, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_sortDir`, sortDir); }, [sortDir, stateKey]);
+
+  const openMobileFilters = () => {
+    setDraftStatuses(localStatuses);
+    setDraftTypes(localTypes);
+    setDraftProjects(localProjects);
+    setDraftSupervisors(localSupervisors);
+    setDraftAppointments(localAppointments);
+    setDraftSortKey(sortKey);
+    setDraftSortDir(sortDir);
+    setMobileFiltersOpen(true);
+  };
+
+  const toggleDraftValue = (
+    value: string,
+    values: string[],
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+  ) => setter(values.includes(value) ? values.filter(v => v !== value) : [...values, value]);
+
+  const clearMobileDraft = () => {
+    setDraftStatuses([]);
+    setDraftTypes([]);
+    setDraftProjects([]);
+    setDraftSupervisors([]);
+    setDraftAppointments([]);
+    setDraftSortKey('date');
+    setDraftSortDir('asc');
+  };
+
+  const applyMobileFilters = () => {
+    setLocalStatuses(draftStatuses);
+    setLocalTypes(draftTypes);
+    setLocalProjects(draftProjects);
+    setLocalSupervisors(draftSupervisors);
+    setLocalAppointments(draftAppointments);
+    setSortKey(draftSortKey);
+    setSortDir(draftSortDir);
+    setMobileFiltersOpen(false);
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -684,6 +767,15 @@ export function TicketTable({
     return APPOINTMENT_FILTER_GROUPS.filter(g => present.has(g.key))
       .map(g => ({ value: g.key, label: g.label }));
   }, filterDeps);
+
+  const activeMobileFilterCount =
+    localStatuses.length + localTypes.length + localProjects.length +
+    localSupervisors.length + localAppointments.length;
+  const draftMobileFilterCount =
+    draftStatuses.length + draftTypes.length + draftProjects.length +
+    draftSupervisors.length + draftAppointments.length;
+  const hasCustomSort = sortKey !== 'date' || sortDir !== 'asc';
+  const mobileControlActive = activeMobileFilterCount > 0 || hasCustomSort;
 
   const baseTickets = useMemo(() => {
     if (!showInlineFilters) return tickets;
@@ -897,33 +989,25 @@ export function TicketTable({
               <span className="hidden sm:inline">المغلقة</span>
             </button>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <Button variant="outline" className={cn("h-10 px-3 rounded-xl gap-2 md:hidden transition-all", showMobileSort ? "bg-blue-500/10 border-blue-500/30 text-blue-400" : "bg-card border-border/50 text-slate-400")}>
-                  <ArrowUpDown className="w-4 h-4" />
-                </Button>
-              } />
-              <DropdownMenuContent className="bg-card border-border text-foreground min-w-[140px]" align="end">
-                <div className="px-2 py-1.5 text-xs font-bold text-slate-500">ترتيب حسب:</div>
-                {([
-                  { key: 'date' as SortKey,     label: 'التاريخ'   },
-                  { key: 'days' as SortKey,     label: 'الأيام'    },
-                  { key: 'priority' as SortKey, label: 'الأولوية'  },
-                  { key: 'status' as SortKey,   label: 'الحالة'    },
-                  { key: 'client' as SortKey,   label: 'العميل'    },
-                  { key: 'ref' as SortKey,      label: 'المرجع'    },
-                ]).map(({ key, label }) => (
-                  <DropdownMenuItem 
-                    key={key} 
-                    onClick={() => handleSort(key)}
-                    className={cn("flex items-center justify-between cursor-pointer", sortKey === key && "text-blue-400 font-bold bg-blue-500/10")}
-                  >
-                    {label}
-                    {sortKey === key && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={openMobileFilters}
+              title="فلترة وترتيب"
+              className={cn(
+                'relative h-10 w-11 px-0 rounded-xl md:hidden transition-all',
+                mobileControlActive
+                  ? 'bg-blue-500/10 border-blue-500/40 text-blue-500 dark:text-blue-300'
+                  : 'bg-card border-border/50 text-slate-400',
+              )}
+            >
+              <SlidersHorizontal className="w-4.5 h-4.5" />
+              {activeMobileFilterCount > 0 && (
+                <span className="absolute -top-1.5 -left-1.5 min-w-5 h-5 px-1 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center border-2 border-card">
+                  {activeMobileFilterCount}
+                </span>
+              )}
+            </Button>
 
           </div>
 
@@ -934,69 +1018,24 @@ export function TicketTable({
            * moved into the search box above, next to the clear (X) button.     */}
           <div className="flex flex-wrap items-center gap-2 mt-3 w-full">
             {/* Mobile-only value filters — desktop uses the column headers instead */}
-            <div className="flex flex-wrap items-center gap-2 md:hidden">
-              <ExcelFilterMenu
-                options={statusFilterOptions}
-                selected={localStatuses}
-                onChange={setLocalStatuses}
-                trigger={
-                  <Button variant="outline" size="sm" className={cn(
-                    'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                    localStatuses.length > 0 ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
-                  )}>
-                    <ChevronDown className="w-3 h-3 opacity-60" />
-                    {localStatuses.length > 0 ? `الحالة (${localStatuses.length})` : 'الحالة'}
-                  </Button>
-                }
-              />
-              <ExcelFilterMenu
-                options={typeFilterOptions}
-                selected={localTypes}
-                onChange={setLocalTypes}
-                trigger={
-                  <Button variant="outline" size="sm" className={cn(
-                    'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                    localTypes.length > 0 ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
-                  )}>
-                    <ChevronDown className="w-3 h-3 opacity-60" />
-                    {localTypes.length > 0 ? `التخصص (${localTypes.length})` : 'التخصص'}
-                  </Button>
-                }
-              />
-              {!hideSupervisorColumn && uniqueSupervisors.length > 0 && (
+            {/* فلتر المشروع — لا يوجد له عمود في الجدول فيبقى هنا دايماً */}
+            {!hideProjectColumn && projectFilterOptions.length > 1 && (
+              <div className="hidden md:block">
                 <ExcelFilterMenu
-                  options={supervisorFilterOptions}
-                  selected={localSupervisors}
-                  onChange={setLocalSupervisors}
+                  options={projectFilterOptions}
+                  selected={localProjects}
+                  onChange={setLocalProjects}
                   trigger={
                     <Button variant="outline" size="sm" className={cn(
                       'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                      localSupervisors.length > 0 ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
+                      localProjects.length > 0 ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
                     )}>
                       <ChevronDown className="w-3 h-3 opacity-60" />
-                      {localSupervisors.length > 0 ? `المشرف (${localSupervisors.length})` : 'المشرف'}
+                      {localProjects.length > 0 ? `المشروع (${localProjects.length})` : 'المشروع'}
                     </Button>
                   }
                 />
-              )}
-            </div>
-
-            {/* فلتر المشروع — لا يوجد له عمود في الجدول فيبقى هنا دايماً */}
-            {!hideProjectColumn && projectFilterOptions.length > 1 && (
-              <ExcelFilterMenu
-                options={projectFilterOptions}
-                selected={localProjects}
-                onChange={setLocalProjects}
-                trigger={
-                  <Button variant="outline" size="sm" className={cn(
-                    'h-9 border-border/50 rounded-xl gap-1.5 text-xs font-medium',
-                    localProjects.length > 0 ? 'border-blue-500/50 bg-blue-500/10 text-blue-500 dark:text-blue-300' : 'bg-transparent text-slate-500 dark:text-slate-400',
-                  )}>
-                    <ChevronDown className="w-3 h-3 opacity-60" />
-                    {localProjects.length > 0 ? `المشروع (${localProjects.length})` : 'المشروع'}
-                  </Button>
-                }
-              />
+              </div>
             )}
 
             {/* تشمل فلاتر ID/المرجع/العميل/التاريخ/الأيام/الموعد اللي مالهاش زرار على الموبايل */}
@@ -1005,18 +1044,158 @@ export function TicketTable({
                 variant="outline"
                 size="sm"
                 onClick={clearAllValueFilters}
-                className="h-9 rounded-xl gap-1.5 text-xs font-bold border-rose-500/40 bg-rose-500/10 text-rose-500 dark:text-rose-400"
+                className="hidden md:flex h-9 rounded-xl gap-1.5 text-xs font-bold border-rose-500/40 bg-rose-500/10 text-rose-500 dark:text-rose-400"
               >
                 <X className="w-3.5 h-3.5" />
                 مسح كل الفلاتر
               </Button>
             )}
 
+            {activeMobileFilterCount > 0 && (
+              <span className="md:hidden text-[10px] font-bold text-blue-500 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2 py-1">
+                {activeMobileFilterCount} اختيار مفعّل
+              </span>
+            )}
             <span className="text-[10px] text-slate-500 font-bold px-2 mr-auto">
               {baseTickets.length} / {tickets.length}
             </span>
           </div>
         </div>
+      )}
+
+      {showInlineFilters && (
+        <Dialog open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+          <DialogContent
+            showCloseButton={false}
+            dir="rtl"
+            className="!fixed !inset-x-0 !bottom-0 !top-auto !left-0 !translate-x-0 !translate-y-0 !w-full !max-w-none !max-h-[88dvh] !rounded-t-3xl !rounded-b-none !p-0 !gap-0 overflow-hidden border-x-0 border-b-0 md:hidden"
+          >
+            <div className="flex items-center justify-between gap-3 px-4 py-4 border-b border-border bg-card shrink-0">
+              <div>
+                <DialogTitle className="text-base font-black">فلترة وترتيب التذاكر</DialogTitle>
+                <p className="text-[11px] text-muted-foreground mt-1">اختر أكثر من قيمة من أي قسم</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(false)}
+                className="w-9 h-9 rounded-full bg-muted text-muted-foreground flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto overscroll-contain p-3 space-y-2 bg-card min-h-0">
+              <MobileFilterSection
+                title="الحالة"
+                options={statusFilterOptions}
+                selected={draftStatuses}
+                onToggle={value => toggleDraftValue(value, draftStatuses, setDraftStatuses)}
+                defaultOpen
+              />
+              <MobileFilterSection
+                title="التخصص"
+                options={typeFilterOptions}
+                selected={draftTypes}
+                onToggle={value => toggleDraftValue(value, draftTypes, setDraftTypes)}
+                defaultOpen
+              />
+              {!hideSupervisorColumn && (
+                <MobileFilterSection
+                  title="المشرف"
+                  options={supervisorFilterOptions}
+                  selected={draftSupervisors}
+                  onToggle={value => toggleDraftValue(value, draftSupervisors, setDraftSupervisors)}
+                />
+              )}
+              {!hideProjectColumn && (
+                <MobileFilterSection
+                  title="المشروع"
+                  options={projectFilterOptions}
+                  selected={draftProjects}
+                  onToggle={value => toggleDraftValue(value, draftProjects, setDraftProjects)}
+                />
+              )}
+              <MobileFilterSection
+                title="الموعد"
+                options={appointmentFilterOptions}
+                selected={draftAppointments}
+                onToggle={value => toggleDraftValue(value, draftAppointments, setDraftAppointments)}
+              />
+
+              <details open className="group rounded-2xl border border-border/60 bg-background/50 overflow-hidden">
+                <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+                  <span className="text-sm font-black text-foreground">الترتيب</span>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="px-3 pb-3 pt-0 border-t border-border/40 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { key: 'date' as SortKey, label: 'التاريخ' },
+                      { key: 'days' as SortKey, label: 'عدد الأيام' },
+                      { key: 'priority' as SortKey, label: 'الأولوية' },
+                      { key: 'status' as SortKey, label: 'الحالة' },
+                      { key: 'client' as SortKey, label: 'العميل' },
+                      { key: 'ref' as SortKey, label: 'المرجع' },
+                    ]).map(option => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setDraftSortKey(option.key)}
+                        className={cn(
+                          'min-h-9 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all',
+                          draftSortKey === option.key
+                            ? 'border-blue-500/60 bg-blue-500/15 text-blue-600 dark:text-blue-300'
+                            : 'border-border/60 bg-card text-muted-foreground',
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-muted/60">
+                    {([
+                      { value: 'asc' as const, label: 'تصاعدي' },
+                      { value: 'desc' as const, label: 'تنازلي' },
+                    ]).map(option => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setDraftSortDir(option.value)}
+                        className={cn(
+                          'h-9 rounded-lg text-xs font-black transition-all',
+                          draftSortDir === option.value
+                            ? 'bg-card text-blue-500 shadow-sm'
+                            : 'text-muted-foreground',
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            <div className="grid grid-cols-[auto_1fr] gap-2 p-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))] border-t border-border bg-card shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={clearMobileDraft}
+                className="h-11 rounded-xl gap-2 px-3 text-muted-foreground"
+              >
+                <RotateCcw className="w-4 h-4" />
+                مسح الكل
+              </Button>
+              <Button
+                type="button"
+                onClick={applyMobileFilters}
+                className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black"
+              >
+                تطبيق{draftMobileFilterCount > 0 ? ` (${draftMobileFilterCount})` : ''}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {showInlineFilters && displayTickets.length === 0 && (
