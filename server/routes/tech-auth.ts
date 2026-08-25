@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../db.js';
 import { APP_JWT_SECRET } from '../config.js';
-import { requireAuth } from '../auth.js';
+import { requireAuth, assertPhoneNumberUnique, normalizePhoneNumber } from '../auth.js';
 import { sendWAText, getWAStatus } from '../baileys.js';
 import { BOT_USER_ID } from '../whatsappBot.js';
 
@@ -41,7 +41,19 @@ router.post('/login', async (req, res) => {
       res.status(400).json({ error: 'Missing username or password' });
       return;
     }
-    const tech = await prisma.technician.findUnique({ where: { username } });
+    const normalizedUsername = normalizePhoneNumber(username);
+    const rawUsername = String(username).trim();
+    const tech = normalizedUsername
+      ? await prisma.technician.findFirst({
+          where: {
+            OR: [
+              { username: normalizedUsername },
+              { phoneNumber: normalizedUsername },
+              ...(rawUsername !== normalizedUsername ? [{ username: rawUsername }, { phoneNumber: rawUsername }] : []),
+            ],
+          },
+        })
+      : null;
     if (!tech || !tech.isActive) {
       res.status(401).json({ error: 'Invalid credentials or inactive account' });
       return;
@@ -125,16 +137,13 @@ router.post('/invite', requireAuth, async (req: any, res) => {
       res.status(403).json({ error: 'Forbidden' });
       return;
     }
-    const { name, phoneNumber, projectId, supervisorId } = req.body;
+    const { name, projectId, supervisorId } = req.body;
+    const phoneNumber = normalizePhoneNumber(req.body.phoneNumber || null);
     if (!name || !phoneNumber || !projectId || !supervisorId) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
     }
-    const existing = await prisma.technician.findUnique({ where: { username: phoneNumber } });
-    if (existing) {
-      res.status(400).json({ error: 'Technician with this phone number already exists' });
-      return;
-    }
+    await assertPhoneNumberUnique(phoneNumber);
     const tempPassword = Math.floor(100000 + Math.random() * 900000).toString();
     const passwordHash = await bcrypt.hash(tempPassword, 10);
     const tech = await prisma.technician.create({
@@ -160,7 +169,7 @@ router.post('/invite', requireAuth, async (req: any, res) => {
 
     res.json({ technicianId: tech.id, tempPassword, waSent: waResult.sent });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 

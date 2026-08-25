@@ -46,6 +46,7 @@ let globalIo: any = null;
 
 async function startServer() {
   const app = express();
+  app.set("trust proxy", "loopback");
   const httpServer = createServer(app);
   globalIo = setupSocket(httpServer);
   

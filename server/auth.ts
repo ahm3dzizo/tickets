@@ -132,10 +132,50 @@ export function sanitizeSpecialties(input: unknown): string[] {
   return Array.from(uniq);
 }
 
-export function normalizePhoneNumber(value: string | null): string | null {
-  if (!value) return null;
-  const normalized = value.replace(/\s+/g, "");
-  return normalized.length > 0 ? normalized : null;
+export function normalizePhoneNumber(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw || !/^[+\d\s().-]+$/.test(raw)) return null;
+  let normalized = raw.replace(/\D/g, "");
+  if (normalized.startsWith("00")) normalized = normalized.slice(2);
+  // Store Saudi mobile numbers in international form so 05xxxxxxxx,
+  // 5xxxxxxxx and +9665xxxxxxxx cannot create separate accounts.
+  if (/^05\d{8}$/.test(normalized)) normalized = `966${normalized.slice(1)}`;
+  else if (/^5\d{8}$/.test(normalized)) normalized = `966${normalized}`;
+  return normalized.length >= 7 && normalized.length <= 15 ? normalized : null;
+}
+
+export async function assertPhoneNumberUnique(
+  phoneNumber: string | null,
+  options: { excludeUserUid?: string; excludeTechnicianId?: string } = {},
+) {
+  const normalized = normalizePhoneNumber(phoneNumber);
+  if (!normalized) return;
+
+  // Compare normalized values so legacy formatting (+, spaces, 00 prefix)
+  // cannot bypass the uniqueness rule before all old rows are migrated.
+  const [users, technicians] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        phoneNumber: { not: null },
+        ...(options.excludeUserUid ? { uid: { not: options.excludeUserUid } } : {}),
+      },
+      select: { uid: true, phoneNumber: true },
+    }),
+    prisma.technician.findMany({
+      where: {
+        phoneNumber: { not: null },
+        ...(options.excludeTechnicianId ? { id: { not: options.excludeTechnicianId } } : {}),
+      },
+      select: { id: true, phoneNumber: true },
+    }),
+  ]);
+
+  const duplicateUser = users.some((user) => normalizePhoneNumber(user.phoneNumber) === normalized);
+  const duplicateTechnician = technicians.some((tech) => normalizePhoneNumber(tech.phoneNumber) === normalized);
+  if (duplicateUser || duplicateTechnician) {
+    throw new Error("رقم الهاتف مستخدم بالفعل لحساب آخر");
+  }
 }
 
 export function toPublicUser<T extends Record<string, unknown> | null>(user: T) {
@@ -161,25 +201,15 @@ export function toPublicUsers<T extends Array<Record<string, unknown>>>(users: T
 }
 
 export async function assertUserIdentityUnique(employeeId: string | null, phoneNumber: string | null, excludeUid?: string) {
-  const orWhere: Array<Record<string, string>> = [];
-  if (employeeId) orWhere.push({ employeeId });
-  if (phoneNumber) orWhere.push({ phoneNumber });
-  if (orWhere.length === 0) return;
-
-  const existing = await prisma.user.findFirst({
-    where: {
-      OR: orWhere,
-      ...(excludeUid ? { uid: { not: excludeUid } } : {}),
-    },
-    select: { uid: true, employeeId: true, phoneNumber: true },
-  });
-
-  if (!existing) return;
-  if (employeeId && existing.employeeId === employeeId) {
-    throw new Error("رقم الموظف مستخدم بالفعل");
+  if (employeeId) {
+    const existingEmployee = await prisma.user.findFirst({
+      where: {
+        employeeId,
+        ...(excludeUid ? { uid: { not: excludeUid } } : {}),
+      },
+      select: { uid: true },
+    });
+    if (existingEmployee) throw new Error("رقم الموظف مستخدم بالفعل");
   }
-  if (phoneNumber && existing.phoneNumber === phoneNumber) {
-    throw new Error("رقم الهاتف مستخدم بالفعل");
-  }
-  throw new Error("بيانات الهوية موجودة مسبقاً");
+  await assertPhoneNumberUnique(phoneNumber, { excludeUserUid: excludeUid });
 }

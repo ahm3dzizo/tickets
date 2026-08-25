@@ -103,13 +103,13 @@ export function TicketForm({
   useEffect(() => {
     projectsApi.getAll()
       .then((all: Project[]) => {
-        const scoped = (!user || user.role === 'admin')
-          ? all
-          : all.filter(p => (user.projectIds || []).includes(p.id));
-        setProjects(scoped);
+        // The API derives access from the live User↔Project relation. Filtering
+        // again with the cached auth profile can incorrectly hide newly
+        // assigned projects from this form and its import modal.
+        setProjects(all);
         // لو المستخدم مسنودله مشروع واحد بس، اختاره تلقائي
-        if (!defaultProjectId && scoped.length === 1) {
-          setProjectId(scoped[0].id);
+        if (!defaultProjectId && all.length === 1) {
+          setProjectId(all[0].id);
         }
       })
       .catch(() => {});

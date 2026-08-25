@@ -47,8 +47,9 @@ router.post("/login", loginLimiter, async (req, res) => {
   if (email) {
     user = await prisma.user.findUnique({ where: { email } });
   } else if (phoneNumber) {
-    // Multiple users may share a phone.
-    // Priority: password match first, then first-login account.
+    // During the rollout, tolerate legacy duplicate rows long enough for an
+    // existing account to sign in. New writes are rejected and the database
+    // unique constraint prevents new duplicates.
     const allByPhone = await prisma.user.findMany({
       where: { phoneNumber }
     });

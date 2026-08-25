@@ -225,8 +225,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     }
 
     const employeeId = asTrimmedString(data.employeeId);
-    const phoneNumber = asTrimmedString(data.phoneNumber);
-    if (phoneNumber && !/^\d{7,15}$/.test(phoneNumber.replace(/\s+/g, ""))) {
+    const rawPhoneNumber = asTrimmedString(data.phoneNumber);
+    const phoneNumber = normalizePhoneNumber(rawPhoneNumber);
+    if (rawPhoneNumber && !phoneNumber) {
       throw new Error("صيغة رقم الهاتف غير صالحة");
     }
 

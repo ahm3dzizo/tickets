@@ -18,7 +18,7 @@ model User {
   displayName        String
   role               String    @default("engineer")
   employeeId         String?
-  phoneNumber        String?
+  phoneNumber        String?   @unique
   photoURL           String?
   profileCompleted   Boolean   @default(false)
   disabled           Boolean   @default(false)

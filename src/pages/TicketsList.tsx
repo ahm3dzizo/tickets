@@ -55,11 +55,11 @@ export default function TicketsList() {
       const clientMap: Record<string, Client> = {};
       allClients.forEach((c: any) => { clientMap[c.id] = c as Client; });
       setClients(clientMap);
-      const scopedProjects = user.role === 'admin'
-        ? allProjects
-        : allProjects.filter((p: any) => user.projectIds?.includes(p.id));
       const projectMap: Record<string, Project> = {};
-      scopedProjects.forEach((p: any) => { projectMap[p.id] = p as Project; });
+      // /api/projects is already scoped from the current database relations.
+      // Do not filter it again using the cached auth profile: projectIds may be
+      // stale until the user signs in again after an assignment changes.
+      allProjects.forEach((p: any) => { projectMap[p.id] = p as Project; });
       setProjects(projectMap);
 
       const params: Parameters<typeof ticketsApi.getAll>[0] = {};

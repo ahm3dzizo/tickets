@@ -6,7 +6,7 @@
  */
 
 import { Router } from "express";
-import { requireAuth, AuthRequest } from "../auth.js";
+import { requireAuth, AuthRequest, getRequesterRole } from "../auth.js";
 import multer from "multer";
 import fs from "fs";
 import * as XLSX from "xlsx";
@@ -467,16 +467,22 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
   try {
     // ── 1. Load project info ─────────────────────────────────────────────────
+    const role = await getRequesterRole(req.uid!);
+    const projectWhere: any = { id: projectId };
+    if (role !== "admin") {
+      projectWhere.users = { some: { uid: req.uid! } };
+    }
+
     const [project, existingTicketsCount] = await Promise.all([
-      prisma.project.findUnique({
-        where: { id: projectId },
+      prisma.project.findFirst({
+        where: projectWhere,
         select: { id: true, name: true, abbreviation: true },
       }),
       prisma.ticket.count({ where: { projectId } }),
     ]);
     if (!project) {
       fs.unlinkSync(filePath);
-      res.write(JSON.stringify({ error: "المشروع غير موجود" }) + "\n");
+      res.write(JSON.stringify({ error: "المشروع غير موجود أو غير مسموح لك بالاستيراد إليه" }) + "\n");
       return res.end();
     }
     const projectAbbr = (project.abbreviation || "").toUpperCase();
@@ -532,10 +538,9 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       })
     ]);
 
-    const allSups = projectSups.length > 0 ? projectSups : await prisma.user.findMany({
-      where: { role: "supervisor" },
-      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
-    });
+    // Never fall back to supervisors from other projects. A project with no
+    // supervisors should keep imported tickets unassigned.
+    const allSups = projectSups;
 
     const getSpecs = (u: any): string[] => {
       if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
