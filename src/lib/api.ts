@@ -650,4 +650,42 @@ export const notificationsApi = {
   read: (id: string) => post<{ ok: boolean }>(`/notifications/${id}/read`, {}),
 };
 
+// ── Warehouse ─────────────────────────────────────────────────────────────────
+export const warehouseApi = {
+  // Items
+  getItems: (projectId: string) => get<any[]>(`/warehouse/items?projectId=${encodeURIComponent(projectId)}`),
+  createItem: (data: { projectId: string; name: string; category?: string; quantity?: number; unit?: string; minQuantity?: number; notes?: string }) =>
+    post<any>('/warehouse/items', data),
+  updateItem: (id: string, data: Partial<{ name: string; category: string; quantity: number; unit: string; minQuantity: number; notes: string }>) =>
+    put<any>(`/warehouse/items/${id}`, data),
+  deleteItem: (id: string) => del<any>(`/warehouse/items/${id}`),
+
+  // Requests
+  getRequests: (projectId?: string) => {
+    const q = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+    return get<any[]>(`/warehouse/requests${q}`);
+  },
+  createRequest: (data: { projectId: string; title?: string; notes?: string; items: { name: string; quantity: number; unit?: string; urgency?: string; notes?: string }[] }) =>
+    post<any>('/warehouse/requests', data),
+  updateRequest: (id: string, data: { title?: string; notes?: string; items: { name: string; quantity: number; unit?: string; urgency?: string; notes?: string }[] }) =>
+    put<any>(`/warehouse/requests/${id}`, data),
+  deleteRequest: (id: string) => del<any>(`/warehouse/requests/${id}`),
+  exportRequest: (id: string) => {
+    const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
+    return fetch(`/api/warehouse/requests/${id}/export`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(async r => {
+      if (!r.ok) throw new Error('فشل تصدير الملف');
+      const blob = await r.blob();
+      const cd = r.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename="(.+?)"/);
+      const filename = m ? m[1] : `request-${id}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    });
+  },
+};
+
 

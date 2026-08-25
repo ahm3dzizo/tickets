@@ -23,6 +23,8 @@ import Appointments from '@/pages/Appointments';
 import Contractors from '@/pages/Contractors';
 import ClientDetail from '@/pages/ClientDetail';
 import ContractorDetail from '@/pages/ContractorDetail';
+import Warehouse from '@/pages/Warehouse';
+import WarehouseRequests from '@/pages/WarehouseRequests';
 
 import UnitDetail from '@/pages/UnitDetail';
 import Warranties from '@/pages/Warranties';
@@ -171,6 +173,14 @@ function AppContent() {
           <Route
             path="/warranties"
             element={user && !requiresProfileCompletion ? <Warranties /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/warehouse"
+            element={user && !requiresProfileCompletion ? <Warehouse /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/warehouse/requests"
+            element={user && !requiresProfileCompletion ? <WarehouseRequests /> : <Navigate to="/login" />}
           />
           {/* ⚡ Technician PWA Routes — independent auth */}
           <Route path="/tech/login" element={<TechLogin />} />
