@@ -33,11 +33,12 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  supervisedTechnicians Technician[] @relation("SupervisorTechnicians")
-  projects              Project[]    @relation("ProjectUsers")
-  specialtiesRef        Specialty[]  @relation("UserSpecialties")
-  substitute            User?        @relation("UserSubstitute", fields: [substituteUid], references: [uid])
-  substituteFor         User[]       @relation("UserSubstitute")
+  supervisedTechnicians Technician[]      @relation("SupervisorTechnicians")
+  projects              Project[]         @relation("ProjectUsers")
+  specialtiesRef        Specialty[]       @relation("UserSpecialties")
+  substitute            User?             @relation("UserSubstitute", fields: [substituteUid], references: [uid])
+  substituteFor         User[]            @relation("UserSubstitute")
+  materialRequests      MaterialRequest[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,6 +65,8 @@ model Project {
   units                 Unit[]
   appointments          Appointment[]
   shiftLogs             ShiftLog[]
+  warehouseItems        WarehouseItem[]
+  materialRequests      MaterialRequest[]
 }
 
 /// بلوك داخل مشروع — يضم مجموعة وحدات
@@ -528,6 +531,53 @@ model TranslationCache {
 
   @@unique([sourceText, targetLang])
   @@index([targetLang])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WAREHOUSE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model WarehouseItem {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  category    String?
+  quantity    Float    @default(0)
+  unit        String   @default("قطعة")
+  minQuantity Float?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model MaterialRequest {
+  id          String                @id @default(cuid())
+  projectId   String
+  project     Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requesterId String
+  requester   User                  @relation(fields: [requesterId], references: [uid])
+  title       String?
+  notes       String?
+  items       MaterialRequestItem[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([projectId])
+  @@index([requesterId])
+}
+
+model MaterialRequestItem {
+  id        String          @id @default(cuid())
+  requestId String
+  request   MaterialRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  name      String
+  quantity  Float
+  unit      String  @default("قطعة")
+  urgency   String  @default("medium")
+  notes     String?
 }
 
 model AppNotification {

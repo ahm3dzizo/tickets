@@ -34,6 +34,7 @@ import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
 import pushRoutes from "./routes/push.js";
 import notificationRoutes from "./routes/notifications.js";
+import warehouseRoutes from "./routes/warehouse.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { startCronJobs } from "./cronJobs.js";
@@ -104,6 +105,7 @@ async function startServer() {
   app.use("/api/warranties", warrantiesRoutes);
   app.use("/api/push", pushRoutes);
   app.use("/api/notifications", notificationRoutes);
+  app.use("/api/warehouse", warehouseRoutes);
 
   // ── Legacy client routes under projects (for backward compat) ──────────
   app.get("/api/projects/:projectId/clients", requireAuth, async (req, res) => {
