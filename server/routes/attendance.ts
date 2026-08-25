@@ -996,7 +996,6 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
             type: true,
             detectedTypes: true,
             priority: true,
-            supervisorNotes: true,
 
             unit: { select: { unitNumber: true } },
             client: { select: { name: true, phone: true } },

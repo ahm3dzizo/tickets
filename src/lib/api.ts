@@ -397,7 +397,7 @@ export const techniciansApi = {
   enable:  (id: string)              => put<any>(`/technicians/${id}`, { isActive: true }),
   delete: (id: string)               => del<any>(`/technicians/${id}`),
   invite: (data: { name: string; phoneNumber: string; projectId?: string | null; supervisorId?: string | null }) =>
-    post<{ technician: any; tempPassword?: string }>('/tech/invite', data),
+    post<{ technicianId: string; tempPassword: string; waSent: boolean }>('/tech/invite', data),
 };
 
 // ── Attendance (Supervisor) ───────────────────────────────────────────────────
