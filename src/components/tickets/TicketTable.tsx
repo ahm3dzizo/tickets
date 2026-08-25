@@ -90,6 +90,7 @@ export const statusTranslations: Record<string, string> = {
   'in-progress':   'قيد التنفيذ',
   'in_progress':   'قيد التنفيذ',
   pending:         'معلقة',
+  waiting:         'في انتظار رد العميل',
   completed:       'مكتملة',
   closed:          'مغلقة',
   'out-of-scope':  'خارج اختصاص',
@@ -104,6 +105,7 @@ export const statusColors: Record<string, string> = {
   'in-progress':   'bg-amber-500/10 text-amber-400 border-amber-500/20',
   'in_progress':   'bg-amber-500/10 text-amber-400 border-amber-500/20',
   pending:         'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  waiting:         'bg-violet-500/10 text-violet-400 border-violet-500/20',
   completed:       'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   closed:          'bg-slate-500/10 text-slate-400 border-slate-500/20',
   'out-of-scope':  'bg-rose-500/10 text-rose-400 border-rose-500/20',
@@ -836,6 +838,9 @@ export function TicketTable({
       const note = ((ticket as any).contractorNote || '').trim();
       return note ? (note.length > 22 ? note.slice(0, 22) + '…' : note) : 'ملاحظة';
     }
+    if (ticket.status === 'pending' && (ticket as any).appointmentTime) {
+      return 'تم تحديد موعد';
+    }
     return statusTranslations[ticket.status] ?? ticket.status;
   };
 
@@ -1141,7 +1146,12 @@ export function TicketTable({
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border max-w-[120px] truncate', statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20')}>
+                      <span className={cn(
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full border max-w-[120px] truncate',
+                        ticket.status === 'pending' && (ticket as any).appointmentTime
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                      )}>
                         {getStatusLabel(ticket)}
                       </span>
                       <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', daysBg)}>{daysOpen}ي</span>

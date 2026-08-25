@@ -41,7 +41,7 @@ const statusTranslations: Record<string, string> = {
   'open': 'مفتوح',
   'in-progress': 'قيد التنفيذ',
   'pending': 'معلق',
-  'waiting': 'بانتظار رد العميل',
+  'waiting': 'في انتظار رد العميل',
   'completed': 'مكتمل',
   'closed': 'مغلق',
   'out-of-scope': 'خارج اختصاص',
@@ -66,8 +66,15 @@ export function TicketCard({ ticket }: TicketCardProps) {
         <div className="space-y-2 text-right">
           <div className="flex items-center gap-2 justify-end">
             <span className="text-[10px] text-slate-500 font-mono font-medium">#{ticket.id.slice(0, 8)}</span>
-            <Badge variant="outline" className={cn("text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full", statusColors[ticket.status])}>
-              {statusTranslations[ticket.status]}
+            <Badge variant="outline" className={cn(
+              "text-[10px] font-bold px-2 py-0.5 rounded-full",
+              ticket.status === 'pending' && ticket.appointmentTime
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
+                : statusColors[ticket.status]
+            )}>
+              {ticket.status === 'pending' && ticket.appointmentTime
+                ? 'تم تحديد موعد'
+                : (statusTranslations[ticket.status] ?? ticket.status)}
             </Badge>
           </div>
           <h3 className="font-bold text-slate-100 group-hover:text-blue-400 transition-colors text-base leading-tight">
@@ -83,12 +90,16 @@ export function TicketCard({ ticket }: TicketCardProps) {
           {ticket.description}
         </p>
 
-        {ticket.status === 'waiting' && (
-          <div className="flex items-center gap-2 rounded-xl border border-purple-500/20 bg-purple-500/10 px-3 py-2.5 text-purple-400">
+        {ticket.status === 'waiting' && !ticket.appointmentTime && (
+          <div className="flex items-center gap-2 rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 py-2.5 text-violet-400">
             <MessageCircle className="w-4 h-4 shrink-0" />
-            <span className="text-xs font-bold">
-              بانتظار رد العميل
-            </span>
+            <span className="text-xs font-bold">في انتظار رد العميل</span>
+          </div>
+        )}
+        {ticket.status === 'pending' && !ticket.appointmentTime && (
+          <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2.5 text-amber-400">
+            <Clock className="w-4 h-4 shrink-0" />
+            <span className="text-xs font-bold">في انتظار تحديد موعد</span>
           </div>
         )}
 
