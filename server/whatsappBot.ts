@@ -112,7 +112,7 @@ const pendingClosureChoices = new Map<string, PendingClosureChoice>(); // key: s
 
 function closureDataFor(closureType: ClosureType): { status: 'closed' | 'out_of_scope'; closedAt: Date | null } {
   if (closureType === 'out_of_scope') return { status: 'out_of_scope', closedAt: new Date() };
-  if (closureType === 'absent') return { status: 'closed', closedAt: null };
+  if (closureType === 'absent') return { status: 'closed', closedAt: new Date() };
   return { status: 'closed', closedAt: new Date() };
 }
 

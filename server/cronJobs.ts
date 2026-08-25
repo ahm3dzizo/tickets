@@ -115,9 +115,9 @@ async function notifyEngineersClosureSummary() {
   const closed = await prisma.ticket.findMany({
     where: {
       status: { in: ['closed', 'out_of_scope', 'absent'] },
-      updatedAt: { gte: today0() },
+      closedAt: { gte: today0(), lte: today24() },
     },
-    select: { closedById: true, projectId: true },
+    select: { projectId: true },
   });
 
   const engineers = await prisma.user.findMany({
@@ -179,7 +179,12 @@ async function notifyLateTickets() {
 async function notifyAdminDailySummary() {
   const [openCount, closedToday, activeTechs] = await Promise.all([
     prisma.ticket.count({ where: { status: 'open' } }),
-    prisma.ticket.count({ where: { status: { in: ['closed','absent','out_of_scope'] }, updatedAt: { gte: today0() } } }),
+    prisma.ticket.count({
+      where: {
+        status: { in: ['closed', 'absent', 'out_of_scope'] },
+        closedAt: { gte: today0(), lte: today24() },
+      },
+    }),
     prisma.shiftLog.count({ where: { clockInAt: { gte: today0() }, clockOutAt: null } }),
   ]);
 

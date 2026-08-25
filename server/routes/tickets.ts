@@ -413,7 +413,7 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
 
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },
-      data: { status, closureNotes: notes || null, closedAt: closeType === 'out_of_scope' ? new Date() : null },
+      data: { status, closureNotes: notes || null, closedAt: new Date() },
       select: { id: true, ticketId: true, clientId: true, description: true, unitId: true, status: true },
     });
 
