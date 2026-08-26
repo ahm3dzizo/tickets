@@ -18,8 +18,99 @@ const statuses = new Map<string, WAStatus>();
 const qrCodes = new Map<string, string | null>();
 const linkedPhones = new Map<string, string | null>();
 const reconnectAttempts = new Map<string, number>(); // عداد محاولات إعادة الاتصال
+const reconnectTimers = new Map<string, NodeJS.Timeout>();
+const sessionGenerations = new Map<string, number>();
+const SESSION_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_SWEEP_MS = 6 * 60 * 60 * 1000;
+const SESSION_META_DIR = path.join(BASE_SESSIONS, '.session-meta');
+let staleSessionSweep: NodeJS.Timeout | null = null;
 
 const logger = pino({ level: 'silent' }); // نخفّت اللوجز — rc13 verbose جداً
+
+// libsignal 6 logs the complete session object (including private/root keys)
+// directly through console.info. Suppress only those exact dependency messages.
+const originalConsoleInfo = console.info.bind(console);
+const originalConsoleWarn = console.warn.bind(console);
+console.info = (...args: unknown[]) => {
+  if (args[0] === 'Closing session:') return;
+  originalConsoleInfo(...args);
+};
+console.warn = (...args: unknown[]) => {
+  if (args[0] === 'Closing open session in favor of incoming prekey bundle' || args[0] === 'Session already closed') return;
+  originalConsoleWarn(...args);
+};
+
+function safeUserId(userId: string): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(userId)) throw new Error('Invalid WhatsApp session id');
+  return userId;
+}
+
+function sessionDir(userId: string): string {
+  return path.join(BASE_SESSIONS, `auth_${safeUserId(userId)}`);
+}
+
+function activityFile(userId: string): string {
+  return path.join(SESSION_META_DIR, `${safeUserId(userId)}.json`);
+}
+
+function touchSessionActivity(userId: string): void {
+  try {
+    fs.mkdirSync(SESSION_META_DIR, { recursive: true });
+    const target = activityFile(userId);
+    const temp = `${target}.${process.pid}.tmp`;
+    fs.writeFileSync(temp, JSON.stringify({ lastActivityAt: new Date().toISOString() }), { mode: 0o600 });
+    fs.renameSync(temp, target);
+  } catch (err) {
+    console.error(`[WA] Could not update activity for ${userId}:`, err instanceof Error ? err.message : err);
+  }
+}
+
+function getLastActivity(userId: string): number {
+  try {
+    const raw = JSON.parse(fs.readFileSync(activityFile(userId), 'utf8'));
+    const timestamp = Date.parse(raw.lastActivityAt);
+    if (Number.isFinite(timestamp)) return timestamp;
+  } catch { /* migrate existing sessions from their credentials timestamp */ }
+
+  try {
+    return fs.statSync(path.join(sessionDir(userId), 'creds.json')).mtimeMs;
+  } catch {
+    return Date.now();
+  }
+}
+
+function purgeSessionFiles(userId: string): void {
+  const dir = sessionDir(userId);
+  if (fs.existsSync(dir)) {
+    const tombstone = path.join(BASE_SESSIONS, `.deleting-auth_${safeUserId(userId)}-${Date.now()}`);
+    try {
+      fs.renameSync(dir, tombstone);
+      fs.rmSync(tombstone, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(`[WA] Could not remove session files for ${userId}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  try { fs.rmSync(activityFile(userId), { force: true }); } catch { /* already absent */ }
+}
+
+function cancelReconnect(userId: string): void {
+  const timer = reconnectTimers.get(userId);
+  if (timer) clearTimeout(timer);
+  reconnectTimers.delete(userId);
+  reconnectAttempts.delete(userId);
+}
+
+async function removeStaleSessions(): Promise<void> {
+  if (!fs.existsSync(BASE_SESSIONS)) return;
+  const cutoff = Date.now() - SESSION_IDLE_MS;
+  for (const dir of fs.readdirSync(BASE_SESSIONS)) {
+    if (!dir.startsWith('auth_')) continue;
+    const userId = dir.slice('auth_'.length);
+    if (getLastActivity(userId) >= cutoff) continue;
+    console.warn(`[WA] Removing inactive session for ${userId} (unused for 7 days)`);
+    await stopWA(userId, true, 'inactive');
+  }
+}
 
 export function getWAStatus(userId: string): WAStatus {
   return statuses.get(userId) || 'DISCONNECTED';
@@ -40,7 +131,11 @@ export function getLinkedPhone(userId: string): string | null {
 export async function initAllSessions() {
   if (!fs.existsSync(BASE_SESSIONS)) {
     fs.mkdirSync(BASE_SESSIONS, { recursive: true });
-    return;
+  }
+  await removeStaleSessions();
+  if (!staleSessionSweep) {
+    staleSessionSweep = setInterval(() => void removeStaleSessions(), SESSION_SWEEP_MS);
+    staleSessionSweep.unref();
   }
   const dirs = fs.readdirSync(BASE_SESSIONS);
   for (const dir of dirs) {
@@ -53,47 +148,39 @@ export async function initAllSessions() {
         continue;
       }
       console.log(`[WA] Auto-starting session for user: ${userId}`);
-      startWA(userId).catch(() => {});
+      startWA(userId, false).catch(() => {});
     }
   }
 }
 
-const initializingSessions = new Set<string>();
+const initializingSessions = new Map<string, Promise<void>>();
 
-export async function startWA(userId: string) {
-  if (sessions.has(userId) || initializingSessions.has(userId)) return;
-  initializingSessions.add(userId);
+export function startWA(userId: string, userInitiated = true): Promise<void> {
+  if (sessions.has(userId)) return Promise.resolve();
+  const existing = initializingSessions.get(userId);
+  if (existing) return existing;
 
-  try {
+  const initialization = Promise.resolve().then(async () => {
+    try {
     statuses.set(userId, 'WAITING_AUTH');
     qrCodes.set(userId, null);
 
-    const SESSION_DIR = path.join(BASE_SESSIONS, `auth_${userId}`);
+    const SESSION_DIR = sessionDir(userId);
     if (!fs.existsSync(SESSION_DIR)) {
       fs.mkdirSync(SESSION_DIR, { recursive: true });
-    } else {
-      // تنظيف تلقائي: لو ملفات الجلسة تجاوزت 200 ملف، امسحها وابدأ من أول
-      // ده بيحصل لما الجلسة تنكسر كتير وتتراكم الملفات وتثقّل السيرفر
-      try {
-        const sessionFiles = fs.readdirSync(SESSION_DIR);
-        if (sessionFiles.length > 200) {
-          console.warn(`[WA] Session dir for ${userId} has ${sessionFiles.length} files — cleaning up to prevent server freeze`);
-          for (const file of sessionFiles) {
-            if (file !== 'creds.json') {
-              fs.rmSync(path.join(SESSION_DIR, file), { recursive: true, force: true });
-            }
-          }
-        }
-      } catch (cleanErr) {
-        console.error(`[WA] Failed to clean session dir for ${userId}:`, cleanErr);
-      }
     }
+
+  const generation = (sessionGenerations.get(userId) || 0) + 1;
+  sessionGenerations.set(userId, generation);
 
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
 
   // جلب أحدث إصدار من واتساب ويب — إصدارات قديمة بتتسبب في رفض الاتصال
   const { version } = await fetchLatestBaileysVersion();
   console.log(`[WA] Using WA version: ${version.join('.')} for ${userId}`);
+
+  // The session may have been stopped/purged while the async setup was running.
+  if (sessionGenerations.get(userId) !== generation) return;
 
   const sock = makeWASocket({
     version,
@@ -125,8 +212,9 @@ export async function startWA(userId: string) {
     if (connection === 'close') {
       const error = lastDisconnect?.error;
       const statusCode = (error as any)?.output?.statusCode;
-      console.log(`[WA] Connection closed for ${userId}. Reason: ${error?.message || error} (Code: ${statusCode})`);
-      
+      // An old socket may close after a replacement was already created.
+      if (sessionGenerations.get(userId) !== generation || sessions.get(userId) !== sock) return;
+      console.log(`[WA] Connection closed for ${userId}. Reason: ${error?.message || 'unknown'} (Code: ${statusCode})`);
       const isLoggedOut = statusCode === DisconnectReason.loggedOut;
       sessions.delete(userId);
       statuses.set(userId, 'DISCONNECTED');
@@ -135,9 +223,7 @@ export async function startWA(userId: string) {
 
       if (isLoggedOut) {
         // حُذفت الجلسة من الهاتف — امسح الملفات
-        if (fs.existsSync(SESSION_DIR)) {
-          fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-        }
+        purgeSessionFiles(userId);
         reconnectAttempts.delete(userId);
       } else {
         // هل عندنا credentials محفوظة؟
@@ -151,7 +237,11 @@ export async function startWA(userId: string) {
         if (attempts <= maxAttempts) {
           const delay = Math.min(3000 * Math.pow(1.5, attempts - 1), 30000); // max 30s
           console.log(`[WA] Reconnecting ${userId} (attempt ${attempts}/${maxAttempts}) in ${Math.round(delay/1000)}s`);
-          setTimeout(() => startWA(userId), delay);
+          const timer = setTimeout(() => {
+            reconnectTimers.delete(userId);
+            void startWA(userId, false);
+          }, delay);
+          reconnectTimers.set(userId, timer);
         } else {
           console.warn(`[WA] Max reconnect attempts reached for ${userId} — stopping`);
           reconnectAttempts.delete(userId);
@@ -159,6 +249,8 @@ export async function startWA(userId: string) {
       }
       getIO()?.emit(`wa-status-${userId}`, { running: false, connected: false, state: 'DISCONNECTED' });
     } else if (connection === 'open') {
+      reconnectAttempts.delete(userId);
+      if (userInitiated) touchSessionActivity(userId);
       statuses.set(userId, 'CONNECTED');
       qrCodes.set(userId, null);
       if (sock.user?.id) {
@@ -175,6 +267,7 @@ export async function startWA(userId: string) {
   // ─── معالجة الردود الواردة (موافقة / رفض / تقييم) ─────────────────────────
   sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
     if (type !== 'notify') return;
+    touchSessionActivity(userId);
     for (const msg of msgs) {
       if (!msg.message || msg.key.fromMe) continue;
 
@@ -220,12 +313,18 @@ export async function startWA(userId: string) {
     }
   });
 
-  } finally {
-    initializingSessions.delete(userId);
-  }
+    } finally {
+      if (initializingSessions.get(userId) === initialization) initializingSessions.delete(userId);
+    }
+  });
+  initializingSessions.set(userId, initialization);
+  return initialization;
 }
 
-export async function stopWA(userId: string, cleanSession = false) {
+export async function stopWA(userId: string, cleanSession = false, reason = 'manual') {
+  cancelReconnect(userId);
+  sessionGenerations.set(userId, (sessionGenerations.get(userId) || 0) + 1);
+  await initializingSessions.get(userId)?.catch(() => {});
   const sock = sessions.get(userId);
   if (sock) {
     try {
@@ -240,23 +339,17 @@ export async function stopWA(userId: string, cleanSession = false) {
   qrCodes.set(userId, null);
   linkedPhones.delete(userId);
 
-  const SESSION_DIR = path.join(BASE_SESSIONS, `auth_${userId}`);
-  if (cleanSession && fs.existsSync(SESSION_DIR)) {
-    try {
-      fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-    } catch (e) {
-      console.warn(`[WA] Could not remove session dir for ${userId}:`, e);
-    }
+  if (cleanSession) {
+    purgeSessionFiles(userId);
+    console.log(`[WA] Session files removed for ${userId} (${reason})`);
   }
 }
 
 export async function closeAllSessions() {
-  for (const [userId, sock] of sessions.entries()) {
-    try {
-      sock.end(undefined);
-    } catch (err) {
-      console.error(`Error closing session for ${userId}:`, err);
-    }
+  if (staleSessionSweep) clearInterval(staleSessionSweep);
+  staleSessionSweep = null;
+  for (const userId of [...sessions.keys()]) {
+    await stopWA(userId, false, 'shutdown');
   }
 }
 
@@ -298,16 +391,11 @@ export async function pairWACode(userId: string, phone: string): Promise<string>
     throw new Error('واتساب مرتبط بالفعل.');
   }
 
-  // إعادة ضبط عداد المحاولات
-  reconnectAttempts.delete(userId);
-
-  // إذا لم تكن هناك جلسة أو كان السوكيت مغلقاً، نبدأ جلسة جديدة
-  let sock = sessions.get(userId);
-  if (!sock) {
-    await stopWA(userId, true);
-    await startWA(userId);
-    sock = sessions.get(userId);
-  }
+  // كل محاولة ربط جديدة تبدأ من مجلد نظيف حتى لا تختلط مفاتيح قديمة بجديدة.
+  await stopWA(userId, true, 'relink');
+  touchSessionActivity(userId);
+  await startWA(userId);
+  const sock = sessions.get(userId);
 
   if (!sock) {
     throw new Error('تعذر بدء جلسة واتساب. حاول مجدداً.');
@@ -326,12 +414,12 @@ export async function pairWACode(userId: string, phone: string): Promise<string>
     const executeRequest = async (targetSock: any) => {
       if (resolved) return;
       try {
-        console.log(`[WA] Requesting pairing code for ${userId} (Phone: ${d})...`);
+        console.log(`[WA] Requesting pairing code for ${userId}`);
         const code = await targetSock.requestPairingCode(d);
         if (!resolved) {
           resolved = true;
           clearTimeout(timeout);
-          console.log(`[WA] Pairing code successfully received for ${userId}: ${code}`);
+          console.log(`[WA] Pairing code successfully received for ${userId}`);
           getIO()?.emit(`wa-status-${userId}`, { running: true, connected: false, state: 'WAITING_AUTH', pairingCode: code });
           resolve(code);
         }
@@ -348,7 +436,7 @@ export async function pairWACode(userId: string, phone: string): Promise<string>
                 if (!resolved) {
                   resolved = true;
                   clearTimeout(timeout);
-                  console.log(`[WA] Pairing code generated on retry for ${userId}: ${retryCode}`);
+                  console.log(`[WA] Pairing code generated on retry for ${userId}`);
                   getIO()?.emit(`wa-status-${userId}`, { running: true, connected: false, state: 'WAITING_AUTH', pairingCode: retryCode });
                   resolve(retryCode);
                 }
@@ -442,6 +530,7 @@ export async function sendWAJid(userId: string, jid: string, message: string): P
   }
   try {
     await sock.sendMessage(jid, { text: message });
+    touchSessionActivity(userId);
     sock.sendPresenceUpdate('unavailable').catch(() => {});
     return { sent: true };
   } catch (err) {
@@ -462,6 +551,7 @@ export async function sendWAText(userId: string, phone: string, message: string)
       return { sent: false, fallback: true, error: 'NOT_ON_WHATSAPP' };
     }
     await sock.sendMessage(jid, { text: message });
+    touchSessionActivity(userId);
     return { sent: true, fallback: false };
   } catch (err) {
     console.error('Baileys Error sending text:', err);
@@ -481,6 +571,7 @@ export async function sendWAImage(userId: string, phone: string, jpgBuffer: Buff
       return { sent: false, fallback: true, error: 'NOT_ON_WHATSAPP' };
     }
     await sock.sendMessage(jid, { image: jpgBuffer, caption });
+    touchSessionActivity(userId);
     return { sent: true, fallback: false };
   } catch (err) {
     console.error('Baileys Error sending image:', err);
@@ -577,4 +668,3 @@ export async function buildAppointmentRangeMsg(params: AppointmentRangeParams): 
   
   return msg;
 }
-
