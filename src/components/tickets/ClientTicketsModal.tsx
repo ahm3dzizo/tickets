@@ -27,9 +27,12 @@ function cleanDescription(text?: string): { text: string; hasAttachments: boolea
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   'open':         { label: 'مفتوحة',       color: 'bg-blue-500/15 text-blue-500' },
   'in-progress':  { label: 'قيد التنفيذ',  color: 'bg-amber-500/15 text-amber-500' },
+  'in_progress':  { label: 'قيد التنفيذ',  color: 'bg-amber-500/15 text-amber-500' },
   'pending':      { label: 'معلقة',         color: 'bg-slate-500/15 text-slate-400' },
   'waiting':      { label: 'بانتظار موعد', color: 'bg-purple-500/15 text-purple-500' },
   'contractor':   { label: 'مقاول',         color: 'bg-cyan-500/15 text-cyan-500' },
+  'completed':    { label: 'مكتملة',        color: 'bg-emerald-500/15 text-emerald-500' },
+  'note':         { label: 'ملاحظة',        color: 'bg-slate-500/15 text-slate-400' },
 };
 
 export function ClientTicketsModal({
@@ -59,7 +62,7 @@ export function ClientTicketsModal({
         const tks = resTickets.filter(
           (t: any) =>
             String(t.unitId || '').trim() === String(unitId || '').trim() &&
-            !['closed', 'out_of_scope', 'completed'].includes(t.status),
+            !['closed', 'out_of_scope', 'out-of-scope', 'absent'].includes(t.status),
         );
         setTickets(tks);
         setClients(resClients);
@@ -78,12 +81,13 @@ export function ClientTicketsModal({
     setSelectedIds(new Set());
   }, [open, unitId, projectId]);
 
-  const allSelected = tickets.length > 0 && selectedIds.size === tickets.length;
+  const closableTickets = tickets.filter(t => t.status !== 'completed');
+  const allSelected = closableTickets.length > 0 && closableTickets.every(t => selectedIds.has(t.id));
   const toggleSelectAll = () => {
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(tickets.map(t => t.id)));
+      setSelectedIds(new Set(closableTickets.map(t => t.id)));
     }
   };
   const toggleSelect = (id: string) => {
@@ -107,7 +111,7 @@ export function ClientTicketsModal({
             <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
               <Wrench className="w-4 h-4 text-blue-500" />
             </div>
-            <span>التذاكر المفتوحة</span>
+            <span>تذاكر الوحدة</span>
             <span className="text-muted-foreground font-normal">— وحدة {tickets[0]?.unitNumber || '---'}</span>
             {tickets.length > 0 && (
               <>
@@ -137,7 +141,7 @@ export function ClientTicketsModal({
             </div>
           ) : tickets.length === 0 ? (
             <div className="text-center py-6 text-sm text-muted-foreground">
-              لا توجد تذاكر مفتوحة حالياً
+              لا توجد تذاكر نشطة حالياً
             </div>
           ) : (
             <div className="space-y-2">
@@ -176,16 +180,18 @@ export function ClientTicketsModal({
                           مرفقات
                         </span>
                       )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setTicketToClose(t);
-                        }}
-                        className="mr-auto flex items-center gap-1 text-[11px] text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg font-bold transition-colors"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        إغلاق
-                      </button>
+                      {!['completed'].includes(t.status) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTicketToClose(t);
+                          }}
+                          className="mr-auto flex items-center gap-1 text-[11px] text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg font-bold transition-colors"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          إغلاق
+                        </button>
+                      )}
                       <Link
                         to={`/tickets/${t.id}`}
                         onClick={(e) => { e.stopPropagation(); onOpenChange(false); }}
