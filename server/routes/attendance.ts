@@ -18,6 +18,68 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
 
 const ACTIVE_TICKET_STATUSES = ['open', 'pending', 'in_progress', 'waiting', 'contractor'];
 
+/**
+ * If every ticket in the appointment is in a terminal state
+ * (completed / closed / out_of_scope / absent), auto-finish the
+ * appointment work session and mark the appointment completed.
+ * Called after any ticket status change so a claimed appointment
+ * doesn't stay "in progress" once its work is actually done.
+ */
+export async function maybeAutoFinishAppointment(appointmentId: string | null | undefined) {
+  if (!appointmentId) return;
+  try {
+    const remaining = await prisma.ticket.count({
+      where: {
+        appointmentId,
+        status: { in: ACTIVE_TICKET_STATUSES }
+      }
+    });
+    if (remaining > 0) return;
+
+    const session = await prisma.appointmentWorkSession.findUnique({
+      where: { appointmentId }
+    });
+    if (session && ['in_progress', 'paused'].includes(session.status)) {
+      const now = new Date();
+      let extraPause = 0;
+      if (session.status === 'paused' && session.pausedAt) {
+        extraPause = Math.round((now.getTime() - session.pausedAt.getTime()) / 60000);
+      }
+      const totalPausedMins = (session.totalPausedMins || 0) + extraPause;
+      const totalElapsedMins = Math.round((now.getTime() - session.claimedAt.getTime()) / 60000);
+      const totalDurationMins = Math.max(0, totalElapsedMins - totalPausedMins);
+
+      await prisma.appointmentWorkSession.update({
+        where: { id: session.id },
+        data: {
+          status: 'completed',
+          finishedAt: now,
+          pausedAt: null,
+          totalPausedMins,
+          totalElapsedMins,
+          totalDurationMins,
+          completionNotes: session.completionNotes || 'أُنهي تلقائياً بعد إغلاق كل تذاكر الموعد',
+        }
+      });
+
+      if (session.shiftLogId) {
+        await prisma.shiftLog.update({
+          where: { id: session.shiftLogId },
+          data: { totalWorkMinutes: { increment: totalDurationMins } }
+        }).catch(() => {});
+      }
+    }
+
+    // Mark the appointment itself completed if it isn't already.
+    await prisma.appointment.updateMany({
+      where: { id: appointmentId, status: { not: 'completed' } },
+      data: { status: 'completed' }
+    });
+  } catch (e) {
+    console.warn('maybeAutoFinishAppointment failed:', e);
+  }
+}
+
 // ================= SHIFT ENDPOINTS =================
 
 router.post('/shift/clock-in', requireTechAuth, async (req: TechAuthRequest, res) => {
@@ -792,6 +854,7 @@ router.patch('/tech/appointments/:appointmentId/tickets/:ticketId', requireTechA
         closureNotes: isClosing && notes ? notes : undefined
       }
     });
+    await maybeAutoFinishAppointment(appointmentId);
     res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -20,6 +20,7 @@ import {
   CheckCircle2,  Play,
   Pause,
   Timer,
+  MoreVertical,
   Sun,
   Moon,
   Monitor,
@@ -958,190 +959,29 @@ function AppointmentCard({
 
       {appt.notes && <div className="tech-note">{translateText(appt.notes)}</div>}
 
-      <div className="tech-appointment-actions">
-        <div className="tech-contact-actions">
-          {appt.clientPhone && (
-            <>
-              <a
-                href={`https://wa.me/${appt.clientPhone.replace(/\D/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="tech-contact whatsapp"
-              >
-                <MessageCircle size={14} />
-                {t(lang, 'whatsapp')}
-              </a>
-              <a href={`tel:${appt.clientPhone}`} className="tech-contact call">
-                <Phone size={14} />
-              </a>
-            </>
-          )}
-        </div>
-
-        {isClaimedByMe && (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              borderRadius: 8,
-              background: isPausedByMe ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.12)',
-              border: isPausedByMe ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(59,130,246,0.3)',
-              color: isPausedByMe ? '#f59e0b' : '#3b82f6',
-              fontWeight: 700,
-              fontSize: 12,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            <Timer size={13} />
-            {elapsedLabel}
-            {isPausedByMe && <span style={{ fontSize: 10, fontWeight: 900 }}>• متوقف</span>}
-          </div>
-        )}
-
-        {!isCompleted && !isClaimedByOther && (
-          <button
-            onClick={handleClaimAppointment}
-            disabled={claiming || claimBlocked}
-            className={`tech-ticket-toggle ${claimBlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
-            style={{
-              minWidth: '120px',
-              justifyContent: 'center',
-              ...(!isClaimedByMe && !claiming && !claimBlocked ? {
-                background: 'rgba(34,197,94,0.12)',
-                border: '1px solid rgba(34,197,94,0.3)',
-                borderRadius: '8px',
-                padding: '5px 10px',
-                color: '#16a34a',
-                fontWeight: 700,
-              } : {
-                background: 'rgba(100,116,139,0.1)',
-                borderRadius: '8px',
-                padding: '5px 10px',
-              }),
-            }}
-          >
-            {claiming ? (
-              <>
-                <Loader2 size={14} className="animate-spin" />
-                {t(lang, 'claimingAppointment')}
-              </>
-            ) : claimBlocked ? (
-              <>
-                <Clock size={14} />
-                {t(lang, 'finishActiveAppointmentFirst')}
-              </>
-            ) : isClaimedByMe ? (
-              <>
-                <Play size={14} />
-                {t(lang, 'continueWork')}
-              </>
-            ) : (
-              <>
-                <CheckCircle2 size={14} />
-                {t(lang, 'claimAppointment')}
-              </>
-            )}
-          </button>
-        )}
-
-        {isClaimedByMe && (
-          <button
-            onClick={handleFinishAppointment}
-            disabled={finishing}
-            className="tech-ticket-toggle"
-            style={{
-              minWidth: 100,
-              justifyContent: 'center',
-              background: 'rgba(239,68,68,0.12)',
-              border: '1px solid rgba(239,68,68,0.3)',
-              borderRadius: 8,
-              padding: '5px 10px',
-              color: '#ef4444',
-              fontWeight: 700,
-            }}
-          >
-            {finishing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-            {finishing ? '...' : 'إنهاء'}
-          </button>
-        )}
-
-        {isClaimedByMe && !isPausedByMe && (
-          <button
-            onClick={handlePauseAppointment}
-            disabled={pausing}
-            className="tech-ticket-toggle"
-            style={{
-              minWidth: 80, justifyContent: 'center',
-              background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)',
-              borderRadius: 8, padding: '5px 10px', color: '#f59e0b', fontWeight: 700,
-            }}
-            title="تعليق الموعد — تقدر تستلم موعد آخر"
-          >
-            {pausing ? <Loader2 size={14} className="animate-spin" /> : <Pause size={14} />}
-            توقف
-          </button>
-        )}
-
-        {isPausedByMe && (
-          <button
-            onClick={handleResumeAppointment}
-            disabled={resuming}
-            className="tech-ticket-toggle"
-            style={{
-              minWidth: 90, justifyContent: 'center',
-              background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)',
-              borderRadius: 8, padding: '5px 10px', color: '#16a34a', fontWeight: 700,
-            }}
-          >
-            {resuming ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-            استئناف
-          </button>
-        )}
-
-        {isClaimedByMe && (
-          <button
-            onClick={() => setShowPostpone(true)}
-            className="tech-ticket-toggle"
-            style={{
-              minWidth: 80, justifyContent: 'center',
-              background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-              borderRadius: 8, padding: '5px 10px', color: '#8b5cf6', fontWeight: 700,
-            }}
-            title="تأجيل الموعد لتاريخ آخر"
-          >
-            <Calendar size={14} />
-            تأجيل
-          </button>
-        )}
-
-        {isClaimedByOther && !isCompleted && (
-          <div
-            className="tech-ticket-toggle"
-            style={{
-              minWidth: 120,
-              justifyContent: 'center',
-              background: 'rgba(148,163,184,0.15)',
-              borderRadius: 8,
-              padding: '5px 10px',
-              color: '#94a3b8',
-              fontSize: 11,
-            }}
-          >
-            <User size={12} />
-            فني آخر يعمل عليه
-          </div>
-        )}
-
-        {tickets.length > 0 && (
-          <button onClick={onToggle} className="tech-ticket-toggle">
-            <Ticket size={14} />
-            {completedTickets}/{tickets.length} {t(lang, 'ticketsCount')}
-            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-        )}
-      </div>
+      <ApptCardActions
+        appt={appt}
+        lang={lang}
+        expanded={expanded}
+        onToggle={onToggle}
+        tickets={tickets}
+        completedTickets={completedTickets}
+        isCompleted={isCompleted}
+        isClaimedByMe={isClaimedByMe}
+        isClaimedByOther={isClaimedByOther}
+        isPausedByMe={isPausedByMe}
+        claimBlocked={claimBlocked}
+        elapsedLabel={elapsedLabel}
+        claiming={claiming}
+        finishing={finishing}
+        pausing={pausing}
+        resuming={resuming}
+        onClaim={handleClaimAppointment}
+        onFinish={handleFinishAppointment}
+        onPause={handlePauseAppointment}
+        onResume={handleResumeAppointment}
+        onPostpone={() => setShowPostpone(true)}
+      />
 
       {expanded && tickets.length > 0 && (
         <div className="tech-ticket-list">
@@ -1171,6 +1011,252 @@ function AppointmentCard({
         />
       )}
     </article>
+  );
+}
+
+function ApptCardActions({
+  appt, lang, expanded, onToggle, tickets, completedTickets,
+  isCompleted, isClaimedByMe, isClaimedByOther, isPausedByMe, claimBlocked,
+  elapsedLabel, claiming, finishing, pausing, resuming,
+  onClaim, onFinish, onPause, onResume, onPostpone,
+}: {
+  appt: any; lang: TechLang; expanded: boolean; onToggle: () => void;
+  tickets: any[]; completedTickets: number;
+  isCompleted: boolean; isClaimedByMe: boolean; isClaimedByOther: boolean;
+  isPausedByMe: boolean; claimBlocked: boolean; elapsedLabel: string;
+  claiming: boolean; finishing: boolean; pausing: boolean; resuming: boolean;
+  onClaim: () => void; onFinish: () => void; onPause: () => void;
+  onResume: () => void; onPostpone: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [menuOpen]);
+
+  // Row 1: contact icons + status
+  const statusPill = (() => {
+    if (isCompleted) {
+      return (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '4px 9px', borderRadius: 999, fontSize: 11, fontWeight: 800,
+          background: 'rgba(34,197,94,0.12)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.25)',
+        }}>
+          <CheckCircle2 size={12} /> مكتمل
+        </span>
+      );
+    }
+    if (isClaimedByOther) {
+      return (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '4px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+          background: 'rgba(148,163,184,0.15)', color: '#94a3b8',
+        }}>
+          <User size={12} /> فني آخر يعمل عليه
+        </span>
+      );
+    }
+    if (isClaimedByMe) {
+      return (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 800,
+          fontVariantNumeric: 'tabular-nums',
+          background: isPausedByMe ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.14)',
+          color: isPausedByMe ? '#f59e0b' : '#3b82f6',
+          border: isPausedByMe ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(59,130,246,0.3)',
+        }}>
+          {isPausedByMe ? <Pause size={12} /> : <Timer size={12} />}
+          {elapsedLabel}
+          {isPausedByMe && <span style={{ fontSize: 10 }}>متوقف</span>}
+        </span>
+      );
+    }
+    return null;
+  })();
+
+  // Primary action button
+  const primaryAction = (() => {
+    if (isCompleted) return null;
+    if (isClaimedByOther) return null;
+    if (isPausedByMe) {
+      return (
+        <button
+          onClick={onResume} disabled={resuming}
+          className="tech-btn tech-btn-success"
+          style={{ flex: 1, height: 40, fontSize: 13, fontWeight: 800 }}
+        >
+          {resuming ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+          استئناف الموعد
+        </button>
+      );
+    }
+    if (isClaimedByMe) {
+      return (
+        <button
+          onClick={onFinish} disabled={finishing}
+          className="tech-btn"
+          style={{
+            flex: 1, height: 40, fontSize: 13, fontWeight: 800,
+            background: 'linear-gradient(180deg,#ef4444,#dc2626)', color: '#fff', border: 'none',
+          }}
+        >
+          {finishing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+          إنهاء الموعد
+        </button>
+      );
+    }
+    return (
+      <button
+        onClick={onClaim} disabled={claiming || claimBlocked}
+        className="tech-btn"
+        style={{
+          flex: 1, height: 40, fontSize: 13, fontWeight: 800,
+          background: claimBlocked
+            ? 'rgba(100,116,139,0.15)'
+            : 'linear-gradient(180deg,#22c55e,#16a34a)',
+          color: claimBlocked ? '#94a3b8' : '#fff',
+          border: 'none',
+          cursor: claimBlocked ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {claiming ? (
+          <Loader2 size={16} className="animate-spin" />
+        ) : claimBlocked ? (
+          <Clock size={16} />
+        ) : (
+          <CheckCircle2 size={16} />
+        )}
+        {claiming ? 'جارٍ الاستلام...' : claimBlocked ? 'أنهِ الموعد الآخر أولاً' : 'استلام الموعد'}
+      </button>
+    );
+  })();
+
+  // Overflow menu items (only when I'm actively on this appointment)
+  const hasMenu = isClaimedByMe && !isCompleted;
+
+  return (
+    <>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 8, marginTop: 8, flexWrap: 'wrap',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {statusPill}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {appt.clientPhone && (
+            <>
+              <a
+                href={`https://wa.me/${appt.clientPhone.replace(/\D/g, '')}`}
+                target="_blank" rel="noopener noreferrer"
+                aria-label="واتساب"
+                style={{
+                  width: 32, height: 32, borderRadius: 10,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(34,197,94,0.12)', color: '#16a34a',
+                  border: '1px solid rgba(34,197,94,0.25)',
+                }}
+              >
+                <MessageCircle size={14} />
+              </a>
+              <a
+                href={`tel:${appt.clientPhone}`}
+                aria-label="اتصال"
+                style={{
+                  width: 32, height: 32, borderRadius: 10,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(59,130,246,0.12)', color: '#3b82f6',
+                  border: '1px solid rgba(59,130,246,0.25)',
+                }}
+              >
+                <Phone size={14} />
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+
+      {primaryAction && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'stretch' }}>
+          {primaryAction}
+          {hasMenu && (
+            <div ref={menuRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setMenuOpen(m => !m)}
+                aria-label="خيارات"
+                style={{
+                  width: 40, height: 40, borderRadius: 10,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(100,116,139,0.12)', color: 'inherit',
+                  border: '1px solid var(--tech-border, rgba(100,116,139,0.25))',
+                }}
+              >
+                <MoreVertical size={18} />
+              </button>
+              {menuOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', insetInlineEnd: 0, marginTop: 6,
+                  minWidth: 180, borderRadius: 12, overflow: 'hidden',
+                  background: 'var(--tech-card, #fff)',
+                  border: '1px solid var(--tech-border, #e2e8f0)',
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.15)', zIndex: 20,
+                }}>
+                  {!isPausedByMe && (
+                    <button
+                      onClick={() => { setMenuOpen(false); onPause(); }}
+                      disabled={pausing}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '10px 12px', background: 'transparent', border: 0,
+                        color: '#f59e0b', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                        textAlign: 'start',
+                      }}
+                    >
+                      <Pause size={14} /> توقف مؤقت
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setMenuOpen(false); onPostpone(); }}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '10px 12px', background: 'transparent', border: 0,
+                      borderTop: '1px solid var(--tech-border, #e2e8f0)',
+                      color: '#8b5cf6', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                      textAlign: 'start',
+                    }}
+                  >
+                    <Calendar size={14} /> تأجيل الموعد
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tickets.length > 0 && (
+        <button
+          onClick={onToggle}
+          className="tech-ticket-toggle"
+          style={{ marginTop: 8, width: '100%', justifyContent: 'space-between' }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Ticket size={14} />
+            {completedTickets}/{tickets.length} {t(lang, 'ticketsCount')}
+          </span>
+          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      )}
+    </>
   );
 }
 

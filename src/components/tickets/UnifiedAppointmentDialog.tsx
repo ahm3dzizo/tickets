@@ -269,6 +269,7 @@ export function UnifiedAppointmentDialog({
   const [existingUnitAppointments, setExistingUnitAppointments] = useState<any[]>([]);
   const [fetchingTickets, setFetchingTickets] = useState(false);
   const [newTicketTypes, setNewTicketTypes] = useState<string[]>([]);
+  const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -280,6 +281,14 @@ export function UnifiedAppointmentDialog({
 
   const activeTickets: any[] = isCalendarMode ? loadedTickets : (tickets ?? []);
   const hasExistingTickets = activeTickets.length > 0;
+
+  // Whenever the ticket list changes (e.g. villa switched), preselect them all.
+  useEffect(() => {
+    setSelectedTicketIds(new Set(activeTickets.map((t: any) => t.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTickets.map((t: any) => t.id).join('|')]);
+
+  const chosenTickets = activeTickets.filter((t: any) => selectedTicketIds.has(t.id));
 
   const currentProjectId = useMemo(() => {
     if (isTicketMode) {
@@ -709,10 +718,10 @@ export function UnifiedAppointmentDialog({
       } else if (isCalendarMode) {
         const effectiveDate = dateStr ?? date;
 
-        if (hasExistingTickets) {
-          const existingApptId: string | undefined = activeTickets.find((t: any) => t.appointmentId)?.appointmentId;
+        if (hasExistingTickets && chosenTickets.length > 0) {
+          const existingApptId: string | undefined = chosenTickets.find((t: any) => t.appointmentId)?.appointmentId;
           const allTypes = new Set<string>();
-          activeTickets.forEach((t: any) => {
+          chosenTickets.forEach((t: any) => {
             if (t.type) allTypes.add(t.type);
             (t.detectedTypes ?? []).forEach((dt: string) => allTypes.add(dt));
           });
@@ -737,7 +746,7 @@ export function UnifiedAppointmentDialog({
               technicianId: selectedTechId || null,
               technicianIds: selectedTechId ? [selectedTechId] : [],
               types: Array.from(allTypes),
-              ticketIds: activeTickets.map((t: any) => t.id),
+              ticketIds: chosenTickets.map((t: any) => t.id),
             });
           }
         } else {
@@ -805,7 +814,14 @@ export function UnifiedAppointmentDialog({
       : isTicketMode
       ? (!!(canSendWhatsApp ? startDate : date) && !hasConflict)
       : isCalendarMode
-      ? (!!selectedClientId && !hasConflict && (hasExistingTickets || newTicketTypes.length > 0))
+      ? (
+          !!selectedClientId
+          && !hasConflict
+          && (
+            (hasExistingTickets && selectedTicketIds.size > 0)
+            || (!hasExistingTickets && newTicketTypes.length > 0)
+          )
+        )
       : false
   );
 
@@ -1070,18 +1086,71 @@ export function UnifiedAppointmentDialog({
           )}
           {isCalendarMode && hasExistingTickets && !fetchingTickets && !hasConflict && (
             <div className="space-y-2">
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-right">
-                <p className="text-sm text-blue-500 font-bold mb-1">يوجد {activeTickets.length} تذاكر مفتوحة</p>
-                <p className="text-xs text-blue-500/70">سيتم ربط الموعد بهذه التذاكر تلقائياً.</p>
+              <div className="flex items-center justify-between px-1">
+                <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold">
+                  اختر التذاكر ({selectedTicketIds.size}/{activeTickets.length})
+                </Label>
+                <div className="flex items-center gap-2 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTicketIds(new Set(activeTickets.map((t: any) => t.id)))}
+                    className="font-bold text-blue-500 hover:underline"
+                  >
+                    تحديد الكل
+                  </button>
+                  <span className="text-muted-foreground">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTicketIds(new Set())}
+                    className="font-bold text-muted-foreground hover:underline"
+                  >
+                    إلغاء الكل
+                  </button>
+                </div>
               </div>
-              <div className="bg-muted/30 border border-border/50 rounded-2xl p-3 max-h-28 overflow-y-auto text-right no-scrollbar">
-                {activeTickets.map((t: any) => (
-                  <div key={t.id} className="mb-1.5 last:mb-0 border-b border-border/50 pb-1.5 last:border-0 last:pb-0">
-                    <span className="text-[10px] text-blue-400 font-bold ml-2">#{t.ticketId || t.id?.slice(0, 6)}</span>
-                    <p className="text-xs text-foreground leading-relaxed break-words">{renderTableDescription(t.description)}</p>
-                  </div>
-                ))}
+              <div className="bg-muted/30 border border-border/50 rounded-2xl p-1.5 max-h-48 overflow-y-auto text-right">
+                {activeTickets.map((t: any) => {
+                  const checked = selectedTicketIds.has(t.id);
+                  return (
+                    <label
+                      key={t.id}
+                      className={cn(
+                        'flex items-start gap-2.5 p-2 rounded-xl cursor-pointer transition-colors',
+                        checked ? 'bg-blue-500/10 border border-blue-500/30' : 'hover:bg-accent/30 border border-transparent'
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setSelectedTicketIds(prev => {
+                            const next = new Set(prev);
+                            if (next.has(t.id)) next.delete(t.id); else next.add(t.id);
+                            return next;
+                          });
+                        }}
+                        className="mt-0.5 w-4 h-4 accent-blue-500 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] text-blue-400 font-bold">#{t.ticketId || t.id?.slice(0, 6)}</span>
+                          {t.type && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-slate-500/15 text-slate-400">
+                              {t.type}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-foreground leading-relaxed break-words line-clamp-2">
+                          {renderTableDescription(t.description)}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
+              {selectedTicketIds.size === 0 && (
+                <p className="text-[10px] text-rose-500 px-1">اختر تذكرة واحدة على الأقل لربط الموعد بها</p>
+              )}
             </div>
           )}
           {isCalendarMode && selectedClientId && !fetchingTickets && !hasExistingTickets && (
@@ -1172,45 +1241,6 @@ export function UnifiedAppointmentDialog({
                 </div>
               </div>
 
-              {(checkingConflicts || conflicts.length > 0) && (
-                <div className={cn(
-                  'rounded-xl border p-3 space-y-2',
-                  conflicts.length > 0 ? 'bg-orange-500/10 border-orange-500/30' : 'bg-slate-500/10 border-border'
-                )}>
-                  <div className="flex items-center gap-2">
-                    {checkingConflicts
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                      : <AlertTriangle className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400" />
-                    }
-                    <span className={cn('text-xs font-bold', conflicts.length > 0 ? 'text-orange-600 dark:text-orange-300' : 'text-muted-foreground')}>
-                      {checkingConflicts
-                        ? 'جارٍ فحص التعارضات...'
-                        : `${conflicts.length} موعد آخر في نفس الفترة`}
-                    </span>
-                  </div>
-                  {conflicts.length > 0 && (
-                    <div className="space-y-1">
-                      {conflicts.slice(0, 3).map((c: any, i) => (
-                        <div key={i} className="text-[11px] text-orange-800 dark:text-orange-200/80 bg-orange-500/10 rounded-lg px-2 py-1">
-                          تذكرة #{c.ticketId} — {c.clientName} | {c.appointmentTime?.split(' ')[0]}
-                        </div>
-                      ))}
-                      {conflicts.length > 3 && (
-                        <p className="text-[10px] text-orange-600 dark:text-orange-400">... و{conflicts.length - 3} أخرى</p>
-                      )}
-                      <p className="text-[10px] text-orange-600/70 dark:text-orange-400/70 mt-1">
-                        يمكن المتابعة — التحذير للمعلومية فقط
-                      </p>
-                    </div>
-                  )}
-                  {!checkingConflicts && conflicts.length === 0 && (
-                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      لا توجد تعارضات في هذه الفترة
-                    </div>
-                  )}
-                </div>
-              )}
             </>
           )}
 

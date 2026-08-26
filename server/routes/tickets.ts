@@ -7,6 +7,7 @@ import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } 
 import { invalidateKeywordCache } from "../classifier/keywords.js";
 import { sendWAText, buildOpeningMsg, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from "../baileys.js";
 import { createNotification } from "../notificationService.js";
+import { maybeAutoFinishAppointment } from "./attendance.js";
 
 const router = Router();
 
@@ -426,8 +427,10 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },
       data: { status, closureNotes: notes || null, closedAt: new Date() },
-      select: { id: true, ticketId: true, clientId: true, description: true, unitId: true, status: true },
+      select: { id: true, ticketId: true, clientId: true, description: true, unitId: true, status: true, appointmentId: true },
     });
+
+    await maybeAutoFinishAppointment((ticket as any).appointmentId);
 
     res.json({ ok: true, status });
   } catch (err: any) {
@@ -995,6 +998,10 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       // autoSendClosing(req.uid, ticket).catch(() => {});
     }
 
+    if (data.status && data.status !== oldTicket?.status) {
+      await maybeAutoFinishAppointment((ticket as any).appointmentId);
+    }
+
     // ── إشعار المشرفين الآخرين عند تحديد موعد ──────────────────────────────
     const apptChanged = data.appointmentId !== undefined &&
       data.appointmentId !== (oldTicket as any)?.appointmentId;
@@ -1083,7 +1090,13 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 // PATCH /api/tickets/bulk-status
 router.patch("/bulk-status", requireAuth, async (req, res) => {
   const { ids, status } = req.body as { ids: string[]; status: any };
+  const rows = await prisma.ticket.findMany({
+    where: { id: { in: ids } },
+    select: { appointmentId: true }
+  });
   await prisma.ticket.updateMany({ where: { id: { in: ids } }, data: { status } });
+  const apptIds = Array.from(new Set(rows.map(r => r.appointmentId).filter(Boolean))) as string[];
+  for (const apptId of apptIds) await maybeAutoFinishAppointment(apptId);
   res.json({ count: ids.length });
 });
 
