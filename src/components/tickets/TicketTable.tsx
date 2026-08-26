@@ -554,6 +554,7 @@ export function TicketTable({
   const [draftAppointments, setDraftAppointments] = useState<string[]>([]);
   const [draftSortKey, setDraftSortKey] = useState<SortKey>('date');
   const [draftSortDir, setDraftSortDir] = useState<'asc' | 'desc'>('asc');
+  const [activeFilterCategory, setActiveFilterCategory] = useState<string>('الحالة');
 
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_sortKey`, sortKey); }, [sortKey, stateKey]);
   useEffect(() => { if (stateKey) sessionStorage.setItem(`${stateKey}_sortDir`, sortDir); }, [sortDir, stateKey]);
@@ -1068,7 +1069,7 @@ export function TicketTable({
           <DialogContent
             showCloseButton={false}
             dir="rtl"
-            className="!fixed !inset-x-0 !bottom-0 !top-auto !left-0 !translate-x-0 !translate-y-0 !w-full !max-w-none !max-h-[88dvh] !rounded-t-3xl !rounded-b-none !p-0 !gap-0 overflow-hidden border-x-0 border-b-0 md:hidden"
+            className="!fixed !inset-x-0 !bottom-0 !top-auto !left-0 !translate-x-0 !translate-y-0 !w-full !max-w-none !max-h-[88dvh] !rounded-t-3xl !rounded-b-none !p-0 !gap-0 overflow-hidden border-x-0 border-b-0 md:hidden flex flex-col"
           >
             <div className="flex items-center justify-between gap-3 px-4 py-4 border-b border-border bg-card shrink-0">
               <div>
@@ -1084,96 +1085,165 @@ export function TicketTable({
               </button>
             </div>
 
-            <div className="overflow-y-auto overscroll-contain p-3 space-y-2 bg-card min-h-0">
-              <MobileFilterSection
-                title="الحالة"
-                options={statusFilterOptions}
-                selected={draftStatuses}
-                onToggle={value => toggleDraftValue(value, draftStatuses, setDraftStatuses)}
-                defaultOpen
-              />
-              <MobileFilterSection
-                title="التخصص"
-                options={typeFilterOptions}
-                selected={draftTypes}
-                onToggle={value => toggleDraftValue(value, draftTypes, setDraftTypes)}
-                defaultOpen
-              />
-              {!hideSupervisorColumn && (
-                <MobileFilterSection
-                  title="المشرف"
-                  options={supervisorFilterOptions}
-                  selected={draftSupervisors}
-                  onToggle={value => toggleDraftValue(value, draftSupervisors, setDraftSupervisors)}
-                />
-              )}
-              {!hideProjectColumn && (
-                <MobileFilterSection
-                  title="المشروع"
-                  options={projectFilterOptions}
-                  selected={draftProjects}
-                  onToggle={value => toggleDraftValue(value, draftProjects, setDraftProjects)}
-                />
-              )}
-              <MobileFilterSection
-                title="الموعد"
-                options={appointmentFilterOptions}
-                selected={draftAppointments}
-                onToggle={value => toggleDraftValue(value, draftAppointments, setDraftAppointments)}
-              />
+            {/* Two-column filter layout */}
+            <div className="flex min-h-0 flex-1 overflow-hidden bg-card">
+              {/* Right column: category list */}
+              <div className="w-28 shrink-0 overflow-y-auto border-l border-border/50 bg-muted/30 py-2">
+                {([
+                  { id: 'الحالة', count: draftStatuses.length },
+                  { id: 'التخصص', count: draftTypes.length },
+                  ...(!hideSupervisorColumn ? [{ id: 'المشرف', count: draftSupervisors.length }] : []),
+                  ...(!hideProjectColumn ? [{ id: 'المشروع', count: draftProjects.length }] : []),
+                  { id: 'الموعد', count: draftAppointments.length },
+                  { id: 'الترتيب', count: 0 },
+                ] as { id: string; count: number }[]).map(cat => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveFilterCategory(cat.id)}
+                    className={cn(
+                      'w-full flex items-center justify-between gap-1 px-3 py-3 text-right text-sm font-bold transition-all border-r-2',
+                      activeFilterCategory === cat.id
+                        ? 'border-blue-500 bg-card text-foreground'
+                        : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-card/50',
+                    )}
+                  >
+                    <span>{cat.id}</span>
+                    {cat.count > 0 && (
+                      <span className="min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center">
+                        {cat.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
 
-              <details open className="group rounded-2xl border border-border/60 bg-background/50 overflow-hidden">
-                <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
-                  <span className="text-sm font-black text-foreground">الترتيب</span>
-                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="px-3 pb-3 pt-0 border-t border-border/40 space-y-3">
+              {/* Left column: options for selected category */}
+              <div className="flex-1 overflow-y-auto p-3">
+                {activeFilterCategory === 'الحالة' && (
                   <div className="flex flex-wrap gap-2">
-                    {([
-                      { key: 'date' as SortKey, label: 'التاريخ' },
-                      { key: 'days' as SortKey, label: 'عدد الأيام' },
-                      { key: 'priority' as SortKey, label: 'الأولوية' },
-                      { key: 'status' as SortKey, label: 'الحالة' },
-                      { key: 'client' as SortKey, label: 'العميل' },
-                      { key: 'ref' as SortKey, label: 'المرجع' },
-                    ]).map(option => (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => setDraftSortKey(option.key)}
-                        className={cn(
-                          'min-h-9 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all',
-                          draftSortKey === option.key
-                            ? 'border-blue-500/60 bg-blue-500/15 text-blue-600 dark:text-blue-300'
-                            : 'border-border/60 bg-card text-muted-foreground',
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
+                    {statusFilterOptions.map(option => {
+                      const active = draftStatuses.includes(option.value);
+                      return (
+                        <button key={option.value} type="button"
+                          onClick={() => toggleDraftValue(option.value, draftStatuses, setDraftStatuses)}
+                          className={cn('min-h-9 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5',
+                            active ? 'border-blue-500/60 bg-blue-500/15 text-blue-600 dark:text-blue-300' : 'border-border/60 bg-card text-muted-foreground hover:text-foreground hover:border-border')}
+                        >
+                          {active && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                          {option.label}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-muted/60">
-                    {([
-                      { value: 'asc' as const, label: 'تصاعدي' },
-                      { value: 'desc' as const, label: 'تنازلي' },
-                    ]).map(option => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setDraftSortDir(option.value)}
-                        className={cn(
-                          'h-9 rounded-lg text-xs font-black transition-all',
-                          draftSortDir === option.value
-                            ? 'bg-card text-blue-500 shadow-sm'
-                            : 'text-muted-foreground',
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
+                )}
+                {activeFilterCategory === 'التخصص' && (
+                  <div className="flex flex-wrap gap-2">
+                    {typeFilterOptions.map(option => {
+                      const active = draftTypes.includes(option.value);
+                      return (
+                        <button key={option.value} type="button"
+                          onClick={() => toggleDraftValue(option.value, draftTypes, setDraftTypes)}
+                          className={cn('min-h-9 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5',
+                            active ? 'border-blue-500/60 bg-blue-500/15 text-blue-600 dark:text-blue-300' : 'border-border/60 bg-card text-muted-foreground hover:text-foreground hover:border-border')}
+                        >
+                          {active && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                          {option.label}
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
-              </details>
+                )}
+                {activeFilterCategory === 'المشرف' && (
+                  <div className="flex flex-wrap gap-2">
+                    {supervisorFilterOptions.map(option => {
+                      const active = draftSupervisors.includes(option.value);
+                      return (
+                        <button key={option.value} type="button"
+                          onClick={() => toggleDraftValue(option.value, draftSupervisors, setDraftSupervisors)}
+                          className={cn('min-h-9 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5',
+                            active ? 'border-blue-500/60 bg-blue-500/15 text-blue-600 dark:text-blue-300' : 'border-border/60 bg-card text-muted-foreground hover:text-foreground hover:border-border')}
+                        >
+                          {active && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {activeFilterCategory === 'المشروع' && (
+                  <div className="flex flex-wrap gap-2">
+                    {projectFilterOptions.map(option => {
+                      const active = draftProjects.includes(option.value);
+                      return (
+                        <button key={option.value} type="button"
+                          onClick={() => toggleDraftValue(option.value, draftProjects, setDraftProjects)}
+                          className={cn('min-h-9 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5',
+                            active ? 'border-blue-500/60 bg-blue-500/15 text-blue-600 dark:text-blue-300' : 'border-border/60 bg-card text-muted-foreground hover:text-foreground hover:border-border')}
+                        >
+                          {active && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {activeFilterCategory === 'الموعد' && (
+                  <div className="flex flex-wrap gap-2">
+                    {appointmentFilterOptions.map(option => {
+                      const active = draftAppointments.includes(option.value);
+                      return (
+                        <button key={option.value} type="button"
+                          onClick={() => toggleDraftValue(option.value, draftAppointments, setDraftAppointments)}
+                          className={cn('min-h-9 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5',
+                            active ? 'border-blue-500/60 bg-blue-500/15 text-blue-600 dark:text-blue-300' : 'border-border/60 bg-card text-muted-foreground hover:text-foreground hover:border-border')}
+                        >
+                          {active && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {activeFilterCategory === 'الترتيب' && (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        { key: 'date' as SortKey, label: 'التاريخ' },
+                        { key: 'days' as SortKey, label: 'عدد الأيام' },
+                        { key: 'priority' as SortKey, label: 'الأولوية' },
+                        { key: 'status' as SortKey, label: 'الحالة' },
+                        { key: 'client' as SortKey, label: 'العميل' },
+                        { key: 'ref' as SortKey, label: 'المرجع' },
+                      ]).map(option => (
+                        <button key={option.key} type="button"
+                          onClick={() => setDraftSortKey(option.key)}
+                          className={cn('min-h-9 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all',
+                            draftSortKey === option.key
+                              ? 'border-blue-500/60 bg-blue-500/15 text-blue-600 dark:text-blue-300'
+                              : 'border-border/60 bg-card text-muted-foreground')}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-muted/60">
+                      {([
+                        { value: 'asc' as const, label: 'تصاعدي' },
+                        { value: 'desc' as const, label: 'تنازلي' },
+                      ]).map(option => (
+                        <button key={option.value} type="button"
+                          onClick={() => setDraftSortDir(option.value)}
+                          className={cn('h-9 rounded-lg text-xs font-black transition-all',
+                            draftSortDir === option.value ? 'bg-card text-blue-500 shadow-sm' : 'text-muted-foreground')}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-[auto_1fr] gap-2 p-3 pb-[calc(.75rem+env(safe-area-inset-bottom,0px))] border-t border-border bg-card shrink-0">
