@@ -395,16 +395,29 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
         return { blockedBy: otherActive, session: null, updatedTickets: 0 };
       }
 
-      // Idempotent: if a session already exists for this appointment (and it's in_progress), reuse it.
+      // Idempotent: if a session already exists for this appointment, decide what to do.
       const existing = await tx.appointmentWorkSession.findUnique({
         where: { appointmentId }
       });
       if (existing) {
-        if (existing.status === 'in_progress' && existing.technicianId === technicianId) {
+        if (['in_progress', 'paused'].includes(existing.status)) {
+          if (existing.technicianId !== technicianId) {
+            throw new Error('Another technician is already working on this appointment');
+          }
+          // Same tech re-entering: if paused, resume; otherwise just return.
+          if (existing.status === 'paused' && existing.pausedAt) {
+            const extraPause = Math.round((Date.now() - existing.pausedAt.getTime()) / 60000);
+            const resumed = await tx.appointmentWorkSession.update({
+              where: { id: existing.id },
+              data: {
+                status: 'in_progress',
+                pausedAt: null,
+                totalPausedMins: (existing.totalPausedMins || 0) + extraPause,
+              }
+            });
+            return { blockedBy: null, session: resumed, updatedTickets: 0 };
+          }
           return { blockedBy: null, session: existing, updatedTickets: 0 };
-        }
-        if (existing.status === 'in_progress') {
-          throw new Error('Another technician is already working on this appointment');
         }
         // A finished/cancelled session already existed → delete it before reopening.
         await tx.appointmentWorkSession.delete({ where: { id: existing.id } });
@@ -477,19 +490,29 @@ router.post('/tech/appointments/:appointmentId/finish', requireTechAuth, async (
       if (session.technicianId !== technicianId) {
         throw new Error('This appointment is being worked on by another technician');
       }
-      if (session.status !== 'in_progress') {
+      if (session.status === 'completed' || session.status === 'cancelled') {
         // Idempotent: already finished — return the current state.
         return { session, completedTickets: 0 };
       }
 
       const now = new Date();
-      const totalDurationMins = Math.round((now.getTime() - session.claimedAt.getTime()) / 60000);
+      // If the session is currently paused, close out the paused window first.
+      let extraPause = 0;
+      if (session.status === 'paused' && session.pausedAt) {
+        extraPause = Math.round((now.getTime() - session.pausedAt.getTime()) / 60000);
+      }
+      const totalPausedMins = (session.totalPausedMins || 0) + extraPause;
+      const totalElapsedMins = Math.round((now.getTime() - session.claimedAt.getTime()) / 60000);
+      const totalDurationMins = Math.max(0, totalElapsedMins - totalPausedMins);
 
       const updatedSession = await tx.appointmentWorkSession.update({
         where: { id: session.id },
         data: {
           status: 'completed',
           finishedAt: now,
+          pausedAt: null,
+          totalPausedMins,
+          totalElapsedMins,
           totalDurationMins,
           finishLat: typeof lat === 'number' ? lat : null,
           finishLng: typeof lng === 'number' ? lng : null,
@@ -546,11 +569,11 @@ router.post('/tech/appointments/:appointmentId/cancel-claim', requireTechAuth, a
       if (session.technicianId !== technicianId) {
         throw new Error('Cannot cancel another technician\'s session');
       }
-      if (session.status !== 'in_progress') return { cancelled: false };
+      if (!['in_progress', 'paused'].includes(session.status)) return { cancelled: false };
 
       await tx.appointmentWorkSession.update({
         where: { id: session.id },
-        data: { status: 'cancelled', finishedAt: new Date() }
+        data: { status: 'cancelled', finishedAt: new Date(), pausedAt: null }
       });
 
       // Revert tickets back to their pre-claim state (open).
@@ -560,6 +583,163 @@ router.post('/tech/appointments/:appointmentId/cancel-claim', requireTechAuth, a
       });
 
       return { cancelled: true };
+    });
+
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /tech/appointments/:id/pause — pause the session (frees up the tech to claim another)
+router.post('/tech/appointments/:appointmentId/pause', requireTechAuth, async (req: TechAuthRequest, res) => {
+  try {
+    const technicianId = req.technicianId!;
+    const appointmentId = req.params.appointmentId;
+    const { reason } = req.body || {};
+
+    const session = await prisma.appointmentWorkSession.findUnique({ where: { appointmentId } });
+    if (!session) { res.status(404).json({ error: 'No session' }); return; }
+    if (session.technicianId !== technicianId) { res.status(403).json({ error: 'Not yours' }); return; }
+    if (session.status !== 'in_progress') {
+      res.status(400).json({ error: 'Session must be in_progress to pause' });
+      return;
+    }
+
+    const updated = await prisma.appointmentWorkSession.update({
+      where: { id: session.id },
+      data: {
+        status: 'paused',
+        pausedAt: new Date(),
+        pauseReason: reason || null,
+      }
+    });
+    res.json({ ok: true, session: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /tech/appointments/:id/resume — resume the session
+router.post('/tech/appointments/:appointmentId/resume', requireTechAuth, async (req: TechAuthRequest, res) => {
+  try {
+    const technicianId = req.technicianId!;
+    const appointmentId = req.params.appointmentId;
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${technicianId}))`;
+
+      const session = await tx.appointmentWorkSession.findUnique({ where: { appointmentId } });
+      if (!session) throw new Error('No session');
+      if (session.technicianId !== technicianId) throw new Error('Not yours');
+      if (session.status !== 'paused') throw new Error('Session is not paused');
+
+      // Refuse resume if the tech now has another in_progress appointment.
+      const otherActive = await tx.appointmentWorkSession.findFirst({
+        where: {
+          technicianId,
+          status: 'in_progress',
+          appointmentId: { not: appointmentId }
+        },
+        include: {
+          appointment: {
+            select: { id: true, date: true, time: true, unit: { select: { unitNumber: true } } }
+          }
+        }
+      });
+      if (otherActive) {
+        return { blockedBy: otherActive, session: null };
+      }
+
+      const now = new Date();
+      const extraPause = session.pausedAt
+        ? Math.round((now.getTime() - session.pausedAt.getTime()) / 60000)
+        : 0;
+      const totalPausedMins = (session.totalPausedMins || 0) + extraPause;
+
+      const updated = await tx.appointmentWorkSession.update({
+        where: { id: session.id },
+        data: {
+          status: 'in_progress',
+          pausedAt: null,
+          totalPausedMins,
+        }
+      });
+      return { session: updated, blockedBy: null };
+    });
+
+    if (result.blockedBy) {
+      res.status(409).json({
+        code: 'ACTIVE_APPOINTMENT_EXISTS',
+        error: 'Finish or pause the other active appointment first',
+        activeAppointmentId: result.blockedBy.appointmentId,
+        activeAppointment: result.blockedBy.appointment
+      });
+      return;
+    }
+    res.json({ ok: true, session: result.session });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /tech/appointments/:id/postpone — cancel the session and reschedule the appointment
+router.post('/tech/appointments/:appointmentId/postpone', requireTechAuth, async (req: TechAuthRequest, res) => {
+  try {
+    const technicianId = req.technicianId!;
+    const appointmentId = req.params.appointmentId;
+    const { newDate, newTime, reason } = req.body || {};
+
+    if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+      res.status(400).json({ error: 'newDate (YYYY-MM-DD) is required' });
+      return;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const appointment = await tx.appointment.findUnique({
+        where: { id: appointmentId },
+        include: { workSession: true }
+      });
+      if (!appointment) throw new Error('Appointment not found');
+
+      const session = appointment.workSession;
+      if (session) {
+        if (session.technicianId !== technicianId) {
+          throw new Error('This appointment is owned by another technician');
+        }
+        if (['in_progress', 'paused'].includes(session.status)) {
+          // Close the session out as cancelled so the tech can move on.
+          await tx.appointmentWorkSession.update({
+            where: { id: session.id },
+            data: {
+              status: 'cancelled',
+              finishedAt: new Date(),
+              pausedAt: null,
+              completionNotes: reason ? `تم التأجيل: ${reason}` : 'تم التأجيل',
+            }
+          });
+        }
+      }
+
+      // Revert any tickets that we flipped to in_progress on claim back to open.
+      await tx.ticket.updateMany({
+        where: { appointmentId, status: 'in_progress' },
+        data: { status: 'open' }
+      });
+
+      // Reschedule the appointment itself.
+      const updated = await tx.appointment.update({
+        where: { id: appointmentId },
+        data: {
+          date: newDate,
+          time: newTime ?? null,
+          status: 'scheduled',
+          notes: reason
+            ? `${appointment.notes ? appointment.notes + '\n' : ''}تم التأجيل من ${appointment.date}${appointment.time ? ' ' + appointment.time : ''}: ${reason}`
+            : appointment.notes,
+        }
+      });
+      return { appointment: updated };
     });
 
     res.json({ ok: true, ...result });
@@ -792,6 +972,7 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
       return;
     }
 
+    // Only in_progress blocks — paused sessions free up the tech to claim another.
     const activeSession = await prisma.appointmentWorkSession.findFirst({
       where: { technicianId: technician.id, status: 'in_progress' },
       select: { appointmentId: true, claimedAt: true }
@@ -800,17 +981,14 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
 
     const { from, to, date } = req.query as { from?: string; to?: string; date?: string };
 
-    const orConditions: any[] = [
-      { technicianId: technician.id },
-      { technicianIds: { has: technician.id } }
-    ];
-    if (technician.supervisorId) {
-      orConditions.push({ supervisorIds: { has: technician.supervisorId } });
-    }
-
+    // Only show appointments explicitly assigned to THIS technician.
+    // A supervisor-shared appointment that is not tied to this tech is hidden.
     const where: any = {
       status: { not: 'cancelled' },
-      OR: orConditions
+      OR: [
+        { technicianId: technician.id },
+        { technicianIds: { has: technician.id } }
+      ]
     };
     if (technician.projectId) where.projectId = technician.projectId;
     if (date) where.date = date;
@@ -828,7 +1006,10 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
         },
         workSession: {
           select: {
-            id: true, status: true, technicianId: true, claimedAt: true, finishedAt: true, totalDurationMins: true
+            id: true, status: true, technicianId: true,
+            claimedAt: true, finishedAt: true, pausedAt: true,
+            pauseReason: true, totalPausedMins: true,
+            totalDurationMins: true, totalElapsedMins: true,
           }
         },
         tickets: {
@@ -844,20 +1025,14 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
     });
 
     const enriched = appointments.map((appointment: any) => {
-      const isAssignedToMe =
-        appointment.technicianId === technician.id ||
-        (Array.isArray(appointment.technicianIds) && appointment.technicianIds.includes(technician.id));
-      const isSupervisorAppointment =
-        !!technician.supervisorId &&
-        Array.isArray(appointment.supervisorIds) &&
-        appointment.supervisorIds.includes(technician.supervisorId);
-
+      const ws = appointment.workSession;
       const isClaimedByMe =
-        appointment.workSession?.status === 'in_progress' &&
-        appointment.workSession?.technicianId === technician.id;
+        ws && ['in_progress', 'paused'].includes(ws.status) && ws.technicianId === technician.id;
       const isClaimedByOther =
-        appointment.workSession?.status === 'in_progress' &&
-        appointment.workSession?.technicianId !== technician.id;
+        ws && ['in_progress', 'paused'].includes(ws.status) && ws.technicianId !== technician.id;
+      const isPausedByMe = isClaimedByMe && ws.status === 'paused';
+
+      const isCompleted = appointment.status === 'completed';
 
       const completedTickets = appointment.tickets?.filter((t: any) =>
         ['completed', 'closed', 'out_of_scope', 'absent'].includes(String(t.status).toLowerCase())
@@ -871,20 +1046,26 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
       const clientName  = firstTicket?.client?.name  || appointment.clientName  || '';
       const clientPhone = firstTicket?.client?.phone || appointment.clientPhone || '';
 
+      // Priority: 0 = in_progress by me, 1 = paused by me, 2 = pending mine, 99 = completed at bottom
+      const appointmentPriority = isCompleted
+        ? 99
+        : (isClaimedByMe && !isPausedByMe ? 0 : (isPausedByMe ? 1 : 2));
+
       return {
         ...appointment,
         unitNumber,
         clientName,
         clientPhone,
-        isAssignedToMe,
-        isSupervisorAppointment,
         isClaimedByMe,
         isClaimedByOther,
+        isPausedByMe,
+        isCompleted,
         activeAppointmentId,
+        // Only in_progress (not paused) blocks claiming another appointment.
         claimBlocked: !!activeAppointmentId && activeAppointmentId !== appointment.id,
         completedTickets,
         totalTickets: appointment.tickets?.length || 0,
-        appointmentPriority: isClaimedByMe ? 0 : (isAssignedToMe ? 1 : 2)
+        appointmentPriority,
       };
     });
 

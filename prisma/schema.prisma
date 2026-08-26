@@ -479,12 +479,18 @@ model AppointmentWorkSession {
   technicianId      String
   shiftLogId        String?
 
-  status            String    @default("in_progress") // in_progress | completed | cancelled
+  status            String    @default("in_progress") // in_progress | paused | completed | cancelled
 
   claimedAt         DateTime  @default(now())
   finishedAt        DateTime?
 
-  totalDurationMins Int?                            // يحسب عند الإنهاء
+  // للتوقف المؤقت
+  pausedAt          DateTime?
+  pauseReason       String?
+  totalPausedMins   Int       @default(0)
+
+  totalDurationMins Int?                            // مدة العمل الصافية (بدون التوقف)
+  totalElapsedMins  Int?                            // من الاستلام للإنهاء (بما فيها التوقف)
 
   // موقع البداية
   claimLat          Float?

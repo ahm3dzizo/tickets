@@ -631,6 +631,53 @@ export const techApi = {
     }
     return res.json();
   },
+  pauseAppointment: async (appointmentId: string, reason?: string) => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch(`/api/tech/appointments/${appointmentId}/pause`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ reason: reason || null })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  resumeAppointment: async (appointmentId: string) => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch(`/api/tech/appointments/${appointmentId}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: '{}'
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      const error = new Error(err.error || `HTTP ${res.status}`) as Error & {
+        code?: string; activeAppointmentId?: string | null;
+      };
+      error.code = err.code;
+      error.activeAppointmentId = err.activeAppointmentId;
+      throw error;
+    }
+    return res.json();
+  },
+  postponeAppointment: async (
+    appointmentId: string,
+    payload: { newDate: string; newTime?: string | null; reason?: string }
+  ) => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch(`/api/tech/appointments/${appointmentId}/postpone`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
   updateTicketStatus: async (
     appointmentId: string,
     ticketId: string,

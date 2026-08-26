@@ -477,7 +477,7 @@ export default function TechTicketDetail() {
         </div>
 
         {/* Appointment Session Banner — appears whenever this ticket belongs to a claimed appointment */}
-        {ticket.appointmentSession?.status === 'in_progress' && (
+        {['in_progress', 'paused'].includes(ticket.appointmentSession?.status) && (
           <AppointmentSessionBanner
             session={ticket.appointmentSession}
             appointmentId={ticket.appointment?.id || ticket.appointmentId}
@@ -713,20 +713,32 @@ function AppointmentSessionBanner({
   appointmentId?: string;
   navigate: ReturnType<typeof useNavigate>;
 }) {
+  const isPaused = session?.status === 'paused';
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
+    if (isPaused) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [isPaused]);
 
-  const startTs = session?.claimedAt ? new Date(session.claimedAt).getTime() : now;
-  const secs = Math.max(0, Math.floor((now - startTs) / 1000));
+  const start = session?.claimedAt ? new Date(session.claimedAt).getTime() : now;
+  const end = isPaused && session.pausedAt ? new Date(session.pausedAt).getTime() : now;
+  const pauseSecs = (session?.totalPausedMins || 0) * 60;
+  const secs = Math.max(0, Math.floor((end - start) / 1000) - pauseSecs);
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   const s = secs % 60;
   const label = h > 0
     ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
     : `${m}:${String(s).padStart(2, '0')}`;
+
+  const color = isPaused ? '#f59e0b' : '#3b82f6';
+  const bg = isPaused
+    ? 'linear-gradient(90deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05))'
+    : 'linear-gradient(90deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))';
+  const border = isPaused ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(59,130,246,0.35)';
+  const iconBg = isPaused ? 'rgba(245,158,11,0.25)' : 'rgba(59,130,246,0.25)';
 
   return (
     <div
@@ -738,22 +750,25 @@ function AppointmentSessionBanner({
         padding: '10px 14px',
         marginTop: 12,
         borderRadius: 14,
-        background: 'linear-gradient(90deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))',
-        border: '1px solid rgba(59,130,246,0.35)',
+        background: bg,
+        border,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           width: 34, height: 34, borderRadius: 10,
-          background: 'rgba(59,130,246,0.25)', color: '#3b82f6',
+          background: iconBg, color,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <Clock3 className="w-4 h-4" />
         </div>
         <div>
-          <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 2 }}>الموعد جارٍ التنفيذ</div>
-          <div style={{ fontWeight: 900, fontSize: 16, fontVariantNumeric: 'tabular-nums', color: '#3b82f6' }}>
+          <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 2 }}>
+            {isPaused ? 'الموعد متوقف مؤقتاً' : 'الموعد جارٍ التنفيذ'}
+          </div>
+          <div style={{ fontWeight: 900, fontSize: 16, fontVariantNumeric: 'tabular-nums', color }}>
             {label}
+            {isPaused && <span style={{ fontSize: 11, marginRight: 6 }}>⏸</span>}
           </div>
         </div>
       </div>
@@ -763,7 +778,7 @@ function AppointmentSessionBanner({
           className="tech-btn"
           style={{
             fontSize: 11, padding: '6px 10px',
-            background: 'rgba(59,130,246,0.2)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6',
+            background: iconBg, border: `1px solid ${color}30`, color,
           }}
         >
           الموعد كامل

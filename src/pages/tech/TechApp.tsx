@@ -17,8 +17,8 @@ import {
   ChevronUp,
   Ticket,
   User,
-  CheckCircle2,
-  Play,
+  CheckCircle2,  Play,
+  Pause,
   Timer,
   Sun,
   Moon,
@@ -781,21 +781,35 @@ function AppointmentCard({
 
   const isClaimedByMe = appt.isClaimedByMe === true;
   const isClaimedByOther = appt.isClaimedByOther === true;
+  const isPausedByMe = appt.isPausedByMe === true;
   const session = appt.workSession || null;
+  const isRunning = isClaimedByMe && !isPausedByMe;
 
   const [claiming, setClaiming] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [pausing, setPausing] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [showPostpone, setShowPostpone] = useState(false);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!isClaimedByMe || !session?.claimedAt) return;
+    if (!isRunning || !session?.claimedAt) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [isClaimedByMe, session?.claimedAt]);
+  }, [isRunning, session?.claimedAt]);
 
-  const elapsedSecs = isClaimedByMe && session?.claimedAt
-    ? Math.max(0, Math.floor((now - new Date(session.claimedAt).getTime()) / 1000))
-    : 0;
+  // Effective elapsed time:
+  //   in_progress → wall clock (now - claimedAt) - totalPausedMins*60
+  //   paused      → up to pausedAt, minus prior pauses
+  const elapsedSecs = (() => {
+    if (!session?.claimedAt) return 0;
+    const start = new Date(session.claimedAt).getTime();
+    const end = isPausedByMe && session.pausedAt
+      ? new Date(session.pausedAt).getTime()
+      : now;
+    const pauseSecs = (session.totalPausedMins || 0) * 60;
+    return Math.max(0, Math.floor((end - start) / 1000) - pauseSecs);
+  })();
   const elapsedLabel = (() => {
     const h = Math.floor(elapsedSecs / 3600);
     const m = Math.floor((elapsedSecs % 3600) / 60);
@@ -871,6 +885,38 @@ function AppointmentCard({
     }
   };
 
+  const handlePauseAppointment = async () => {
+    if (pausing) return;
+    const reason = window.prompt('سبب التوقف المؤقت (اختياري):', '');
+    if (reason === null) return; // cancelled
+    setPausing(true);
+    try {
+      await techApi.pauseAppointment(appt.id, reason.trim() || undefined);
+      toast.success('تم تعليق الموعد — تقدر تستلم موعد آخر');
+      onRefresh?.();
+    } catch (err: any) {
+      toast.error(err?.message || 'فشل تعليق الموعد');
+    } finally {
+      setPausing(false);
+    }
+  };
+
+  const handleResumeAppointment = async () => {
+    if (resuming) return;
+    setResuming(true);
+    try {
+      await techApi.resumeAppointment(appt.id);
+      toast.success('تم استئناف الموعد');
+      onRefresh?.();
+    } catch (err: any) {
+      toast.error(err?.code === 'ACTIVE_APPOINTMENT_EXISTS'
+        ? 'أنه أو علّق الموعد الآخر أولاً'
+        : (err?.message || 'فشل استئناف الموعد'));
+    } finally {
+      setResuming(false);
+    }
+  };
+
   const statusLabel = (status?: string) => {
     switch (status?.toLowerCase()) {
       case 'open': return t(lang, 'status_OPEN');
@@ -940,9 +986,9 @@ function AppointmentCard({
               gap: 6,
               padding: '4px 10px',
               borderRadius: 8,
-              background: 'rgba(59,130,246,0.12)',
-              border: '1px solid rgba(59,130,246,0.3)',
-              color: '#3b82f6',
+              background: isPausedByMe ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.12)',
+              border: isPausedByMe ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(59,130,246,0.3)',
+              color: isPausedByMe ? '#f59e0b' : '#3b82f6',
               fontWeight: 700,
               fontSize: 12,
               fontVariantNumeric: 'tabular-nums',
@@ -950,6 +996,7 @@ function AppointmentCard({
           >
             <Timer size={13} />
             {elapsedLabel}
+            {isPausedByMe && <span style={{ fontSize: 10, fontWeight: 900 }}>• متوقف</span>}
           </div>
         )}
 
@@ -1005,7 +1052,7 @@ function AppointmentCard({
             disabled={finishing}
             className="tech-ticket-toggle"
             style={{
-              minWidth: 110,
+              minWidth: 100,
               justifyContent: 'center',
               background: 'rgba(239,68,68,0.12)',
               border: '1px solid rgba(239,68,68,0.3)',
@@ -1016,7 +1063,56 @@ function AppointmentCard({
             }}
           >
             {finishing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-            {finishing ? '...' : 'إنهاء الموعد'}
+            {finishing ? '...' : 'إنهاء'}
+          </button>
+        )}
+
+        {isClaimedByMe && !isPausedByMe && (
+          <button
+            onClick={handlePauseAppointment}
+            disabled={pausing}
+            className="tech-ticket-toggle"
+            style={{
+              minWidth: 80, justifyContent: 'center',
+              background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)',
+              borderRadius: 8, padding: '5px 10px', color: '#f59e0b', fontWeight: 700,
+            }}
+            title="تعليق الموعد — تقدر تستلم موعد آخر"
+          >
+            {pausing ? <Loader2 size={14} className="animate-spin" /> : <Pause size={14} />}
+            توقف
+          </button>
+        )}
+
+        {isPausedByMe && (
+          <button
+            onClick={handleResumeAppointment}
+            disabled={resuming}
+            className="tech-ticket-toggle"
+            style={{
+              minWidth: 90, justifyContent: 'center',
+              background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)',
+              borderRadius: 8, padding: '5px 10px', color: '#16a34a', fontWeight: 700,
+            }}
+          >
+            {resuming ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+            استئناف
+          </button>
+        )}
+
+        {isClaimedByMe && (
+          <button
+            onClick={() => setShowPostpone(true)}
+            className="tech-ticket-toggle"
+            style={{
+              minWidth: 80, justifyContent: 'center',
+              background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+              borderRadius: 8, padding: '5px 10px', color: '#8b5cf6', fontWeight: 700,
+            }}
+            title="تأجيل الموعد لتاريخ آخر"
+          >
+            <Calendar size={14} />
+            تأجيل
           </button>
         )}
 
@@ -1064,7 +1160,129 @@ function AppointmentCard({
           ))}
         </div>
       )}
+
+      {showPostpone && (
+        <PostponeDialog
+          appointmentId={appt.id}
+          currentDate={appt.date}
+          currentTime={appt.time}
+          onClose={() => setShowPostpone(false)}
+          onDone={() => { setShowPostpone(false); onRefresh?.(); }}
+        />
+      )}
     </article>
+  );
+}
+
+function PostponeDialog({
+  appointmentId, currentDate, currentTime, onClose, onDone,
+}: {
+  appointmentId: string;
+  currentDate?: string;
+  currentTime?: string | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [newDate, setNewDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [newTime, setNewTime] = useState<string>(currentTime || '');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (submitting) return;
+    if (!newDate) { toast.error('اختر تاريخ جديد'); return; }
+    setSubmitting(true);
+    try {
+      await techApi.postponeAppointment(appointmentId, {
+        newDate, newTime: newTime || null, reason: reason.trim() || undefined,
+      });
+      toast.success('تم تأجيل الموعد');
+      onDone();
+    } catch (err: any) {
+      toast.error(err?.message || 'فشل التأجيل');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 100,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--tech-card, #fff)', color: 'var(--tech-text, #000)',
+          borderRadius: 20, padding: 20, width: '100%', maxWidth: 400,
+          border: '1px solid var(--tech-border, #e2e8f0)',
+        }}
+        dir="rtl"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'rgba(139,92,246,0.15)', color: '#8b5cf6',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Calendar size={18} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 15 }}>تأجيل الموعد</div>
+            <div style={{ fontSize: 11, opacity: 0.7 }}>حالياً: {currentDate} {currentTime || ''}</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>التاريخ الجديد</label>
+            <input
+              type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+              min={new Date().toISOString().slice(0, 10)}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '1px solid var(--tech-border, #cbd5e1)', background: 'transparent', color: 'inherit', fontSize: 13 }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>الوقت (اختياري)</label>
+            <input
+              type="time" value={newTime} onChange={e => setNewTime(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '1px solid var(--tech-border, #cbd5e1)', background: 'transparent', color: 'inherit', fontSize: 13 }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>سبب التأجيل</label>
+            <textarea
+              value={reason} onChange={e => setReason(e.target.value)} rows={2}
+              placeholder="اختياري..."
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '1px solid var(--tech-border, #cbd5e1)', background: 'transparent', color: 'inherit', fontSize: 13, resize: 'none' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button
+            onClick={onClose}
+            className="tech-btn"
+            style={{ flex: 1, background: 'rgba(100,116,139,0.15)', color: 'inherit' }}
+          >إلغاء</button>
+          <button
+            onClick={submit} disabled={submitting}
+            className="tech-btn"
+            style={{ flex: 1, background: '#8b5cf6', color: '#fff' }}
+          >
+            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
+            تأكيد
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
