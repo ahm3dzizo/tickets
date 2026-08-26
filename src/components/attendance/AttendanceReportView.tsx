@@ -41,6 +41,18 @@ const specialtyLabels: Record<string, string> = {
   general: 'عام' 
 };
 
+const gpsFlagLabels: Record<string, string> = {
+  clock_in_far_from_office: 'تسجيل قديم خارج النطاق',
+  gps_unrealistic_precision: 'دقة GPS غير واقعية',
+  gps_impossible_speed: 'سرعة انتقال غير منطقية',
+  gps_suspicious_altitude_accuracy: 'بيانات ارتفاع مشبوهة',
+};
+
+function gpsFlagText(reason?: string | null) {
+  if (!reason) return 'قراءة موقع تحتاج مراجعة';
+  return reason.split(',').map(code => gpsFlagLabels[code.trim()] || code.trim()).join('، ');
+}
+
 export function AttendanceReportView({ initialProjectId }: AttendanceReportViewProps) {
   const [shifts, setShifts] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>({
@@ -347,7 +359,7 @@ export function AttendanceReportView({ initialProjectId }: AttendanceReportViewP
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6 text-right" dir="rtl">
 
       {/* ── Top Filter Bar ─────────────────────────────────────────────── */}
       <div className="bg-card border border-border rounded-3xl p-5 shadow-sm space-y-4">
@@ -646,7 +658,11 @@ export function AttendanceReportView({ initialProjectId }: AttendanceReportViewP
                           {shift.isFlagged ? (
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                               <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                              <span>{shift.clockInDistanceM ? `${Math.round(shift.clockInDistanceM)}م من المكتب` : 'خارج النطاق'}</span>
+                              <span title={gpsFlagText(shift.flagReason)}>
+                                {shift.clockInDistanceM != null
+                                  ? `${Math.round(shift.clockInDistanceM)}م — ${gpsFlagText(shift.flagReason)}`
+                                  : gpsFlagText(shift.flagReason)}
+                              </span>
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">

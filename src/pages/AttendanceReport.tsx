@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { projectsApi, techniciansApi } from '@/lib/api';
+import { attendanceApi, projectsApi, techniciansApi } from '@/lib/api';
 
 type ShiftRow = {
   id: string;
@@ -80,6 +80,20 @@ function fmtDur(mins: number | null | undefined) {
   return h > 0 ? `${h}س ${m}د` : `${m}د`;
 }
 
+const gpsFlagLabels: Record<string, string> = {
+  clock_in_far_from_office: 'تسجيل قديم خارج النطاق',
+  gps_unrealistic_precision: 'دقة GPS غير واقعية وقد تشير لموقع وهمي',
+  gps_impossible_speed: 'سرعة انتقال غير منطقية',
+  gps_suspicious_altitude_accuracy: 'بيانات ارتفاع GPS مشبوهة',
+};
+
+function formatGpsFlags(reason: string) {
+  return reason
+    .split(',')
+    .map(code => gpsFlagLabels[code.trim()] || code.trim())
+    .join('، ');
+}
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -87,14 +101,6 @@ function daysAgoStr(days: number) {
   const d = new Date();
   d.setDate(d.getDate() - days);
   return d.toISOString().slice(0, 10);
-}
-
-async function fetchReport(params: URLSearchParams): Promise<ReportResponse> {
-  const res = await fetch(`/api/attendance/report?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
 }
 
 function KpiCard({
@@ -203,7 +209,7 @@ function ShiftRowCard({ shift }: { shift: ShiftRow }) {
 
           {shift.flagReason && (
             <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs">
-              <strong>سبب التعليم:</strong> {shift.flagReason}
+              <strong>سبب التنبيه:</strong> {formatGpsFlags(shift.flagReason)}
               {shift.clockInDistanceM != null && ` (${Math.round(shift.clockInDistanceM)}م من المكتب)`}
             </div>
           )}
@@ -292,13 +298,18 @@ export default function AttendanceReport() {
   const load = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ from, to });
-      if (projectId !== 'all') params.set('projectId', projectId);
-      if (technicianId !== 'all') params.set('technicianId', technicianId);
-      const r = await fetchReport(params);
-      setData(r);
+      const report = await attendanceApi.getReport({
+        from,
+        to,
+        projectId: projectId !== 'all' ? projectId : undefined,
+        technicianId: technicianId !== 'all' ? technicianId : undefined,
+      });
+      setData(report as ReportResponse);
     } catch (e: any) {
-      toast.error('فشل جلب التقرير: ' + (e.message || ''));
+      const message = e?.message === 'Unauthorized' || e?.message === 'Invalid token' || e?.message === 'Not authenticated'
+        ? 'انتهت جلسة الدخول. سجّل الدخول مرة أخرى.'
+        : (e?.message || 'حدث خطأ غير متوقع');
+      toast.error(`فشل جلب التقرير: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -311,7 +322,7 @@ export default function AttendanceReport() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto space-y-6 py-6 lg:py-8">
+      <div dir="rtl" className="max-w-[1400px] mx-auto space-y-6 py-6 lg:py-8 text-right">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -335,21 +346,21 @@ export default function AttendanceReport() {
               <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">من</label>
               <input
                 type="date" value={from} onChange={e => setFrom(e.target.value)}
-                className="w-full h-9 px-3 rounded-xl border border-border bg-background text-sm"
+                dir="ltr" className="w-full h-9 px-3 rounded-xl border border-border bg-background text-sm text-right"
               />
             </div>
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">إلى</label>
               <input
                 type="date" value={to} onChange={e => setTo(e.target.value)}
-                className="w-full h-9 px-3 rounded-xl border border-border bg-background text-sm"
+                dir="ltr" className="w-full h-9 px-3 rounded-xl border border-border bg-background text-sm text-right"
               />
             </div>
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">المشروع</label>
               <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger className="h-9 rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectTrigger className="h-9 rounded-xl text-right"><SelectValue /></SelectTrigger>
+                <SelectContent dir="rtl">
                   <SelectItem value="all">كل المشاريع</SelectItem>
                   {projects.map((p: any) => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
@@ -360,8 +371,8 @@ export default function AttendanceReport() {
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">الفني</label>
               <Select value={technicianId} onValueChange={setTechnicianId}>
-                <SelectTrigger className="h-9 rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectTrigger className="h-9 rounded-xl text-right"><SelectValue /></SelectTrigger>
+                <SelectContent dir="rtl">
                   <SelectItem value="all">كل الفنيين</SelectItem>
                   {techs.map((t: any) => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>

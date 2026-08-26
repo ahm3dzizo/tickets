@@ -119,7 +119,7 @@ export default function Technicians() {
 
   return (
     <Layout>
-      <div className="space-y-6 page-in" dir="rtl">
+      <div className="space-y-6 page-in text-right" dir="rtl">
 
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">

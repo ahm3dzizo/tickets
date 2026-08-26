@@ -516,7 +516,17 @@ export const techApi = {
     if (!res.ok) return null;
     return res.json();
   },
-  clockIn: async (data: { lat?: number; lng?: number; accuracy?: number; projectId?: string }) => {
+  clockIn: async (data: {
+    lat: number;
+    lng: number;
+    accuracy: number;
+    projectId?: string;
+    sampledAt: number;
+    sampleCount: number;
+    sampleSpreadM: number;
+    speed?: number | null;
+    altitudeAccuracy?: number | null;
+  }) => {
     const token = localStorage.getItem('tech_token') || '';
     const res = await fetch('/api/shift/clock-in', {
       method: 'POST',

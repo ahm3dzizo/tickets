@@ -63,6 +63,64 @@ function TechPushButton({ token }: { token: string | null }) {
 type Tab = 'home' | 'appointments' | 'profile';
 type Theme = 'light' | 'dark' | 'system';
 
+type AttendanceLocation = {
+  lat: number;
+  lng: number;
+  accuracy: number;
+  sampledAt: number;
+  sampleCount: number;
+  sampleSpreadM: number;
+  speed?: number | null;
+  altitudeAccuracy?: number | null;
+};
+
+function distanceMeters(a: GeolocationCoordinates, b: GeolocationCoordinates) {
+  const radius = 6371000;
+  const toRad = (value: number) => value * Math.PI / 180;
+  const latDelta = toRad(b.latitude - a.latitude);
+  const lngDelta = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const h = Math.sin(latDelta / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(lngDelta / 2) ** 2;
+  return radius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+async function collectAttendanceLocation(): Promise<AttendanceLocation> {
+  if (!navigator.geolocation) {
+    throw new Error('خدمة الموقع غير مدعومة على هذا الجهاز');
+  }
+
+  const samples: GeolocationPosition[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        timeout: 10000,
+        maximumAge: 0,
+        enableHighAccuracy: true,
+      });
+    });
+    samples.push(position);
+    if (index < 2) await new Promise(resolve => window.setTimeout(resolve, 450));
+  }
+
+  const best = [...samples].sort((a, b) => a.coords.accuracy - b.coords.accuracy)[0];
+  const spreads = samples.flatMap((sample, index) =>
+    samples.slice(index + 1).map(other => distanceMeters(sample.coords, other.coords))
+  );
+
+  return {
+    lat: best.coords.latitude,
+    lng: best.coords.longitude,
+    accuracy: best.coords.accuracy,
+    sampledAt: best.timestamp,
+    sampleCount: samples.length,
+    sampleSpreadM: spreads.length ? Math.max(...spreads) : 0,
+    speed: Number.isFinite(best.coords.speed) ? best.coords.speed : null,
+    altitudeAccuracy: Number.isFinite(best.coords.altitudeAccuracy) ? best.coords.altitudeAccuracy : null,
+  };
+}
+
 function getStoredTheme(): Theme {
   try {
     const v = localStorage.getItem('tech-theme');
@@ -143,23 +201,8 @@ export default function TechApp() {
   const handleClockIn = async () => {
     setActionLoading(true);
     try {
-      let lat: number | undefined;
-      let lng: number | undefined;
-      let accuracy: number | undefined;
-      if (navigator.geolocation) {
-        try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              timeout: 10000,
-              enableHighAccuracy: true,
-            });
-          });
-          lat = pos.coords.latitude;
-          lng = pos.coords.longitude;
-          accuracy = pos.coords.accuracy;
-        } catch {}
-      }
-      await techApi.clockIn({ lat, lng, accuracy, projectId: techProfile?.projectId });
+      const location = await collectAttendanceLocation();
+      await techApi.clockIn({ ...location, projectId: techProfile?.projectId });
       toast.success(t(lang, 'shiftActive'));
       await fetchData();
     } catch (err: any) {

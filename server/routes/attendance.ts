@@ -6,6 +6,10 @@ import { DEFAULT_WORK_HOURS, WorkHoursSettings, toMins } from './settings.js';
 import type { TicketStatus } from '@prisma/client';
 
 const router = Router();
+const MAX_ATTENDANCE_DISTANCE_M = 200;
+const MAX_GPS_ACCURACY_M = 100;
+const MAX_LOCATION_AGE_MS = 30_000;
+const MAX_SAMPLE_SPREAD_M = 100;
 
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -92,8 +96,64 @@ export async function maybeAutoFinishAppointment(appointmentId: string | null | 
 
 router.post('/shift/clock-in', requireTechAuth, async (req: TechAuthRequest, res) => {
   try {
-    const { lat, lng, accuracy, projectId } = req.body;
+    const {
+      lat,
+      lng,
+      accuracy,
+      projectId,
+      sampledAt,
+      sampleCount,
+      sampleSpreadM,
+      speed,
+      altitudeAccuracy,
+    } = req.body;
     const technicianId = req.technicianId!;
+
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    const gpsAccuracy = Number(accuracy);
+    const locationTimestamp = Number(sampledAt);
+    const samples = Number(sampleCount);
+    const spread = Number(sampleSpreadM);
+
+    if (typeof projectId !== 'string' || !projectId.trim()) {
+      res.status(422).json({ error: 'لم يتم تحديد مشروع الفني.' });
+      return;
+    }
+    if (
+      !Number.isFinite(latitude) || latitude < -90 || latitude > 90
+      || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
+      || !Number.isFinite(gpsAccuracy) || gpsAccuracy <= 0
+    ) {
+      res.status(422).json({ error: 'تعذر التحقق من موقعك. فعّل GPS وحاول مرة أخرى.' });
+      return;
+    }
+    if (!Number.isFinite(samples) || samples < 3 || !Number.isFinite(spread)) {
+      res.status(422).json({ error: 'لم نحصل على قراءات موقع كافية. انتظر ثوانٍ وحاول مرة أخرى.' });
+      return;
+    }
+    if (gpsAccuracy > MAX_GPS_ACCURACY_M) {
+      res.status(422).json({ error: `دقة الموقع ضعيفة (${Math.round(gpsAccuracy)}م). انتقل لمكان مفتوح وحاول مرة أخرى.` });
+      return;
+    }
+    if (spread > MAX_SAMPLE_SPREAD_M) {
+      res.status(422).json({ error: 'قراءات GPS غير مستقرة. انتظر حتى يثبت الموقع ثم حاول مرة أخرى.' });
+      return;
+    }
+    const locationAge = Date.now() - locationTimestamp;
+    if (!Number.isFinite(locationTimestamp) || locationAge > MAX_LOCATION_AGE_MS || locationAge < -5_000) {
+      res.status(422).json({ error: 'قراءة الموقع قديمة أو وقت الجهاز غير صحيح. حدّث الوقت وحاول مرة أخرى.' });
+      return;
+    }
+
+    const technician = await prisma.technician.findUnique({
+      where: { id: technicianId },
+      select: { projectId: true, isActive: true },
+    });
+    if (!technician?.isActive || !technician.projectId || technician.projectId !== projectId) {
+      res.status(403).json({ error: 'المشروع المحدد غير مخصص لهذا الفني.' });
+      return;
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -115,9 +175,28 @@ router.post('/shift/clock-in', requireTechAuth, async (req: TechAuthRequest, res
       return;
     }
 
-    const distance = haversineMeters(lat, lng, project.officeLat, project.officeLng);
-    const isFlagged = distance > 500;
-    const flagReason = isFlagged ? 'clock_in_far_from_office' : null;
+    const distance = haversineMeters(latitude, longitude, project.officeLat, project.officeLng);
+    if (distance > MAX_ATTENDANCE_DISTANCE_M) {
+      res.status(422).json({
+        error: `لا يمكن تسجيل الحضور من هذا المكان. أنت على بُعد ${Math.round(distance)}م والحد الأقصى ${MAX_ATTENDANCE_DISTANCE_M}م.`,
+        code: 'OUTSIDE_ATTENDANCE_GEOFENCE',
+        distanceM: Math.round(distance),
+        maxDistanceM: MAX_ATTENDANCE_DISTANCE_M,
+      });
+      return;
+    }
+
+    // Browser GPS cannot prove that Android mock locations are disabled. These
+    // signals mark implausible readings for review while the 200m geofence is
+    // still enforced authoritatively by the server.
+    const riskSignals: string[] = [];
+    if (gpsAccuracy < 2) riskSignals.push('gps_unrealistic_precision');
+    if (Number.isFinite(Number(speed)) && Number(speed) > 55) riskSignals.push('gps_impossible_speed');
+    if (altitudeAccuracy !== null && altitudeAccuracy !== undefined && Number(altitudeAccuracy) === 0) {
+      riskSignals.push('gps_suspicious_altitude_accuracy');
+    }
+    const isFlagged = riskSignals.length > 0;
+    const flagReason = riskSignals.length ? riskSignals.join(',') : null;
 
     const shift = await prisma.shiftLog.create({
       data: {
@@ -130,9 +209,9 @@ router.post('/shift/clock-in', requireTechAuth, async (req: TechAuthRequest, res
           d.setHours(0, 0, 0, 0);
           return d;
         })(),
-        clockInLat: lat,
-        clockInLng: lng,
-        clockInAccuracy: accuracy,
+        clockInLat: latitude,
+        clockInLng: longitude,
+        clockInAccuracy: gpsAccuracy,
         clockInDistanceM: distance,
         isFlagged,
         flagReason
@@ -943,6 +1022,19 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
       from?: string; to?: string; projectId?: string; technicianId?: string;
     };
 
+    const requester = await prisma.user.findUnique({
+      where: { uid: req.uid! },
+      select: {
+        role: true,
+        disabled: true,
+        projects: { select: { id: true } },
+      },
+    });
+    if (!requester || requester.disabled) {
+      res.status(403).json({ error: 'الحساب غير مصرح له بعرض تقرير الحضور.' });
+      return;
+    }
+
     const where: any = {};
     if (from || to) {
       where.clockInAt = {};
@@ -957,7 +1049,20 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
         where.clockInAt.lte = toDate;
       }
     }
-    if (projectId && projectId !== 'all') where.projectId = projectId;
+    if (requester.role === 'admin') {
+      if (projectId && projectId !== 'all') where.projectId = projectId;
+    } else {
+      const allowedProjects = requester.projects.map(project => project.id);
+      if (projectId && projectId !== 'all') {
+        if (!allowedProjects.includes(projectId)) {
+          res.status(403).json({ error: 'لا تملك صلاحية عرض حضور هذا المشروع.' });
+          return;
+        }
+        where.projectId = projectId;
+      } else {
+        where.projectId = { in: allowedProjects.length ? allowedProjects : ['__none__'] };
+      }
+    }
     if (technicianId && technicianId !== 'all') where.technicianId = technicianId;
 
     const shifts = await prisma.shiftLog.findMany({

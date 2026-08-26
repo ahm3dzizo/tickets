@@ -146,7 +146,7 @@ export default function Team() {
                 <MoreHorizontal className="w-4 h-4" />
               </button>
             } />
-            <DropdownMenuContent align="end" className="bg-card border-border w-48 rounded-2xl">
+            <DropdownMenuContent dir="rtl" align="end" className="bg-card border-border w-48 rounded-2xl text-right">
               <DropdownMenuItem className="hover:bg-muted cursor-pointer text-start justify-start rounded-xl mx-1 my-0.5" onClick={() => navigate(`/team/${member.id}`)}>
                 عرض الملف الشخصي
               </DropdownMenuItem>
@@ -187,7 +187,7 @@ export default function Team() {
 
   return (
     <Layout>
-      <div className="space-y-6 page-in">
+      <div dir="rtl" className="space-y-6 page-in text-right">
 
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">

@@ -209,7 +209,7 @@ export function UserForm({
   if (isControlled) {
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/40 max-h-[90vh] overflow-y-auto">
+        <DialogContent dir="rtl" className="bg-card border-border text-slate-200 sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/40 max-h-[90vh] overflow-y-auto text-right">
           <FormBody
             editingUser={editingUser}
             displayName={displayName} setDisplayName={setDisplayName}
@@ -251,7 +251,7 @@ export function UserForm({
           </Button>
         )}
       />
-      <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/40 max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="bg-card border-border text-slate-200 sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/40 max-h-[90vh] overflow-y-auto text-right">
         <FormBody
           editingUser={editingUser}
           displayName={displayName} setDisplayName={setDisplayName}
@@ -437,7 +437,7 @@ function FormBody({
               <Shield className="w-3 h-3 opacity-50" />
               <span>{roleTranslations[role]}</span>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-card border-border text-slate-200 w-64">
+            <DropdownMenuContent dir="rtl" className="bg-card border-border text-slate-200 w-64 text-right">
               {visibleRoles.map(r => (
                 <DropdownMenuItem key={r} className="hover:bg-white/5 cursor-pointer text-right justify-end" onClick={() => setRole(r)}>
                   {roleTranslations[r]}
@@ -570,7 +570,7 @@ function FormBody({
                     <span className="text-right flex-1 text-sm">{clothingSize || 'اختر'}</span>
                     <Shirt className="w-3.5 h-3.5 opacity-50 shrink-0" />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="bg-card border-border text-slate-200">
+                  <DropdownMenuContent dir="rtl" className="bg-card border-border text-slate-200 text-right">
                     <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end text-slate-500" onClick={() => setClothingSize('')}>— بدون —</DropdownMenuItem>
                     {CLOTHING_SIZES.map(s => (
                       <DropdownMenuItem key={s} className={cn("hover:bg-white/5 cursor-pointer text-right justify-end", clothingSize === s && 'text-blue-400')} onClick={() => setClothingSize(s)}>{s}</DropdownMenuItem>
@@ -585,7 +585,7 @@ function FormBody({
                     <span className="text-right flex-1 text-sm">{shoeSize || 'اختر'}</span>
                     <Footprints className="w-3.5 h-3.5 opacity-50 shrink-0" />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="bg-card border-border text-slate-200">
+                  <DropdownMenuContent dir="rtl" className="bg-card border-border text-slate-200 text-right">
                     <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-right justify-end text-slate-500" onClick={() => setShoeSize('')}>— بدون —</DropdownMenuItem>
                     {SHOE_SIZES.map(s => (
                       <DropdownMenuItem key={s} className={cn("hover:bg-white/5 cursor-pointer text-right justify-end", shoeSize === s && 'text-blue-400')} onClick={() => setShoeSize(s)}>{s}</DropdownMenuItem>

@@ -190,7 +190,7 @@ export function ProjectForm({
         }
       />
 
-      <DialogContent className="bg-card border-border text-slate-200 sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/40">
+      <DialogContent dir="rtl" className="bg-card border-border text-slate-200 sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/40 text-right">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-white text-right">
             {isEdit ? 'تعديل المشروع' : 'إضافة مشروع جديد'}
@@ -312,7 +312,7 @@ export function ProjectForm({
                 </span>
               </DropdownMenuTrigger>
 
-              <DropdownMenuContent className="bg-card border-border text-slate-200 w-64 max-h-60 overflow-y-auto">
+              <DropdownMenuContent dir="rtl" className="bg-card border-border text-slate-200 w-64 max-h-60 overflow-y-auto text-right">
                 {engineers.map(eng => (
                   <DropdownMenuItem
                     key={eng.uid}

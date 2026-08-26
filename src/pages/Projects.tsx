@@ -15,10 +15,11 @@ import { Project } from '@/types';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export default function Projects() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +53,7 @@ export default function Projects() {
 
   return (
     <Layout>
-      <div className="space-y-6 page-in">
+      <div dir="rtl" className="space-y-6 page-in text-right">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -134,31 +135,45 @@ export default function Projects() {
 
               <div
                 key={project.id}
+                role="link"
+                tabIndex={0}
+                aria-label={`فتح مشروع ${project.name}`}
+                onClick={() => navigate(`/projects/${project.id}`)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/projects/${project.id}`);
+                  }
+                }}
                 className="
                   bg-card
                   border border-border
-                  rounded-2xl
-                  p-5
+                  rounded-3xl
+                  p-5 sm:p-6
                   group
                   hover:border-primary/30
-                  hover:shadow-lg
+                  hover:shadow-xl
                   hover:-translate-y-0.5
+                  focus-visible:outline-none
+                  focus-visible:ring-2
+                  focus-visible:ring-primary/50
                   transition-all
                   duration-300
                   h-full
                   flex
                   flex-col
+                  cursor-pointer
                 "
               >
 
                 {/* Top */}
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between mb-5">
 
-                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted px-2.5 py-1 rounded-lg">
+                  <span dir="ltr" className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted px-2.5 py-1 rounded-lg">
                     {project.abbreviation}
                   </span>
 
-                  <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all duration-300 shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/15 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all duration-300 shrink-0">
                     <Briefcase className="w-5 h-5" />
                   </div>
 
@@ -171,12 +186,11 @@ export default function Projects() {
                     {project.name}
                   </h3>
 
-                  <div className="flex items-center gap-1.5 justify-start mt-1.5 text-muted-foreground">
-                    <span className="text-sm">
-                      {project.location}
-                    </span>
-
+                  <div className="flex items-center gap-1.5 mt-2 text-muted-foreground">
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span className="text-sm">
+                      {project.location || 'لم يُحدد الموقع'}
+                    </span>
                   </div>
 
                 </div>
@@ -184,12 +198,30 @@ export default function Projects() {
                 {/* Footer */}
                 <div className="mt-4 pt-3 border-t border-border">
 
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="rounded-xl bg-primary/5 border border-primary/10 px-3 py-2">
+                      <div className="flex items-center gap-1.5 text-primary">
+                        <Users className="w-3.5 h-3.5" />
+                        <span className="text-lg font-black tabular-nums">{project.supervisorIds?.length || 0}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">مشرفون</p>
+                    </div>
+                    <div className="rounded-xl bg-purple-500/5 border border-purple-500/10 px-3 py-2">
+                      <div className="flex items-center gap-1.5 text-purple-500">
+                        <User className="w-3.5 h-3.5" />
+                        <span className="text-lg font-black tabular-nums">{project.engineerIds?.length || 0}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">مهندسون</p>
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between gap-2">
 
                     {/* View Tickets */}
                     <Link
                       to={`/projects/${project.id}`}
                       className="shrink-0"
+                      onClick={event => event.stopPropagation()}
                     >
                       <Button
                         type="button"
@@ -213,10 +245,11 @@ export default function Projects() {
 
                     {/* Edit */}
                     {user?.role === 'admin' && (
-                      <ProjectForm
-                        project={project}
-                        onSuccess={loadProjects}
-                        trigger={
+                      <div onClick={event => event.stopPropagation()}>
+                        <ProjectForm
+                          project={project}
+                          onSuccess={loadProjects}
+                          trigger={
                           <Button
                             type="button"
                             variant="outline"
@@ -241,30 +274,10 @@ export default function Projects() {
                             <Pencil className="w-3.5 h-3.5" />
                             تعديل
                           </Button>
-                        }
-                      />
+                          }
+                        />
+                      </div>
                     )}
-
-                  </div>
-
-                  {/* Stats */}
-                  <div className="flex items-center justify-end gap-3 mt-3 text-xs text-muted-foreground">
-
-                    <div className="flex items-center gap-1">
-                      <span>
-                        {project.supervisorIds?.length || 0}
-                      </span>
-
-                      <Users className="w-3.5 h-3.5" />
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <span>
-                        {project.engineerIds?.length || 0}
-                      </span>
-
-                      <User className="w-3.5 h-3.5" />
-                    </div>
 
                   </div>
 
