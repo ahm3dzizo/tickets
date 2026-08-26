@@ -11,6 +11,7 @@ import { ticketsApi } from '@/lib/api';
 import { Contractor, Ticket } from '@/types';
 import { cn } from '@/lib/utils';
 import { UnifiedAppointmentDialog } from './UnifiedAppointmentDialog';
+import { invalidateTicketCache } from '@/lib/ticketCache';
 
 interface AssignContractorDialogProps {
   open: boolean;
@@ -113,6 +114,7 @@ export function AssignContractorDialog({
             })
           )
         );
+        invalidateTicketCache();
         toast.success(`تم إسناد ${tickets.length} تذكرة لـ ${selectedContractor.name}`);
         setAssignedTickets(tickets.map(t => ({
           ...t,
@@ -120,6 +122,9 @@ export function AssignContractorDialog({
           assigneeName: selectedContractor.name,
           status: 'contractor' as any,
         })));
+        // Refresh the list immediately; the optional appointment prompt must
+        // not keep the ticket visible in its old tab.
+        onSuccess();
         setShowAppointment(true);
       } catch {
         toast.error('فشل إسناد المقاول');
@@ -145,6 +150,7 @@ export function AssignContractorDialog({
             })
           )
         );
+        invalidateTicketCache();
         toast.success(`تم تعيين الملاحظة لـ ${tickets.length} تذكرة`);
         setAssignedTickets(tickets.map(t => ({
           ...t,
@@ -152,6 +158,7 @@ export function AssignContractorDialog({
           assigneeName: 'ملاحظة',
           status: 'note' as any,
         })));
+        onSuccess();
         setShowAppointment(true);
       } catch {
         toast.error('فشل حفظ الملاحظة');

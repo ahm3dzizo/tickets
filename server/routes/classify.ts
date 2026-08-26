@@ -2,7 +2,7 @@ import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, requireAdmin } from "../auth.js";
 import { classifyTicket } from "../classifier/classify.js";
-import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
+import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache, selectSupervisorCoverage, uniqueStringList } from "../classifier/db-helpers.js";
 import { loadKeywordsFromDB, invalidateKeywordCache, classifyFromKeywordsDB, normalizeArabic } from "../classifier/keywords.js";
 import { geminiEnabled, classifyBatchWithGemini } from "../classifier/gemini.js";
 import { nudgeReclassifyWorker } from "../classifier/reclassify-worker.js";
@@ -52,20 +52,14 @@ router.post("/bulk", requireAuth, async (req, res) => {
 
     for (const pid of projectIds) {
       supervisorCache[pid] = await prisma.user.findMany({
-        where: { role: "supervisor", projects: { some: { id: pid } } },
-        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
+        where: { role: "supervisor", disabled: false, onLeave: false, projects: { some: { id: pid } } },
+        select: {
+          uid: true,
+          displayName: true,
+          specialtiesRef: { select: { key: true } },
+          substituteFor: { select: { specialtiesRef: { select: { key: true } } } },
+        },
       });
-      if (supervisorCache[pid].length === 0) {
-        supervisorCache[pid] = await prisma.user.findMany({
-          where: { role: "supervisor" },
-          select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
-        });
-      }
-    }
-
-    const getSpecs = (u: any): string[] => {
-      if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-      return ["general"];
     };
 
     const keywords = await loadKeywordsFromDB();
@@ -75,22 +69,19 @@ router.post("/bulk", requireAuth, async (req, res) => {
       const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
       const projectSups = supervisorCache[item.projectId] || [];
 
-      const matched = projectSups.filter((s: any) =>
-        getSpecs(s).some((sp: string) => requiredSpecialties.includes(sp))
-      );
-      const fallback = matched.length > 0 ? matched : projectSups.filter((s: any) => getSpecs(s).includes("general"));
-      const finalSups = fallback.length > 0 ? fallback : projectSups;
+      const coverage = selectSupervisorCoverage(projectSups, requiredSpecialties);
 
       return {
         primaryType:        classification.primaryType,
-        allTypes:           classification.allTypes,
+        allTypes:           uniqueStringList(classification.allTypes),
         typeId:             classification.typeId    ?? null,
         subType:            classification.subType   ?? null,
         subTypeId:          classification.subTypeId ?? null,
         requiredSpecialties,
         confidence:         classification.confidence,
         source:             "keywords",
-        supervisors: finalSups.map((u: any) => ({ id: u.uid, name: u.displayName, specialties: getSpecs(u) })),
+        supervisors: coverage.supervisors,
+        missingSpecialties: coverage.missingSpecialties,
       };
     });
 
@@ -295,14 +286,14 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
             const bResult = batchResultMap.get(ticket.id);
             if (bResult) {
               primaryType   = bResult.primaryType;
-              allTypes      = bResult.allTypes;
+              allTypes      = uniqueStringList(bResult.allTypes);
               subTypeId     = bResult.subTypeId;
               allSubTypeIds = bResult.allSubTypeIds;
             } else {
               // Bynara missed this ticket — fall back to ML/keywords (no extra Bynara call)
               const fallback = await classifyTicket(ticket.description!, ticket.projectId || undefined, { forceReclassify: true, skipGemini: true });
               primaryType   = fallback.primaryType;
-              allTypes      = fallback.allTypes;
+              allTypes      = uniqueStringList(fallback.allTypes);
               subTypeId     = fallback.subTypeId ?? undefined;
               allSubTypeIds = fallback.allSubTypeIds ?? [];
             }
@@ -314,9 +305,9 @@ router.post("/retry-failed", requireAuth, requireAdmin, async (req, res) => {
                 where: { id: ticket.id },
                 data: {
                   type: primaryType,
-                  detectedTypes: allTypes.filter((t: string) => t !== "unclassified"),
+                  detectedTypes: uniqueStringList(allTypes.filter((t: string) => t !== "unclassified")),
                   subTypeId: subTypeId ?? null,
-                  detectedSubTypeIds: allSubTypeIds,
+                  detectedSubTypeIds: uniqueStringList(allSubTypeIds),
                 },
               });
 
@@ -423,21 +414,18 @@ router.post("/import", requireAuth, async (req, res) => {
     // ============================================================
 
     const projectSups = await prisma.user.findMany({
-      where: { role: "supervisor", projects: { some: { id: projectId } } },
-      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
+      where: { role: "supervisor", disabled: false, onLeave: false, projects: { some: { id: projectId } } },
+      select: {
+        uid: true,
+        displayName: true,
+        specialtiesRef: { select: { key: true } },
+        substituteFor: { select: { specialtiesRef: { select: { key: true } } } },
+      },
     });
-    const allSups = projectSups.length > 0 ? projectSups : await prisma.user.findMany({
-      where: { role: "supervisor" },
-      select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
-    });
+    const allSups = projectSups;
 
     const keywords = await loadKeywordsFromDB();
     const typeToSpecialty = await buildTypeToSpecialtyMap();
-
-    const getSpecs = (u: any): string[] => {
-      if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-      return ["general"];
-    };
 
     const errors: { index: number; reason: string }[] = [];
     const ticketsToCreate: any[] = [];
@@ -513,10 +501,8 @@ router.post("/import", requireAuth, async (req, res) => {
       const type = raw.type || rawType;
 
       const requiredSpecialties = [...new Set(classification.allTypes.map((t: string) => typeToSpecialty[t] || "general"))];
-      const matchedSups = allSups.filter((s: any) => getSpecs(s).some((sp: string) => requiredSpecialties.includes(sp)));
-      const finalSups = matchedSups.length > 0 ? matchedSups : allSups.filter((s: any) => getSpecs(s).includes("general"));
-      const supervisorList = finalSups.length > 0 ? finalSups : allSups;
-      const supervisorIds = supervisorList.map((s: any) => s.uid);
+      const supervisorList = selectSupervisorCoverage(allSups, requiredSpecialties).supervisors;
+      const supervisorIds = supervisorList.map(s => s.id);
       const primarySup = supervisorList[0];
       const priorityNum = raw.priority !== undefined ? parseInt(String(raw.priority), 10) : 3;
 
@@ -528,9 +514,9 @@ router.post("/import", requireAuth, async (req, res) => {
         issuedAt: raw.issuedAt || null,
         description, type, status: "open",
         priority: isNaN(priorityNum) ? 3 : priorityNum,
-        assigneeName: primarySup?.displayName || null,
+        assigneeName: primarySup?.name || null,
         assignedSupervisorIds: supervisorIds,
-        detectedTypes: classification.allTypes,
+        detectedTypes: uniqueStringList(classification.allTypes),
       });
     }
 

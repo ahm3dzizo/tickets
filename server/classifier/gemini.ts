@@ -135,16 +135,23 @@ function normalizeConfidence(value: unknown): number {
 
 function validateItems(raw: unknown, validTypeKeys: Set<string>, subTypes: SubTypeInfo[]): ClassificationItem[] {
   if (!Array.isArray(raw)) throw new Error('items must be an array');
-  return raw.map((item) => {
+  const items = raw.map((item) => {
     if (!item || typeof item !== 'object' || typeof item.type !== 'string' || !validTypeKeys.has(item.type)) {
       throw new Error('model returned a type outside the allowed taxonomy');
     }
-    const subType = item.subType === 'null' ? null : item.subType;
+    let subType = item.subType === 'null' ? null : item.subType;
     if (subType != null && (typeof subType !== 'string' || !subTypes.some(s => s.parentKey === item.type && s.nameAr === subType))) {
-      throw new Error('model returned a subtype outside its allowed parent type');
+      // Keep the valid parent type and discard only the invalid child. Rejecting
+      // the entire batch caused good classifications to be lost because of one
+      // hallucinated subtype.
+      console.warn(`[ClassifierValidation] dropped invalid subtype for type=${item.type}`);
+      subType = null;
     }
     return { type: item.type, subType };
   });
+  return items.filter((item, index) =>
+    items.findIndex(other => other.type === item.type && other.subType === item.subType) === index
+  );
 }
 
 function buildPrompt(typesList: string): string {
@@ -244,11 +251,11 @@ export async function classifyWithGemini(
         const validTypes = [...new Set(classifiedItems.map(it => it.type))];
         console.log(`[${provider.label}] classified ${validTypes.join(',')} at ${Math.round(confidence * 100)}%`);
 
-        const allSubTypeIds = classifiedItems.flatMap((item) => {
+        const allSubTypeIds = [...new Set(classifiedItems.flatMap((item) => {
           if (!item.subType) return [];
           const match = subTypes.find(s => s.nameAr === item.subType && s.parentKey === item.type);
           return match ? [match.id] : [];
-        });
+        }))];
 
         return {
           primaryType: validTypes[0],
@@ -342,11 +349,11 @@ export async function classifyBatchWithGemini(
             const classifiedItems = validateItems(r.items, validTypeKeys, subTypes);
             const confidence = normalizeConfidence(r.confidence);
             const validTypes = [...new Set(classifiedItems.map(it => it.type))];
-            const allSubTypeIds = classifiedItems.flatMap((item) => {
+            const allSubTypeIds = [...new Set(classifiedItems.flatMap((item) => {
               if (!item.subType) return [];
               const match = subTypes.find(s => s.nameAr === item.subType && s.parentKey === item.type);
               return match ? [match.id] : [];
-            });
+            }))];
             return {
               id: items[r.i - 1].id,
               primaryType: validTypes[0] ?? "unclassified",

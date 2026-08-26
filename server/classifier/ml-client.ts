@@ -26,6 +26,29 @@ export interface MLBatchResult extends MLResult {
   id: string;
 }
 
+function normalizeMLResult<T extends Partial<MLResult>>(raw: T): T & MLResult {
+  const primaryType = typeof raw.primaryType === "string" && raw.primaryType.trim()
+    ? raw.primaryType.trim()
+    : "unclassified";
+  const allTypes = [...new Set([
+    primaryType,
+    ...(Array.isArray(raw.allTypes) ? raw.allTypes : []),
+  ].filter((type): type is string => typeof type === "string" && !!type.trim())
+    .map(type => type.trim()))];
+
+  return {
+    ...raw,
+    primaryType,
+    allTypes: primaryType === "unclassified"
+      ? allTypes.filter(type => type !== "unclassified")
+      : allTypes.filter(type => type !== "unclassified"),
+    confidence: typeof raw.confidence === "number" && Number.isFinite(raw.confidence)
+      ? Math.max(0, Math.min(1, raw.confidence))
+      : 0,
+    source: "ml",
+  } as T & MLResult;
+}
+
 // ── Single classification ───────────────────────────────────────────────────
 export async function classifyWithML(description: string): Promise<MLResult | null> {
   try {
@@ -36,7 +59,7 @@ export async function classifyWithML(description: string): Promise<MLResult | nu
       signal:  AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) return null;
-    return await res.json() as MLResult;
+    return normalizeMLResult(await res.json() as MLResult);
   } catch {
     return null;
   }
@@ -53,7 +76,10 @@ export async function classifyBatchWithML(items: MLBatchItem[]): Promise<MLBatch
       signal:  AbortSignal.timeout(TIMEOUT_MS * 2),
     });
     if (!res.ok) return [];
-    return await res.json() as MLBatchResult[];
+    const results = await res.json() as MLBatchResult[];
+    return Array.isArray(results)
+      ? results.filter(result => typeof result?.id === "string").map(normalizeMLResult)
+      : [];
   } catch {
     return [];
   }

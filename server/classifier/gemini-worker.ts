@@ -11,7 +11,7 @@
 import prisma from "../db.js";
 import { classifyBatchWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
 import { classifyBatchWithML } from "./ml-client.js";
-import { buildTypeToSpecialtyMap, findSupervisorsDB } from "./db-helpers.js";
+import { buildTypeToSpecialtyMap, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
 
 const INTERVAL_MS          = 15_000;
 const BATCH_SIZE           = 10;      // ML handles more per batch (no cost)
@@ -115,28 +115,28 @@ async function processBatch(): Promise<void> {
     const updateData: Record<string, any> = { geminiClassifiedAt: now };
 
     if (result) {
+      const allTypes = uniqueStringList(result.allTypes).filter(type => type !== "unclassified");
       updateData.type          = result.primaryType;
-      updateData.detectedTypes = result.allTypes;
+      updateData.detectedTypes = allTypes;
       updateData.typeId        = typeKeyToId[result.primaryType] ?? null;
       updateData.subTypeId     = result.subTypeId ?? null;
 
       if (result._src === "gemini") {
-        learnFromGeminiResult(ticket.description!, result.allTypes).catch(() => {});
+        learnFromGeminiResult(ticket.description!, allTypes).catch(() => {});
       }
 
       if (ticket.projectId && result.primaryType !== ticket.type) {
         try {
-          const specialties = [...new Set(result.allTypes.map((t: string) => typeToSpecialty[t] || "general"))] as string[];
+          const specialties = [...new Set(allTypes.map((t: string) => typeToSpecialty[t] || "general"))] as string[];
           const supervisors = await findSupervisorsDB(ticket.projectId, specialties);
-          if (supervisors.length > 0) {
-                        updateData.assignedSupervisorIds = supervisors.map(s => s.id);
-          }
+          updateData.assignedSupervisorIds = supervisors.map(s => s.id);
+          updateData.assigneeName = supervisors[0]?.name || null;
         } catch { /* non-fatal */ }
       }
 
       const src = result._src === "gemini" ? "🤖" : "🧠";
       console.log(
-        `[ClassifyWorker] ${src} ${ticket.id.slice(0, 8)} → [${result.allTypes.join(", ")}]` +
+        `[ClassifyWorker] ${src} ${ticket.id.slice(0, 8)} → [${allTypes.join(", ")}]` +
         (result.primaryType !== ticket.type ? ` (was: ${ticket.type})` : " (confirmed)") +
         (result.confidence   ? ` conf:${(result.confidence * 100).toFixed(0)}%` : "")
       );

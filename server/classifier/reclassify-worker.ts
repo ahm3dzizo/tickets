@@ -14,7 +14,7 @@
 
 import prisma from "../db.js";
 import { loadKeywordsFromDB, classifyFromKeywordsDB, invalidateKeywordCache } from "./keywords.js";
-import { buildTypeToSpecialtyMap, findSupervisorsDB } from "./db-helpers.js";
+import { buildTypeToSpecialtyMap, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
 
 const INTERVAL_MS         = 30_000;  // 30 s between ticks
 const KEYWORDS_PER_TICK   = 5;       // pending keywords processed per tick
@@ -147,9 +147,10 @@ async function reclassifyForKeyword(
       result.primaryType === ticket.type
     ) continue;
 
+    const allTypes = uniqueStringList(result.allTypes).filter(type => type !== "unclassified");
     const updateData: Record<string, any> = {
       type:         result.primaryType,
-      detectedTypes: result.allTypes,
+      detectedTypes: allTypes,
       typeId:       result.typeId   ?? null,
       subTypeId:    result.subTypeId ?? null,
     };
@@ -158,12 +159,11 @@ async function reclassifyForKeyword(
     if (ticket.projectId) {
       try {
         const specialties = [
-          ...new Set(result.allTypes.map((t) => typeToSpecialty[t] || "general")),
+          ...new Set(allTypes.map((t) => typeToSpecialty[t] || "general")),
         ] as string[];
         const supervisors = await findSupervisorsDB(ticket.projectId, specialties);
-        if (supervisors.length > 0) {
-                    updateData.assignedSupervisorIds = supervisors.map((s) => s.id);
-        }
+        updateData.assignedSupervisorIds = supervisors.map((s) => s.id);
+        updateData.assigneeName = supervisors[0]?.name || null;
       } catch { /* non-fatal — type still updated */ }
     }
 

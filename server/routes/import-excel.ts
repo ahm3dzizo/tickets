@@ -12,7 +12,7 @@ import fs from "fs";
 import * as XLSX from "xlsx";
 import prisma from "../db.js";
 import { normalizeArabic, classifyFromKeywordsDB, loadKeywordsFromDB } from "../classifier/keywords.js";
-import { buildTypeToSpecialtyMap } from "../classifier/db-helpers.js";
+import { buildTypeToSpecialtyMap, selectSupervisorCoverage, uniqueStringList } from "../classifier/db-helpers.js";
 
 // بيحلل ملف الإكسل ويكتشف صف العناوين، ويفلتر التذاكر المغلقة القديمة جداً.
 // (كان ده شغال في worker thread منفصل عبر ملف مؤقت، لكن نصوص القالب المتداخلة
@@ -533,19 +533,19 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       loadKeywordsFromDB(),
       buildTypeToSpecialtyMap(),
       prisma.user.findMany({
-        where: { role: "supervisor", projects: { some: { id: projectId } } },
-        select: { uid: true, displayName: true, specialtiesRef: { select: { key: true } } },
+        where: { role: "supervisor", disabled: false, onLeave: false, projects: { some: { id: projectId } } },
+        select: {
+          uid: true,
+          displayName: true,
+          specialtiesRef: { select: { key: true } },
+          substituteFor: { select: { specialtiesRef: { select: { key: true } } } },
+        },
       })
     ]);
 
     // Never fall back to supervisors from other projects. A project with no
     // supervisors should keep imported tickets unassigned.
     const allSups = projectSups;
-
-    const getSpecs = (u: any): string[] => {
-      if (Array.isArray(u.specialtiesRef) && u.specialtiesRef.length > 0) return u.specialtiesRef.map((s: any) => s.key);
-      return ["general"];
-    };
 
     const existingMap = new Map(existingRows.map((t) => [normalizeTicketId(String(t.ticketId).trim()), t]));
     // Excel-only lookup:
@@ -679,6 +679,7 @@ const excelUnitLookup = new Map<string, {
           }
         }
 
+        finalTypes = uniqueStringList(finalTypes).filter(type => type !== "unclassified");
         if (!finalType) finalType = "unclassified";
         const finalTypeId = typeIdMap.get(finalType) || null;
 
@@ -688,10 +689,8 @@ const excelUnitLookup = new Map<string, {
 
         // ── Assign Supervisors based on Final Types ──────────────────────────
         const requiredSpecialties = [...new Set(finalTypes.map((t: string) => typeToSpecialty[t] || "general"))];
-        const matchedSups = allSups.filter((s: any) => getSpecs(s).some((sp: string) => requiredSpecialties.includes(sp)));
-        const finalSups = matchedSups.length > 0 ? matchedSups : allSups.filter((s: any) => getSpecs(s).includes("general"));
-        const supervisorList = finalSups.length > 0 ? finalSups : allSups;
-        const supervisorIds = supervisorList.map((s: any) => s.uid);
+        const supervisorList = selectSupervisorCoverage(allSups, requiredSpecialties).supervisors;
+        const supervisorIds = supervisorList.map(s => s.id);
         const primarySup = supervisorList[0];
 
         // Duplicate check (DB)
@@ -713,7 +712,7 @@ const excelUnitLookup = new Map<string, {
               upd.type = finalType;
               upd.typeId = finalTypeId;
               upd.detectedTypes = finalTypes;
-              upd.assigneeName = primarySup?.displayName || null;
+              upd.assigneeName = primarySup?.name || null;
               upd.assignedSupervisorIds = supervisorIds;
             }
             toUpdate.push(upd);
@@ -741,7 +740,7 @@ const excelUnitLookup = new Map<string, {
           subTypeId: finalSubTypeId,
           status: inheritWaiting ? "waiting" : status,
           priority: 3,
-          assigneeName: primarySup?.displayName || null,
+          assigneeName: primarySup?.name || null,
           assignedSupervisorIds: supervisorIds,
           detectedTypes: finalTypes,
           closedAt: closedAt ? new Date(closedAt) : null,

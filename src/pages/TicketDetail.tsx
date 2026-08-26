@@ -253,12 +253,14 @@ export default function TicketDetail() {
     setEditPriority(String(ticket.priority));
     setEditDescription(ticket.description || '');
     const initTypes = (ticket.detectedTypes as TicketType[] | undefined)?.length
-      ? (ticket.detectedTypes as TicketType[])
+      ? [...new Set(ticket.detectedTypes as TicketType[])]
       : [ticket.type];
     setEditTypes(initTypes);
-    setEditSubTypeIds((ticket as any).detectedSubTypeIds ?? []);
+    setEditSubTypeIds([...new Set(((ticket as any).detectedSubTypeIds ?? []) as string[])]);
     setEditAssignedSupervisorIds(
-      (ticket.assignedSupervisorIds as string[] | undefined) ??
+      ticket.assignedSupervisorIds
+        ? [...new Set(ticket.assignedSupervisorIds as string[])]
+        :
       (ticket.assignedSupervisorId ? [ticket.assignedSupervisorId as string] : [])
     );
     setEditOpen(true);
@@ -282,7 +284,7 @@ export default function TicketDetail() {
     setEditSaving(true);
 
     const originalTypes = ((ticket.detectedTypes as TicketType[] | undefined)?.length
-      ? (ticket.detectedTypes as TicketType[])
+      ? [...new Set(ticket.detectedTypes as TicketType[])]
       : [ticket.type]
     ).sort();
     const newTypes = [...editTypes].sort();
@@ -588,10 +590,10 @@ export default function TicketDetail() {
                       النوع
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      {((ticket.detectedTypes as string[] | undefined)?.length
+                      {[...new Set((ticket.detectedTypes as string[] | undefined)?.length
                         ? (ticket.detectedTypes as string[])
                         : [ticket.type]
-                      ).map((t, i) => (
+                      )].map((t, i) => (
                         <span key={i} className="text-xs text-slate-300 font-bold">{typeTranslations[t] || t}</span>
                       ))}
                       {(ticket as any).subTypeName && (

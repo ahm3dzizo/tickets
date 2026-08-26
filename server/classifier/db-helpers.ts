@@ -89,6 +89,12 @@ export async function learnSpecialtyFromCorrections(
   threshold = 3,
   sampleSize = 50
 ): Promise<boolean> {
+  // Supervisor choices are ticket-level operational decisions, not taxonomy
+  // corrections.  Learning from them made a type oscillate between specialties
+  // (and consequently routed later tickets to the wrong people).  Keep the old
+  // implementation available only as an explicit, controlled migration tool.
+  if (process.env.ENABLE_SPECIALTY_AUTO_LEARN !== "true") return false;
+
   const ticketType = await prisma.ticketType.findUnique({
     where: { key: typeKey },
     include: { specialty: { select: { id: true, key: true } } },
@@ -146,51 +152,104 @@ export async function learnSpecialtyFromCorrections(
 }
 
 // ── Find Supervisors ────────────────────────────────────────────────────────
-export async function findSupervisorsDB(projectId: string, requiredSpecialties: string[]) {
+type SupervisorCandidate = {
+  uid: string;
+  displayName: string;
+  disabled?: boolean;
+  onLeave?: boolean;
+  specialtiesRef?: { key: string }[];
+  substituteFor?: { specialtiesRef?: { key: string }[] }[];
+};
+
+export type MatchedSupervisor = {
+  id: string;
+  name: string;
+  specialties: string[];
+};
+
+export function uniqueStringList(values: unknown): string[] {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values
+    .filter((value): value is string => typeof value === "string")
+    .map(value => value.trim())
+    .filter(Boolean))];
+}
+
+function getSupervisorSpecialties(user: SupervisorCandidate): string[] {
+  const direct = user.specialtiesRef?.map(s => s.key) ?? [];
+  const substituted = user.substituteFor?.flatMap(
+    relation => relation.specialtiesRef?.map(s => s.key) ?? []
+  ) ?? [];
+  const specialties = uniqueStringList([...direct, ...substituted]);
+  return specialties.length > 0 ? specialties : ["general"];
+}
+
+/**
+ * Select the smallest deterministic set of project supervisors that covers
+ * every required specialty. A multi-specialty supervisor may cover more than
+ * one requirement. Missing specialties are returned explicitly; a supervisor
+ * from another project (or a generic supervisor) is never presented as a match.
+ */
+export function selectSupervisorCoverage(
+  candidates: SupervisorCandidate[],
+  requiredSpecialties: string[]
+): { supervisors: MatchedSupervisor[]; missingSpecialties: string[] } {
+  const required = uniqueStringList(requiredSpecialties);
+  const available = candidates
+    .filter(user => user.uid && !user.disabled && !user.onLeave)
+    .map(user => ({
+      id: user.uid,
+      name: user.displayName,
+      specialties: getSupervisorSpecialties(user),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ar") || a.id.localeCompare(b.id));
+
+  const uncovered = new Set(required);
+  const selected: MatchedSupervisor[] = [];
+
+  while (uncovered.size > 0) {
+    const alreadySelected = new Set(selected.map(supervisor => supervisor.id));
+    const ranked = available
+      .filter(supervisor => !alreadySelected.has(supervisor.id))
+      .map(supervisor => ({
+        supervisor,
+        score: supervisor.specialties.filter(specialty => uncovered.has(specialty)).length,
+      }))
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score || a.supervisor.name.localeCompare(b.supervisor.name, "ar"));
+
+    const best = ranked[0]?.supervisor;
+    if (!best) break;
+    selected.push(best);
+    for (const specialty of best.specialties) uncovered.delete(specialty);
+  }
+
+  return { supervisors: selected, missingSpecialties: [...uncovered] };
+}
+
+export async function findSupervisorCoverageDB(projectId: string, requiredSpecialties: string[]) {
   const allUsers = await prisma.user.findMany({
-    where: { role: "supervisor" },
+    where: {
+      role: "supervisor",
+      disabled: false,
+      onLeave: false,
+      projects: { some: { id: projectId } },
+    },
     include: {
-      projects: { select: { id: true } },
       specialtiesRef: { select: { key: true } },
       substituteFor: { select: { specialtiesRef: { select: { key: true } } } }
     },
   });
 
-  const activeUsers = allUsers.filter((u: any) => u.uid && !u.disabled && !u.onLeave);
-
-  let projectSups = activeUsers.filter(
-    (u: any) => u.projects && u.projects.some((p: any) => p.id === projectId)
-  );
-  if (projectSups.length === 0) projectSups = activeUsers;
-
-  const getSpecs = (u: any): string[] => {
-    const specs: string[] = [];
-    if (u.specialtiesRef && u.specialtiesRef.length > 0) specs.push(...u.specialtiesRef.map((s: any) => s.key));
-    else specs.push("general");
-
-    if (u.substituteFor && u.substituteFor.length > 0) {
-      for (const sub of u.substituteFor) {
-        if (sub.specialtiesRef && sub.specialtiesRef.length > 0) specs.push(...sub.specialtiesRef.map((s: any) => s.key));
-      }
-    }
-    return [...new Set(specs)];
-  };
-
-  let matched = projectSups.filter((s: any) =>
-    getSpecs(s).some((sp: string) => requiredSpecialties.includes(sp))
-  );
-
-  if (matched.length === 0) {
-    matched = projectSups.filter((s: any) => getSpecs(s).includes("general"));
+  const coverage = selectSupervisorCoverage(allUsers, requiredSpecialties);
+  if (coverage.missingSpecialties.length > 0) {
+    console.warn(
+      `[SupervisorCoverage] project=${projectId} missing=${coverage.missingSpecialties.join(",")}`
+    );
   }
+  return coverage;
+}
 
-  if (matched.length === 0) {
-    matched = projectSups.slice(0, 3);
-  }
-
-  return matched.map((u: any) => ({
-    id: u.uid,
-    name: u.displayName,
-    specialties: getSpecs(u),
-  }));
+export async function findSupervisorsDB(projectId: string, requiredSpecialties: string[]) {
+  return (await findSupervisorCoverageDB(projectId, requiredSpecialties)).supervisors;
 }

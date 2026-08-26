@@ -3,7 +3,7 @@ import prisma from "../db.js";
 import { AuthRequest, requireAuth, requireAdmin, getRequesterRole, asTrimmedString } from "../auth.js";
 import { getIO } from "../socket.js";
 import { classifyTicket } from "../classifier/classify.js";
-import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache } from "../classifier/db-helpers.js";
+import { buildTypeToSpecialtyMap, findSupervisorsDB, invalidateReferenceCache, uniqueStringList } from "../classifier/db-helpers.js";
 import { invalidateKeywordCache } from "../classifier/keywords.js";
 import { sendWAText, buildOpeningMsg, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from "../baileys.js";
 import { createNotification } from "../notificationService.js";
@@ -23,6 +23,8 @@ function normalizeTicketId(raw: string): string {
 // ── Compute virtual fields and enrich supervisor names ───────────────────────
 async function enrichTickets<T extends {
   assignedSupervisorIds?: string[];
+  detectedTypes?: string[];
+  detectedSubTypeIds?: string[];
   unit?: { unitNumber: string; block?: { blockNumber: string } | null } | null;
   client?: { name: string; phone?: string | null } | null;
   project?: { abbreviation: string } | null;
@@ -57,7 +59,9 @@ async function enrichTickets<T extends {
     const refNumber   = projAbbr && unitNumber ? `${projAbbr}-${unitNumber}` : unitNumber;
     const clientName  = t.client?.name || '';
     const contractorName = t.contractor?.name || '';
-    const ids = t.assignedSupervisorIds || [];
+    const ids = uniqueStringList(t.assignedSupervisorIds);
+    const detectedTypes = uniqueStringList(t.detectedTypes);
+    const detectedSubTypeIds = uniqueStringList(t.detectedSubTypeIds);
     const assignedSupervisorId = ids[0] || null;
     const assignedSupervisors = ids
       .map(id => {
@@ -65,7 +69,18 @@ async function enrichTickets<T extends {
         return u ? { id: u.uid, name: u.displayName, specialty: u.specialtiesRef?.[0]?.key || 'general' } : null;
       })
       .filter((s): s is { id: string; name: string; specialty: string } => s !== null);
-    return { ...t, unitNumber, refNumber, clientName, contractorName, assignedSupervisorId, assignedSupervisors };
+    return {
+      ...t,
+      assignedSupervisorIds: ids,
+      detectedTypes,
+      detectedSubTypeIds,
+      unitNumber,
+      refNumber,
+      clientName,
+      contractorName,
+      assignedSupervisorId,
+      assignedSupervisors,
+    };
   });
 }
 
@@ -165,7 +180,7 @@ async function classifyInBackground(
     if (opts?.forceGemini && classification.source !== "gemini") return classification.source;
 
     const typeToSpecialty = await buildTypeToSpecialtyMap();
-    const allTypes: string[] = classification.allTypes;
+    const allTypes = uniqueStringList(classification.allTypes).filter(type => type !== "unclassified");
     const requiredSpecialties = [...new Set(allTypes.map((t: string) => typeToSpecialty[t] || "general"))] as string[];
 
     let supervisorIds: string[] = [];
@@ -190,14 +205,15 @@ async function classifyInBackground(
 
     const updateData: any = {
       type: classification.primaryType,
-      detectedTypes: classification.allTypes,
+      detectedTypes: allTypes,
       typeId: resolvedTypeId,
       subTypeId: classification.subTypeId || null,
-      detectedSubTypeIds: classification.allSubTypeIds ?? [],
+      detectedSubTypeIds: uniqueStringList(classification.allSubTypeIds ?? []),
     };
 
     if (!keepManualSupervisors) {
       updateData.assignedSupervisorIds = supervisorIds;
+      updateData.assigneeName = supervisorList[0]?.name || null;
     }
 
     await prisma.ticket.updateMany({ where: { id: ticketId }, data: updateData });
@@ -544,9 +560,7 @@ router.post("/", requireAuth, async (req, res) => {
       }
     }
 
-    const assignedSupervisorIds = Array.isArray(data.assignedSupervisorIds)
-      ? data.assignedSupervisorIds.filter((id: unknown) => typeof id === "string" && id.trim().length > 0)
-      : [];
+    const assignedSupervisorIds = uniqueStringList(data.assignedSupervisorIds);
 
     let priority = 3;
     if (data.priority !== undefined) {
@@ -581,7 +595,7 @@ router.post("/", requireAuth, async (req, res) => {
         status: data.status || "open", priority,
         assigneeName: data.assigneeName || null,
         assignedSupervisorIds,
-        detectedTypes: data.detectedTypes || [],
+        detectedTypes: uniqueStringList(data.detectedTypes),
         closureNotes: data.closureNotes || null,
         maintenanceItems: data.maintenanceItems ?? undefined,
         closedAt: data.closedAt ? new Date(data.closedAt) : null,
@@ -624,9 +638,7 @@ router.post("/bulk", requireAuth, async (req, res) => {
 
     const now = Date.now();
     const normalized = tickets.map((t, index) => {
-      const assignedSupervisorIds = Array.isArray(t.assignedSupervisorIds)
-        ? t.assignedSupervisorIds.filter((id: string) => !!id)
-        : [];
+      const assignedSupervisorIds = uniqueStringList(t.assignedSupervisorIds);
 
       let priority = 3;
       if (t.priority !== undefined) {
@@ -647,7 +659,7 @@ router.post("/bulk", requireAuth, async (req, res) => {
         status: t.status || "open", priority,
         assigneeName: t.assigneeName || null,
         assignedSupervisorIds,
-        detectedTypes: t.detectedTypes || [],
+        detectedTypes: uniqueStringList(t.detectedTypes),
         closedAt: t.closedAt ? new Date(t.closedAt) : null,
         closureNotes: t.closureNotes || null,
       };
@@ -893,19 +905,21 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       priority:              data.priority !== undefined ? Number(data.priority) : undefined,
       assigneeName:          data.assigneeName         ?? undefined,
       assignedSupervisorIds: data.assignedSupervisorIds
-        ? (data.assignedSupervisorIds as string[]).filter((id: string) => id && id.trim())
+        ? uniqueStringList(data.assignedSupervisorIds)
         : undefined,
       closureNotes:          data.closureNotes         ?? undefined,
       maintenanceItems:      data.maintenanceItems     ?? undefined,
       closedAt:              data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
       description:           data.description          ?? undefined,
       type:                  data.type                 ?? undefined,
-      detectedTypes:         data.detectedTypes        ?? undefined,
-      detectedSubTypeIds:    data.detectedSubTypeIds   ?? undefined,
+      detectedTypes:         data.detectedTypes !== undefined ? uniqueStringList(data.detectedTypes) : undefined,
+      detectedSubTypeIds:    data.detectedSubTypeIds !== undefined ? uniqueStringList(data.detectedSubTypeIds) : undefined,
       clientId:              data.clientId             ?? undefined,
       unitId:                data.unitId               ?? undefined,
-      contractorId:          data.contractorId         ?? undefined,
-      contractorNote:        data.contractorNote       ?? undefined,
+      // null intentionally clears a previous contractor/note; `??` used to
+      // turn null into undefined and left stale contractor data behind.
+      contractorId:          data.contractorId !== undefined ? data.contractorId : undefined,
+      contractorNote:        data.contractorNote !== undefined ? data.contractorNote : undefined,
     };
 
     // ── Auto-reassign supervisor when classification changes ───────────────
@@ -930,9 +944,8 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
           const specialties     = [...new Set(newTypes.map((t) => typeToSpecialty[t] || "general"))];
           const supervisors     = await findSupervisorsDB(existing.projectId, specialties);
 
-          if (supervisors.length > 0) {
-            updatePayload.assignedSupervisorIds = supervisors.map((s) => s.id);
-          }
+          updatePayload.assignedSupervisorIds = supervisors.map((s) => s.id);
+          updatePayload.assigneeName = supervisors[0]?.name || null;
         } catch { /* non-fatal */ }
       }
     }
@@ -978,18 +991,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     if (data.type && oldTicket?.type && data.type !== oldTicket.type && ticket.description) {
       import('../classifier/gemini.js').then(m => {
         m.learnFromGeminiResult(ticket.description!, [data.type!]).catch(() => {});
-      }).catch(() => {});
-    }
-
-    // ── Learn specialty from manual supervisor correction ─────────────────────
-    const supervisorsChanged =
-      data.assignedSupervisorIds !== undefined &&
-      JSON.stringify((oldTicket as any)?.assignedSupervisorIds ?? []) !==
-      JSON.stringify(data.assignedSupervisorIds);
-
-    if (supervisorsChanged && ticket.type && ticket.type !== 'unclassified') {
-      import('../classifier/db-helpers.js').then(m => {
-        m.learnSpecialtyFromCorrections(ticket.type!).catch(() => {});
       }).catch(() => {});
     }
 

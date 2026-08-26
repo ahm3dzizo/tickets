@@ -12,6 +12,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "phones:audit": "tsx scripts/audit-phone-duplicates.ts",
+    "supervisors:reconcile": "tsx scripts/reconcile-ticket-supervisors.ts",
     "delete-tickets": "npx tsx scripts/delete-tickets.ts",
     "delete-tickets:dry": "npx tsx scripts/delete-tickets.ts --dry-run"
   },
