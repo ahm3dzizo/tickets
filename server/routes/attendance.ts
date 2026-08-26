@@ -3,6 +3,7 @@ import { requireTechAuth, TechAuthRequest } from './tech-auth.js';
 import { requireAuth, AuthRequest } from '../auth.js';
 import prisma from '../db.js';
 import { DEFAULT_WORK_HOURS, WorkHoursSettings, toMins } from './settings.js';
+import type { TicketStatus } from '@prisma/client';
 
 const router = Router();
 
@@ -16,7 +17,14 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-const ACTIVE_TICKET_STATUSES = ['open', 'pending', 'in_progress', 'waiting', 'contractor'];
+const ACTIVE_TICKET_STATUSES: TicketStatus[] = [
+  'open',
+  'pending',
+  'in_progress',
+  'waiting',
+  'contractor',
+  'note',
+];
 
 /**
  * If every ticket in the appointment is in a terminal state

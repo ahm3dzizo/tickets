@@ -310,7 +310,7 @@ export default function AttendanceReport() {
   const summary = data?.summary;
 
   return (
-    <Layout title="تقرير الحضور والانصراف">
+    <Layout>
       <div className="max-w-[1400px] mx-auto space-y-6 py-6 lg:py-8">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
