@@ -173,7 +173,6 @@ model Ticket {
   ticketSubType TicketSubType? @relation(fields: [subTypeId], references: [id])
   audits        TicketAudit[]
   appointment   Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-  techSessions  TicketTimeSession[]
 
   @@index([projectId, status])
   @@index([projectId, unitId])
@@ -258,7 +257,7 @@ model Technician {
   project      Project?            @relation(fields: [projectId], references: [id])
   supervisor   User?               @relation("SupervisorTechnicians", fields: [supervisorId], references: [uid])
   shiftLogs    ShiftLog[]
-  sessions     TicketTimeSession[]
+  workSessions AppointmentWorkSession[]
   appointments Appointment[]
 }
 
@@ -398,11 +397,12 @@ model Appointment {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  unit       Unit?       @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  client     Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  technician Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
-  tickets    Ticket[]
+  project     Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit        Unit?                   @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  client      Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  technician  Technician?             @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  tickets     Ticket[]
+  workSession AppointmentWorkSession?
 
   @@index([projectId, date])
   @@index([projectId, unitId])
@@ -449,7 +449,7 @@ model ShiftLog {
 
   technician        Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
   project           Project    @relation(fields: [projectId], references: [id])
-  sessions          TicketTimeSession[]
+  workSessions      AppointmentWorkSession[]
   breaks            ShiftBreakLog[]
 
   @@unique([technicianId, shiftDate, projectId])
@@ -471,51 +471,41 @@ model ShiftBreakLog {
   @@index([shiftLogId])
 }
 
-/// جلسة عمل فني على تذكرة معينة
-model TicketTimeSession {
-  id                    String     @id @default(cuid())
-  ticketId              String
-  technicianId          String
-  shiftLogId            String?
-  specialtyKey          String?    // التخصص وقت العمل — لتحليلات الأداء
-  status                SessionStatus @default(CLAIMED)
+/// جلسة عمل فني على موعد كامل — التوقيت على مستوى الموعد
+/// كل تذاكر الموعد تأخذ حالتها تلقائياً من حالة الجلسة.
+model AppointmentWorkSession {
+  id                String    @id @default(cuid())
+  appointmentId     String    @unique              // موعد واحد = جلسة واحدة
+  technicianId      String
+  shiftLogId        String?
 
-  // توقيتات
-  claimedAt             DateTime   @default(now())
-  travelStartedAt       DateTime?
-  arrivedAt             DateTime?
-  workStartedAt         DateTime?
-  completedAt           DateTime?
+  status            String    @default("in_progress") // in_progress | completed | cancelled
 
-  // مدة بالدقائق
-  travelDurationMins    Int?
-  workDurationMins      Int?       // أساسي للتحليلات
-  pausedDurationMins    Int        @default(0)
+  claimedAt         DateTime  @default(now())
+  finishedAt        DateTime?
 
-  // موقع الوصول
-  checkInLat            Float?
-  checkInLng            Float?
-  checkInAccuracy       Float?
-  checkInDistanceMeters Float?     // البُعد عن الوحدة / مكتب المشروع
-  isLocationVerified    Boolean    @default(true)
+  totalDurationMins Int?                            // يحسب عند الإنهاء
+
+  // موقع البداية
+  claimLat          Float?
+  claimLng          Float?
+  claimAccuracy     Float?
 
   // موقع الإنهاء
-  checkOutLat           Float?
-  checkOutLng           Float?
+  finishLat         Float?
+  finishLng         Float?
 
-  pauseReason           String?
-  completionNotes       String?
+  completionNotes   String?
 
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  ticket                Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  technician            Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
-  shiftLog              ShiftLog?  @relation(fields: [shiftLogId], references: [id], onDelete: SetNull)
+  appointment       Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  technician        Technician  @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  shiftLog          ShiftLog?   @relation(fields: [shiftLogId], references: [id], onDelete: SetNull)
 
-  @@index([ticketId])
   @@index([technicianId, status])
-  @@index([specialtyKey])  // للتحليلات
+  @@index([status, claimedAt])
   @@index([shiftLogId])
 }
 
@@ -638,11 +628,3 @@ enum ShiftStatus {
   FLAGGED
 }
 
-enum SessionStatus {
-  CLAIMED
-  EN_ROUTE
-  IN_PROGRESS
-  PAUSED
-  COMPLETED
-  CANCELLED
-}

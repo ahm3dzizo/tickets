@@ -16,13 +16,15 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+const ACTIVE_TICKET_STATUSES = ['open', 'pending', 'in_progress', 'waiting', 'contractor'];
+
 // ================= SHIFT ENDPOINTS =================
 
 router.post('/shift/clock-in', requireTechAuth, async (req: TechAuthRequest, res) => {
   try {
     const { lat, lng, accuracy, projectId } = req.body;
     const technicianId = req.technicianId!;
-    
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const existing = await prisma.shiftLog.findFirst({
@@ -36,17 +38,17 @@ router.post('/shift/clock-in', requireTechAuth, async (req: TechAuthRequest, res
       res.status(400).json({ error: 'Active shift already exists for today' });
       return;
     }
-    
+
     const project = await prisma.project.findUnique({ where: { id: projectId } });
     if (!project || project.officeLat == null || project.officeLng == null) {
       res.status(400).json({ error: 'Project or project office location not found' });
       return;
     }
-    
+
     const distance = haversineMeters(lat, lng, project.officeLat, project.officeLng);
     const isFlagged = distance > 500;
     const flagReason = isFlagged ? 'clock_in_far_from_office' : null;
-    
+
     const shift = await prisma.shiftLog.create({
       data: {
         technicianId,
@@ -58,6 +60,9 @@ router.post('/shift/clock-in', requireTechAuth, async (req: TechAuthRequest, res
           d.setHours(0, 0, 0, 0);
           return d;
         })(),
+        clockInLat: lat,
+        clockInLng: lng,
+        clockInAccuracy: accuracy,
         clockInDistanceM: distance,
         isFlagged,
         flagReason
@@ -73,19 +78,49 @@ router.post('/shift/clock-out', requireTechAuth, async (req: TechAuthRequest, re
   try {
     const { lat, lng, note } = req.body;
     const technicianId = req.technicianId!;
-    
+
     const shift = await prisma.shiftLog.findFirst({
       where: {
         technicianId,
         status: { in: ['ACTIVE', 'ON_BREAK'] }
       }
     });
-    
+
     if (!shift) {
       res.status(400).json({ error: 'No active shift found' });
       return;
     }
-    
+
+    // Auto-finish any still-open appointment session before clocking out.
+    const openSession = await prisma.appointmentWorkSession.findFirst({
+      where: { technicianId, status: 'in_progress' }
+    });
+    if (openSession) {
+      const now = new Date();
+      const totalDurationMins = Math.round((now.getTime() - openSession.claimedAt.getTime()) / 60000);
+      await prisma.appointmentWorkSession.update({
+        where: { id: openSession.id },
+        data: {
+          status: 'completed',
+          finishedAt: now,
+          totalDurationMins,
+          completionNotes: 'أغلقت تلقائياً عند نهاية الوردية'
+        }
+      });
+      // Auto-complete remaining active tickets in that appointment.
+      await prisma.ticket.updateMany({
+        where: {
+          appointmentId: openSession.appointmentId,
+          status: { in: ['in_progress', 'open', 'pending'] }
+        },
+        data: { status: 'completed', closedAt: now }
+      });
+      await prisma.appointment.update({
+        where: { id: openSession.appointmentId },
+        data: { status: 'completed' }
+      });
+    }
+
     const openBreak = await prisma.shiftBreakLog.findFirst({
       where: { shiftLogId: shift.id, endedAt: null }
     });
@@ -97,15 +132,15 @@ router.post('/shift/clock-out', requireTechAuth, async (req: TechAuthRequest, re
         data: { endedAt: now, durationMins }
       });
     }
-    
+
     const setting = await prisma.systemSetting.findUnique({ where: { key: 'work_hours' } });
     const wh = (setting?.value as unknown as WorkHoursSettings) || DEFAULT_WORK_HOURS;
     const projectWh = wh.byProject?.[shift.projectId] || wh.default;
-    
+
     const totalWorkMinutes = Math.round((now.getTime() - shift.clockInAt.getTime()) / 60000);
     const breaks = await prisma.shiftBreakLog.findMany({ where: { shiftLogId: shift.id } });
     const totalBreakMinutes = breaks.reduce((acc, b) => acc + (b.durationMins || 0), 0);
-    
+
     let regularMinutes = 0;
     if (projectWh.enabled && projectWh.hasMorning && projectWh.hasAfternoon) {
       const mStart = toMins(projectWh.morning.start);
@@ -116,13 +151,16 @@ router.post('/shift/clock-out', requireTechAuth, async (req: TechAuthRequest, re
     } else {
       regularMinutes = 8 * 60;
     }
-    
+
     const overtimeMinutes = Math.max(0, totalWorkMinutes - totalBreakMinutes - regularMinutes);
-    
+
     const updated = await prisma.shiftLog.update({
       where: { id: shift.id },
       data: {
         clockOutAt: now,
+        clockOutLat: lat,
+        clockOutLng: lng,
+        clockOutNote: note,
         status: 'COMPLETED',
         totalWorkMinutes,
         totalBreakMinutes,
@@ -140,7 +178,7 @@ router.post('/shift/break/start', requireTechAuth, async (req: TechAuthRequest, 
   try {
     const { breakType = 'MEAL' } = req.body;
     const technicianId = req.technicianId!;
-    
+
     const shift = await prisma.shiftLog.findFirst({
       where: { technicianId, status: 'ACTIVE' }
     });
@@ -148,12 +186,12 @@ router.post('/shift/break/start', requireTechAuth, async (req: TechAuthRequest, 
       res.status(400).json({ error: 'No active shift found' });
       return;
     }
-    
+
     await prisma.shiftLog.update({
       where: { id: shift.id },
       data: { status: 'ON_BREAK' }
     });
-    
+
     const breakLog = await prisma.shiftBreakLog.create({
       data: {
         shiftLogId: shift.id,
@@ -177,7 +215,7 @@ router.post('/shift/break/end', requireTechAuth, async (req: TechAuthRequest, re
       res.status(400).json({ error: 'No shift on break found' });
       return;
     }
-    
+
     const openBreak = await prisma.shiftBreakLog.findFirst({
       where: { shiftLogId: shift.id, endedAt: null }
     });
@@ -185,15 +223,15 @@ router.post('/shift/break/end', requireTechAuth, async (req: TechAuthRequest, re
       res.status(400).json({ error: 'No open break found' });
       return;
     }
-    
+
     const now = new Date();
     const durationMins = Math.round((now.getTime() - openBreak.startedAt.getTime()) / 60000);
-    
+
     await prisma.shiftBreakLog.update({
       where: { id: openBreak.id },
       data: { endedAt: now, durationMins }
     });
-    
+
     const updated = await prisma.shiftLog.update({
       where: { id: shift.id },
       data: { status: 'ACTIVE' }
@@ -215,7 +253,13 @@ router.get('/shift/today', requireTechAuth, async (req: TechAuthRequest, res) =>
       },
       include: {
         breaks: true,
-        sessions: true
+        workSessions: {
+          include: {
+            appointment: {
+              select: { id: true, date: true, time: true, unit: { select: { unitNumber: true } } }
+            }
+          }
+        }
       }
     });
     res.json(shift || null);
@@ -228,20 +272,29 @@ router.get('/shift/history', requireTechAuth, async (req: TechAuthRequest, res) 
   try {
     const { from, to, page = '1', pageSize = '20' } = req.query;
     const skip = (Number(page) - 1) * Number(pageSize);
-    
+
     const where: any = { technicianId: req.technicianId! };
     if (from || to) {
       where.clockInAt = {};
       if (from) where.clockInAt.gte = new Date(from as string);
       if (to) where.clockInAt.lte = new Date(to as string);
     }
-    
+
     const shifts = await prisma.shiftLog.findMany({
       where,
       skip,
       take: Number(pageSize),
       orderBy: { clockInAt: 'desc' },
-      include: { breaks: true, sessions: true }
+      include: {
+        breaks: true,
+        workSessions: {
+          include: {
+            appointment: {
+              select: { id: true, date: true, time: true, unit: { select: { unitNumber: true } } }
+            }
+          }
+        }
+      }
     });
     res.json(shifts);
   } catch (err: any) {
@@ -249,299 +302,321 @@ router.get('/shift/history', requireTechAuth, async (req: TechAuthRequest, res) 
   }
 });
 
-// ================= TICKET SESSION ENDPOINTS =================
+// ================= APPOINTMENT WORK SESSION =================
 
-router.post('/ticket-session/claim', requireTechAuth, async (req: TechAuthRequest, res) => {
+// GET /tech/me/active-session — current active session for the tech (for recovery)
+router.get('/tech/me/active-session', requireTechAuth, async (req: TechAuthRequest, res) => {
   try {
-    const { ticketId } = req.body;
-    const technicianId = req.technicianId!;
-    
-    const existing = await prisma.ticketTimeSession.findFirst({
-      where: {
-        ticketId,
-        status: { notIn: ['COMPLETED', 'CANCELLED'] }
+    const session = await prisma.appointmentWorkSession.findFirst({
+      where: { technicianId: req.technicianId!, status: 'in_progress' },
+      include: {
+        appointment: {
+          include: {
+            unit: { include: { block: true } },
+            client: true,
+            project: { select: { id: true, name: true, officeLat: true, officeLng: true, officeAddress: true } },
+            tickets: {
+              select: {
+                id: true, ticketId: true, description: true, status: true,
+                type: true, detectedTypes: true, priority: true,
+                unit: { select: { unitNumber: true } },
+                client: { select: { name: true, phone: true } }
+              }
+            }
+          }
+        }
       }
     });
-    if (existing) {
-      res.status(400).json({ error: 'Ticket is already being worked on' });
-      return;
-    }
-    
-    const tech = await prisma.technician.findUnique({ where: { id: technicianId } });
-    if (!tech) {
+    res.json(session || null);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /tech/appointments/:id/claim
+router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (req: TechAuthRequest, res) => {
+  try {
+    const technicianId = req.technicianId!;
+    const appointmentId = req.params.appointmentId;
+    const { lat, lng, accuracy } = req.body || {};
+
+    const technician = await prisma.technician.findUnique({
+      where: { id: technicianId },
+      select: { id: true, name: true, supervisorId: true, projectId: true, specialty: true }
+    });
+    if (!technician) {
       res.status(404).json({ error: 'Technician not found' });
       return;
     }
-    
-    const shift = await prisma.shiftLog.findFirst({
-      where: { technicianId, status: 'ACTIVE' }
-    });
-    
-    const session = await prisma.ticketTimeSession.create({
-      data: {
-        ticketId,
-        technicianId,
-        shiftLogId: shift?.id,
-        status: 'CLAIMED',
-        specialtyKey: tech.specialty || 'general'
+
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: {
+        tickets: { select: { id: true, status: true } }
       }
     });
-    
-    await prisma.ticket.update({
-      where: { id: ticketId },
-      data: { status: 'in_progress' }
-    });
-    
-    res.json(session);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/ticket-session/travel', requireTechAuth, async (req: TechAuthRequest, res) => {
-  try {
-    const { ticketId } = req.body;
-    const session = await prisma.ticketTimeSession.findFirst({
-      where: { ticketId, technicianId: req.technicianId!, status: 'CLAIMED' }
-    });
-    if (!session) {
-      res.status(404).json({ error: 'Claimed session not found' });
+    if (!appointment) {
+      res.status(404).json({ error: 'Appointment not found' });
       return;
     }
-    
-    const updated = await prisma.ticketTimeSession.update({
-      where: { id: session.id },
-      data: {
-        status: 'EN_ROUTE',
-        travelStartedAt: new Date()
-      }
-    });
-    res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/ticket-session/arrive', requireTechAuth, async (req: TechAuthRequest, res) => {
-  try {
-    const { ticketId, lat, lng, accuracy } = req.body;
-    const session = await prisma.ticketTimeSession.findFirst({
-      where: { ticketId, technicianId: req.technicianId!, status: 'EN_ROUTE' }
-    });
-    if (!session) {
-      res.status(404).json({ error: 'En route session not found' });
+    if (['cancelled', 'completed'].includes(appointment.status)) {
+      res.status(400).json({ error: `Cannot claim a ${appointment.status} appointment` });
       return;
     }
-    
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: { project: true }
-    });
-    
-    let isLocationVerified = true;
-    let distance = 0;
-    
-    if (ticket?.project?.officeLat && ticket?.project?.officeLng) {
-      distance = haversineMeters(lat, lng, ticket.project.officeLat, ticket.project.officeLng);
-      if (distance > 300) {
-        isLocationVerified = false;
-      }
-    }
-    
-    const now = new Date();
-    const travelDurationMins = session.travelStartedAt 
-      ? Math.round((now.getTime() - session.travelStartedAt.getTime()) / 60000) 
-      : 0;
-      
-    const updated = await prisma.ticketTimeSession.update({
-      where: { id: session.id },
-      data: {
-        status: 'IN_PROGRESS',
-        arrivedAt: now,
-        workStartedAt: now,
-        travelDurationMins,
-        checkInLat: lat,
-        checkInLng: lng,
-        checkInAccuracy: accuracy,
-        checkInDistanceMeters: distance,
-        isLocationVerified
-      }
-    });
-    res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
-router.post('/ticket-session/pause', requireTechAuth, async (req: TechAuthRequest, res) => {
-  try {
-    const { ticketId, reason } = req.body;
-    const session = await prisma.ticketTimeSession.findFirst({
-      where: { ticketId, technicianId: req.technicianId!, status: 'IN_PROGRESS' }
-    });
-    if (!session) {
-      res.status(404).json({ error: 'In progress session not found' });
+    const isDirectTechnician =
+      appointment.technicianId === technician.id ||
+      appointment.technicianIds.includes(technician.id);
+    const isSupervisorAppointment =
+      !!technician.supervisorId &&
+      appointment.supervisorIds.includes(technician.supervisorId);
+    if (!isDirectTechnician && !isSupervisorAppointment) {
+      res.status(403).json({ error: 'This appointment is not assigned to this technician' });
       return;
     }
-    
-    const updated = await prisma.ticketTimeSession.update({
-      where: { id: session.id },
-      data: {
-        status: 'PAUSED',
-        pauseReason: reason
-      }
-    });
-    res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
-router.post('/ticket-session/resume', requireTechAuth, async (req: TechAuthRequest, res) => {
-  try {
-    const { ticketId } = req.body;
-    const session = await prisma.ticketTimeSession.findFirst({
-      where: { ticketId, technicianId: req.technicianId!, status: 'PAUSED' }
-    });
-    if (!session) {
-      res.status(404).json({ error: 'Paused session not found' });
-      return;
-    }
-    
-    const updated = await prisma.ticketTimeSession.update({
-      where: { id: session.id },
-      data: {
-        status: 'IN_PROGRESS'
-      }
-    });
-    res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${technicianId}))`;
 
-router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthRequest, res) => {
-  try {
-    const { ticketId, notes } = req.body;
-    const session = await prisma.ticketTimeSession.findFirst({
-      where: { ticketId, technicianId: req.technicianId!, status: { in: ['IN_PROGRESS', 'PAUSED'] } }
-    });
-    if (!session) {
-      res.status(404).json({ error: 'Active session not found' });
-      return;
-    }
-    
-    const now = new Date();
-    const workStartedAt = session.workStartedAt || now;
-    let workDurationMins = Math.round((now.getTime() - workStartedAt.getTime()) / 60000);
-    workDurationMins -= (session.pausedDurationMins || 0);
-    workDurationMins = Math.max(0, workDurationMins);
-    
-    const updated = await prisma.ticketTimeSession.update({
-      where: { id: session.id },
-      data: {
-        status: 'COMPLETED',
-        completedAt: now,
-        completionNotes: notes,
-        workDurationMins
-      }
-    });
-    
-    // Complete the actual ticket as well.
-    await prisma.ticket.update({
-      where: { id: ticketId },
-      data: {
-        status: 'completed',
-        closedAt: now,
-        closureNotes: notes || undefined
-      }
-    });
-
-    // ============================================================
-    // AUTO COMPLETE APPOINTMENT
-    // If this ticket belongs to an appointment and it was the
-    // last non-completed ticket, complete the appointment too.
-    // Appointment status remains "scheduled" while work is active.
-    // ============================================================
-    const completedTicket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      select: { appointmentId: true }
-    });
-
-    let nextTicketId: string | null = null;
-    let appointmentCompleted = false;
-
-    if (completedTicket?.appointmentId) {
-      const remainingTickets = await prisma.ticket.count({
+      // Enforce: one active appointment per tech.
+      const otherActive = await tx.appointmentWorkSession.findFirst({
         where: {
-          appointmentId: completedTicket.appointmentId,
-          status: {
-            in: ['open', 'pending', 'in_progress', 'waiting', 'contractor']
+          technicianId,
+          status: 'in_progress',
+          appointmentId: { not: appointmentId }
+        },
+        include: {
+          appointment: {
+            select: { id: true, date: true, time: true, unit: { select: { unitNumber: true } } }
           }
         }
       });
-
-      if (remainingTickets === 0) {
-        await prisma.appointment.update({
-          where: { id: completedTicket.appointmentId },
-          data: {
-            status: 'completed'
-          }
-        });
-        appointmentCompleted = true;
-      } else {
-        const nextTicket = await prisma.ticket.findFirst({
-          where: {
-            appointmentId: completedTicket.appointmentId,
-            status: { in: ['open', 'pending', 'in_progress', 'waiting', 'contractor'] },
-            techSessions: {
-              some: {
-                technicianId: req.technicianId!,
-                status: { in: ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'] },
-              },
-            },
-          },
-          orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
-          select: { id: true },
-        });
-        nextTicketId = nextTicket?.id || null;
+      if (otherActive) {
+        return { blockedBy: otherActive, session: null, updatedTickets: 0 };
       }
+
+      // Idempotent: if a session already exists for this appointment (and it's in_progress), reuse it.
+      const existing = await tx.appointmentWorkSession.findUnique({
+        where: { appointmentId }
+      });
+      if (existing) {
+        if (existing.status === 'in_progress' && existing.technicianId === technicianId) {
+          return { blockedBy: null, session: existing, updatedTickets: 0 };
+        }
+        if (existing.status === 'in_progress') {
+          throw new Error('Another technician is already working on this appointment');
+        }
+        // A finished/cancelled session already existed → delete it before reopening.
+        await tx.appointmentWorkSession.delete({ where: { id: existing.id } });
+      }
+
+      const shift = await tx.shiftLog.findFirst({
+        where: { technicianId, status: { in: ['ACTIVE', 'ON_BREAK'] } },
+        orderBy: { clockInAt: 'desc' }
+      });
+
+      const session = await tx.appointmentWorkSession.create({
+        data: {
+          appointmentId,
+          technicianId,
+          shiftLogId: shift?.id,
+          status: 'in_progress',
+          claimLat: typeof lat === 'number' ? lat : null,
+          claimLng: typeof lng === 'number' ? lng : null,
+          claimAccuracy: typeof accuracy === 'number' ? accuracy : null
+        }
+      });
+
+      // Move all still-open tickets to in_progress.
+      const updated = await tx.ticket.updateMany({
+        where: {
+          appointmentId,
+          status: { in: ['open', 'pending'] }
+        },
+        data: { status: 'in_progress' }
+      });
+
+      return { blockedBy: null, session, updatedTickets: updated.count };
+    });
+
+    if (result.blockedBy) {
+      res.status(409).json({
+        code: 'ACTIVE_APPOINTMENT_EXISTS',
+        error: 'Finish the active appointment before claiming another one',
+        activeAppointmentId: result.blockedBy.appointmentId,
+        activeAppointment: result.blockedBy.appointment
+      });
+      return;
     }
 
-    if (session.shiftLogId) {
-      const shift = await prisma.shiftLog.findUnique({ where: { id: session.shiftLogId } });
-      if (shift) {
-        await prisma.shiftLog.update({
-          where: { id: shift.id },
-          data: {
-            totalWorkMinutes: (shift.totalWorkMinutes || 0) + workDurationMins
-          }
-        });
-      }
-    }
-
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-    res.json({ session: updated, ticket, nextTicketId, appointmentCompleted });
+    res.json({
+      ok: true,
+      session: result.session,
+      updatedTickets: result.updatedTickets
+    });
   } catch (err: any) {
+    console.error('CLAIM APPOINTMENT ERROR:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-router.get('/ticket-session/mine', requireTechAuth, async (req: TechAuthRequest, res) => {
+// POST /tech/appointments/:id/finish
+router.post('/tech/appointments/:appointmentId/finish', requireTechAuth, async (req: TechAuthRequest, res) => {
   try {
-    const sessions = await prisma.ticketTimeSession.findMany({
-      where: {
-        technicianId: req.technicianId!,
-        status: { in: ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'] }
+    const technicianId = req.technicianId!;
+    const appointmentId = req.params.appointmentId;
+    const { lat, lng, notes } = req.body || {};
+
+    const result = await prisma.$transaction(async (tx) => {
+      const session = await tx.appointmentWorkSession.findUnique({
+        where: { appointmentId }
+      });
+      if (!session) {
+        throw new Error('No active session for this appointment');
+      }
+      if (session.technicianId !== technicianId) {
+        throw new Error('This appointment is being worked on by another technician');
+      }
+      if (session.status !== 'in_progress') {
+        // Idempotent: already finished — return the current state.
+        return { session, completedTickets: 0 };
+      }
+
+      const now = new Date();
+      const totalDurationMins = Math.round((now.getTime() - session.claimedAt.getTime()) / 60000);
+
+      const updatedSession = await tx.appointmentWorkSession.update({
+        where: { id: session.id },
+        data: {
+          status: 'completed',
+          finishedAt: now,
+          totalDurationMins,
+          finishLat: typeof lat === 'number' ? lat : null,
+          finishLng: typeof lng === 'number' ? lng : null,
+          completionNotes: notes || null
+        }
+      });
+
+      // Auto-complete any ticket that is still in_progress / open / pending.
+      // Tickets already set by the tech to out_of_scope / waiting / absent stay as-is.
+      const completed = await tx.ticket.updateMany({
+        where: {
+          appointmentId,
+          status: { in: ['in_progress', 'open', 'pending'] }
+        },
+        data: { status: 'completed', closedAt: now, closureNotes: notes || undefined }
+      });
+
+      // Mark the appointment itself as completed.
+      await tx.appointment.update({
+        where: { id: appointmentId },
+        data: { status: 'completed' }
+      });
+
+      // Roll up work minutes into the shift log.
+      if (session.shiftLogId) {
+        await tx.shiftLog.update({
+          where: { id: session.shiftLogId },
+          data: {
+            totalWorkMinutes: { increment: totalDurationMins }
+          }
+        });
+      }
+
+      return { session: updatedSession, completedTickets: completed.count };
+    });
+
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    console.error('FINISH APPOINTMENT ERROR:', err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /tech/appointments/:id/cancel-claim
+// Release an appointment session without completing anything.
+router.post('/tech/appointments/:appointmentId/cancel-claim', requireTechAuth, async (req: TechAuthRequest, res) => {
+  try {
+    const technicianId = req.technicianId!;
+    const appointmentId = req.params.appointmentId;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const session = await tx.appointmentWorkSession.findUnique({ where: { appointmentId } });
+      if (!session) return { cancelled: false };
+      if (session.technicianId !== technicianId) {
+        throw new Error('Cannot cancel another technician\'s session');
+      }
+      if (session.status !== 'in_progress') return { cancelled: false };
+
+      await tx.appointmentWorkSession.update({
+        where: { id: session.id },
+        data: { status: 'cancelled', finishedAt: new Date() }
+      });
+
+      // Revert tickets back to their pre-claim state (open).
+      await tx.ticket.updateMany({
+        where: { appointmentId, status: 'in_progress' },
+        data: { status: 'open' }
+      });
+
+      return { cancelled: true };
+    });
+
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PATCH /tech/appointments/:id/tickets/:ticketId — per-ticket exception state
+// (out_of_scope | waiting | absent | contractor | completed)
+router.patch('/tech/appointments/:appointmentId/tickets/:ticketId', requireTechAuth, async (req: TechAuthRequest, res) => {
+  try {
+    const technicianId = req.technicianId!;
+    const { appointmentId, ticketId } = req.params;
+    const { status, notes } = req.body || {};
+
+    const allowed = ['completed', 'out_of_scope', 'waiting', 'absent', 'contractor', 'in_progress'];
+    if (!allowed.includes(status)) {
+      res.status(400).json({ error: `Invalid status: ${status}` });
+      return;
+    }
+
+    const session = await prisma.appointmentWorkSession.findUnique({ where: { appointmentId } });
+    if (!session || session.status !== 'in_progress') {
+      res.status(400).json({ error: 'No active session for this appointment' });
+      return;
+    }
+    if (session.technicianId !== technicianId) {
+      res.status(403).json({ error: 'Not your appointment' });
+      return;
+    }
+
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: ticketId, appointmentId }
+    });
+    if (!ticket) {
+      res.status(404).json({ error: 'Ticket not in this appointment' });
+      return;
+    }
+
+    const now = new Date();
+    const isClosing = ['completed', 'out_of_scope', 'absent'].includes(status);
+    const updated = await prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        status,
+        closedAt: isClosing ? now : null,
+        closureNotes: isClosing && notes ? notes : undefined
       }
     });
-    res.json(sessions);
+    res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ================= SUPERVISOR ENDPOINTS =================
+// ================= SUPERVISOR / ADMIN ENDPOINTS =================
 
 router.get('/attendance/live', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -551,21 +626,25 @@ router.get('/attendance/live', requireAuth, async (req: AuthRequest, res) => {
       where: { clockInAt: { gte: today }, status: { in: ['ACTIVE', 'ON_BREAK'] } },
       include: {
         technician: true,
-        sessions: {
-          where: { status: { in: ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'] } }
+        workSessions: {
+          where: { status: 'in_progress' },
+          include: {
+            appointment: {
+              select: { id: true, date: true, time: true, unit: { select: { unitNumber: true } } }
+            }
+          }
         }
       }
     });
-    
+
     const result = shifts.map(s => ({
       technicianId: s.technicianId,
       name: s.technician?.name,
       specialty: s.technician?.specialty,
       shiftStatus: s.status,
-      currentSession: s.sessions[0] || null,
+      currentSession: s.workSessions[0] || null,
       totalWorkMinutes: s.totalWorkMinutes
     }));
-    
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -576,18 +655,28 @@ router.get('/attendance/daily', requireAuth, async (req: AuthRequest, res) => {
   try {
     const dateParam = req.query.date as string;
     const projectId = req.query.projectId as string;
-    
+
     const date = dateParam ? new Date(dateParam) : new Date();
     date.setHours(0, 0, 0, 0);
     const nextDay = new Date(date);
     nextDay.setDate(date.getDate() + 1);
-    
+
     const where: any = { clockInAt: { gte: date, lt: nextDay } };
     if (projectId) where.projectId = projectId;
-    
+
     const shifts = await prisma.shiftLog.findMany({
       where,
-      include: { breaks: true, sessions: true, technician: true }
+      include: {
+        breaks: true,
+        workSessions: {
+          include: {
+            appointment: {
+              select: { id: true, date: true, time: true, unit: { select: { unitNumber: true } }, tickets: { select: { id: true, status: true } } }
+            }
+          }
+        },
+        technician: true
+      }
     });
     res.json(shifts);
   } catch (err: any) {
@@ -598,10 +687,7 @@ router.get('/attendance/daily', requireAuth, async (req: AuthRequest, res) => {
 router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { from, to, projectId, technicianId } = req.query as {
-      from?: string;
-      to?: string;
-      projectId?: string;
-      technicianId?: string;
+      from?: string; to?: string; projectId?: string; technicianId?: string;
     };
 
     const where: any = {};
@@ -618,12 +704,8 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
         where.clockInAt.lte = toDate;
       }
     }
-    if (projectId && projectId !== 'all') {
-      where.projectId = projectId;
-    }
-    if (technicianId && technicianId !== 'all') {
-      where.technicianId = technicianId;
-    }
+    if (projectId && projectId !== 'all') where.projectId = projectId;
+    if (technicianId && technicianId !== 'all') where.technicianId = technicianId;
 
     const shifts = await prisma.shiftLog.findMany({
       where,
@@ -635,10 +717,15 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
           select: { id: true, name: true, abbreviation: true }
         },
         breaks: true,
-        sessions: {
+        workSessions: {
           include: {
-            ticket: {
-              select: { id: true, ticketId: true, description: true, status: true }
+            appointment: {
+              select: {
+                id: true, date: true, time: true, notes: true,
+                unit: { select: { unitNumber: true, block: { select: { blockNumber: true } } } },
+                client: { select: { name: true, phone: true } },
+                tickets: { select: { id: true, ticketId: true, description: true, status: true, type: true } }
+              }
             }
           }
         }
@@ -649,6 +736,7 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
     let totalWorkMinutes = 0;
     let totalBreakMinutes = 0;
     let totalOvertimeMinutes = 0;
+    let totalAppointmentsWorked = 0;
     let totalTicketsWorked = 0;
     let flaggedShiftsCount = 0;
 
@@ -656,7 +744,8 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
       totalWorkMinutes += s.totalWorkMinutes || 0;
       totalBreakMinutes += s.totalBreakMinutes || 0;
       totalOvertimeMinutes += s.overtimeMinutes || 0;
-      totalTicketsWorked += s.sessions?.length || 0;
+      totalAppointmentsWorked += s.workSessions?.length || 0;
+      totalTicketsWorked += s.workSessions?.reduce((n, ws) => n + (ws.appointment?.tickets?.length || 0), 0) || 0;
       if (s.isFlagged) flaggedShiftsCount++;
     });
 
@@ -667,6 +756,7 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
         totalWorkHours: Number((totalWorkMinutes / 60).toFixed(1)),
         totalBreakHours: Number((totalBreakMinutes / 60).toFixed(1)),
         totalOvertimeHours: Number((totalOvertimeMinutes / 60).toFixed(1)),
+        totalAppointmentsWorked,
         totalTicketsWorked,
         flaggedShiftsCount
       }
@@ -679,456 +769,105 @@ router.get('/attendance/report', requireAuth, async (req: AuthRequest, res) => {
 router.patch('/attendance/override', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { shiftLogId, clockInAt, clockOutAt, reason } = req.body;
-    
     const data: any = {};
     if (clockInAt) data.clockInAt = new Date(clockInAt);
     if (clockOutAt) data.clockOutAt = new Date(clockOutAt);
-    
-    const updated = await prisma.shiftLog.update({
-      where: { id: shiftLogId },
-      data
-    });
+    const updated = await prisma.shiftLog.update({ where: { id: shiftLogId }, data });
     res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-
-// ============================================================
-// CLAIM APPOINTMENT
-// Claiming an appointment immediately starts all eligible
-// open tickets belonging to that appointment.
-// Direct workflow: IN_PROGRESS -> PAUSED -> IN_PROGRESS -> COMPLETED.
-// ============================================================
-router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (req: TechAuthRequest, res) => {
-  try {
-    const technicianId = req.technicianId!;
-    const appointmentId = req.params.appointmentId;
-
-    const technician = await prisma.technician.findUnique({
-      where: { id: technicianId },
-      select: {
-        id: true,
-        name: true,
-        supervisorId: true,
-        projectId: true,
-        specialty: true
-      }
-    });
-
-    if (!technician) {
-      res.status(404).json({ error: 'Technician not found' });
-      return;
-    }
-
-    const appointment = await prisma.appointment.findUnique({
-      where: { id: appointmentId },
-      include: {
-        tickets: {
-          select: {
-            id: true,
-            ticketId: true,
-            status: true,
-            assigneeName: true,
-            assignedSupervisorIds: true
-          }
-        }
-      }
-    });
-
-    if (!appointment) {
-      res.status(404).json({ error: 'Appointment not found' });
-      return;
-    }
-
-    if (['cancelled', 'completed'].includes(appointment.status)) {
-      res.status(400).json({ error: `Cannot claim a ${appointment.status} appointment` });
-      return;
-    }
-
-    // Technician must belong to this appointment either directly
-    // or through the technicianIds array.
-    const isDirectTechnician =
-      appointment.technicianId === technician.id ||
-      appointment.technicianIds.includes(technician.id);
-
-    const isSupervisorAppointment =
-      !!technician.supervisorId &&
-      appointment.supervisorIds.includes(technician.supervisorId);
-
-    if (!isDirectTechnician && !isSupervisorAppointment) {
-      res.status(403).json({
-        error: 'This appointment is not assigned to this technician'
-      });
-      return;
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      // Serialize claims per technician at the database level. This closes the
-      // race where two rapid requests could otherwise claim two appointments.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${technicianId}))`;
-
-      // A technician may work on several tickets inside the same appointment,
-      // but must finish that appointment before claiming another one.
-      const otherActiveWork = await tx.ticketTimeSession.findFirst({
-        where: {
-          technicianId,
-          status: { in: ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'] },
-          OR: [
-            { ticket: { appointmentId: null } },
-            { ticket: { appointmentId: { not: appointmentId } } },
-          ],
-        },
-        select: {
-          ticket: {
-            select: {
-              appointmentId: true,
-              appointment: {
-                select: {
-                  id: true,
-                  date: true,
-                  time: true,
-                  unit: { select: { unitNumber: true } },
-                },
-              },
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (otherActiveWork) {
-        return { blockedBy: otherActiveWork, claimedTickets: [], remainingOpen: 0 };
-      }
-
-      const eligibleTickets = appointment.tickets.filter((ticket) => {
-        // Accept open or pending tickets (pending = appointment was scheduled but not yet started).
-        if (!['open', 'pending'].includes(ticket.status)) return false;
-
-        const assignedToTech =
-          ticket.assigneeName &&
-          ticket.assigneeName.trim() === technician.name.trim();
-
-        const assignedToSupervisor =
-          !!technician.supervisorId &&
-          ticket.assignedSupervisorIds.includes(technician.supervisorId);
-
-        // If the ticket has an explicit technician/supervisor assignment,
-        // only claim it when it belongs to this technician's chain.
-        const hasExplicitAssignment =
-          !!ticket.assigneeName ||
-          ticket.assignedSupervisorIds.length > 0;
-
-        if (hasExplicitAssignment) {
-          return assignedToTech || assignedToSupervisor;
-        }
-
-        // Appointment ticket without an explicit assignment:
-        // because the appointment itself belongs to this technician,
-        // it is eligible.
-        return isDirectTechnician;
-      });
-
-      const claimedTickets: any[] = [];
-
-      for (const ticket of eligibleTickets) {
-        /*
-         * IMPORTANT:
-         *
-         * Claiming an appointment starts the work immediately.
-         *
-         * Correct lifecycle:
-         *
-         * IN_PROGRESS
-         *   -> PAUSED / IN_PROGRESS
-         *   -> COMPLETED
-         *
-         * There is no EN_ROUTE / ARRIVED step for appointment claims.
-         */
-
-        const existing = await tx.ticketTimeSession.findFirst({
-          where: {
-            ticketId: ticket.id,
-            status: {
-              notIn: ['COMPLETED', 'CANCELLED']
-            }
-          }
-        });
-
-        if (existing) {
-          /*
-           * If the existing session belongs to this technician,
-           * this ticket has already been claimed by him.
-           *
-           * If it belongs to another technician, DO NOT touch it.
-           * This prevents one technician from hijacking another
-           * technician's active work session.
-           */
-          if (existing.technicianId === technicianId) {
-            claimedTickets.push({
-              id: ticket.id,
-              ticketId: ticket.ticketId,
-              sessionId: existing.id,
-              alreadyClaimed: true
-            });
-          }
-
-          continue;
-        }
-
-        const shift = await tx.shiftLog.findFirst({
-          where: {
-            technicianId,
-            status: {
-              in: ['ACTIVE', 'ON_BREAK']
-            }
-          },
-          orderBy: {
-            clockInAt: 'desc'
-          }
-        });
-
-        const now = new Date();
-
-        const session = await tx.ticketTimeSession.create({
-          data: {
-            ticketId: ticket.id,
-            technicianId,
-            shiftLogId: shift?.id,
-            status: 'IN_PROGRESS',
-            specialtyKey: technician.specialty || 'general',
-            claimedAt: now,
-            workStartedAt: now
-          }
-        });
-
-        /*
-         * DIRECT WORKFLOW:
-         *
-         * Appointment Claim = IN_PROGRESS immediately.
-         *
-         * There is no EN_ROUTE / ARRIVED step.
-         * Work timing starts at the exact moment of claiming.
-         */
-        await tx.ticket.update({
-          where: { id: ticket.id },
-          data: {
-            status: 'in_progress'
-          }
-        });
-
-        claimedTickets.push({
-          id: ticket.id,
-          ticketId: ticket.ticketId,
-          sessionId: session.id,
-          alreadyClaimed: false
-        });
-      }
-
-      /*
-       * Claiming an appointment does not complete it.
-       *
-       * remainingOpen is returned only as information for the client.
-       * The appointment must remain active until its tickets are
-       * actually completed through the completion workflow.
-       */
-      const remainingOpen = await tx.ticket.count({
-        where: {
-          appointmentId,
-          status: {
-            in: ['open', 'pending', 'waiting']
-          }
-        }
-      });
-
-      return {
-        blockedBy: null,
-        claimedTickets,
-        remainingOpen
-      };
-    });
-
-    if (result.blockedBy) {
-      res.status(409).json({
-        code: 'ACTIVE_APPOINTMENT_EXISTS',
-        error: 'Finish the active appointment before claiming another one',
-        activeAppointmentId: result.blockedBy.ticket.appointmentId,
-        activeAppointment: result.blockedBy.ticket.appointment,
-      });
-      return;
-    }
-
-    res.json({
-      ok: true,
-      appointmentId,
-      technicianId,
-      claimedCount: result.claimedTickets.length,
-      tickets: result.claimedTickets
-    });
-
-  } catch (err: any) {
-    console.error('CLAIM APPOINTMENT ERROR:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+// ================= TECH APPOINTMENT LIST =================
 
 router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, res) => {
   try {
     const technician = await prisma.technician.findUnique({
       where: { id: req.technicianId! },
-      select: {
-        id: true,
-        supervisorId: true,
-        projectId: true,
-        specialty: true,
-        name: true
-      }
+      select: { id: true, supervisorId: true, projectId: true, specialty: true, name: true }
     });
-
     if (!technician) {
       res.status(404).json({ error: 'Technician not found' });
       return;
     }
 
-    const activeWork = await prisma.ticketTimeSession.findFirst({
-      where: {
-        technicianId: technician.id,
-        status: { in: ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'] },
-      },
-      select: { ticket: { select: { appointmentId: true } } },
-      orderBy: { createdAt: 'desc' },
+    const activeSession = await prisma.appointmentWorkSession.findFirst({
+      where: { technicianId: technician.id, status: 'in_progress' },
+      select: { appointmentId: true, claimedAt: true }
     });
-    const activeAppointmentId = activeWork?.ticket.appointmentId || null;
+    const activeAppointmentId = activeSession?.appointmentId || null;
 
-    const { from, to, date } = req.query as {
-      from?: string;
-      to?: string;
-      date?: string;
-    };
+    const { from, to, date } = req.query as { from?: string; to?: string; date?: string };
 
     const orConditions: any[] = [
       { technicianId: technician.id },
       { technicianIds: { has: technician.id } }
     ];
-
-    // كل مواعيد المشرف تظهر للفنيين التابعين له
     if (technician.supervisorId) {
-      orConditions.push({
-        supervisorIds: { has: technician.supervisorId }
-      });
+      orConditions.push({ supervisorIds: { has: technician.supervisorId } });
     }
 
     const where: any = {
       status: { not: 'cancelled' },
       OR: orConditions
     };
-
-    // المواعيد يجب أن تكون في نفس مشروع الفني
-    if (technician.projectId) {
-      where.projectId = technician.projectId;
-    }
-
-    if (date) {
-      where.date = date;
-    } else if (from && to) {
-      where.date = {
-        gte: from,
-        lte: to
-      };
-    }
+    if (technician.projectId) where.projectId = technician.projectId;
+    if (date) where.date = date;
+    else if (from && to) where.date = { gte: from, lte: to };
 
     const appointments = await prisma.appointment.findMany({
       where,
-
       include: {
-        unit: {
-          select: { unitNumber: true }
-        },
-
+        unit: { select: { unitNumber: true } },
         project: {
-          select: {
-            id: true,
-            name: true,
-            officeLat: true,
-            officeLng: true,
-            officeAddress: true
-          }
+          select: { id: true, name: true, officeLat: true, officeLng: true, officeAddress: true }
         },
-
         technician: {
+          select: { id: true, name: true, specialty: true, phoneNumber: true }
+        },
+        workSession: {
           select: {
-            id: true,
-            name: true,
-            specialty: true,
-            phoneNumber: true
+            id: true, status: true, technicianId: true, claimedAt: true, finishedAt: true, totalDurationMins: true
           }
         },
-
         tickets: {
           select: {
-            id: true,
-            ticketId: true,
-            clientId: true,
-            description: true,
-            status: true,
-            type: true,
-            detectedTypes: true,
-            priority: true,
-
+            id: true, ticketId: true, clientId: true, description: true,
+            status: true, type: true, detectedTypes: true, priority: true,
             unit: { select: { unitNumber: true } },
-            client: { select: { name: true, phone: true } },
-
-            techSessions: {
-              where: {
-                technicianId: technician.id
-              },
-              orderBy: {
-                createdAt: 'desc'
-              },
-              take: 1
-            }
+            client: { select: { name: true, phone: true } }
           }
         }
       },
-
-      orderBy: [
-        { date: 'asc' },
-        { time: 'asc' }
-      ]
+      orderBy: [{ date: 'asc' }, { time: 'asc' }]
     });
 
-    const enrichedAppointments = appointments.map((appointment: any) => {
+    const enriched = appointments.map((appointment: any) => {
       const isAssignedToMe =
         appointment.technicianId === technician.id ||
-        (
-          Array.isArray(appointment.technicianIds) &&
-          appointment.technicianIds.includes(technician.id)
-        );
-
+        (Array.isArray(appointment.technicianIds) && appointment.technicianIds.includes(technician.id));
       const isSupervisorAppointment =
         !!technician.supervisorId &&
         Array.isArray(appointment.supervisorIds) &&
         appointment.supervisorIds.includes(technician.supervisorId);
 
-      const isClaimed = appointment.tickets?.some((t: any) =>
-        t.techSessions?.some((s: any) =>
-          ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'].includes(s.status)
-        )
-      ) ?? false;
+      const isClaimedByMe =
+        appointment.workSession?.status === 'in_progress' &&
+        appointment.workSession?.technicianId === technician.id;
+      const isClaimedByOther =
+        appointment.workSession?.status === 'in_progress' &&
+        appointment.workSession?.technicianId !== technician.id;
 
       const completedTickets = appointment.tickets?.filter((t: any) =>
         ['completed', 'closed', 'out_of_scope', 'absent'].includes(String(t.status).toLowerCase())
       ).length || 0;
 
-      // Derive unitNumber from the appointment's own unit, fall back to first ticket's unit
       const unitNumber =
-        (appointment as any).unit?.unitNumber ||
+        appointment.unit?.unitNumber ||
         appointment.tickets?.find((tk: any) => tk.unit?.unitNumber)?.unit?.unitNumber ||
         '';
-
-      // Derive client info from first ticket
-      const firstTicket = appointment.tickets?.[0] as any;
+      const firstTicket = appointment.tickets?.[0];
       const clientName  = firstTicket?.client?.name  || appointment.clientName  || '';
       const clientPhone = firstTicket?.client?.phone || appointment.clientPhone || '';
 
@@ -1139,36 +878,28 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
         clientPhone,
         isAssignedToMe,
         isSupervisorAppointment,
-        isClaimed,
+        isClaimedByMe,
+        isClaimedByOther,
         activeAppointmentId,
         claimBlocked: !!activeAppointmentId && activeAppointmentId !== appointment.id,
         completedTickets,
         totalTickets: appointment.tickets?.length || 0,
-        appointmentPriority: isClaimed ? 0 : (isAssignedToMe ? 1 : 2)
+        appointmentPriority: isClaimedByMe ? 0 : (isAssignedToMe ? 1 : 2)
       };
     });
 
-    // المواعيد المخصصة للفني أولاً، ثم مواعيد المشرف
-    enrichedAppointments.sort((a: any, b: any) => {
+    enriched.sort((a: any, b: any) => {
       if (a.appointmentPriority !== b.appointmentPriority) {
         return a.appointmentPriority - b.appointmentPriority;
       }
-
-      if (a.date !== b.date) {
-        return String(a.date).localeCompare(String(b.date));
-      }
-
+      if (a.date !== b.date) return String(a.date).localeCompare(String(b.date));
       return String(a.time || '').localeCompare(String(b.time || ''));
     });
 
-    res.json(enrichedAppointments);
-
+    res.json(enriched);
   } catch (err: any) {
     console.error('GET /tech/appointments error:', err);
-
-    res.status(500).json({
-      error: err.message
-    });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1181,7 +912,14 @@ router.get('/tech/tickets/:id', requireTechAuth, async (req: TechAuthRequest, re
         unit: { select: { unitNumber: true } },
         project: { select: { name: true } },
         client: { select: { name: true, phone: true } },
-        appointment: { select: { id: true, notes: true } }
+        appointment: {
+          select: {
+            id: true, notes: true, date: true, time: true, status: true,
+            workSession: {
+              select: { id: true, status: true, technicianId: true, claimedAt: true, finishedAt: true, totalDurationMins: true }
+            }
+          }
+        }
       }
     });
 
@@ -1196,7 +934,8 @@ router.get('/tech/tickets/:id', requireTechAuth, async (req: TechAuthRequest, re
       projectName: ticket.project?.name,
       clientName: ticket.client?.name,
       clientPhone: ticket.client?.phone,
-      appointmentNotes: ticket.appointment?.notes
+      appointmentNotes: ticket.appointment?.notes,
+      appointmentSession: ticket.appointment?.workSession || null
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

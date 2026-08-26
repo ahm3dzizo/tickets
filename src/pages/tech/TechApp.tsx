@@ -482,6 +482,7 @@ export default function TechApp() {
                 }
                 navigate={navigate}
                 translateText={translateText}
+                onRefresh={fetchData}
               />
             ))}
           </div>
@@ -542,6 +543,7 @@ export default function TechApp() {
                 }
                 navigate={navigate}
                 translateText={translateText}
+                onRefresh={fetchData}
               />
             ))}
           </div>
@@ -760,6 +762,7 @@ function AppointmentCard({
   onToggle,
   navigate,
   translateText,
+  onRefresh,
 }: {
   appt: any;
   lang: TechLang;
@@ -767,6 +770,7 @@ function AppointmentCard({
   onToggle: () => void;
   navigate: ReturnType<typeof useNavigate>;
   translateText: (value?: string | null) => string;
+  onRefresh?: () => void;
 }) {
   const tickets = appt.tickets || [];
   const isCompleted = appt.status === 'completed';
@@ -775,12 +779,31 @@ function AppointmentCard({
     ['completed', 'closed', 'out_of_scope', 'absent'].includes(String(ticket.status).toLowerCase())
   ).length;
 
-  const initialClaimed = appt.isClaimed === true;
+  const isClaimedByMe = appt.isClaimedByMe === true;
+  const isClaimedByOther = appt.isClaimedByOther === true;
+  const session = appt.workSession || null;
 
   const [claiming, setClaiming] = useState(false);
-  const [claimed, setClaimed] = useState(initialClaimed);
+  const [finishing, setFinishing] = useState(false);
 
-  useEffect(() => setClaimed(initialClaimed), [initialClaimed]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isClaimedByMe || !session?.claimedAt) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [isClaimedByMe, session?.claimedAt]);
+
+  const elapsedSecs = isClaimedByMe && session?.claimedAt
+    ? Math.max(0, Math.floor((now - new Date(session.claimedAt).getTime()) / 1000))
+    : 0;
+  const elapsedLabel = (() => {
+    const h = Math.floor(elapsedSecs / 3600);
+    const m = Math.floor((elapsedSecs % 3600) / 60);
+    const s = elapsedSecs % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+      : `${m}:${String(s).padStart(2, '0')}`;
+  })();
 
   const firstWorkTicket =
     tickets.find((ticket: any) => String(ticket.status).toLowerCase() === 'in_progress') ||
@@ -794,18 +817,26 @@ function AppointmentCard({
       toast.error(t(lang, 'finishActiveAppointmentFirst'));
       return;
     }
-    if (claimed) {
+    if (isClaimedByMe) {
       if (firstWorkTicket?.id) navigate(`/tech/ticket/${firstWorkTicket.id}`);
       else onToggle();
       return;
     }
     setClaiming(true);
     try {
-      const result = await techApi.claimAppointment(appt.id);
-      setClaimed(true);
+      let lat: number | undefined, lng: number | undefined, accuracy: number | undefined;
+      if (navigator.geolocation) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, enableHighAccuracy: true });
+          });
+          lat = pos.coords.latitude; lng = pos.coords.longitude; accuracy = pos.coords.accuracy;
+        } catch {}
+      }
+      await techApi.claimAppointment(appt.id, { lat, lng, accuracy });
       toast.success(t(lang, 'appointmentClaimed'));
-      const firstTicketId = result?.tickets?.find((ticket: any) => ticket.id)?.id;
-      if (firstTicketId) navigate(`/tech/ticket/${firstTicketId}`);
+      onRefresh?.();
+      if (firstWorkTicket?.id) navigate(`/tech/ticket/${firstWorkTicket.id}`);
       else onToggle();
     } catch (err: any) {
       toast.error(err?.code === 'ACTIVE_APPOINTMENT_EXISTS'
@@ -813,6 +844,30 @@ function AppointmentCard({
         : (err?.message || t(lang, 'claimTicket')));
     } finally {
       setClaiming(false);
+    }
+  };
+
+  const handleFinishAppointment = async () => {
+    if (finishing) return;
+    if (!window.confirm('إنهاء الموعد وإغلاق كل التذاكر النشطة؟')) return;
+    setFinishing(true);
+    try {
+      let lat: number | undefined, lng: number | undefined;
+      if (navigator.geolocation) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, enableHighAccuracy: true });
+          });
+          lat = pos.coords.latitude; lng = pos.coords.longitude;
+        } catch {}
+      }
+      await techApi.finishAppointment(appt.id, { lat, lng });
+      toast.success('تم إنهاء الموعد');
+      onRefresh?.();
+    } catch (err: any) {
+      toast.error(err?.message || 'فشل إنهاء الموعد');
+    } finally {
+      setFinishing(false);
     }
   };
 
@@ -877,7 +932,28 @@ function AppointmentCard({
           )}
         </div>
 
-        {!isCompleted && (
+        {isClaimedByMe && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 8,
+              background: 'rgba(59,130,246,0.12)',
+              border: '1px solid rgba(59,130,246,0.3)',
+              color: '#3b82f6',
+              fontWeight: 700,
+              fontSize: 12,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            <Timer size={13} />
+            {elapsedLabel}
+          </div>
+        )}
+
+        {!isCompleted && !isClaimedByOther && (
           <button
             onClick={handleClaimAppointment}
             disabled={claiming || claimBlocked}
@@ -885,7 +961,7 @@ function AppointmentCard({
             style={{
               minWidth: '120px',
               justifyContent: 'center',
-              ...(!claimed && !claiming && !claimBlocked ? {
+              ...(!isClaimedByMe && !claiming && !claimBlocked ? {
                 background: 'rgba(34,197,94,0.12)',
                 border: '1px solid rgba(34,197,94,0.3)',
                 borderRadius: '8px',
@@ -909,7 +985,7 @@ function AppointmentCard({
                 <Clock size={14} />
                 {t(lang, 'finishActiveAppointmentFirst')}
               </>
-            ) : claimed ? (
+            ) : isClaimedByMe ? (
               <>
                 <Play size={14} />
                 {t(lang, 'continueWork')}
@@ -921,6 +997,45 @@ function AppointmentCard({
               </>
             )}
           </button>
+        )}
+
+        {isClaimedByMe && (
+          <button
+            onClick={handleFinishAppointment}
+            disabled={finishing}
+            className="tech-ticket-toggle"
+            style={{
+              minWidth: 110,
+              justifyContent: 'center',
+              background: 'rgba(239,68,68,0.12)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: 8,
+              padding: '5px 10px',
+              color: '#ef4444',
+              fontWeight: 700,
+            }}
+          >
+            {finishing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+            {finishing ? '...' : 'إنهاء الموعد'}
+          </button>
+        )}
+
+        {isClaimedByOther && !isCompleted && (
+          <div
+            className="tech-ticket-toggle"
+            style={{
+              minWidth: 120,
+              justifyContent: 'center',
+              background: 'rgba(148,163,184,0.15)',
+              borderRadius: 8,
+              padding: '5px 10px',
+              color: '#94a3b8',
+              fontSize: 11,
+            }}
+          >
+            <User size={12} />
+            فني آخر يعمل عليه
+          </div>
         )}
 
         {tickets.length > 0 && (

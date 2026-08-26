@@ -256,18 +256,26 @@ export default function TechTicketDetail() {
   const handleComplete = async () => {
     if (!ticket?.id) return;
 
+    const appointmentId = ticket.appointmentId || ticket.appointment?.id;
+    if (!appointmentId) {
+      toast.error('التذكرة غير مرتبطة بموعد');
+      return;
+    }
+
     setActionLoading(true);
 
     try {
-      const result = await techApi.completeTicket(
+      const updated = await techApi.updateTicketStatus(
+        appointmentId,
         ticket.id,
+        'completed',
         notes.trim() || undefined
       );
 
       setTicket((prev) => ({
         ...(prev || {}),
-        ...(result?.ticket || {}),
-        status: result?.ticket?.status || 'completed',
+        ...updated,
+        status: updated?.status || 'completed',
       }));
 
       setShowCompleteModal(false);
@@ -275,12 +283,7 @@ export default function TechTicketDetail() {
       toast.success(t(lang, 'finishTicketSuccess'));
 
       setTimeout(() => {
-        if (result?.nextTicketId) {
-          toast.info(t(lang, 'nextTicket'));
-          navigate(`/tech/ticket/${result.nextTicketId}`);
-        } else {
-          navigate('/tech');
-        }
+        navigate(`/tech/appointment/${appointmentId}`);
       }, 700);
     } catch (err: any) {
       console.error(err);
@@ -472,6 +475,15 @@ export default function TechTicketDetail() {
             </div>
           )}
         </div>
+
+        {/* Appointment Session Banner — appears whenever this ticket belongs to a claimed appointment */}
+        {ticket.appointmentSession?.status === 'in_progress' && (
+          <AppointmentSessionBanner
+            session={ticket.appointmentSession}
+            appointmentId={ticket.appointment?.id || ticket.appointmentId}
+            navigate={navigate}
+          />
+        )}
 
         {/* Location / Villa */}
         <div className="tech-card">
@@ -687,6 +699,75 @@ export default function TechTicketDetail() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function AppointmentSessionBanner({
+  session,
+  appointmentId,
+  navigate,
+}: {
+  session: any;
+  appointmentId?: string;
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const startTs = session?.claimedAt ? new Date(session.claimedAt).getTime() : now;
+  const secs = Math.max(0, Math.floor((now - startTs) / 1000));
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  const label = h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        padding: '10px 14px',
+        marginTop: 12,
+        borderRadius: 14,
+        background: 'linear-gradient(90deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))',
+        border: '1px solid rgba(59,130,246,0.35)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 10,
+          background: 'rgba(59,130,246,0.25)', color: '#3b82f6',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Clock3 className="w-4 h-4" />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 2 }}>الموعد جارٍ التنفيذ</div>
+          <div style={{ fontWeight: 900, fontSize: 16, fontVariantNumeric: 'tabular-nums', color: '#3b82f6' }}>
+            {label}
+          </div>
+        </div>
+      </div>
+      {appointmentId && (
+        <button
+          onClick={() => navigate('/tech')}
+          className="tech-btn"
+          style={{
+            fontSize: 11, padding: '6px 10px',
+            background: 'rgba(59,130,246,0.2)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6',
+          }}
+        >
+          الموعد كامل
+        </button>
       )}
     </div>
   );

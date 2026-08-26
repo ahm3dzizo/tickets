@@ -545,6 +545,9 @@ export default function TicketDetail() {
                     <span className="text-slate-500 text-xs">موعد الزيارة</span>
                     <span className="text-amber-500 font-bold">{formatAppointmentDayTime(ticket.appointmentTime)}</span>
                   </div>
+                  {(ticket as any).appointmentSession && (
+                    <AppointmentSessionRow session={(ticket as any).appointmentSession} />
+                  )}
                   <div className="space-y-2">
                     <span className="text-slate-500 text-xs block text-right">ملاحظات الموعد</span>
                     <p className="text-slate-400 text-xs text-right bg-white/5 p-3 rounded-xl">
@@ -945,5 +948,41 @@ export default function TicketDetail() {
         </DialogContent>
       </Dialog>
     </Layout>
+  );
+}
+
+function AppointmentSessionRow({ session }: { session: any }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (session?.status !== 'in_progress') return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [session?.status]);
+
+  if (!session) return null;
+
+  const start = session.claimedAt ? new Date(session.claimedAt).getTime() : null;
+  const end = session.finishedAt ? new Date(session.finishedAt).getTime() : now;
+  const mins = start ? Math.max(0, Math.floor((end - start) / 60000)) : (session.totalDurationMins ?? 0);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const label = h > 0 ? `${h}س ${m}د` : `${m}د`;
+
+  const inProgress = session.status === 'in_progress';
+  const color = inProgress ? 'blue' : session.status === 'completed' ? 'emerald' : 'slate';
+
+  return (
+    <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+      <div className="flex flex-col items-start gap-0.5">
+        <span className="text-slate-500 text-[10px]">جلسة الفني</span>
+        <span className={`text-${color}-400 font-black text-sm`}>
+          {inProgress ? 'جارية الآن' : session.status === 'completed' ? 'اكتملت' : 'ملغاة'}
+          {session.technician?.name && ` • ${session.technician.name}`}
+        </span>
+      </div>
+      <span className={`text-${color}-400 font-black text-base tabular-nums`}>
+        {label}
+      </span>
+    </div>
   );
 }

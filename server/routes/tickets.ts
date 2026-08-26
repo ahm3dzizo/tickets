@@ -300,7 +300,18 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       project:       { select: { id: true, abbreviation: true } },
       contractor:    { select: { name: true } },
       ticketSubType: { select: { id: true, nameAr: true } },
-      appointment:   { select: { id: true, date: true, time: true, notes: true } },
+      appointment:   {
+        select: {
+          id: true, date: true, time: true, notes: true, status: true,
+          workSession: {
+            select: {
+              id: true, status: true, technicianId: true,
+              claimedAt: true, finishedAt: true, totalDurationMins: true,
+              technician: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
     },
   });
   const enriched = await enrichTickets(tickets);
@@ -314,7 +325,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       ...t,
       appointmentTime:  apptInFuture ? apptTime : null,
       appointmentNotes: appt?.notes ?? null,
-      appointment:      appt ? { id: appt.id, date: appt.date, time: appt.time ?? null } : null,
+      appointment:      appt ? { id: appt.id, date: appt.date, time: appt.time ?? null, status: appt.status } : null,
+      appointmentSession: appt?.workSession || null,
       subTypeName:          (t as any).ticketSubType?.nameAr ?? null,
       clientPhone:          (t as any).client?.phone         ?? null,
       warrantyExpiryDate:   (t as any).unit?.warrantyExpiryDate ?? null,

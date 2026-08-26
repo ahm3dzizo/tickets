@@ -111,6 +111,15 @@ export interface Ticket {
   appointmentId?: string | null;
   lastWaSentAt?: string | null;
   warrantyExpiryDate?: string | null;
+  appointmentSession?: {
+    id: string;
+    status: 'in_progress' | 'completed' | 'cancelled';
+    technicianId: string;
+    claimedAt: string;
+    finishedAt: string | null;
+    totalDurationMins: number | null;
+    technician?: { id: string; name: string } | null;
+  } | null;
 }
 
 // ─── Contractor Types ─────────────────────────────────────────────────────────

@@ -276,6 +276,13 @@ router.get("/calendar", requireAuth, async (req: AuthRequest, res) => {
             specialty: true,
           },
         },
+        workSession: {
+          select: {
+            id: true, status: true, technicianId: true,
+            claimedAt: true, finishedAt: true, totalDurationMins: true,
+            technician: { select: { id: true, name: true } },
+          },
+        },
         tickets: {
           select: {
             id: true,

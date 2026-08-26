@@ -568,7 +568,10 @@ export const techApi = {
     }
     return res.json();
   },
-  claimAppointment: async (appointmentId: string) => {
+  claimAppointment: async (
+    appointmentId: string,
+    location?: { lat?: number; lng?: number; accuracy?: number }
+  ) => {
     const token = localStorage.getItem('tech_token') || '';
 
     const res = await fetch(
@@ -578,7 +581,8 @@ export const techApi = {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify(location || {})
       }
     );
 
@@ -598,12 +602,15 @@ export const techApi = {
     return res.json();
   },
 
-  startTravel: async (ticketId: string) => {
+  finishAppointment: async (
+    appointmentId: string,
+    payload?: { lat?: number; lng?: number; notes?: string }
+  ) => {
     const token = localStorage.getItem('tech_token') || '';
-    const res = await fetch('/api/ticket-session/travel', {
+    const res = await fetch(`/api/tech/appointments/${appointmentId}/finish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ticketId })
+      body: JSON.stringify(payload || {})
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -611,12 +618,12 @@ export const techApi = {
     }
     return res.json();
   },
-  arrive: async (ticketId: string, location?: { lat: number; lng: number; accuracy?: number }) => {
+  cancelClaim: async (appointmentId: string) => {
     const token = localStorage.getItem('tech_token') || '';
-    const res = await fetch('/api/ticket-session/arrive', {
+    const res = await fetch(`/api/tech/appointments/${appointmentId}/cancel-claim`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ticketId, ...location })
+      body: '{}'
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -624,12 +631,28 @@ export const techApi = {
     }
     return res.json();
   },
-  completeTicket: async (ticketId: string, notes?: string) => {
+  updateTicketStatus: async (
+    appointmentId: string,
+    ticketId: string,
+    status: 'completed' | 'out_of_scope' | 'waiting' | 'absent' | 'contractor' | 'in_progress',
+    notes?: string
+  ) => {
     const token = localStorage.getItem('tech_token') || '';
-    const res = await fetch('/api/ticket-session/complete', {
-      method: 'POST',
+    const res = await fetch(`/api/tech/appointments/${appointmentId}/tickets/${ticketId}`, {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ticketId, notes })
+      body: JSON.stringify({ status, notes })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  getActiveSession: async () => {
+    const token = localStorage.getItem('tech_token') || '';
+    const res = await fetch('/api/tech/me/active-session', {
+      headers: { Authorization: `Bearer ${token}` }
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));

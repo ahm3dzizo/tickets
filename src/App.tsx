@@ -19,6 +19,7 @@ import Clients from '@/pages/Clients';
 import Technicians from '@/pages/Technicians';
 import TeamMemberDetail from '@/pages/TeamMemberDetail';
 import Reports from '@/pages/Reports';
+import AttendanceReport from '@/pages/AttendanceReport';
 import Appointments from '@/pages/Appointments';
 import Contractors from '@/pages/Contractors';
 import ClientDetail from '@/pages/ClientDetail';
@@ -148,6 +149,10 @@ function AppContent() {
           <Route
             path="/reports"
             element={user && !requiresProfileCompletion ? <Reports /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/reports/attendance"
+            element={user && !requiresProfileCompletion ? <AttendanceReport /> : <Navigate to="/login" />}
           />
           <Route
             path="/appointments"

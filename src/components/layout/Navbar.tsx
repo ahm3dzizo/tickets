@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Ticket, Users, Settings, LogOut, Bell, BellOff, BellRing,
   Briefcase, UserCheck, HardHat, CalendarClock, ClipboardList,
   CheckCheck, Moon, Sun, Settings2, BarChart3, X, CloudLightning, ShieldCheck, Package,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ const allNavItems = [
   { icon: HardHat,         label: 'المقاولون',   path: '/contractors',   roles: ['admin', 'engineer', 'supervisor'] },
   { icon: CalendarClock,   label: 'المواعيد',    path: '/appointments',  roles: ['admin', 'supervisor', 'engineer'] },
   { icon: BarChart3,       label: 'التقارير',    path: '/reports',       roles: ['admin', 'engineer'] },
+  { icon: Clock,           label: 'الحضور والمواعيد', path: '/reports/attendance', roles: ['admin', 'engineer', 'supervisor'] },
   { icon: HardHat,         label: 'الفنيين',     path: '/technicians',   roles: ['admin', 'supervisor'] },
   { icon: Users,           label: 'الفريق',      path: '/team',          roles: ['admin', 'engineer'] },
   { icon: Settings2,       label: 'أنواع التذاكر', path: '/ticket-types', roles: ['admin'] },
@@ -47,7 +49,7 @@ const allNavItems = [
 const NAV_GROUPS = [
   { label: null,        paths: ['/', '/projects', '/clients', '/warranties', '/tickets'] },
   { label: 'المخزن',   paths: ['/warehouse', '/warehouse/requests'] },
-  { label: 'العمليات', paths: ['/contractors', '/appointments', '/reports'] },
+  { label: 'العمليات', paths: ['/contractors', '/appointments', '/reports', '/reports/attendance'] },
   { label: 'الفريق',   paths: ['/technicians', '/team', '/ticket-types'] },
   { label: 'النظام',   paths: ['/settings'] },
 ];
