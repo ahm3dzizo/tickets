@@ -78,6 +78,8 @@ export default function TechApp() {
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
   const [shift, setShift] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [dynamicTranslations, setDynamicTranslations] = useState<Record<string, string>>({});
+  const requestedTranslationsRef = useRef(new Set<string>());
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [expandedApptId, setExpandedApptId] = useState<string | null>(null);
@@ -222,6 +224,51 @@ export default function TechApp() {
     () => appointments.filter((a) => !selectedDate || a.date === selectedDate),
     [appointments, selectedDate]
   );
+
+  const dynamicTexts = useMemo(() => {
+    const values = new Set<string>();
+    const add = (value?: string | null) => {
+      const clean = value?.trim();
+      if (clean) values.add(clean);
+    };
+    for (const appointment of appointments) {
+      add(appointment.notes);
+      for (const type of appointment.types || []) add(TYPE_LABELS_STATIC[type] ?? type);
+      for (const ticket of appointment.tickets || []) {
+        add(ticket.description);
+        add(TYPE_LABELS_STATIC[ticket.type] ?? ticket.type);
+        for (const type of ticket.detectedTypes || []) add(TYPE_LABELS_STATIC[type] ?? type);
+      }
+    }
+    return [...values];
+  }, [appointments]);
+
+  useEffect(() => {
+    if (lang === 'ar' || dynamicTexts.length === 0) return;
+    const missing = dynamicTexts.filter(text => {
+      const key = `${lang}\u0000${text}`;
+      return !dynamicTranslations[key] && !requestedTranslationsRef.current.has(key);
+    });
+    if (missing.length === 0) return;
+    for (const text of missing) requestedTranslationsRef.current.add(`${lang}\u0000${text}`);
+    techApi.translateTexts(missing, lang)
+      .then(result => {
+        setDynamicTranslations(current => {
+          const next = { ...current };
+          for (const [source, translated] of Object.entries(result)) {
+            next[`${lang}\u0000${source}`] = translated;
+          }
+          return next;
+        });
+      })
+      .catch(error => console.warn('Dynamic translation failed:', error));
+  }, [dynamicTexts, dynamicTranslations, lang]);
+
+  const translateText = useCallback((value?: string | null) => {
+    if (!value) return '';
+    if (lang === 'ar') return value;
+    return dynamicTranslations[`${lang}\u0000${value}`] || value;
+  }, [dynamicTranslations, lang]);
 
   const todayCount = filteredAppointments.length;
   const ticketCount = filteredAppointments.reduce(
@@ -434,6 +481,7 @@ export default function TechApp() {
                   setExpandedApptId(expandedApptId === appt.id ? null : appt.id)
                 }
                 navigate={navigate}
+                translateText={translateText}
               />
             ))}
           </div>
@@ -493,6 +541,7 @@ export default function TechApp() {
                   setExpandedApptId(expandedApptId === appt.id ? null : appt.id)
                 }
                 navigate={navigate}
+                translateText={translateText}
               />
             ))}
           </div>
@@ -710,40 +759,58 @@ function AppointmentCard({
   expanded,
   onToggle,
   navigate,
+  translateText,
 }: {
   appt: any;
   lang: TechLang;
   expanded: boolean;
   onToggle: () => void;
   navigate: ReturnType<typeof useNavigate>;
+  translateText: (value?: string | null) => string;
 }) {
   const tickets = appt.tickets || [];
   const isCompleted = appt.status === 'completed';
+  const claimBlocked = appt.claimBlocked === true;
+  const completedTickets = appt.completedTickets ?? tickets.filter((ticket: any) =>
+    ['completed', 'closed', 'out_of_scope', 'absent'].includes(String(ticket.status).toLowerCase())
+  ).length;
 
-  const initialClaimed =
-    appt.isClaimed === true ||
-    tickets.some(
-      (ticket: any) =>
-        ticket.status === 'in_progress' ||
-        ticket.status === 'IN_PROGRESS' ||
-        ticket.techSessions?.some(
-          (session: any) =>
-            session.status === 'CLAIMED' || session.status === 'IN_PROGRESS'
-        )
-    );
+  const initialClaimed = appt.isClaimed === true;
 
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(initialClaimed);
 
+  useEffect(() => setClaimed(initialClaimed), [initialClaimed]);
+
+  const firstWorkTicket =
+    tickets.find((ticket: any) => String(ticket.status).toLowerCase() === 'in_progress') ||
+    tickets.find((ticket: any) =>
+      ['pending', 'open', 'waiting', 'contractor'].includes(String(ticket.status).toLowerCase())
+    );
+
   const handleClaimAppointment = async () => {
-    if (claiming || claimed || isCompleted) return;
+    if (claiming || isCompleted) return;
+    if (claimBlocked) {
+      toast.error(t(lang, 'finishActiveAppointmentFirst'));
+      return;
+    }
+    if (claimed) {
+      if (firstWorkTicket?.id) navigate(`/tech/ticket/${firstWorkTicket.id}`);
+      else onToggle();
+      return;
+    }
     setClaiming(true);
     try {
-      await techApi.claimAppointment(appt.id);
+      const result = await techApi.claimAppointment(appt.id);
       setClaimed(true);
       toast.success(t(lang, 'appointmentClaimed'));
+      const firstTicketId = result?.tickets?.find((ticket: any) => ticket.id)?.id;
+      if (firstTicketId) navigate(`/tech/ticket/${firstTicketId}`);
+      else onToggle();
     } catch (err: any) {
-      toast.error(err?.message || t(lang, 'claimTicket'));
+      toast.error(err?.code === 'ACTIVE_APPOINTMENT_EXISTS'
+        ? t(lang, 'finishActiveAppointmentFirst')
+        : (err?.message || t(lang, 'claimTicket')));
     } finally {
       setClaiming(false);
     }
@@ -751,12 +818,13 @@ function AppointmentCard({
 
   const statusLabel = (status?: string) => {
     switch (status?.toLowerCase()) {
-      case 'open': return t(lang, 'status_CLAIMED').replace('محجوزة', 'مفتوحة') || 'Open';
-      case 'pending': return 'Pending';
+      case 'open': return t(lang, 'status_OPEN');
+      case 'pending': return t(lang, 'status_PENDING');
       case 'in_progress': return t(lang, 'status_IN_PROGRESS');
       case 'completed': return t(lang, 'status_COMPLETED');
+      case 'closed': return t(lang, 'status_CLOSED');
       case 'paused': return t(lang, 'status_PAUSED');
-      default: return status || '';
+      default: return status || t(lang, 'status_UNKNOWN');
     }
   };
 
@@ -782,18 +850,12 @@ function AppointmentCard({
       {appt.types?.length > 0 && (
         <div className="tech-tags">
           {appt.types.map((type: string) => (
-            <span key={type}>{TYPE_LABELS_STATIC[type] ?? type}</span>
+            <span key={type}>{translateText(TYPE_LABELS_STATIC[type] ?? type)}</span>
           ))}
         </div>
       )}
 
-      {appt.notes && <div className="tech-note">{appt.notes}</div>}
-      {appt.supervisorNotes && (
-        <div className="tech-note" style={{ borderRight: '3px solid #f59e0b', background: 'rgba(245,158,11,0.08)', color: 'var(--tech-text-secondary)' }}>
-          <strong style={{ color: '#f59e0b', fontSize: '11px' }}>ملاحظة المشرف: </strong>
-          {appt.supervisorNotes}
-        </div>
-      )}
+      {appt.notes && <div className="tech-note">{translateText(appt.notes)}</div>}
 
       <div className="tech-appointment-actions">
         <div className="tech-contact-actions">
@@ -818,12 +880,12 @@ function AppointmentCard({
         {!isCompleted && (
           <button
             onClick={handleClaimAppointment}
-            disabled={claiming || claimed}
-            className={`tech-ticket-toggle ${claimed ? 'opacity-70 cursor-default' : ''}`}
+            disabled={claiming || claimBlocked}
+            className={`tech-ticket-toggle ${claimBlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
             style={{
               minWidth: '120px',
               justifyContent: 'center',
-              ...(!claimed && !claiming ? {
+              ...(!claimed && !claiming && !claimBlocked ? {
                 background: 'rgba(34,197,94,0.12)',
                 border: '1px solid rgba(34,197,94,0.3)',
                 borderRadius: '8px',
@@ -842,10 +904,15 @@ function AppointmentCard({
                 <Loader2 size={14} className="animate-spin" />
                 {t(lang, 'claimingAppointment')}
               </>
+            ) : claimBlocked ? (
+              <>
+                <Clock size={14} />
+                {t(lang, 'finishActiveAppointmentFirst')}
+              </>
             ) : claimed ? (
               <>
-                <CheckCircle2 size={14} />
-                {t(lang, 'appointmentClaimed')}
+                <Play size={14} />
+                {t(lang, 'continueWork')}
               </>
             ) : (
               <>
@@ -859,7 +926,7 @@ function AppointmentCard({
         {tickets.length > 0 && (
           <button onClick={onToggle} className="tech-ticket-toggle">
             <Ticket size={14} />
-            {tickets.length} {t(lang, 'ticketsCount')}
+            {completedTickets}/{tickets.length} {t(lang, 'ticketsCount')}
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         )}
@@ -875,7 +942,7 @@ function AppointmentCard({
             >
               <div>
                 <strong>{ticket.itemCode || ticket.id?.slice(0, 8)}</strong>
-                <span>{ticket.description || t(lang, 'noDescription')}</span>
+                <span>{translateText(ticket.description) || t(lang, 'noDescription')}</span>
               </div>
               <span className="tech-ticket-status">{statusLabel(ticket.status)}</span>
             </button>

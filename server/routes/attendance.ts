@@ -468,6 +468,9 @@ router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthReq
       select: { appointmentId: true }
     });
 
+    let nextTicketId: string | null = null;
+    let appointmentCompleted = false;
+
     if (completedTicket?.appointmentId) {
       const remainingTickets = await prisma.ticket.count({
         where: {
@@ -485,7 +488,23 @@ router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthReq
             status: 'completed'
           }
         });
-
+        appointmentCompleted = true;
+      } else {
+        const nextTicket = await prisma.ticket.findFirst({
+          where: {
+            appointmentId: completedTicket.appointmentId,
+            status: { in: ['open', 'pending', 'in_progress', 'waiting', 'contractor'] },
+            techSessions: {
+              some: {
+                technicianId: req.technicianId!,
+                status: { in: ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'] },
+              },
+            },
+          },
+          orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true },
+        });
+        nextTicketId = nextTicket?.id || null;
       }
     }
 
@@ -502,7 +521,7 @@ router.post('/ticket-session/complete', requireTechAuth, async (req: TechAuthReq
     }
 
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-    res.json({ session: updated, ticket });
+    res.json({ session: updated, ticket, nextTicketId, appointmentCompleted });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -723,8 +742,8 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
       return;
     }
 
-    if (appointment.status === 'cancelled') {
-      res.status(400).json({ error: 'Cannot claim a cancelled appointment' });
+    if (['cancelled', 'completed'].includes(appointment.status)) {
+      res.status(400).json({ error: `Cannot claim a ${appointment.status} appointment` });
       return;
     }
 
@@ -746,6 +765,43 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // Serialize claims per technician at the database level. This closes the
+      // race where two rapid requests could otherwise claim two appointments.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${technicianId}))`;
+
+      // A technician may work on several tickets inside the same appointment,
+      // but must finish that appointment before claiming another one.
+      const otherActiveWork = await tx.ticketTimeSession.findFirst({
+        where: {
+          technicianId,
+          status: { in: ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'] },
+          OR: [
+            { ticket: { appointmentId: null } },
+            { ticket: { appointmentId: { not: appointmentId } } },
+          ],
+        },
+        select: {
+          ticket: {
+            select: {
+              appointmentId: true,
+              appointment: {
+                select: {
+                  id: true,
+                  date: true,
+                  time: true,
+                  unit: { select: { unitNumber: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (otherActiveWork) {
+        return { blockedBy: otherActiveWork, claimedTickets: [], remainingOpen: 0 };
+      }
+
       const eligibleTickets = appointment.tickets.filter((ticket) => {
         // Accept open or pending tickets (pending = appointment was scheduled but not yet started).
         if (!['open', 'pending'].includes(ticket.status)) return false;
@@ -811,6 +867,7 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
            */
           if (existing.technicianId === technicianId) {
             claimedTickets.push({
+              id: ticket.id,
               ticketId: ticket.ticketId,
               sessionId: existing.id,
               alreadyClaimed: true
@@ -862,6 +919,7 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
         });
 
         claimedTickets.push({
+          id: ticket.id,
           ticketId: ticket.ticketId,
           sessionId: session.id,
           alreadyClaimed: false
@@ -885,10 +943,21 @@ router.post('/tech/appointments/:appointmentId/claim', requireTechAuth, async (r
       });
 
       return {
+        blockedBy: null,
         claimedTickets,
         remainingOpen
       };
     });
+
+    if (result.blockedBy) {
+      res.status(409).json({
+        code: 'ACTIVE_APPOINTMENT_EXISTS',
+        error: 'Finish the active appointment before claiming another one',
+        activeAppointmentId: result.blockedBy.ticket.appointmentId,
+        activeAppointment: result.blockedBy.ticket.appointment,
+      });
+      return;
+    }
 
     res.json({
       ok: true,
@@ -921,6 +990,16 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
       res.status(404).json({ error: 'Technician not found' });
       return;
     }
+
+    const activeWork = await prisma.ticketTimeSession.findFirst({
+      where: {
+        technicianId: technician.id,
+        status: { in: ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'] },
+      },
+      select: { ticket: { select: { appointmentId: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const activeAppointmentId = activeWork?.ticket.appointmentId || null;
 
     const { from, to, date } = req.query as {
       from?: string;
@@ -1032,13 +1111,15 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
         Array.isArray(appointment.supervisorIds) &&
         appointment.supervisorIds.includes(technician.supervisorId);
 
-      const isClaimed = appointment.tickets?.some(
-        (t: any) =>
-          t.status === 'in_progress' ||
-          t.techSessions?.some(
-            (s: any) => s.status === 'IN_PROGRESS' || s.status === 'PAUSED'
-          )
+      const isClaimed = appointment.tickets?.some((t: any) =>
+        t.techSessions?.some((s: any) =>
+          ['CLAIMED', 'EN_ROUTE', 'IN_PROGRESS', 'PAUSED'].includes(s.status)
+        )
       ) ?? false;
+
+      const completedTickets = appointment.tickets?.filter((t: any) =>
+        ['completed', 'closed', 'out_of_scope', 'absent'].includes(String(t.status).toLowerCase())
+      ).length || 0;
 
       // Derive unitNumber from the appointment's own unit, fall back to first ticket's unit
       const unitNumber =
@@ -1059,7 +1140,11 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
         isAssignedToMe,
         isSupervisorAppointment,
         isClaimed,
-        appointmentPriority: isAssignedToMe ? 1 : 2
+        activeAppointmentId,
+        claimBlocked: !!activeAppointmentId && activeAppointmentId !== appointment.id,
+        completedTickets,
+        totalTickets: appointment.tickets?.length || 0,
+        appointmentPriority: isClaimed ? 0 : (isAssignedToMe ? 1 : 2)
       };
     });
 
@@ -1095,7 +1180,8 @@ router.get('/tech/tickets/:id', requireTechAuth, async (req: TechAuthRequest, re
       include: {
         unit: { select: { unitNumber: true } },
         project: { select: { name: true } },
-        client: { select: { name: true, phone: true } }
+        client: { select: { name: true, phone: true } },
+        appointment: { select: { id: true, notes: true } }
       }
     });
 
@@ -1109,7 +1195,8 @@ router.get('/tech/tickets/:id', requireTechAuth, async (req: TechAuthRequest, re
       unitNumber: ticket.unit?.unitNumber,
       projectName: ticket.project?.name,
       clientName: ticket.client?.name,
-      clientPhone: ticket.client?.phone
+      clientPhone: ticket.client?.phone,
+      appointmentNotes: ticket.appointment?.notes
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

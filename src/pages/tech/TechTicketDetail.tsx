@@ -22,6 +22,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { TYPE_LABELS_STATIC } from '@/components/tickets/TypesSelector';
 import './tech.css';
 
 type TicketStatus =
@@ -45,6 +46,7 @@ interface Ticket {
 
   description?: string;
   notes?: string;
+  appointmentNotes?: string;
 
   clientName?: string;
   clientPhone?: string;
@@ -67,28 +69,28 @@ interface Ticket {
   [key: string]: any;
 }
 
-const statusLabel = (status?: string) => {
+const statusLabel = (lang: TechLang, status?: string) => {
   switch (status?.toLowerCase()) {
     case 'claimed':
     case 'assigned':
     case 'open':
     case 'pending':
-      return 'مخصصة للفني';
+      return t(lang, 'status_CLAIMED');
     case 'en_route':
     case 'traveling':
-      return 'في الطريق';
+      return t(lang, 'status_EN_ROUTE');
     case 'arrived':
-      return 'وصل للموقع';
+      return t(lang, 'arrived');
     case 'in_progress':
-      return 'جاري التنفيذ';
+      return t(lang, 'status_IN_PROGRESS');
     case 'paused':
-      return 'متوقفة مؤقتًا';
+      return t(lang, 'status_PAUSED');
     case 'completed':
-      return 'مكتملة';
+      return t(lang, 'status_COMPLETED');
     case 'closed':
-      return 'مغلقة';
+      return t(lang, 'status_CLOSED');
     default:
-      return status || 'غير معروف';
+      return status || t(lang, 'status_UNKNOWN');
   }
 };
 
@@ -135,6 +137,7 @@ export default function TechTicketDetail() {
 
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [notes, setNotes] = useState('');
+  const [dynamicTranslations, setDynamicTranslations] = useState<Record<string, string>>({});
 
   const fetchTicket = async () => {
     if (!id) return;
@@ -167,7 +170,7 @@ export default function TechTicketDetail() {
       setTicket(data);
     } catch (err: any) {
       console.error('Failed to load ticket:', err);
-      setError(err.message || 'فشل تحميل التذكرة');
+      setError(err.message || t(lang, 'ticketLoadError'));
     } finally {
       setLoading(false);
     }
@@ -176,6 +179,37 @@ export default function TechTicketDetail() {
   useEffect(() => {
     fetchTicket();
   }, [id, token]);
+
+  const translationTexts = useMemo(() => {
+    if (!ticket) return [];
+    const values = new Set<string>();
+    const add = (value?: string | null) => {
+      const clean = value?.trim();
+      if (clean) values.add(clean);
+    };
+    add(ticket.description);
+    add(ticket.appointmentNotes);
+    add(TYPE_LABELS_STATIC[ticket.type || ''] ?? ticket.type);
+    for (const type of (ticket as any).detectedTypes || []) add(TYPE_LABELS_STATIC[type] ?? type);
+    return [...values];
+  }, [ticket]);
+
+  useEffect(() => {
+    if (lang === 'ar' || translationTexts.length === 0) {
+      setDynamicTranslations({});
+      return;
+    }
+    let cancelled = false;
+    techApi.translateTexts(translationTexts, lang)
+      .then(result => { if (!cancelled) setDynamicTranslations(result); })
+      .catch(error => console.warn('Ticket translation failed:', error));
+    return () => { cancelled = true; };
+  }, [lang, translationTexts]);
+
+  const translateText = (value?: string | null) => {
+    if (!value || lang === 'ar') return value || '';
+    return dynamicTranslations[value] || value;
+  };
 
   const currentStatus = ticket?.status || '';
 
@@ -201,7 +235,7 @@ export default function TechTicketDetail() {
 
   const getCurrentLocation = async () => {
     if (!navigator.geolocation) {
-      throw new Error('المتصفح لا يدعم تحديد الموقع');
+      throw new Error(t(lang, 'locationError'));
     }
 
     return new Promise<GeolocationPosition>(
@@ -238,15 +272,20 @@ export default function TechTicketDetail() {
 
       setShowCompleteModal(false);
 
-      toast.success('تم إنهاء التذكرة بنجاح');
+      toast.success(t(lang, 'finishTicketSuccess'));
 
       setTimeout(() => {
-        navigate('/tech');
+        if (result?.nextTicketId) {
+          toast.info(t(lang, 'nextTicket'));
+          navigate(`/tech/ticket/${result.nextTicketId}`);
+        } else {
+          navigate('/tech');
+        }
       }, 700);
     } catch (err: any) {
       console.error(err);
       toast.error(
-        err.message || 'فشل إنهاء التذكرة'
+        err.message || t(lang, 'finishTicketError')
       );
     } finally {
       setActionLoading(false);
@@ -263,7 +302,7 @@ export default function TechTicketDetail() {
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="text-sm text-[var(--tech-text-muted)]">
-            جاري تحميل التذكرة...
+            {t(lang, 'ticketLoading')}
           </span>
         </div>
       </div>
@@ -290,7 +329,7 @@ export default function TechTicketDetail() {
           </button>
 
           <div className="font-black">
-            التذكرة
+            {t(lang, 'ticket')}
           </div>
 
           <button
@@ -306,11 +345,11 @@ export default function TechTicketDetail() {
             <AlertCircle className="w-10 h-10 mx-auto mb-4 text-rose-500" />
 
             <div className="font-black text-base mb-2">
-              تعذر تحميل التذكرة
+              {t(lang, 'ticketLoadError')}
             </div>
 
             <div className="text-xs text-[var(--tech-text-muted)] mb-6">
-              {error || 'التذكرة غير موجودة'}
+              {error || t(lang, 'ticketNotFound')}
             </div>
 
             <button
@@ -318,7 +357,7 @@ export default function TechTicketDetail() {
               className="tech-btn tech-btn-primary"
             >
               <RefreshCw className="w-4 h-4" />
-              إعادة المحاولة
+              {t(lang, 'retry')}
             </button>
           </div>
         </div>
@@ -335,7 +374,7 @@ export default function TechTicketDetail() {
   const villa =
     ticket.villa ||
     ticket.unitNumber ||
-    'غير محددة';
+    t(lang, 'unknownVilla');
 
   return (
     <div
@@ -348,7 +387,7 @@ export default function TechTicketDetail() {
         <button
           onClick={() => navigate('/tech')}
           className="p-2 rounded-xl hover:bg-muted transition-colors"
-          aria-label="رجوع"
+          aria-label={t(lang, 'backHome')}
         >
           {isRtl ? (
             <ArrowRight className="w-5 h-5" />
@@ -359,7 +398,7 @@ export default function TechTicketDetail() {
 
         <div className="flex-1 text-center min-w-0">
           <div className="text-[10px] text-[var(--tech-text-muted)]">
-            التذكرة
+            {t(lang, 'ticket')}
           </div>
           <div className="font-black text-sm truncate">
             {ticketRef}
@@ -370,7 +409,7 @@ export default function TechTicketDetail() {
           onClick={fetchTicket}
           disabled={loading}
           className="p-2 rounded-xl hover:bg-muted transition-colors"
-          aria-label="تحديث"
+          aria-label={t(lang, 'refresh')}
         >
           <RefreshCw
             className={`w-5 h-5 ${
@@ -392,7 +431,7 @@ export default function TechTicketDetail() {
 
               <div className="min-w-0">
                 <div className="text-[10px] text-[var(--tech-text-muted)]">
-                  رقم التذكرة
+                  {t(lang, 'ticketNumber')}
                 </div>
 
                 <div className="font-black text-lg truncate">
@@ -412,7 +451,7 @@ export default function TechTicketDetail() {
                 currentStatus
               )}`}
             >
-              {statusLabel(currentStatus)}
+              {statusLabel(lang, currentStatus)}
             </span>
           </div>
 
@@ -443,10 +482,10 @@ export default function TechTicketDetail() {
 
             <div>
               <div className="text-[10px] text-[var(--tech-text-muted)]">
-                الموقع
+                {t(lang, 'location')}
               </div>
               <div className="font-black text-base">
-                فيلا {villa}
+                {t(lang, 'villa')} {villa}
               </div>
             </div>
           </div>
@@ -454,7 +493,7 @@ export default function TechTicketDetail() {
           {ticket.projectName && (
             <div className="p-3 rounded-xl bg-muted/50 border border-border text-sm">
               <div className="text-[10px] text-[var(--tech-text-muted)] mb-1">
-                المشروع
+                {t(lang, 'project')}
               </div>
 
               <div className="font-bold">
@@ -471,7 +510,7 @@ export default function TechTicketDetail() {
               className="mt-3 tech-btn tech-btn-outline"
             >
               <MapPin className="w-4 h-4 text-primary" />
-              فتح الموقع على الخريطة
+              {t(lang, 'openMap')}
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           )}
@@ -483,7 +522,7 @@ export default function TechTicketDetail() {
             <div className="flex items-center gap-2 mb-3">
               <User className="w-4 h-4 text-primary" />
               <span className="font-black text-sm">
-                بيانات العميل
+                {t(lang, 'clientDetails')}
               </span>
             </div>
 
@@ -500,7 +539,7 @@ export default function TechTicketDetail() {
                   className="tech-btn tech-btn-success text-xs"
                 >
                   <Phone className="w-4 h-4" />
-                  اتصال
+                  {t(lang, 'call')}
                 </a>
 
                 <a
@@ -517,7 +556,7 @@ export default function TechTicketDetail() {
                   }}
                 >
                   <MessageCircle className="w-4 h-4" />
-                  واتساب
+                  {t(lang, 'whatsapp')}
                 </a>
               </div>
             )}
@@ -529,70 +568,25 @@ export default function TechTicketDetail() {
           <div className="flex items-center gap-2 mb-3">
             <FileText className="w-4 h-4 text-primary" />
             <span className="font-black text-sm">
-              وصف المشكلة
+              {t(lang, 'problemDescription')}
             </span>
           </div>
 
           <div className="p-3.5 rounded-xl text-sm leading-7 whitespace-pre-wrap" style={{ background: 'var(--tech-card-bg, var(--tech-bg-secondary))', border: '1px solid var(--tech-border)' }}>
-            {ticket.description ||
-              'لا يوجد وصف للتذكرة'}
+            {translateText(ticket.description) || t(lang, 'noTicketDescription')}
           </div>
 
-          {ticket.notes && (
+          {ticket.appointmentNotes && (
             <div className="mt-3 p-3.5 rounded-xl" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
               <div className="text-xs font-black mb-1" style={{ color: '#f59e0b' }}>
-                ملاحظات
+                {t(lang, 'notes')}
               </div>
               <div className="text-sm leading-6">
-                {ticket.notes}
+                {translateText(ticket.appointmentNotes)}
               </div>
             </div>
           )}
 
-          {(ticket as any).supervisorNotes && (
-            <div className="mt-3 p-3.5 rounded-xl" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
-              <div className="text-xs font-black mb-1" style={{ color: '#818cf8' }}>
-                ملاحظة المشرف
-              </div>
-              <div className="text-sm leading-6">
-                {(ticket as any).supervisorNotes}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Workflow */}
-        <div className="tech-card">
-          <div className="font-black text-sm mb-5">
-            سير العمل
-          </div>
-
-          <div className="space-y-4">
-            <WorkflowStep
-              active={
-                canComplete ||
-                isCompleted
-              }
-              completed={
-                canComplete ||
-                isCompleted
-              }
-              label="تم استلام التذكرة"
-            />
-
-            <WorkflowStep
-              active={canComplete || isCompleted}
-              completed={canComplete || isCompleted}
-              label="جاري التنفيذ"
-            />
-
-            <WorkflowStep
-              active={isCompleted}
-              completed={isCompleted}
-              label="تم إنهاء التذكرة"
-              last
-            />
-          </div>
         </div>
 
         {/* Main Action */}
@@ -609,7 +603,7 @@ export default function TechTicketDetail() {
                   className="tech-btn tech-btn-success"
                 >
                   <CheckCircle2 className="w-5 h-5" />
-                  إنهاء التذكرة
+                  {t(lang, 'finishTicket')}
                   <ChevronRight className="w-4 h-4 opacity-70" />
                 </button>
               )}
@@ -623,14 +617,14 @@ export default function TechTicketDetail() {
             <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-emerald-500" />
 
             <div className="font-black text-emerald-600 dark:text-emerald-400">
-              تم إنهاء التذكرة
+              {t(lang, 'finishTicketSuccess')}
             </div>
 
             <button
               onClick={() => navigate('/tech')}
               className="tech-btn tech-btn-outline mt-4"
             >
-              العودة للرئيسية
+              {t(lang, 'backHome')}
             </button>
           </div>
         )}
@@ -647,11 +641,11 @@ export default function TechTicketDetail() {
 
               <div>
                 <div className="font-black text-lg">
-                  إنهاء التذكرة
+                  {t(lang, 'finishTicket')}
                 </div>
 
                 <div className="text-xs text-[var(--tech-text-muted)]">
-                  أضف وصفًا مختصرًا لما تم تنفيذه
+                  {t(lang, 'finishHint')}
                 </div>
               </div>
             </div>
@@ -662,7 +656,7 @@ export default function TechTicketDetail() {
               onChange={(e) =>
                 setNotes(e.target.value)
               }
-              placeholder="مثال: تم إصلاح التسريب وتغيير الوصلة التالفة..."
+              placeholder={t(lang, 'finishPlaceholder')}
               autoFocus
             />
 
@@ -674,7 +668,7 @@ export default function TechTicketDetail() {
                 disabled={actionLoading}
                 className="tech-btn tech-btn-outline"
               >
-                إلغاء
+                {t(lang, 'cancel')}
               </button>
 
               <button
@@ -688,66 +682,12 @@ export default function TechTicketDetail() {
                   <CheckCircle2 className="w-5 h-5" />
                 )}
 
-                تأكيد الإنهاء
+                {t(lang, 'confirmFinish')}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function WorkflowStep({
-  active,
-  completed,
-  label,
-  last = false,
-}: {
-  active: boolean;
-  completed: boolean;
-  label: string;
-  last?: boolean;
-}) {
-  return (
-    <div className="flex gap-3">
-      <div className="flex flex-col items-center">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center border ${
-            completed
-              ? 'bg-emerald-500 text-white border-emerald-500'
-              : active
-              ? 'bg-primary/10 text-primary border-primary'
-              : 'bg-muted text-muted-foreground border-border'
-          }`}
-        >
-          {completed ? (
-            <CheckCircle2 className="w-4 h-4" />
-          ) : (
-            <span className="w-2 h-2 rounded-full bg-current" />
-          )}
-        </div>
-
-        {!last && (
-          <div
-            className={`w-px flex-1 min-h-5 mt-1 ${
-              completed
-                ? 'bg-emerald-500/50'
-                : 'bg-[var(--tech-border)]'
-            }`}
-          />
-        )}
-      </div>
-
-      <div
-        className={`pt-1 text-sm font-bold ${
-          active
-            ? 'text-[var(--tech-text)]'
-            : 'text-[var(--tech-text-muted)]'
-        }`}
-      >
-        {label}
-      </div>
     </div>
   );
 }

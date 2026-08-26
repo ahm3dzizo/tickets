@@ -478,6 +478,21 @@ export const appointmentsApi = {
 
 // ── Technician API ─────────────────────────────────────────────────────────────
 export const techApi = {
+  translateTexts: async (texts: string[], targetLang: 'en' | 'hi' | 'ur') => {
+    const token = localStorage.getItem('tech_token') || '';
+    const uniqueTexts = [...new Set(texts.map(text => text.trim()).filter(Boolean))];
+    if (uniqueTexts.length === 0) return {} as Record<string, string>;
+    const res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ texts: uniqueTexts, targetLang, context: 'maintenance technician app' })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<Record<string, string>>;
+  },
   getAppointments: async (params?: { date?: string; from?: string; to?: string }) => {
     const q = new URLSearchParams();
     if (params?.date) q.set('date', params.date);
@@ -571,10 +586,13 @@ export const techApi = {
       const err = await res.json().catch(() => ({
         error: res.statusText
       }));
-
-      throw new Error(
-        err.error || `HTTP ${res.status}`
-      );
+      const error = new Error(err.error || `HTTP ${res.status}`) as Error & {
+        code?: string;
+        activeAppointmentId?: string | null;
+      };
+      error.code = err.code;
+      error.activeAppointmentId = err.activeAppointmentId;
+      throw error;
     }
 
     return res.json();
@@ -687,5 +705,3 @@ export const warehouseApi = {
     });
   },
 };
-
-
