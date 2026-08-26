@@ -576,10 +576,11 @@ router.post('/tech/appointments/:appointmentId/cancel-claim', requireTechAuth, a
         data: { status: 'cancelled', finishedAt: new Date(), pausedAt: null }
       });
 
-      // Revert tickets back to their pre-claim state (open).
+      // Revert tickets back to their pre-claim state.
+      // They still belong to a scheduled appointment, so pending — not open.
       await tx.ticket.updateMany({
         where: { appointmentId, status: 'in_progress' },
-        data: { status: 'open' }
+        data: { status: 'pending' }
       });
 
       return { cancelled: true };
@@ -721,10 +722,11 @@ router.post('/tech/appointments/:appointmentId/postpone', requireTechAuth, async
         }
       }
 
-      // Revert any tickets that we flipped to in_progress on claim back to open.
+      // Revert any tickets that were flipped to in_progress back to pending
+      // (an appointment is still scheduled for them, just at a new date).
       await tx.ticket.updateMany({
         where: { appointmentId, status: 'in_progress' },
-        data: { status: 'open' }
+        data: { status: 'pending' }
       });
 
       // Reschedule the appointment itself.
@@ -981,14 +983,29 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
 
     const { from, to, date } = req.query as { from?: string; to?: string; date?: string };
 
-    // Only show appointments explicitly assigned to THIS technician.
-    // A supervisor-shared appointment that is not tied to this tech is hidden.
+    // Visibility rules for the tech app:
+    //   1. Appointments explicitly assigned to this tech (technicianId or technicianIds).
+    //   2. Supervisor's general appointments — visible to every tech under that
+    //      supervisor ONLY when the appointment has no specific tech assigned yet.
+    //   3. Appointments assigned to a different tech under the same supervisor
+    //      stay hidden.
+    const orConditions: any[] = [
+      { technicianId: technician.id },
+      { technicianIds: { has: technician.id } }
+    ];
+    if (technician.supervisorId) {
+      orConditions.push({
+        AND: [
+          { supervisorIds: { has: technician.supervisorId } },
+          { technicianId: null },
+          { technicianIds: { isEmpty: true } }
+        ]
+      });
+    }
+
     const where: any = {
       status: { not: 'cancelled' },
-      OR: [
-        { technicianId: technician.id },
-        { technicianIds: { has: technician.id } }
-      ]
+      OR: orConditions,
     };
     if (technician.projectId) where.projectId = technician.projectId;
     if (date) where.date = date;
