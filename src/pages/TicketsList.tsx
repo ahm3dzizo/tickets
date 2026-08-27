@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
-import { TicketTable, parseIssuedAt, BulkActionBar } from '@/components/tickets/TicketTable';
+import { TicketTable, BulkActionBar } from '@/components/tickets/TicketTable';
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
 import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
@@ -18,9 +18,7 @@ import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { getCachedTickets, invalidateTicketCache } from '@/lib/ticketCache';
 import { Ticket, Project, Client } from '@/types';
 import { classifyOnServer } from '@/services/classificationApi';
-import { WhatsAppService } from '@/services/whatsappService';
 import { useAuth } from '@/contexts/AuthContext';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export default function TicketsList() {
@@ -42,9 +40,6 @@ export default function TicketsList() {
     const stored = sessionStorage.getItem('ticketsListTab');
     return stored && stored !== 'all' ? stored : 'linked';
   });
-  // Shared across every tab's TicketTable — typing here searches ALL tickets
-  // regardless of which tab is active, instead of being scoped to that tab's
-  // linked/contractor/unlinked/unclassified subset.
   const [ticketSearch, setTicketSearch] = useState(() => sessionStorage.getItem('ticketsListSearch') || '');
   useEffect(() => { sessionStorage.setItem('ticketsListSearch', ticketSearch); }, [ticketSearch]);
 
@@ -56,9 +51,6 @@ export default function TicketsList() {
       allClients.forEach((c: any) => { clientMap[c.id] = c as Client; });
       setClients(clientMap);
       const projectMap: Record<string, Project> = {};
-      // /api/projects is already scoped from the current database relations.
-      // Do not filter it again using the cached auth profile: projectIds may be
-      // stale until the user signs in again after an assignment changes.
       allProjects.forEach((p: any) => { projectMap[p.id] = p as Project; });
       setProjects(projectMap);
 
@@ -72,8 +64,8 @@ export default function TicketsList() {
       );
       setTickets(allTickets as Ticket[]);
     } catch (err) { console.error(err); }
-    finally { 
-      setLoading(false); 
+    finally {
+      setLoading(false);
       const scrollY = sessionStorage.getItem('ticketsListScrollY');
       if (scrollY) {
         setTimeout(() => {
@@ -159,7 +151,6 @@ export default function TicketsList() {
     setApptOpen(true);
   };
 
-
   const handleAutoLink = async () => {
     setAutoLinking(true);
     try {
@@ -176,15 +167,24 @@ export default function TicketsList() {
   const unlinkedTickets      = tickets.filter(t => !t.clientId);
   const linkedTickets        = tickets.filter(t => !!t.clientId && t.status !== 'contractor' && t.status !== 'note');
   const contractorTickets    = tickets.filter(t => t.status === 'contractor' || t.status === 'note');
-  // Unclassified = no type OR explicitly "unclassified" (new fallback)
   const unclassifiedTickets  = tickets.filter(t => !t.type || t.type === 'unclassified');
-  // Out-of-warranty = linked, active tickets where unit's warranty has expired
   const outOfWarrantyTickets = tickets.filter(t =>
     !!t.clientId &&
     !closedStatuses.has(t.status) &&
     t.warrantyExpiryDate &&
     t.warrantyExpiryDate < todayStr
   );
+
+  useEffect(() => {
+    const available = new Set(['linked', 'contractors']);
+    if (unlinkedTickets.length > 0) available.add('unlinked');
+    if (unclassifiedTickets.length > 0) available.add('unclassified');
+    if (outOfWarrantyTickets.length > 0) available.add('out-of-warranty');
+    if (!available.has(activeTab)) {
+      setActiveTab('linked');
+      sessionStorage.setItem('ticketsListTab', 'linked');
+    }
+  }, [activeTab, unlinkedTickets.length, unclassifiedTickets.length, outOfWarrantyTickets.length]);
 
   const [bulkClassifying, setBulkClassifying] = useState(false);
   const [ticketFormOpen, setTicketFormOpen] = useState(false);
@@ -228,11 +228,14 @@ export default function TicketsList() {
   const selectedTickets = tickets.filter(t => selectedTicketIds?.includes(t.id));
   const uniqueClientIds = new Set(selectedTickets.map(t => t.clientId || t.unitId || t.id));
 
+  const changeTab = (value: string) => {
+    setActiveTab(value);
+    sessionStorage.setItem('ticketsListTab', value);
+  };
+
   return (
     <Layout>
       <div className="space-y-5 page-in">
-
-        {/* ── Header (compact single row) ──────────────────────── */}
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight text-right">تذاكر الصيانة</h1>
 
@@ -246,136 +249,106 @@ export default function TicketsList() {
               <span className="hidden sm:inline text-xs font-bold">تصدير</span>
             </Button>
 
-          {(user?.role === 'admin' || user?.role === 'engineer') && (
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 h-10 rounded-xl shadow-sm transition-all shrink-0 font-bold gap-2">
-                  <Plus className="w-5 h-5" />
-                  <span className="hidden sm:inline">إضافة تذاكر</span>
-                </Button>
-              } />
-              <DropdownMenuContent align="end" className="w-56 bg-card border-border rounded-xl p-1">
-                <DropdownMenuItem onClick={() => setTicketFormOpen(true)} className="gap-2.5 cursor-pointer rounded-lg py-2.5 font-bold">
-                  <Plus className="w-4 h-4 text-blue-500" /> تذكرة جديدة
-                </DropdownMenuItem>
-
-                <div className="my-1 border-t border-border/50" />
-
-                <DropdownMenuItem onClick={() => setImportOpen(true)} className="gap-2.5 cursor-pointer rounded-lg py-2.5">
-                  <FileUp className="w-4 h-4 text-blue-500" /> استيراد التذاكر
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  onClick={handleReassignSupervisors}
-                  disabled={reassigning}
-                  className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-amber-500 focus:text-amber-500 focus:bg-amber-500/10"
-                >
-                  {reassigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
-                  تعيين المشرفين
-                </DropdownMenuItem>
-
-                {import.meta.env.DEV && user?.role === 'admin' && (
-                  <DropdownMenuItem
-                    onClick={handleDeleteAll}
-                    className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-red-500 focus:text-red-500 focus:bg-red-500/10 mt-1 border-t border-border/50"
-                  >
-                    <AlertTriangle className="w-4 h-4" />
-                    {deleteConfirm ? 'تأكيد الحذف' : 'حذف الكل (للتطوير)'}
+            {(user?.role === 'admin' || user?.role === 'engineer') && (
+              <DropdownMenu>
+                <DropdownMenuTrigger render={
+                  <Button className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 h-10 rounded-xl shadow-sm transition-all shrink-0 font-bold gap-2">
+                    <Plus className="w-5 h-5" />
+                    <span className="hidden sm:inline">إضافة تذاكر</span>
+                  </Button>
+                } />
+                <DropdownMenuContent align="end" className="w-56 bg-card border-border rounded-xl p-1">
+                  <DropdownMenuItem onClick={() => setTicketFormOpen(true)} className="gap-2.5 cursor-pointer rounded-lg py-2.5 font-bold">
+                    <Plus className="w-4 h-4 text-blue-500" /> تذكرة جديدة
                   </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                  <div className="my-1 border-t border-border/50" />
+                  <DropdownMenuItem onClick={() => setImportOpen(true)} className="gap-2.5 cursor-pointer rounded-lg py-2.5">
+                    <FileUp className="w-4 h-4 text-blue-500" /> استيراد التذاكر
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleReassignSupervisors}
+                    disabled={reassigning}
+                    className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-amber-500 focus:text-amber-500 focus:bg-amber-500/10"
+                  >
+                    {reassigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
+                    تعيين المشرفين
+                  </DropdownMenuItem>
+                  {import.meta.env.DEV && user?.role === 'admin' && (
+                    <DropdownMenuItem
+                      onClick={handleDeleteAll}
+                      className="gap-2.5 cursor-pointer rounded-lg py-2.5 text-red-500 focus:text-red-500 focus:bg-red-500/10 mt-1 border-t border-border/50"
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                      {deleteConfirm ? 'تأكيد الحذف' : 'حذف الكل (للتطوير)'}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
 
-        {/* ── Tabs ──────────────────────────────────────────────── */}
-        <Tabs 
-          value={activeTab} 
-          onValueChange={val => { setActiveTab(val); sessionStorage.setItem('ticketsListTab', val); }} 
-          className="w-full"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div className="w-full">
-              <TabsList className="bg-transparent h-auto p-0 flex flex-wrap items-center gap-2 w-full">
-                <TabsTrigger
-                  value="linked"
-                  className="rounded-xl h-9 text-sm font-bold px-4 border border-border bg-card data-[state=active]:bg-primary data-[state=active]:border-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+        <Tabs value={activeTab} onValueChange={changeTab} className="w-full">
+          <div className="mb-3">
+            <div className="sm:hidden">
+              <div className="relative rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                <select
+                  value={activeTab}
+                  onChange={(e) => changeTab(e.target.value)}
+                  aria-label="قسم التذاكر"
+                  className="w-full h-11 appearance-none bg-transparent px-4 pe-10 text-sm font-extrabold text-foreground outline-none cursor-pointer"
+                  dir="rtl"
                 >
-                  المربوطة ({linkedTickets.length})
-                </TabsTrigger>
-                <TabsTrigger
-                  value="contractors"
-                  className="rounded-xl h-9 text-sm font-bold px-3 border border-border bg-card data-[state=active]:bg-blue-600 data-[state=active]:border-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-1.5 transition-all"
-                >
-                  <HardHat className="w-3.5 h-3.5" />
-                  المقاولين - ملاحظات
-                  {contractorTickets.length > 0 && (
-                    <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-blue-500 text-white border-0">
-                      {contractorTickets.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                {unlinkedTickets.length > 0 && (
-                  <TabsTrigger
-                    value="unlinked"
-                    className="rounded-xl h-9 text-sm font-bold px-4 border border-red-500/20 bg-red-500/5 text-red-500 data-[state=active]:bg-red-500 data-[state=active]:border-red-500 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-2 transition-all"
-                  >
-                    غير مربوطة
-                    <Badge variant="destructive" className="h-4.5 px-1.5 min-w-5 text-[9px] font-black">
-                      {unlinkedTickets.length}
-                    </Badge>
-                  </TabsTrigger>
-                )}
-                {unclassifiedTickets.length > 0 && (
-                  <TabsTrigger
-                    value="unclassified"
-                    className="rounded-xl h-9 text-sm font-bold px-4 border border-orange-500/20 bg-orange-500/5 text-orange-500 data-[state=active]:bg-orange-500 data-[state=active]:border-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-2 transition-all"
-                  >
-                    غير مصنفة
-                    <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-orange-500 text-white border-0">
-                      {unclassifiedTickets.length}
-                    </Badge>
-                  </TabsTrigger>
-                )}
-                {outOfWarrantyTickets.length > 0 && (
-                  <TabsTrigger
-                    value="out-of-warranty"
-                    className="rounded-xl h-9 text-sm font-bold px-3 border border-rose-500/20 bg-rose-500/5 text-rose-500 data-[state=active]:bg-rose-600 data-[state=active]:border-rose-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-1.5 transition-all"
-                  >
-                    <ShieldOff className="w-3.5 h-3.5" />
-                    خارج الضمان
-                    <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-rose-500 text-white border-0">
-                      {outOfWarrantyTickets.length}
-                    </Badge>
-                  </TabsTrigger>
-                )}
-              </TabsList>
+                  <option value="linked">المربوطة ({linkedTickets.length})</option>
+                  <option value="contractors">المقاولين والملاحظات ({contractorTickets.length})</option>
+                  {unlinkedTickets.length > 0 && <option value="unlinked">غير مربوطة ({unlinkedTickets.length})</option>}
+                  {unclassifiedTickets.length > 0 && <option value="unclassified">غير مصنفة ({unclassifiedTickets.length})</option>}
+                  {outOfWarrantyTickets.length > 0 && <option value="out-of-warranty">خارج الضمان ({outOfWarrantyTickets.length})</option>}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">⌄</div>
+              </div>
             </div>
 
-            <TabsContent value="unlinked" className="mt-0">
+            <TabsList className="hidden sm:flex bg-transparent h-auto p-0 flex-wrap items-center gap-2 w-full">
+              <TabsTrigger value="linked" className="rounded-xl h-9 text-sm font-bold px-4 border border-border bg-card data-[state=active]:bg-primary data-[state=active]:border-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
+                المربوطة ({linkedTickets.length})
+              </TabsTrigger>
+              <TabsTrigger value="contractors" className="rounded-xl h-9 text-sm font-bold px-3 border border-border bg-card data-[state=active]:bg-blue-600 data-[state=active]:border-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-1.5 transition-all">
+                <HardHat className="w-3.5 h-3.5" /> المقاولين - ملاحظات
+                {contractorTickets.length > 0 && <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-blue-500 text-white border-0">{contractorTickets.length}</Badge>}
+              </TabsTrigger>
+              {unlinkedTickets.length > 0 && (
+                <TabsTrigger value="unlinked" className="rounded-xl h-9 text-sm font-bold px-4 border border-red-500/20 bg-red-500/5 text-red-500 data-[state=active]:bg-red-500 data-[state=active]:border-red-500 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-2 transition-all">
+                  غير مربوطة <Badge variant="destructive" className="h-4.5 px-1.5 min-w-5 text-[9px] font-black">{unlinkedTickets.length}</Badge>
+                </TabsTrigger>
+              )}
+              {unclassifiedTickets.length > 0 && (
+                <TabsTrigger value="unclassified" className="rounded-xl h-9 text-sm font-bold px-4 border border-orange-500/20 bg-orange-500/5 text-orange-500 data-[state=active]:bg-orange-500 data-[state=active]:border-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-2 transition-all">
+                  غير مصنفة <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-orange-500 text-white border-0">{unclassifiedTickets.length}</Badge>
+                </TabsTrigger>
+              )}
+              {outOfWarrantyTickets.length > 0 && (
+                <TabsTrigger value="out-of-warranty" className="rounded-xl h-9 text-sm font-bold px-3 border border-rose-500/20 bg-rose-500/5 text-rose-500 data-[state=active]:bg-rose-600 data-[state=active]:border-rose-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-1.5 transition-all">
+                  <ShieldOff className="w-3.5 h-3.5" /> خارج الضمان
+                  <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-rose-500 text-white border-0">{outOfWarrantyTickets.length}</Badge>
+                </TabsTrigger>
+              )}
+            </TabsList>
+
+            <TabsContent value="unlinked" className="mt-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  onClick={handleAutoLink}
-                  disabled={autoLinking || unlinkedTickets.length === 0}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-10 rounded-2xl shadow-md"
-                >
+                <Button onClick={handleAutoLink} disabled={autoLinking || unlinkedTickets.length === 0} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-10 rounded-2xl shadow-md">
                   {autoLinking ? 'جارٍ الربط...' : '⚡ ربط تلقائي'}
                 </Button>
-                
                 <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
-
                 <ClientForm trigger={
                   <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all gap-2">
-                    <UserPlus className="w-4 h-4 text-primary" />
-                    إضافة عميل جديد
+                    <UserPlus className="w-4 h-4 text-primary" /> إضافة عميل جديد
                   </Button>
                 } onSuccess={loadData} />
-
                 <Link to="/clients">
                   <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all gap-2">
-                    <User className="w-4 h-4 text-slate-400" />
-                    صفحة العملاء
+                    <User className="w-4 h-4 text-slate-400" /> صفحة العملاء
                   </Button>
                 </Link>
               </div>
@@ -384,20 +357,7 @@ export default function TicketsList() {
 
           <TabsContent value="linked" className="mt-0">
             <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
-              <TicketTable
-                clientMap={clients}
-                tickets={ticketSearch.trim() ? tickets : linkedTickets}
-                selectedIds={selectedTicketIds}
-                onSelectionChange={setSelectedTicketIds}
-                hideProjectColumn={!showProjectColumn}
-                projects={projects}
-                showInlineFilters
-                stateKey="tl_linked"
-                search={ticketSearch}
-                onSearchChange={setTicketSearch}
-                exportOpen={activeTab === 'linked' ? exportOpen : false}
-                onExportOpenChange={setExportOpen}
-              />
+              <TicketTable clientMap={clients} tickets={ticketSearch.trim() ? tickets : linkedTickets} selectedIds={selectedTicketIds} onSelectionChange={setSelectedTicketIds} hideProjectColumn={!showProjectColumn} projects={projects} showInlineFilters stateKey="tl_linked" search={ticketSearch} onSearchChange={setTicketSearch} exportOpen={activeTab === 'linked' ? exportOpen : false} onExportOpenChange={setExportOpen} />
             </div>
           </TabsContent>
 
@@ -407,185 +367,64 @@ export default function TicketsList() {
                 <HardHat className="w-4 h-4 shrink-0" />
                 <span>تذاكر المقاولين والملاحظات — يتم عرض التذاكر المسندة لمقاولين أو التي تحتوي على ملاحظات</span>
               </div>
-              <TicketTable
-                clientMap={clients}
-                tickets={ticketSearch.trim() ? tickets : contractorTickets}
-                selectedIds={selectedTicketIds}
-                onSelectionChange={setSelectedTicketIds}
-                hideProjectColumn={!showProjectColumn}
-                projects={projects}
-                showInlineFilters
-                onRefresh={loadData}
-                stateKey="tl_contractors"
-                search={ticketSearch}
-                onSearchChange={setTicketSearch}
-                exportOpen={activeTab === 'contractors' ? exportOpen : false}
-                onExportOpenChange={setExportOpen}
-                contractorMode
-              />
+              <TicketTable clientMap={clients} tickets={ticketSearch.trim() ? tickets : contractorTickets} selectedIds={selectedTicketIds} onSelectionChange={setSelectedTicketIds} hideProjectColumn={!showProjectColumn} projects={projects} showInlineFilters onRefresh={loadData} stateKey="tl_contractors" search={ticketSearch} onSearchChange={setTicketSearch} exportOpen={activeTab === 'contractors' ? exportOpen : false} onExportOpenChange={setExportOpen} contractorMode />
             </div>
           </TabsContent>
 
           <TabsContent value="unlinked" className="mt-0">
             <div className="bg-card border border-red-500/25 rounded-3xl overflow-hidden shadow-sm">
               <div className="p-4 bg-red-500/8 border-b border-red-500/20 text-red-500 font-semibold flex items-center gap-2 text-sm">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                هذه التذاكر لا تحتوي على بيانات عميل أو رقم الفيلا غير مسجل في قائمة العملاء
+                <AlertTriangle className="w-4 h-4 shrink-0" /> هذه التذاكر لا تحتوي على بيانات عميل أو رقم الفيلا غير مسجل في قائمة العملاء
               </div>
-              <TicketTable
-                clientMap={clients}
-                tickets={ticketSearch.trim() ? tickets : unlinkedTickets}
-                selectedIds={selectedTicketIds}
-                onSelectionChange={setSelectedTicketIds}
-                hideProjectColumn={!showProjectColumn}
-                projects={projects}
-                showInlineFilters
-                onRefresh={loadData}
-                stateKey="tl_unlinked"
-                search={ticketSearch}
-                onSearchChange={setTicketSearch}
-                exportOpen={activeTab === 'unlinked' ? exportOpen : false}
-                onExportOpenChange={setExportOpen}
-              />
+              <TicketTable clientMap={clients} tickets={ticketSearch.trim() ? tickets : unlinkedTickets} selectedIds={selectedTicketIds} onSelectionChange={setSelectedTicketIds} hideProjectColumn={!showProjectColumn} projects={projects} showInlineFilters onRefresh={loadData} stateKey="tl_unlinked" search={ticketSearch} onSearchChange={setTicketSearch} exportOpen={activeTab === 'unlinked' ? exportOpen : false} onExportOpenChange={setExportOpen} />
             </div>
           </TabsContent>
 
           <TabsContent value="out-of-warranty" className="mt-0">
             <div className="bg-card border border-rose-500/25 rounded-3xl overflow-hidden shadow-sm">
               <div className="p-3 bg-rose-500/8 border-b border-rose-500/20 flex items-center gap-2 text-rose-400 text-sm font-semibold">
-                <ShieldOff className="w-4 h-4 shrink-0" />
-                <span>هذه التذاكر خاصة بوحدات انتهى ضمانها — يُنصح بإخطار العميل قبل بدء الصيانة</span>
+                <ShieldOff className="w-4 h-4 shrink-0" /> <span>هذه التذاكر خاصة بوحدات انتهى ضمانها — يُنصح بإخطار العميل قبل بدء الصيانة</span>
               </div>
-              <TicketTable
-                clientMap={clients}
-                tickets={ticketSearch.trim() ? tickets.filter(t => !closedStatuses.has(t.status) && t.warrantyExpiryDate && t.warrantyExpiryDate < todayStr) : outOfWarrantyTickets}
-                selectedIds={selectedTicketIds}
-                onSelectionChange={setSelectedTicketIds}
-                hideProjectColumn={!showProjectColumn}
-                projects={projects}
-                showInlineFilters
-                onRefresh={loadData}
-                stateKey="tl_out_of_warranty"
-                search={ticketSearch}
-                onSearchChange={setTicketSearch}
-                exportOpen={activeTab === 'out-of-warranty' ? exportOpen : false}
-                onExportOpenChange={setExportOpen}
-              />
+              <TicketTable clientMap={clients} tickets={ticketSearch.trim() ? tickets.filter(t => !closedStatuses.has(t.status) && t.warrantyExpiryDate && t.warrantyExpiryDate < todayStr) : outOfWarrantyTickets} selectedIds={selectedTicketIds} onSelectionChange={setSelectedTicketIds} hideProjectColumn={!showProjectColumn} projects={projects} showInlineFilters onRefresh={loadData} stateKey="tl_out_of_warranty" search={ticketSearch} onSearchChange={setTicketSearch} exportOpen={activeTab === 'out-of-warranty' ? exportOpen : false} onExportOpenChange={setExportOpen} />
             </div>
           </TabsContent>
 
           <TabsContent value="unclassified" className="mt-0">
             <div className="bg-card border border-orange-500/25 rounded-3xl overflow-hidden shadow-sm">
               <div className="p-3 bg-orange-500/8 border-b border-orange-500/20 flex items-center justify-between gap-3">
-                <Button
-                  onClick={handleBulkReclassify}
-                  disabled={bulkClassifying || unclassifiedTickets.length === 0}
-                  size="sm"
-                  className="bg-orange-500 hover:bg-orange-600 text-white font-bold h-9 rounded-xl shadow-md gap-2 shrink-0"
-                >
-                  {bulkClassifying
-                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> جارٍ التصنيف...</>
-                    : <><HelpCircle className="w-3.5 h-3.5" /> تصنيف الكل تلقائياً</>}
+                <Button onClick={handleBulkReclassify} disabled={bulkClassifying || unclassifiedTickets.length === 0} size="sm" className="bg-orange-500 hover:bg-orange-600 text-white font-bold h-9 rounded-xl shadow-md gap-2 shrink-0">
+                  {bulkClassifying ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> جارٍ التصنيف...</> : <><HelpCircle className="w-3.5 h-3.5" /> تصنيف الكل تلقائياً</>}
                 </Button>
                 <div className="flex items-center gap-2 text-orange-500 text-sm font-semibold">
-                  <HelpCircle className="w-4 h-4 shrink-0" />
-                  <span>هذه التذاكر لم تُصنَّف — يمكن تصنيفها تلقائياً أو يدوياً من قائمة كل تذكرة</span>
+                  <HelpCircle className="w-4 h-4 shrink-0" /> <span>هذه التذاكر لم تُصنَّف — يمكن تصنيفها تلقائياً أو يدوياً من قائمة كل تذكرة</span>
                 </div>
               </div>
-              <TicketTable
-                clientMap={clients}
-                tickets={ticketSearch.trim() ? tickets : unclassifiedTickets}
-                selectedIds={selectedTicketIds}
-                onSelectionChange={setSelectedTicketIds}
-                hideProjectColumn={!showProjectColumn}
-                projects={projects}
-                showInlineFilters
-                onRefresh={loadData}
-                stateKey="tl_unclassified"
-                search={ticketSearch}
-                onSearchChange={setTicketSearch}
-                exportOpen={activeTab === 'unclassified' ? exportOpen : false}
-                onExportOpenChange={setExportOpen}
-              />
+              <TicketTable clientMap={clients} tickets={ticketSearch.trim() ? tickets : unclassifiedTickets} selectedIds={selectedTicketIds} onSelectionChange={setSelectedTicketIds} hideProjectColumn={!showProjectColumn} projects={projects} showInlineFilters onRefresh={loadData} stateKey="tl_unclassified" search={ticketSearch} onSearchChange={setTicketSearch} exportOpen={activeTab === 'unclassified' ? exportOpen : false} onExportOpenChange={setExportOpen} />
             </div>
           </TabsContent>
         </Tabs>
 
-        {/* Bulk bar */}
         {selectedTicketIds.length > 0 && (
-          <BulkActionBar
-            count={selectedTicketIds.length}
-            isMultiClient={uniqueClientIds.size > 1}
-            onStatusChange={handleBulkStatusChange}
-            onAppointment={handleAppointment}
-            onContractor={() => setContractorDialogOpen(true)}
-            onClose={() => setCloseDialogOpen(true)}
-            onClear={() => setSelectedTicketIds([])}
-            hidden={closeDialogOpen}
-          />
+          <BulkActionBar count={selectedTicketIds.length} isMultiClient={uniqueClientIds.size > 1} onStatusChange={handleBulkStatusChange} onAppointment={handleAppointment} onContractor={() => setContractorDialogOpen(true)} onClose={() => setCloseDialogOpen(true)} onClear={() => setSelectedTicketIds([])} hidden={closeDialogOpen} />
         )}
 
-        <CloseTicketDialog
-          open={closeDialogOpen}
-          onOpenChange={setCloseDialogOpen}
-          selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))}
-          clients={Object.values(clients)}
-          projects={projects}
-          onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }}
-        />
+        <CloseTicketDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))} clients={Object.values(clients)} projects={projects} onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }} />
 
-        <TicketForm
-          open={ticketFormOpen}
-          onOpenChange={setTicketFormOpen}
-          trigger={<span className="hidden" />}
-          onSuccess={() => { loadData(); setTicketFormOpen(false); }}
-        />
+        <TicketForm open={ticketFormOpen} onOpenChange={setTicketFormOpen} trigger={<span className="hidden" />} onSuccess={() => { loadData(); setTicketFormOpen(false); }} />
 
-        <UnifiedImportModal
-          open={importOpen}
-          onOpenChange={setImportOpen}
-          trigger={<span className="hidden" />}
-          projects={Object.values(projects)}
-          clients={Object.values(clients)}
-          onImportSuccess={() => { loadData(); setImportOpen(false); }}
-          currentUserId={user?.uid}
-        />
+        <UnifiedImportModal open={importOpen} onOpenChange={setImportOpen} trigger={<span className="hidden" />} projects={Object.values(projects)} clients={Object.values(clients)} onImportSuccess={() => { loadData(); setImportOpen(false); }} currentUserId={user?.uid} />
 
         {apptTicket && apptTicket.length > 0 && (
           <UnifiedAppointmentDialog
             open={apptOpen}
             onOpenChange={setApptOpen}
-            tickets={apptTicket.map(t => ({
-              id: t.id,
-              ticketId: t.ticketId,
-              clientName: t.clientName,
-              unitNumber: t.unitNumber,
-              unitId: t.unitId ?? undefined,
-              projectId: t.projectId,
-              clientId: t.clientId,
-              appointmentId: (t as any).appointmentId,
-              appointmentTime: t.appointmentTime,
-              type: t.type as string,
-              detectedTypes: t.detectedTypes,
-              assignedSupervisorIds: t.assignedSupervisorIds as string[] | undefined,
-              status: t.status,
-            }))}
-            clientPhone={
-              clients[apptTicket[0].clientId || '']?.phone ||
-              Object.values(clients).find(c => String(c.unitId) === String(apptTicket[0].unitId))?.phone
-            }
+            tickets={apptTicket.map(t => ({ id: t.id, ticketId: t.ticketId, clientName: t.clientName, unitNumber: t.unitNumber, unitId: t.unitId ?? undefined, projectId: t.projectId, clientId: t.clientId, appointmentId: (t as any).appointmentId, appointmentTime: t.appointmentTime, type: t.type as string, detectedTypes: t.detectedTypes, assignedSupervisorIds: t.assignedSupervisorIds as string[] | undefined, status: t.status }))}
+            clientPhone={clients[apptTicket[0].clientId || '']?.phone || Object.values(clients).find(c => String(c.unitId) === String(apptTicket[0].unitId))?.phone}
             onSuccess={() => { setApptOpen(false); setSelectedTicketIds([]); loadData(); }}
           />
         )}
 
-        <AssignContractorDialog
-          open={contractorDialogOpen}
-          onOpenChange={setContractorDialogOpen}
-          tickets={selectedTickets}
-          projectId={selectedTickets[0]?.projectId || ''}
-          onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadData(); }}
-        />
-
+        <AssignContractorDialog open={contractorDialogOpen} onOpenChange={setContractorDialogOpen} tickets={selectedTickets} projectId={selectedTickets[0]?.projectId || ''} onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadData(); }} />
       </div>
     </Layout>
   );
