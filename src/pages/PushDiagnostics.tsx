@@ -38,7 +38,7 @@ export default function PushDiagnostics() {
             </div>
             <div>
               <h1 className="text-xl font-black">فحص وإصلاح الإشعارات</h1>
-              <p className="text-xs text-muted-foreground mt-1">يحدّث Service Worker، يجدد الاشتراك بمفتاح VAPID الحالي، ثم يرسل اختبارًا لنفس حسابك.</p>
+              <p className="text-xs text-muted-foreground mt-1">يحدّث Service Worker، يجدد اشتراك هذا الجهاز بمفتاح VAPID الحالي، ثم يرسل اختبارًا لنفس هذا المتصفح فقط.</p>
             </div>
           </div>
 
@@ -54,14 +54,17 @@ export default function PushDiagnostics() {
             {row('إذن الإشعارات مسموح', result.permission === 'granted')}
             {row('Service Worker شغال', result.serviceWorker)}
             {row('تم إنشاء Push Subscription جديد', result.subscribed)}
-            {row('تم حفظ الاشتراك على السيرفر', result.saved)}
-            {row('FCM قبل رسالة الاختبار', result.testAccepted && result.delivered > 0)}
+            {row('تم حفظ اشتراك هذا الجهاز على السيرفر', result.saved)}
+            {row(`FCM قبل رسالة هذا الجهاز${result.statusCode ? ` — ${result.statusCode}` : ''}`, result.testAccepted && result.delivered === 1)}
 
-            <div className="mt-4 rounded-2xl bg-muted/50 p-4 text-sm">
+            <div className="mt-4 rounded-2xl bg-muted/50 p-4 text-sm space-y-1">
+              {result.endpointHost && (
+                <div className="text-muted-foreground text-xs">مزود Push: {result.endpointHost}</div>
+              )}
               {result.error ? (
                 <div className="text-red-500 font-bold">❌ {result.error}</div>
               ) : (
-                <div className="text-emerald-500 font-bold">✅ تم الإصلاح، وتم تسليم {result.delivered} اختبار من {result.subscriptions} اشتراك.</div>
+                <div className="text-emerald-500 font-bold">✅ تم اختبار هذا الجهاز فقط، وFCM قبل الرسالة{result.statusCode ? ` بحالة ${result.statusCode}` : ''}.</div>
               )}
             </div>
           </div>
