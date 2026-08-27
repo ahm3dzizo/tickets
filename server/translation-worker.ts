@@ -8,6 +8,7 @@ const MAX_TEXTS_PER_PASS = 60;
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
+let scanOffset = 0;
 
 function collectTicketTexts(ticket: {
   description: string;
@@ -37,7 +38,7 @@ async function missingTextsForLanguage(texts: string[], targetLang: TargetLangua
 }
 
 async function processTranslationPass(): Promise<void> {
-  const tickets = await prisma.ticket.findMany({
+  let tickets = await prisma.ticket.findMany({
     where: {
       geminiClassifiedAt: { not: null },
       description: { not: '' },
@@ -46,6 +47,7 @@ async function processTranslationPass(): Promise<void> {
       { createdAt: 'desc' },
       { id: 'desc' },
     ],
+    skip: scanOffset,
     take: TICKET_BATCH_SIZE,
     select: {
       id: true,
@@ -57,7 +59,31 @@ async function processTranslationPass(): Promise<void> {
     },
   });
 
+  if (tickets.length === 0 && scanOffset > 0) {
+    scanOffset = 0;
+    tickets = await prisma.ticket.findMany({
+      where: {
+        geminiClassifiedAt: { not: null },
+        description: { not: '' },
+      },
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+      take: TICKET_BATCH_SIZE,
+      select: {
+        id: true,
+        ticketId: true,
+        description: true,
+        closureNotes: true,
+        contractorNote: true,
+        appointment: { select: { notes: true } },
+      },
+    });
+  }
+
   if (tickets.length === 0) return;
+  scanOffset += tickets.length;
 
   const sourceTexts = [...new Set(tickets.flatMap(collectTicketTexts))].slice(0, MAX_TEXTS_PER_PASS);
   if (sourceTexts.length === 0) return;
@@ -72,7 +98,7 @@ async function processTranslationPass(): Promise<void> {
       translatedCount += missing.length;
       console.log(`[TranslationWorker] cached ${missing.length} texts → ${targetLang}`);
     } catch (error: any) {
-      console.warn(`[TranslationWorker] ${targetLang} pass failed:`, error?.message || error);
+      console.warn(`[TranslationWorker] ${targetLang} pass failed; it will be retried on the next scan cycle:`, error?.message || error);
     }
   }
 
@@ -83,7 +109,7 @@ async function processTranslationPass(): Promise<void> {
 
 export function startTranslationWorker(): void {
   if (timer) return;
-  console.log('[TranslationWorker] Started — pre-translates classified ticket content every 20 s');
+  console.log('[TranslationWorker] Started — scans classified ticket content every 20 s');
 
   const run = async () => {
     if (running) return;
