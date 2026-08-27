@@ -1,3 +1,4 @@
+import './nara-rate-limiter.js';
 import express, { Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import cors from "cors";
@@ -53,10 +54,8 @@ async function startServer() {
   const httpServer = createServer(app);
   globalIo = setupSocket(httpServer);
   
-  // Make io accessible to routes
   (global as any).__io = globalIo;
 
-  // ── Security Middlewares ───────────────────────────────────────────────
   app.use(helmet({
     contentSecurityPolicy: process.env.NODE_ENV === "production" ? undefined : false,
   }));
@@ -69,8 +68,8 @@ async function startServer() {
   app.use(cors(corsOptions));
 
   const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // Limit each IP to 1000 requests per `window`
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
     message: { error: "تم تجاوز الحد المسموح به من الطلبات، يرجى المحاولة لاحقاً." },
     standardHeaders: true,
     legacyHeaders: false,
@@ -78,10 +77,8 @@ async function startServer() {
   app.use("/api/", globalLimiter);
   app.use(express.json({ limit: "10mb" }));
 
-  // ── Health ─────────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
-  // ── API Routes ─────────────────────────────────────────────────────────
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
   app.use("/api/projects", projectRoutes);
@@ -94,7 +91,7 @@ async function startServer() {
   app.use("/api/classify", classifyRoutes);
   app.use("/api/generate-report", reportRoutes);
   app.use("/api/reports", reportsStatsRoutes);
-  app.use("/api/audit",     auditRoutes);
+  app.use("/api/audit", auditRoutes);
   app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/admin/ticket-types", ticketTypesAdminRoutes);
   app.use("/api/whatsapp", whatsappRoutes);
@@ -109,7 +106,6 @@ async function startServer() {
   app.use("/api/notifications", notificationRoutes);
   app.use("/api/warehouse", warehouseRoutes);
 
-  // ── Legacy client routes under projects (for backward compat) ──────────
   app.get("/api/projects/:projectId/clients", requireAuth, async (req, res) => {
     try {
       const clients = await prisma.client.findMany({
@@ -117,7 +113,6 @@ async function startServer() {
         orderBy: { name: "asc" },
         include: { units: { include: { unit: { include: { block: true } } } } }
       });
-      // Flatten back to old structure if needed for legacy apps
       const mapped = clients.map(c => {
         const primaryUnit = c.units[0]?.unit;
         return {
@@ -142,34 +137,28 @@ async function startServer() {
     try {
       const data = req.body;
       const projectId = req.params.projectId;
-      
       const phone = data.phone?.trim() || `unknown-${Date.now()}`;
-      
       const unit = await prisma.unit.upsert({
         where: { projectId_unitNumber: { projectId, unitNumber: data.unitNumber || '0' } },
         create: { projectId, unitNumber: data.unitNumber || '0', handoverDate: data.handoverDate, warrantyExpiryDate: data.warrantyExpiryDate },
         update: { handoverDate: data.handoverDate, warrantyExpiryDate: data.warrantyExpiryDate }
       });
-
       const client = await prisma.client.upsert({
         where: { phone },
         create: { name: data.name, phone },
         update: { name: data.name }
       });
-
       await prisma.clientUnit.upsert({
         where: { clientId_unitId: { clientId: client.id, unitId: unit.id } },
         create: { clientId: client.id, unitId: unit.id, isPrimary: true },
         update: {}
       });
-
       res.status(201).json({ ...client, projectId, unitNumber: unit.unitNumber });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  // ── Static / Vite ──────────────────────────────────────────────────────
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -178,37 +167,30 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    
-// User uploaded files
-const uploadsDir = path.resolve(process.cwd(), "uploads");
-fs.mkdirSync(uploadsDir, { recursive: true });
-fs.mkdirSync(path.join(uploadsDir, "users"), { recursive: true });
-
-app.use("/uploads", express.static(uploadsDir));
-
-app.use(express.static(distPath));
+    const uploadsDir = path.resolve(process.cwd(), "uploads");
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    fs.mkdirSync(path.join(uploadsDir, "users"), { recursive: true });
+    app.use("/uploads", express.static(uploadsDir));
+    app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
-  // ── Generic Error Handler ──────────────────────────────────────────────
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error("Unhandled Error:", err);
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "حدث خطأ داخلي في الخادم" : err.message });
   });
 
-  // ── Background Jobs ────────────────────────────────────────────────────
-  startGeminiWorker();        // classifies open unclassified tickets via Gemini (4/min)
-  startReclassifyWorker();    // reclassifies tickets when keywords are learned (every 30s)
-  startTrainWorker();         // retrains ML model daily at 03:00
-  startTranslationWorker();   // pre-translates classified ticket content into cache
+  startGeminiWorker();
+  startReclassifyWorker();
+  startTrainWorker();
+  startTranslationWorker();
 
-  // Ensure critical sub-types exist (e.g. روائح كريهة under drainage)
   seedSubTypes().catch((e) => console.error('⚠️  Sub-type seed failed:', e.message));
 
-  await initVapid();           // load/generate stable VAPID keys from DB
-  startCronJobs();             // push notification scheduled jobs
+  await initVapid();
+  startCronJobs();
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
