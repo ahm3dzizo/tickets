@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
+import { translateTechTaxonomy } from '@/i18n/techTaxonomy';
 import { Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import './tech.css';
@@ -13,7 +14,7 @@ const LANGUAGES = [
   { code: 'ur', label: 'اردو' },
 ];
 
-const SPECIALTIES = ['plumbing/سباكة', 'electrical/كهرباء', 'HVAC/تكييف', 'carpentry/نجارة', 'general/عام'];
+const SPECIALTIES = ['plumbing', 'electrical', 'hvac', 'carpentry', 'general'];
 const CLOTHING_SIZES = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 const SHOE_SIZES = Array.from({ length: 10 }, (_, i) => String(38 + i)); // 38-47
 
@@ -50,11 +51,11 @@ export default function TechSetup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.fullName || !formData.idNumber || !formData.employeeId) {
-      toast.error('Please fill all mandatory fields');
+      toast.error(t(lang, 'fillMandatory'));
       return;
     }
     if (!idPhoto) {
-      toast.error('ID Photo is required');
+      toast.error(t(lang, 'idPhotoRequired'));
       return;
     }
 
@@ -83,7 +84,7 @@ export default function TechSetup() {
           idNumber: formData.idNumber,
           employeeId: formData.employeeId,
           experienceLevel: formData.experienceLevel || null,
-          specialty: formData.specialty.split('/')[0],
+          specialty: formData.specialty,
           clothingSize: formData.clothingSize,
           shoeSize: formData.shoeSize,
           language: formData.preferredLang,
@@ -91,16 +92,16 @@ export default function TechSetup() {
         })
       });
 
-      if (!res.ok) throw new Error('Failed to complete profile');
+      if (!res.ok) throw new Error(t(lang, 'profileCompletedError'));
 
       const data = await res.json();
-      setProfile(data.profile);
+      setProfile(data.profile ?? data);
       localStorage.setItem('tech_language', formData.preferredLang);
       navigate('/tech');
-      toast.success('Profile completed successfully');
+      toast.success(t(lang, 'profileCompletedSuccess'));
       
     } catch (err: any) {
-      toast.error(err.message || 'An error occurred');
+      toast.error(lang === 'ar' && err.message ? err.message : t(lang, 'profileCompletedError'));
     } finally {
       setLoading(false);
     }
@@ -133,7 +134,7 @@ export default function TechSetup() {
 
         <div className="mb-6">
           <h1 className="text-2xl font-bold">{t(lang, 'profileSetup')}</h1>
-          <p className="text-[var(--tech-text-muted)] text-sm mt-1">Please complete your information to continue.</p>
+          <p className="text-[var(--tech-text-muted)] text-sm mt-1">{t(lang, 'setupSubtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -188,7 +189,7 @@ export default function TechSetup() {
                 min="0"
                 max="50"
                 className="tech-input"
-                placeholder={lang === 'ar' ? 'عدد سنوات الخبرة' : lang === 'en' ? 'Years of experience' : lang === 'hi' ? 'अनुभव के वर्ष' : 'تجربے کے سال'}
+                placeholder={t(lang, 'experienceLevel')}
                 value={formData.experienceLevel}
                 onChange={e => setFormData({...formData, experienceLevel: e.target.value})}
               />
@@ -204,7 +205,7 @@ export default function TechSetup() {
                 onChange={e => setFormData({...formData, specialty: e.target.value})}
                 style={{ backgroundImage: 'none' }}
               >
-                {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+                {SPECIALTIES.map(s => <option key={s} value={s}>{translateTechTaxonomy(s, lang)}</option>)}
               </select>
             </div>
 

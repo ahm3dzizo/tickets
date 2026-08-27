@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
+import { hasTechTaxonomy, translateTechTaxonomy } from '@/i18n/techTaxonomy';
 import { techApi } from '@/lib/api';
 import {
   ArrowLeft,
@@ -22,7 +23,6 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { TYPE_LABELS_STATIC } from '@/components/tickets/TypesSelector';
 import './tech.css';
 
 type TicketStatus =
@@ -58,6 +58,9 @@ interface Ticket {
 
   specialty?: string;
   type?: string;
+  detectedTypes?: string[];
+  typeLabels?: Record<string, string>;
+  closureNotes?: string;
 
   latitude?: number;
   longitude?: number;
@@ -89,8 +92,20 @@ const statusLabel = (lang: TechLang, status?: string) => {
       return t(lang, 'status_COMPLETED');
     case 'closed':
       return t(lang, 'status_CLOSED');
+    case 'waiting':
+      return t(lang, 'status_WAITING');
+    case 'out_of_scope':
+      return t(lang, 'status_OUT_OF_SCOPE');
+    case 'absent':
+      return t(lang, 'status_ABSENT');
+    case 'contractor':
+      return t(lang, 'status_CONTRACTOR');
+    case 'note':
+      return t(lang, 'status_NOTE');
+    case 'cancelled':
+      return t(lang, 'status_CANCELLED');
     default:
-      return status || t(lang, 'status_UNKNOWN');
+      return t(lang, 'status_UNKNOWN');
   }
 };
 
@@ -170,7 +185,7 @@ export default function TechTicketDetail() {
       setTicket(data);
     } catch (err: any) {
       console.error('Failed to load ticket:', err);
-      setError(err.message || t(lang, 'ticketLoadError'));
+      setError(lang === 'ar' && err.message ? err.message : t(lang, 'ticketLoadError'));
     } finally {
       setLoading(false);
     }
@@ -189,8 +204,9 @@ export default function TechTicketDetail() {
     };
     add(ticket.description);
     add(ticket.appointmentNotes);
-    add(TYPE_LABELS_STATIC[ticket.type || ''] ?? ticket.type);
-    for (const type of (ticket as any).detectedTypes || []) add(TYPE_LABELS_STATIC[type] ?? type);
+    add(ticket.notes);
+    add(ticket.closureNotes);
+    for (const label of Object.values(ticket.typeLabels || {})) add(String(label));
     return [...values];
   }, [ticket]);
 
@@ -208,8 +224,20 @@ export default function TechTicketDetail() {
 
   const translateText = (value?: string | null) => {
     if (!value || lang === 'ar') return value || '';
-    return dynamicTranslations[value] || value;
+    return dynamicTranslations[value.trim()] || value;
   };
+
+  const translateType = (value?: string | null) => {
+    if (!value) return '';
+    if (hasTechTaxonomy(value)) return translateTechTaxonomy(value, lang);
+    const sourceLabel = ticket?.typeLabels?.[value] || value;
+    return lang === 'ar' ? sourceLabel : translateText(sourceLabel);
+  };
+
+  const ticketTypes = [...new Set(
+    (ticket?.detectedTypes?.length ? ticket.detectedTypes : [ticket?.type])
+      .filter((value): value is string => typeof value === 'string' && !!value.trim())
+  )];
 
   const currentStatus = ticket?.status || '';
 
@@ -258,7 +286,7 @@ export default function TechTicketDetail() {
 
     const appointmentId = ticket.appointmentId || ticket.appointment?.id;
     if (!appointmentId) {
-      toast.error('التذكرة غير مرتبطة بموعد');
+      toast.error(t(lang, 'ticketNotLinked'));
       return;
     }
 
@@ -288,7 +316,7 @@ export default function TechTicketDetail() {
     } catch (err: any) {
       console.error(err);
       toast.error(
-        err.message || t(lang, 'finishTicketError')
+        lang === 'ar' && err.message ? err.message : t(lang, 'finishTicketError')
       );
     } finally {
       setActionLoading(false);
@@ -443,7 +471,7 @@ export default function TechTicketDetail() {
 
                 {ticket.specialty && (
                   <div className="text-xs text-[var(--tech-text-muted)] mt-0.5">
-                    {ticket.specialty}
+                    {translateTechTaxonomy(ticket.specialty, lang)}
                   </div>
                 )}
               </div>
@@ -482,6 +510,7 @@ export default function TechTicketDetail() {
             session={ticket.appointmentSession}
             appointmentId={ticket.appointment?.id || ticket.appointmentId}
             navigate={navigate}
+            lang={lang}
           />
         )}
 
@@ -588,6 +617,17 @@ export default function TechTicketDetail() {
             {translateText(ticket.description) || t(lang, 'noTicketDescription')}
           </div>
 
+          {ticketTypes.length > 0 && (
+            <div className="mt-3">
+              <div className="text-xs font-black mb-2 text-[var(--tech-text-muted)]">
+                {t(lang, 'classifications')}
+              </div>
+              <div className="tech-tags">
+                {ticketTypes.map(type => <span key={type}>{translateType(type)}</span>)}
+              </div>
+            </div>
+          )}
+
           {ticket.appointmentNotes && (
             <div className="mt-3 p-3.5 rounded-xl" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
               <div className="text-xs font-black mb-1" style={{ color: '#f59e0b' }}>
@@ -595,6 +635,17 @@ export default function TechTicketDetail() {
               </div>
               <div className="text-sm leading-6">
                 {translateText(ticket.appointmentNotes)}
+              </div>
+            </div>
+          )}
+
+          {(ticket.notes || ticket.closureNotes) && (
+            <div className="mt-3 p-3.5 rounded-xl" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+              <div className="text-xs font-black mb-1" style={{ color: '#3b82f6' }}>
+                {t(lang, 'ticketNotes')}
+              </div>
+              <div className="text-sm leading-6 whitespace-pre-wrap">
+                {translateText(ticket.notes || ticket.closureNotes)}
               </div>
             </div>
           )}
@@ -708,10 +759,12 @@ function AppointmentSessionBanner({
   session,
   appointmentId,
   navigate,
+  lang,
 }: {
   session: any;
   appointmentId?: string;
   navigate: ReturnType<typeof useNavigate>;
+  lang: TechLang;
 }) {
   const isPaused = session?.status === 'paused';
 
@@ -764,7 +817,7 @@ function AppointmentSessionBanner({
         </div>
         <div>
           <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 2 }}>
-            {isPaused ? 'الموعد متوقف مؤقتاً' : 'الموعد جارٍ التنفيذ'}
+            {t(lang, isPaused ? 'appointmentPaused' : 'appointmentInProgress')}
           </div>
           <div style={{ fontWeight: 900, fontSize: 16, fontVariantNumeric: 'tabular-nums', color }}>
             {label}
@@ -781,7 +834,7 @@ function AppointmentSessionBanner({
             background: iconBg, border: `1px solid ${color}30`, color,
           }}
         >
-          الموعد كامل
+          {t(lang, 'fullAppointment')}
         </button>
       )}
     </div>

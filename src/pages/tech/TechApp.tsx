@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
+import { hasTechTaxonomy, translateTechTaxonomy } from '@/i18n/techTaxonomy';
 import { techApi } from '@/lib/api';
 import {
   Loader2,
@@ -32,11 +33,10 @@ import {
 import { toast } from 'sonner';
 import './tech.css';
 import { registerPush, unregisterPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
-import { TYPE_LABELS_STATIC } from '@/components/tickets/TypesSelector';
 import { Bell, BellRing, BellOff } from 'lucide-react';
 
 // Push notification button for the TechApp header
-function TechPushButton({ token }: { token: string | null }) {
+function TechPushButton({ token, lang }: { token: string | null; lang: TechLang }) {
   const [perm, setPerm] = React.useState<NotificationPermission>('default');
   React.useEffect(() => { if (isPushSupported()) setPerm(getPushPermission()); }, []);
   if (!isPushSupported() || !token) return null;
@@ -44,17 +44,17 @@ function TechPushButton({ token }: { token: string | null }) {
     if (perm === 'granted') {
       await unregisterPush();
       setPerm('default');
-      toast.info('تم إيقاف الإشعارات');
+      toast.info(t(lang, 'notificationsDisabled'));
     } else {
       const ok = await registerPush(`Bearer ${token}`, true);
       const p = getPushPermission();
       setPerm(p);
-      if (ok) toast.success('✅ تم تفعيل الإشعارات');
-      else if (p === 'denied') toast.error('تم رفض الإشعارات من المتصفح');
+      if (ok) toast.success(`✅ ${t(lang, 'notificationsEnabled')}`);
+      else if (p === 'denied') toast.error(t(lang, 'notificationsDenied'));
     }
   };
   return (
-    <button onClick={toggle} className="tech-icon-btn" title={perm === 'granted' ? 'إيقاف الإشعارات' : 'تفعيل الإشعارات'}>
+    <button onClick={toggle} className="tech-icon-btn" title={t(lang, perm === 'granted' ? 'notificationsDisable' : 'notificationsEnable')}>
       {perm === 'granted' ? <BellRing size={18} style={{ color: '#22c55e' }} /> : perm === 'denied' ? <BellOff size={18} style={{ opacity: 0.5 }} /> : <Bell size={18} style={{ opacity: 0.5 }} />}
     </button>
   );
@@ -86,9 +86,9 @@ function distanceMeters(a: GeolocationCoordinates, b: GeolocationCoordinates) {
   return radius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-async function collectAttendanceLocation(): Promise<AttendanceLocation> {
+async function collectAttendanceLocation(lang: TechLang): Promise<AttendanceLocation> {
   if (!navigator.geolocation) {
-    throw new Error('خدمة الموقع غير مدعومة على هذا الجهاز');
+    throw new Error(t(lang, 'locationUnsupported'));
   }
 
   const samples: GeolocationPosition[] = [];
@@ -201,12 +201,12 @@ export default function TechApp() {
   const handleClockIn = async () => {
     setActionLoading(true);
     try {
-      const location = await collectAttendanceLocation();
+      const location = await collectAttendanceLocation(lang);
       await techApi.clockIn({ ...location, projectId: techProfile?.projectId });
       toast.success(t(lang, 'shiftActive'));
       await fetchData();
     } catch (err: any) {
-      toast.error(err.message || t(lang, 'clockInFail'));
+      toast.error(lang === 'ar' && err.message ? err.message : t(lang, 'clockInFail'));
     } finally {
       setActionLoading(false);
     }
@@ -220,7 +220,7 @@ export default function TechApp() {
       toast.success(t(lang, 'clockOutSuccess'));
       await fetchData();
     } catch (err: any) {
-      toast.error(err.message || t(lang, 'clockOutFail'));
+      toast.error(lang === 'ar' && err.message ? err.message : t(lang, 'clockOutFail'));
     } finally {
       setActionLoading(false);
     }
@@ -238,7 +238,7 @@ export default function TechApp() {
       }
       await fetchData();
     } catch (err: any) {
-      toast.error(err.message || t(lang, 'breakFail'));
+      toast.error(lang === 'ar' && err.message ? err.message : t(lang, 'breakFail'));
     } finally {
       setActionLoading(false);
     }
@@ -260,7 +260,7 @@ export default function TechApp() {
         setProfile({ ...techProfile, language: newLang });
       }
     } catch {
-      toast.error('Failed to update language');
+      toast.error(t(lang, 'languageUpdateFailed'));
     }
   };
 
@@ -277,11 +277,9 @@ export default function TechApp() {
     };
     for (const appointment of appointments) {
       add(appointment.notes);
-      for (const type of appointment.types || []) add(TYPE_LABELS_STATIC[type] ?? type);
+      for (const label of Object.values(appointment.typeLabels || {})) add(String(label));
       for (const ticket of appointment.tickets || []) {
         add(ticket.description);
-        add(TYPE_LABELS_STATIC[ticket.type] ?? ticket.type);
-        for (const type of ticket.detectedTypes || []) add(TYPE_LABELS_STATIC[type] ?? type);
       }
     }
     return [...values];
@@ -304,15 +302,29 @@ export default function TechApp() {
           }
           return next;
         });
+        for (const text of missing) {
+          if (!result[text]) requestedTranslationsRef.current.delete(`${lang}\u0000${text}`);
+        }
       })
-      .catch(error => console.warn('Dynamic translation failed:', error));
+      .catch(error => {
+        for (const text of missing) requestedTranslationsRef.current.delete(`${lang}\u0000${text}`);
+        console.warn('Dynamic translation failed:', error);
+      });
   }, [dynamicTexts, dynamicTranslations, lang]);
 
   const translateText = useCallback((value?: string | null) => {
     if (!value) return '';
     if (lang === 'ar') return value;
-    return dynamicTranslations[`${lang}\u0000${value}`] || value;
+    const clean = value.trim();
+    return dynamicTranslations[`${lang}\u0000${clean}`] || value;
   }, [dynamicTranslations, lang]);
+
+  const translateType = useCallback((value?: string | null, typeLabels?: Record<string, string>) => {
+    if (!value) return '';
+    if (hasTechTaxonomy(value)) return translateTechTaxonomy(value, lang);
+    const sourceLabel = typeLabels?.[value] || value;
+    return lang === 'ar' ? sourceLabel : translateText(sourceLabel);
+  }, [lang, translateText]);
 
   const todayCount = filteredAppointments.length;
   const ticketCount = filteredAppointments.reduce(
@@ -346,7 +358,7 @@ export default function TechApp() {
             <div className="tech-eyebrow">{getGreeting()} 👋</div>
             <h1 className="tech-hero-title">{techProfile?.name || t(lang, 'maintenanceTech')}</h1>
             <div className="tech-hero-subtitle">
-              <span>{techProfile?.specialty || t(lang, 'maintenanceTech')}</span>
+              <span>{translateTechTaxonomy(techProfile?.specialty, lang) || t(lang, 'maintenanceTech')}</span>
               {techProfile?.supervisor?.name && (
                 <>
                   <span className="tech-dot">•</span>
@@ -526,6 +538,7 @@ export default function TechApp() {
                 }
                 navigate={navigate}
                 translateText={translateText}
+                translateType={(value) => translateType(value, appt.typeLabels)}
                 onRefresh={fetchData}
               />
             ))}
@@ -587,6 +600,7 @@ export default function TechApp() {
                 }
                 navigate={navigate}
                 translateText={translateText}
+                translateType={(value) => translateType(value, appt.typeLabels)}
                 onRefresh={fetchData}
               />
             ))}
@@ -598,10 +612,10 @@ export default function TechApp() {
 
   const renderProfile = () => {
     const LANGUAGES: { code: TechLang; label: string; native: string }[] = [
-      { code: 'ar', label: 'Arabic', native: 'العربية' },
-      { code: 'en', label: 'English', native: 'English' },
-      { code: 'hi', label: 'Hindi', native: 'हिंदी' },
-      { code: 'ur', label: 'Urdu', native: 'اردو' },
+      { code: 'ar', label: t(lang, 'languageArabic'), native: 'العربية' },
+      { code: 'en', label: t(lang, 'languageEnglish'), native: 'English' },
+      { code: 'hi', label: t(lang, 'languageHindi'), native: 'हिंदी' },
+      { code: 'ur', label: t(lang, 'languageUrdu'), native: 'اردو' },
     ];
 
     const THEMES: { value: Theme; labelKey: string; icon: React.ReactNode }[] = [
@@ -621,7 +635,7 @@ export default function TechApp() {
             <h2>{techProfile?.name || t(lang, 'maintenanceTech')}</h2>
             <div className="tech-profile-badge">
               <Briefcase size={13} />
-              {techProfile?.specialty || t(lang, 'maintenanceTech')}
+              {translateTechTaxonomy(techProfile?.specialty, lang) || t(lang, 'maintenanceTech')}
             </div>
             {techProfile?.supervisor?.name && (
               <div className="tech-profile-badge" style={{ marginTop: '4px', opacity: 0.8 }}>
@@ -705,7 +719,7 @@ export default function TechApp() {
           </div>
           <InfoRow icon={<User size={17} />} label={t(lang, 'name')} value={techProfile?.name} />
           <InfoRow icon={<Phone size={17} />} label={t(lang, 'phone')} value={techProfile?.phoneNumber || techProfile?.username} />
-          <InfoRow icon={<Briefcase size={17} />} label={t(lang, 'specialty')} value={techProfile?.specialty || t(lang, 'maintenanceTech')} />
+          <InfoRow icon={<Briefcase size={17} />} label={t(lang, 'specialty')} value={translateTechTaxonomy(techProfile?.specialty, lang) || t(lang, 'maintenanceTech')} />
           {techProfile?.employeeId && (
             <InfoRow icon={<Shield size={17} />} label={t(lang, 'employeeId')} value={techProfile.employeeId} />
           )}
@@ -729,12 +743,12 @@ export default function TechApp() {
           <div className="tech-brand-mark">R</div>
           <div>
             <strong>RETAL</strong>
-            <span>Technician</span>
+            <span>{t(lang, 'maintenanceTech')}</span>
           </div>
         </div>
 
         <div className="tech-header-actions">
-          <TechPushButton token={token} />
+          <TechPushButton token={token} lang={lang} />
           <button
             onClick={() => { setLoading(true); fetchData(); }}
             className="tech-icon-btn"
@@ -806,6 +820,7 @@ function AppointmentCard({
   onToggle,
   navigate,
   translateText,
+  translateType,
   onRefresh,
 }: {
   appt: any;
@@ -814,6 +829,7 @@ function AppointmentCard({
   onToggle: () => void;
   navigate: ReturnType<typeof useNavigate>;
   translateText: (value?: string | null) => string;
+  translateType: (value?: string | null) => string;
   onRefresh?: () => void;
 }) {
   const tickets = appt.tickets || [];
@@ -899,7 +915,7 @@ function AppointmentCard({
     } catch (err: any) {
       toast.error(err?.code === 'ACTIVE_APPOINTMENT_EXISTS'
         ? t(lang, 'finishActiveAppointmentFirst')
-        : (err?.message || t(lang, 'claimTicket')));
+        : (lang === 'ar' && err?.message ? err.message : t(lang, 'claimTicket')));
     } finally {
       setClaiming(false);
     }
@@ -907,7 +923,7 @@ function AppointmentCard({
 
   const handleFinishAppointment = async () => {
     if (finishing) return;
-    if (!window.confirm('إنهاء الموعد وإغلاق كل التذاكر النشطة؟')) return;
+    if (!window.confirm(t(lang, 'finishAppointmentConfirm'))) return;
     setFinishing(true);
     try {
       let lat: number | undefined, lng: number | undefined;
@@ -920,10 +936,10 @@ function AppointmentCard({
         } catch {}
       }
       await techApi.finishAppointment(appt.id, { lat, lng });
-      toast.success('تم إنهاء الموعد');
+      toast.success(t(lang, 'finishAppointmentSuccess'));
       onRefresh?.();
     } catch (err: any) {
-      toast.error(err?.message || 'فشل إنهاء الموعد');
+      toast.error(lang === 'ar' && err?.message ? err.message : t(lang, 'finishAppointmentError'));
     } finally {
       setFinishing(false);
     }
@@ -931,15 +947,15 @@ function AppointmentCard({
 
   const handlePauseAppointment = async () => {
     if (pausing) return;
-    const reason = window.prompt('سبب التوقف المؤقت (اختياري):', '');
+    const reason = window.prompt(t(lang, 'pausePrompt'), '');
     if (reason === null) return; // cancelled
     setPausing(true);
     try {
       await techApi.pauseAppointment(appt.id, reason.trim() || undefined);
-      toast.success('تم تعليق الموعد — تقدر تستلم موعد آخر');
+      toast.success(t(lang, 'pauseSuccess'));
       onRefresh?.();
     } catch (err: any) {
-      toast.error(err?.message || 'فشل تعليق الموعد');
+      toast.error(lang === 'ar' && err?.message ? err.message : t(lang, 'pauseError'));
     } finally {
       setPausing(false);
     }
@@ -950,12 +966,12 @@ function AppointmentCard({
     setResuming(true);
     try {
       await techApi.resumeAppointment(appt.id);
-      toast.success('تم استئناف الموعد');
+      toast.success(t(lang, 'resumeSuccess'));
       onRefresh?.();
     } catch (err: any) {
       toast.error(err?.code === 'ACTIVE_APPOINTMENT_EXISTS'
-        ? 'أنه أو علّق الموعد الآخر أولاً'
-        : (err?.message || 'فشل استئناف الموعد'));
+        ? t(lang, 'resumeConflict')
+        : (lang === 'ar' && err?.message ? err.message : t(lang, 'resumeError')));
     } finally {
       setResuming(false);
     }
@@ -969,7 +985,13 @@ function AppointmentCard({
       case 'completed': return t(lang, 'status_COMPLETED');
       case 'closed': return t(lang, 'status_CLOSED');
       case 'paused': return t(lang, 'status_PAUSED');
-      default: return status || t(lang, 'status_UNKNOWN');
+      case 'waiting': return t(lang, 'status_WAITING');
+      case 'out_of_scope': return t(lang, 'status_OUT_OF_SCOPE');
+      case 'absent': return t(lang, 'status_ABSENT');
+      case 'contractor': return t(lang, 'status_CONTRACTOR');
+      case 'note': return t(lang, 'status_NOTE');
+      case 'cancelled': return t(lang, 'status_CANCELLED');
+      default: return t(lang, 'status_UNKNOWN');
     }
   };
 
@@ -995,7 +1017,7 @@ function AppointmentCard({
       {appt.types?.length > 0 && (
         <div className="tech-tags">
           {appt.types.map((type: string) => (
-            <span key={type}>{translateText(TYPE_LABELS_STATIC[type] ?? type)}</span>
+            <span key={type}>{translateType(type)}</span>
           ))}
         </div>
       )}
@@ -1047,6 +1069,7 @@ function AppointmentCard({
       {showPostpone && (
         <PostponeDialog
           appointmentId={appt.id}
+          lang={lang}
           currentDate={appt.date}
           currentTime={appt.time}
           onClose={() => setShowPostpone(false)}
@@ -1092,7 +1115,7 @@ function ApptCardActions({
           padding: '4px 9px', borderRadius: 999, fontSize: 11, fontWeight: 800,
           background: 'rgba(34,197,94,0.12)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.25)',
         }}>
-          <CheckCircle2 size={12} /> مكتمل
+          <CheckCircle2 size={12} /> {t(lang, 'completed')}
         </span>
       );
     }
@@ -1103,7 +1126,7 @@ function ApptCardActions({
           padding: '4px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700,
           background: 'rgba(148,163,184,0.15)', color: '#94a3b8',
         }}>
-          <User size={12} /> فني آخر يعمل عليه
+          <User size={12} /> {t(lang, 'otherTechnicianWorking')}
         </span>
       );
     }
@@ -1119,7 +1142,7 @@ function ApptCardActions({
         }}>
           {isPausedByMe ? <Pause size={12} /> : <Timer size={12} />}
           {elapsedLabel}
-          {isPausedByMe && <span style={{ fontSize: 10 }}>متوقف</span>}
+          {isPausedByMe && <span style={{ fontSize: 10 }}>{t(lang, 'pausedShort')}</span>}
         </span>
       );
     }
@@ -1138,7 +1161,7 @@ function ApptCardActions({
           style={{ flex: 1, height: 40, fontSize: 13, fontWeight: 800 }}
         >
           {resuming ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-          استئناف الموعد
+          {t(lang, 'resumeAppointment')}
         </button>
       );
     }
@@ -1153,7 +1176,7 @@ function ApptCardActions({
           }}
         >
           {finishing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-          إنهاء الموعد
+          {t(lang, 'finishAppointment')}
         </button>
       );
     }
@@ -1178,7 +1201,7 @@ function ApptCardActions({
         ) : (
           <CheckCircle2 size={16} />
         )}
-        {claiming ? 'جارٍ الاستلام...' : claimBlocked ? 'أنهِ الموعد الآخر أولاً' : 'استلام الموعد'}
+        {claiming ? t(lang, 'claimingAppointment') : claimBlocked ? t(lang, 'claimBlocked') : t(lang, 'claimAppointment')}
       </button>
     );
   })();
@@ -1201,7 +1224,7 @@ function ApptCardActions({
               <a
                 href={`https://wa.me/${appt.clientPhone.replace(/\D/g, '')}`}
                 target="_blank" rel="noopener noreferrer"
-                aria-label="واتساب"
+                aria-label={t(lang, 'whatsapp')}
                 style={{
                   width: 32, height: 32, borderRadius: 10,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1213,7 +1236,7 @@ function ApptCardActions({
               </a>
               <a
                 href={`tel:${appt.clientPhone}`}
-                aria-label="اتصال"
+                aria-label={t(lang, 'call')}
                 style={{
                   width: 32, height: 32, borderRadius: 10,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1235,7 +1258,7 @@ function ApptCardActions({
             <div ref={menuRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setMenuOpen(m => !m)}
-                aria-label="خيارات"
+                aria-label={t(lang, 'options')}
                 style={{
                   width: 40, height: 40, borderRadius: 10,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1264,7 +1287,7 @@ function ApptCardActions({
                         textAlign: 'start',
                       }}
                     >
-                      <Pause size={14} /> توقف مؤقت
+                      <Pause size={14} /> {t(lang, 'pauseAppointment')}
                     </button>
                   )}
                   <button
@@ -1277,7 +1300,7 @@ function ApptCardActions({
                       textAlign: 'start',
                     }}
                   >
-                    <Calendar size={14} /> تأجيل الموعد
+                    <Calendar size={14} /> {t(lang, 'postponeAppointment')}
                   </button>
                 </div>
               )}
@@ -1304,9 +1327,10 @@ function ApptCardActions({
 }
 
 function PostponeDialog({
-  appointmentId, currentDate, currentTime, onClose, onDone,
+  appointmentId, lang, currentDate, currentTime, onClose, onDone,
 }: {
   appointmentId: string;
+  lang: TechLang;
   currentDate?: string;
   currentTime?: string | null;
   onClose: () => void;
@@ -1323,16 +1347,16 @@ function PostponeDialog({
 
   const submit = async () => {
     if (submitting) return;
-    if (!newDate) { toast.error('اختر تاريخ جديد'); return; }
+    if (!newDate) { toast.error(t(lang, 'chooseNewDate')); return; }
     setSubmitting(true);
     try {
       await techApi.postponeAppointment(appointmentId, {
         newDate, newTime: newTime || null, reason: reason.trim() || undefined,
       });
-      toast.success('تم تأجيل الموعد');
+      toast.success(t(lang, 'postponeSuccess'));
       onDone();
     } catch (err: any) {
-      toast.error(err?.message || 'فشل التأجيل');
+      toast.error(lang === 'ar' && err?.message ? err.message : t(lang, 'postponeError'));
     } finally {
       setSubmitting(false);
     }
@@ -1353,7 +1377,7 @@ function PostponeDialog({
           borderRadius: 20, padding: 20, width: '100%', maxWidth: 400,
           border: '1px solid var(--tech-border, #e2e8f0)',
         }}
-        dir="rtl"
+        dir={lang === 'ar' || lang === 'ur' ? 'rtl' : 'ltr'}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <div style={{
@@ -1364,14 +1388,14 @@ function PostponeDialog({
             <Calendar size={18} />
           </div>
           <div>
-            <div style={{ fontWeight: 900, fontSize: 15 }}>تأجيل الموعد</div>
-            <div style={{ fontSize: 11, opacity: 0.7 }}>حالياً: {currentDate} {currentTime || ''}</div>
+            <div style={{ fontWeight: 900, fontSize: 15 }}>{t(lang, 'postponeAppointment')}</div>
+            <div style={{ fontSize: 11, opacity: 0.7 }}>{t(lang, 'current')}: {currentDate} {currentTime || ''}</div>
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>التاريخ الجديد</label>
+            <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>{t(lang, 'newDate')}</label>
             <input
               type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
               min={new Date().toISOString().slice(0, 10)}
@@ -1379,17 +1403,17 @@ function PostponeDialog({
             />
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>الوقت (اختياري)</label>
+            <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>{t(lang, 'optionalTime')}</label>
             <input
               type="time" value={newTime} onChange={e => setNewTime(e.target.value)}
               style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '1px solid var(--tech-border, #cbd5e1)', background: 'transparent', color: 'inherit', fontSize: 13 }}
             />
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>سبب التأجيل</label>
+            <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>{t(lang, 'postponeReason')}</label>
             <textarea
               value={reason} onChange={e => setReason(e.target.value)} rows={2}
-              placeholder="اختياري..."
+              placeholder={t(lang, 'optional')}
               style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '1px solid var(--tech-border, #cbd5e1)', background: 'transparent', color: 'inherit', fontSize: 13, resize: 'none' }}
             />
           </div>
@@ -1400,14 +1424,14 @@ function PostponeDialog({
             onClick={onClose}
             className="tech-btn"
             style={{ flex: 1, background: 'rgba(100,116,139,0.15)', color: 'inherit' }}
-          >إلغاء</button>
+          >{t(lang, 'cancel')}</button>
           <button
             onClick={submit} disabled={submitting}
             className="tech-btn"
             style={{ flex: 1, background: '#8b5cf6', color: '#fff' }}
           >
             {submitting ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
-            تأكيد
+            {t(lang, 'confirm')}
           </button>
         </div>
       </div>

@@ -482,16 +482,27 @@ export const techApi = {
     const token = localStorage.getItem('tech_token') || '';
     const uniqueTexts = [...new Set(texts.map(text => text.trim()).filter(Boolean))];
     if (uniqueTexts.length === 0) return {} as Record<string, string>;
-    const res = await fetch('/api/translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ texts: uniqueTexts, targetLang, context: 'maintenance technician app' })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || `HTTP ${res.status}`);
+    const result: Record<string, string> = {};
+    let lastError: Error | null = null;
+
+    // Smaller batches are more reliable with free/router AI models and let the
+    // page keep translations already returned if a later batch fails.
+    for (let index = 0; index < uniqueTexts.length; index += 20) {
+      const batch = uniqueTexts.slice(index, index + 20);
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ texts: batch, targetLang, context: 'maintenance technician app' })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        lastError = new Error(err.error || `HTTP ${res.status}`);
+        continue;
+      }
+      Object.assign(result, await res.json());
     }
-    return res.json() as Promise<Record<string, string>>;
+    if (Object.keys(result).length === 0 && lastError) throw lastError;
+    return result;
   },
   getAppointments: async (params?: { date?: string; from?: string; to?: string }) => {
     const q = new URLSearchParams();

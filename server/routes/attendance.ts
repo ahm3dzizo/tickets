@@ -1217,6 +1217,24 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
       orderBy: [{ date: 'asc' }, { time: 'asc' }]
     });
 
+    // Resolve database-backed/custom ticket type keys to their Arabic source
+    // labels. The technician UI translates these labels to the selected
+    // language and no longer exposes internal keys such as type_1782....
+    const typeKeys = [...new Set(appointments.flatMap((appointment: any) => [
+      ...(appointment.types || []),
+      ...(appointment.tickets || []).flatMap((ticket: any) => [
+        ticket.type,
+        ...(ticket.detectedTypes || []),
+      ]),
+    ]).filter((value: unknown): value is string => typeof value === 'string' && !!value.trim()))];
+    const typeRows = typeKeys.length > 0
+      ? await prisma.ticketType.findMany({
+          where: { key: { in: typeKeys } },
+          select: { key: true, nameAr: true },
+        })
+      : [];
+    const typeLabels = Object.fromEntries(typeRows.map(type => [type.key, type.nameAr]));
+
     const enriched = appointments.map((appointment: any) => {
       const ws = appointment.workSession;
       const isClaimedByMe =
@@ -1258,6 +1276,7 @@ router.get('/tech/appointments', requireTechAuth, async (req: TechAuthRequest, r
         claimBlocked: !!activeAppointmentId && activeAppointmentId !== appointment.id,
         completedTickets,
         totalTickets: appointment.tickets?.length || 0,
+        typeLabels,
         appointmentPriority,
       };
     });
@@ -1302,12 +1321,24 @@ router.get('/tech/tickets/:id', requireTechAuth, async (req: TechAuthRequest, re
       return;
     }
 
+    const ticketTypeKeys = [...new Set([
+      ticket.type,
+      ...(ticket.detectedTypes || []),
+    ].filter((value: unknown): value is string => typeof value === 'string' && !!value.trim()))];
+    const ticketTypeRows = ticketTypeKeys.length > 0
+      ? await prisma.ticketType.findMany({
+          where: { key: { in: ticketTypeKeys } },
+          select: { key: true, nameAr: true },
+        })
+      : [];
+
     res.json({
       ...ticket,
       unitNumber: ticket.unit?.unitNumber,
       projectName: ticket.project?.name,
       clientName: ticket.client?.name,
       clientPhone: ticket.client?.phone,
+      typeLabels: Object.fromEntries(ticketTypeRows.map(type => [type.key, type.nameAr])),
       appointmentNotes: ticket.appointment?.notes,
       appointmentSession: ticket.appointment?.workSession || null
     });

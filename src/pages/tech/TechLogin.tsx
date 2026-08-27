@@ -28,32 +28,36 @@ export default function TechLogin() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone || !pin) {
-      toast.error(lang === 'ar' ? 'أدخل البيانات' : 'Enter credentials');
+      toast.error(t(lang, 'enterCredentials'));
       return;
     }
     
     setLoading(true);
     try {
+      const selectedLang = lang;
       const data = await login(phone, pin);
-
-      // Use the language selected on the login screen.
-      // It will be persisted to the technician profile after setup,
-      // and immediately used by the technician app.
-      const selectedLang =
-        (localStorage.getItem('tech_language') as TechLang) ||
-        (data.technician?.language as TechLang) ||
-        'ar';
 
       localStorage.setItem('tech_language', selectedLang);
 
       // Profile completion check
       if (data.technician?.profileCompleted === true) {
+        const selectedProfile = { ...data.technician, language: selectedLang };
+        localStorage.setItem('tech_profile', JSON.stringify(selectedProfile));
+        const languageResponse = await fetch('/api/tech/language', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${data.token}`,
+          },
+          body: JSON.stringify({ language: selectedLang }),
+        });
+        if (!languageResponse.ok) toast.warning(t(selectedLang, 'languageUpdateFailed'));
         navigate('/tech');
       } else {
         navigate('/tech/setup');
       }
     } catch (err: any) {
-      toast.error(err.message || (lang === 'ar' ? 'فشل تسجيل الدخول' : 'Login failed'));
+      toast.error(lang === 'ar' && err.message ? err.message : t(lang, 'loginFailed'));
     } finally {
       setLoading(false);
     }
