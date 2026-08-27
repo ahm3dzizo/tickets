@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { 
-  BrowserRouter as Router, 
-  Routes, 
-  Route, 
-  Navigate 
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate
 } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import TicketTypesAdminPage from './pages/TicketTypesAdminPage';
@@ -13,6 +13,7 @@ import TicketsList from '@/pages/TicketsList';
 import TicketDetail from '@/pages/TicketDetail';
 import Team from '@/pages/Team';
 import Settings from '@/pages/Settings';
+import PushDiagnostics from '@/pages/PushDiagnostics';
 import Projects from '@/pages/Projects';
 import ProjectDetail from '@/pages/ProjectDetail';
 import Clients from '@/pages/Clients';
@@ -26,7 +27,6 @@ import ClientDetail from '@/pages/ClientDetail';
 import ContractorDetail from '@/pages/ContractorDetail';
 import Warehouse from '@/pages/Warehouse';
 import WarehouseRequests from '@/pages/WarehouseRequests';
-
 import UnitDetail from '@/pages/UnitDetail';
 import Warranties from '@/pages/Warranties';
 import TechLogin from '@/pages/tech/TechLogin';
@@ -69,11 +69,7 @@ function AppContent() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
-        <img
-          src="/logo.png"
-          alt="Tickets"
-          className="w-40 h-40 object-contain animate-pulse"
-        />
+        <img src="/logo.png" alt="Tickets" className="w-40 h-40 object-contain animate-pulse" />
       </div>
     );
   }
@@ -97,102 +93,41 @@ function AppContent() {
     }
   };
 
+  const protectedElement = (element: React.ReactNode) =>
+    user && !requiresProfileCompletion ? element : <Navigate to="/login" />;
+
   return (
     <Router>
       <div className="min-h-screen bg-background text-foreground selection:bg-primary/30">
         <Routes>
           <Route path="/login" element={user && !requiresProfileCompletion ? <Navigate to="/" /> : <Login />} />
-          <Route 
-            path="/" 
-            element={user && !requiresProfileCompletion ? <Dashboard /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/tickets" 
-            element={user && !requiresProfileCompletion ? <TicketsList /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/projects" 
-            element={user && !requiresProfileCompletion ? <Projects /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/projects/:id" 
-            element={user && !requiresProfileCompletion ? <ProjectDetail /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/clients" 
-            element={user && !requiresProfileCompletion ? <Clients /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/technicians" 
-            element={user && !requiresProfileCompletion ? <Technicians /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/tickets/:id" 
-            element={user && !requiresProfileCompletion ? <TicketDetail /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/team" 
-            element={user && !requiresProfileCompletion ? <Team /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/team/:id" 
-            element={user && !requiresProfileCompletion ? <TeamMemberDetail /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/settings" 
-            element={user && !requiresProfileCompletion ? <Settings /> : <Navigate to="/login" />} 
-          />
-          <Route
-            path="/ticket-types"
-            element={user && !requiresProfileCompletion ? <TicketTypesAdminPage /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/reports"
-            element={user && !requiresProfileCompletion ? <Reports /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/reports/attendance"
-            element={user && !requiresProfileCompletion ? <AttendanceReport /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/appointments"
-            element={user && !requiresProfileCompletion ? <Appointments /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/contractors"
-            element={user && !requiresProfileCompletion ? <Contractors /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/contractors/:id"
-            element={user && !requiresProfileCompletion ? <ContractorDetail /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/clients/:id"
-            element={user && !requiresProfileCompletion ? <ClientDetail /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/units/:id"
-            element={user && !requiresProfileCompletion ? <UnitDetail /> : <Navigate to="/login" />}
-          />
+          <Route path="/" element={protectedElement(<Dashboard />)} />
+          <Route path="/tickets" element={protectedElement(<TicketsList />)} />
+          <Route path="/projects" element={protectedElement(<Projects />)} />
+          <Route path="/projects/:id" element={protectedElement(<ProjectDetail />)} />
+          <Route path="/clients" element={protectedElement(<Clients />)} />
+          <Route path="/technicians" element={protectedElement(<Technicians />)} />
+          <Route path="/tickets/:id" element={protectedElement(<TicketDetail />)} />
+          <Route path="/team" element={protectedElement(<Team />)} />
+          <Route path="/team/:id" element={protectedElement(<TeamMemberDetail />)} />
+          <Route path="/settings" element={protectedElement(<Settings />)} />
+          <Route path="/push-test" element={protectedElement(<PushDiagnostics />)} />
+          <Route path="/ticket-types" element={protectedElement(<TicketTypesAdminPage />)} />
+          <Route path="/reports" element={protectedElement(<Reports />)} />
+          <Route path="/reports/attendance" element={protectedElement(<AttendanceReport />)} />
+          <Route path="/appointments" element={protectedElement(<Appointments />)} />
+          <Route path="/contractors" element={protectedElement(<Contractors />)} />
+          <Route path="/contractors/:id" element={protectedElement(<ContractorDetail />)} />
+          <Route path="/clients/:id" element={protectedElement(<ClientDetail />)} />
+          <Route path="/units/:id" element={protectedElement(<UnitDetail />)} />
+          <Route path="/warranties" element={protectedElement(<Warranties />)} />
+          <Route path="/warehouse" element={protectedElement(<Warehouse />)} />
+          <Route path="/warehouse/requests" element={protectedElement(<WarehouseRequests />)} />
 
-          <Route
-            path="/warranties"
-            element={user && !requiresProfileCompletion ? <Warranties /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/warehouse"
-            element={user && !requiresProfileCompletion ? <Warehouse /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/warehouse/requests"
-            element={user && !requiresProfileCompletion ? <WarehouseRequests /> : <Navigate to="/login" />}
-          />
-          {/* ⚡ Technician PWA Routes — independent auth */}
           <Route path="/tech/login" element={<TechLogin />} />
           <Route path="/tech/setup" element={<TechSetup />} />
           <Route path="/tech/ticket/:id" element={<TechTicketDetail />} />
           <Route path="/tech" element={<TechAppWithRecovery />} />
-          {/* ⛔️ تمت إزالة Route /register */}
         </Routes>
         <Toaster position="top-right" />
         <PWAInstallPrompt />
