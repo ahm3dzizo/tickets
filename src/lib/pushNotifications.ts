@@ -74,6 +74,8 @@ export type PushRepairResult = {
   testAccepted: boolean;
   delivered: number;
   subscriptions: number;
+  statusCode?: number;
+  endpointHost?: string;
   error?: string;
 };
 
@@ -107,19 +109,27 @@ export async function repairAndTestPush(authHeader: string, isTech = false): Pro
 
     const sub = await subscribeFresh(reg, publicKey);
     result.subscribed = !!sub;
+    try { result.endpointHost = new URL(sub.endpoint).hostname; } catch {}
+
     await saveSubscription(sub, authHeader, isTech);
     result.saved = true;
 
     const testRes = await fetch('/api/push/' + (isTech ? 'test-self-tech' : 'test-self'), {
       method: 'POST',
-      headers: { Authorization: authHeader },
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
     });
     const test = await testRes.json().catch(() => ({}));
     if (!testRes.ok) throw new Error(test?.error || `فشل اختبار الإشعار (${testRes.status})`);
+
     result.testAccepted = test.success === true;
     result.delivered = Number(test.delivered || 0);
     result.subscriptions = Number(test.subscriptions || 0);
-    if (!result.testAccepted) throw new Error('السيرفر لم يتمكن من تسليم الاختبار لمزود Push');
+    result.statusCode = Number(test?.result?.statusCode || 0) || undefined;
+
+    if (!result.testAccepted) {
+      throw new Error(test?.result?.error || 'السيرفر لم يتمكن من تسليم الاختبار لهذا الجهاز');
+    }
     return result;
   } catch (err: any) {
     result.error = err?.message || String(err);
