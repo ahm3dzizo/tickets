@@ -21,6 +21,10 @@ const LANGUAGE_NAMES: Record<TargetLanguage, string> = {
   ur: 'Urdu',
 };
 
+const TRANSLATION_BATCH_SIZE = 20;
+const TRANSLATION_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 500;
+
 async function allowEitherAuth(req: any, res: any, next: any) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
@@ -122,6 +126,10 @@ function readTranslations(payload: unknown, expected: number): string[] {
   return raw.map(value => String(value).trim());
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function translateWithProvider(
   provider: TranslationProvider,
   texts: string[],
@@ -174,7 +182,26 @@ async function translateWithProvider(
   return readTranslations(extractJson(content), texts.length);
 }
 
-async function translateUncached(
+async function translateWithProviderRetry(
+  provider: TranslationProvider,
+  texts: string[],
+  targetLang: TargetLanguage,
+  context?: string,
+): Promise<string[]> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= TRANSLATION_RETRIES; attempt += 1) {
+    try {
+      return await translateWithProvider(provider, texts, targetLang, context);
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`[Translation] ${provider.label}/${provider.model} attempt ${attempt}/${TRANSLATION_RETRIES} failed:`, error?.message || error);
+      if (attempt < TRANSLATION_RETRIES) await sleep(RETRY_BASE_DELAY_MS * attempt);
+    }
+  }
+  throw lastError;
+}
+
+async function translateBatch(
   texts: string[],
   targetLang: TargetLanguage,
   context?: string,
@@ -185,15 +212,45 @@ async function translateUncached(
   const errors: string[] = [];
   for (const provider of providers) {
     try {
-      const translated = await translateWithProvider(provider, texts, targetLang, context);
+      const translated = await translateWithProviderRetry(provider, texts, targetLang, context);
       console.log(`[Translation] ${provider.label}/${provider.model}: ${texts.length} → ${targetLang}`);
       return translated;
     } catch (error: any) {
       errors.push(`${provider.label}: ${error?.message || error}`);
-      console.warn(`[Translation] ${provider.label} failed:`, error?.message || error);
     }
   }
   throw new Error(`All translation providers failed (${errors.join(' | ')})`);
+}
+
+async function translateResilient(
+  texts: string[],
+  targetLang: TargetLanguage,
+  context?: string,
+): Promise<string[]> {
+  try {
+    return await translateBatch(texts, targetLang, context);
+  } catch (error: any) {
+    if (texts.length === 1) throw error;
+
+    const middle = Math.ceil(texts.length / 2);
+    console.warn(`[Translation] batch of ${texts.length} failed; splitting into ${middle} + ${texts.length - middle}`);
+    const left = await translateResilient(texts.slice(0, middle), targetLang, context);
+    const right = await translateResilient(texts.slice(middle), targetLang, context);
+    return [...left, ...right];
+  }
+}
+
+async function translateUncached(
+  texts: string[],
+  targetLang: TargetLanguage,
+  context?: string,
+): Promise<string[]> {
+  const translated: string[] = [];
+  for (let index = 0; index < texts.length; index += TRANSLATION_BATCH_SIZE) {
+    const batch = texts.slice(index, index + TRANSLATION_BATCH_SIZE);
+    translated.push(...await translateResilient(batch, targetLang, context));
+  }
+  return translated;
 }
 
 router.post('/translate', allowEitherAuth, async (req: any, res: any) => {
