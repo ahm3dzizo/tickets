@@ -43,6 +43,7 @@ import { startGeminiWorker } from "./classifier/gemini-worker.js";
 import { startReclassifyWorker, stopReclassifyWorker } from "./classifier/reclassify-worker.js";
 import { startTrainWorker, stopTrainWorker } from "./classifier/train-worker.js";
 import { seedSubTypes } from "./classifier/seed-subtypes.js";
+import { startTranslationWorker, stopTranslationWorker } from "./translation-worker.js";
 
 let globalIo: any = null;
 
@@ -201,6 +202,7 @@ app.use(express.static(distPath));
   startGeminiWorker();        // classifies open unclassified tickets via Gemini (4/min)
   startReclassifyWorker();    // reclassifies tickets when keywords are learned (every 30s)
   startTrainWorker();         // retrains ML model daily at 03:00
+  startTranslationWorker();   // pre-translates classified ticket content into cache
 
   // Ensure critical sub-types exist (e.g. روائح كريهة under drainage)
   seedSubTypes().catch((e) => console.error('⚠️  Sub-type seed failed:', e.message));
@@ -230,6 +232,7 @@ async function shutdown() {
   stopGeminiWorker();
   stopReclassifyWorker();
   stopTrainWorker();
+  stopTranslationWorker();
   await closeAllSessions();
   process.exit(0);
 }
