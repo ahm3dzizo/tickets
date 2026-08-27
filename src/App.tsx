@@ -31,7 +31,7 @@ import UnitDetail from '@/pages/UnitDetail';
 import Warranties from '@/pages/Warranties';
 import TechLogin from '@/pages/tech/TechLogin';
 import TechSetup from '@/pages/tech/TechSetup';
-import TechApp from '@/pages/tech/TechApp';
+import TechAppWithRecovery from '@/pages/tech/TechAppWithRecovery';
 import TechTicketDetail from '@/pages/tech/TechTicketDetail';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
@@ -191,7 +191,7 @@ function AppContent() {
           <Route path="/tech/login" element={<TechLogin />} />
           <Route path="/tech/setup" element={<TechSetup />} />
           <Route path="/tech/ticket/:id" element={<TechTicketDetail />} />
-          <Route path="/tech" element={<TechApp />} />
+          <Route path="/tech" element={<TechAppWithRecovery />} />
           {/* ⛔️ تمت إزالة Route /register */}
         </Routes>
         <Toaster position="top-right" />
