@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { requireAuth, AuthRequest } from '../auth.js';
 import { requireTechAuth, TechAuthRequest } from './tech-auth.js';
 import prisma from '../db.js';
-import { getVapidPublicKey, sendPushToUserDetailed } from '../pushService.js';
+import { getVapidPublicKey, sendPushToSubscriptionDetailed } from '../pushService.js';
 
 const router = Router();
 
@@ -50,37 +50,49 @@ router.delete('/unsubscribe', async (req, res) => {
 });
 
 router.post('/test-self', requireAuth, async (req: AuthRequest, res) => {
-  const uid = req.uid!;
-  const results = await sendPushToUserDetailed(uid, {
+  const endpoint = String(req.body?.endpoint || '');
+  if (!endpoint) {
+    res.status(400).json({ error: 'Missing current browser endpoint' });
+    return;
+  }
+
+  const result = await sendPushToSubscriptionDetailed(req.uid!, endpoint, {
     title: '🔔 اختبار إشعارات Knot',
-    body: 'لو ظهر الإشعار ده، يبقى Web Push شغال على الجهاز الحالي.',
-    url: '/settings#notifications',
+    body: 'هذا الاختبار موجه لهذا الجهاز والمتصفح تحديدًا.',
+    url: '/push-test',
     tag: `push-self-test-${Date.now()}`,
     requireInteraction: true,
   });
-  res.json({
-    success: results.some(r => r.ok),
-    subscriptions: results.length,
-    delivered: results.filter(r => r.ok).length,
-    results,
-  });
+
+  if (!result) {
+    res.status(404).json({ error: 'Current browser subscription is not saved for this user' });
+    return;
+  }
+
+  res.json({ success: result.ok, delivered: result.ok ? 1 : 0, subscriptions: 1, result });
 });
 
 router.post('/test-self-tech', requireTechAuth as any, async (req: TechAuthRequest, res) => {
-  const uid = req.technicianId!;
-  const results = await sendPushToUserDetailed(uid, {
+  const endpoint = String(req.body?.endpoint || '');
+  if (!endpoint) {
+    res.status(400).json({ error: 'Missing current browser endpoint' });
+    return;
+  }
+
+  const result = await sendPushToSubscriptionDetailed(req.technicianId!, endpoint, {
     title: '🔔 اختبار إشعارات الفني',
-    body: 'لو ظهر الإشعار ده، يبقى Web Push شغال على جهازك.',
+    body: 'هذا الاختبار موجه لهذا الجهاز والمتصفح تحديدًا.',
     url: '/tech',
     tag: `push-tech-test-${Date.now()}`,
     requireInteraction: true,
   });
-  res.json({
-    success: results.some(r => r.ok),
-    subscriptions: results.length,
-    delivered: results.filter(r => r.ok).length,
-    results,
-  });
+
+  if (!result) {
+    res.status(404).json({ error: 'Current browser subscription is not saved for this technician' });
+    return;
+  }
+
+  res.json({ success: result.ok, delivered: result.ok ? 1 : 0, subscriptions: 1, result });
 });
 
 export default router;
