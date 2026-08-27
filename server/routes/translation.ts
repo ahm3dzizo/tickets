@@ -6,7 +6,7 @@ import prisma from '../db.js';
 
 const router = Router();
 
-type TargetLanguage = 'en' | 'hi' | 'ur';
+export type TargetLanguage = 'en' | 'hi' | 'ur';
 
 type TranslationProvider = {
   label: string;
@@ -253,6 +253,56 @@ async function translateUncached(
   return translated;
 }
 
+export async function translateAndCache(
+  texts: string[],
+  targetLang: TargetLanguage,
+  context?: string,
+  incrementUsage = false,
+): Promise<Record<string, string>> {
+  const normalizedTexts = [...new Set(
+    texts
+      .filter((value): value is string => typeof value === 'string')
+      .map(value => value.trim())
+      .filter(Boolean)
+  )].slice(0, 80);
+
+  if (normalizedTexts.length === 0) return {};
+  const totalChars = normalizedTexts.reduce((sum, value) => sum + value.length, 0);
+  if (totalChars > 20_000) throw new Error('Translation request is too large');
+
+  const cached = await prisma.translationCache.findMany({
+    where: { targetLang, sourceText: { in: normalizedTexts } },
+  });
+  const result: Record<string, string> = Object.fromEntries(
+    cached.map(item => [item.sourceText, item.translated])
+  );
+  const uncachedTexts = normalizedTexts.filter(text => !result[text]);
+
+  if (incrementUsage && cached.length > 0) {
+    await prisma.$transaction(cached.map(item => prisma.translationCache.update({
+      where: { id: item.id },
+      data: { usageCount: { increment: 1 }, lastUsedAt: new Date() },
+    })));
+  }
+
+  if (uncachedTexts.length > 0) {
+    const translated = await translateUncached(uncachedTexts, targetLang, context);
+    translated.forEach((value, index) => { result[uncachedTexts[index]] = value; });
+    await prisma.$transaction(uncachedTexts.map((sourceText, index) =>
+      prisma.translationCache.upsert({
+        where: { sourceText_targetLang: { sourceText, targetLang } },
+        update: {
+          translated: translated[index],
+          ...(incrementUsage ? { usageCount: { increment: 1 }, lastUsedAt: new Date() } : {}),
+        },
+        create: { sourceText, targetLang, translated: translated[index] },
+      })
+    ));
+  }
+
+  return result;
+}
+
 router.post('/translate', allowEitherAuth, async (req: any, res: any) => {
   try {
     const { texts, targetLang, context } = req.body || {};
@@ -261,45 +311,16 @@ router.post('/translate', allowEitherAuth, async (req: any, res: any) => {
       return;
     }
 
-    const normalizedTexts = [...new Set(
-      texts
-        .filter((value: unknown): value is string => typeof value === 'string')
-        .map(value => value.trim())
-        .filter(Boolean)
-    )].slice(0, 80);
-    const totalChars = normalizedTexts.reduce((sum, value) => sum + value.length, 0);
-    if (normalizedTexts.length === 0 || totalChars > 20_000) {
-      res.status(400).json({ error: 'Translation request is empty or too large' });
+    const normalizedTexts = texts
+      .filter((value: unknown): value is string => typeof value === 'string')
+      .map(value => value.trim())
+      .filter(Boolean);
+    if (normalizedTexts.length === 0) {
+      res.status(400).json({ error: 'Translation request is empty' });
       return;
     }
 
-    const cached = await prisma.translationCache.findMany({
-      where: { targetLang, sourceText: { in: normalizedTexts } },
-    });
-    const result: Record<string, string> = Object.fromEntries(
-      cached.map(item => [item.sourceText, item.translated])
-    );
-    const uncachedTexts = normalizedTexts.filter(text => !result[text]);
-
-    if (cached.length > 0) {
-      await prisma.$transaction(cached.map(item => prisma.translationCache.update({
-        where: { id: item.id },
-        data: { usageCount: { increment: 1 }, lastUsedAt: new Date() },
-      })));
-    }
-
-    if (uncachedTexts.length > 0) {
-      const translated = await translateUncached(uncachedTexts, targetLang, context);
-      translated.forEach((value, index) => { result[uncachedTexts[index]] = value; });
-      await prisma.$transaction(uncachedTexts.map((sourceText, index) =>
-        prisma.translationCache.upsert({
-          where: { sourceText_targetLang: { sourceText, targetLang } },
-          update: { translated: translated[index], usageCount: { increment: 1 }, lastUsedAt: new Date() },
-          create: { sourceText, targetLang, translated: translated[index] },
-        })
-      ));
-    }
-
+    const result = await translateAndCache(normalizedTexts, targetLang as TargetLanguage, context, true);
     res.json(result);
   } catch (err: any) {
     console.error('[Translation] request failed:', err?.message || err);
