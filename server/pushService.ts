@@ -69,6 +69,17 @@ async function _send(endpoint: string, p256dh: string, auth: string, subId: stri
   }
 }
 
+export async function sendPushToSubscriptionDetailed(
+  uid: string,
+  endpoint: string,
+  payload: PushPayload,
+): Promise<PushDeliveryResult | null> {
+  if (!_ready) return null;
+  const sub = await prisma.pushSubscription.findFirst({ where: { uid, endpoint } });
+  if (!sub) return null;
+  return _send(sub.endpoint, sub.p256dh, sub.auth, sub.id, payload);
+}
+
 export async function sendPushToUserDetailed(uid: string, payload: PushPayload): Promise<PushDeliveryResult[]> {
   if (!_ready) return [];
   const subs = await prisma.pushSubscription.findMany({ where: { uid } });
