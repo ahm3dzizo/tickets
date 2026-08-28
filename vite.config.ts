@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'public',
+        filename: 'sw.js',
         registerType: 'autoUpdate',
         includeAssets: ['logo-192.png', 'logo-512.png'],
         manifest: {
@@ -43,22 +46,11 @@ export default defineConfig(({ mode }) => {
             },
           ],
         },
-        workbox: {
-          skipWaiting: true,
-          clientsClaim: true,
+        injectManifest: {
+          globDirectory: 'dist',
           globIgnores: ['**/index.html'],
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'firestore-cache',
-                networkTimeoutSeconds: 10,
-              },
-            },
-          ],
         },
       }),
     ],
