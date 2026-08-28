@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { requireAuth, AuthRequest } from '../auth.js';
 import { requireTechAuth, TechAuthRequest } from './tech-auth.js';
 import prisma from '../db.js';
-import { getVapidPublicKey, sendPushToSubscriptionDetailed } from '../pushService.js';
+import { getVapidPublicKey, sendPushToSubscriptionDetailed, sendEmptyPushToSubscriptionDetailed } from '../pushService.js';
 
 const router = Router();
 
@@ -52,8 +52,6 @@ router.delete('/unsubscribe', async (req, res) => {
   res.json({ success: true });
 });
 
-// Called by the Service Worker itself after an actual push event reaches the browser.
-// No auth header is required because service workers do not have access to the app token.
 router.post('/sw-ack', (req, res) => {
   const { tag, title, receivedAt, endpointHost, href } = req.body || {};
   console.log(
@@ -89,6 +87,27 @@ router.post('/test-self', requireAuth, async (req: AuthRequest, res) => {
   }
 
   console.log(`[push][TEST_RESULT] uid=${req.uid} tag=${tag} ok=${result.ok} status=${result.statusCode || '-'} error=${JSON.stringify(result.error || '')}`);
+  res.json({ success: result.ok, delivered: result.ok ? 1 : 0, subscriptions: 1, result, tag });
+});
+
+router.post('/test-self-empty', requireAuth, async (req: AuthRequest, res) => {
+  const endpoint = String(req.body?.endpoint || '');
+  if (!endpoint) {
+    res.status(400).json({ error: 'Missing current browser endpoint' });
+    return;
+  }
+
+  const tag = `push-empty-test-${Date.now()}`;
+  console.log(`[push][EMPTY_TEST_SEND] uid=${req.uid} tag=${tag} host=${safeHost(endpoint)}`);
+  const result = await sendEmptyPushToSubscriptionDetailed(req.uid!, endpoint);
+
+  if (!result) {
+    console.warn(`[push][EMPTY_TEST_RESULT] uid=${req.uid} tag=${tag} result=subscription-not-found`);
+    res.status(404).json({ error: 'Current browser subscription is not saved for this user' });
+    return;
+  }
+
+  console.log(`[push][EMPTY_TEST_RESULT] uid=${req.uid} tag=${tag} ok=${result.ok} status=${result.statusCode || '-'} error=${JSON.stringify(result.error || '')}`);
   res.json({ success: result.ok, delivered: result.ok ? 1 : 0, subscriptions: 1, result, tag });
 });
 
