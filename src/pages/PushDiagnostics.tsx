@@ -1,21 +1,26 @@
 import { useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
-import { BellRing, CheckCircle2, Loader2, RefreshCw, XCircle, Smartphone, Send } from 'lucide-react';
+import { BellRing, CheckCircle2, Loader2, RefreshCw, XCircle, Smartphone, Send, FlaskConical } from 'lucide-react';
 import { authStorage } from '@/lib/api';
 import {
   repairAndTestPush,
   retestCurrentPush,
+  testEmptyCurrentPush,
   showLocalNotificationTest,
   type PushRepairResult,
   type LocalNotificationResult,
 } from '@/lib/pushNotifications';
 
+type ResultMode = 'normal' | 'retest' | 'empty';
+
 export default function PushDiagnostics() {
   const [running, setRunning] = useState(false);
   const [retesting, setRetesting] = useState(false);
+  const [emptyTesting, setEmptyTesting] = useState(false);
   const [localRunning, setLocalRunning] = useState(false);
   const [result, setResult] = useState<PushRepairResult | null>(null);
+  const [resultMode, setResultMode] = useState<ResultMode>('normal');
   const [localResult, setLocalResult] = useState<LocalNotificationResult | null>(null);
 
   const run = async () => {
@@ -23,11 +28,9 @@ export default function PushDiagnostics() {
     if (!token) return;
     setRunning(true);
     setResult(null);
-    try {
-      setResult(await repairAndTestPush(`Bearer ${token}`, false));
-    } finally {
-      setRunning(false);
-    }
+    setResultMode('normal');
+    try { setResult(await repairAndTestPush(`Bearer ${token}`, false)); }
+    finally { setRunning(false); }
   };
 
   const retest = async () => {
@@ -35,22 +38,29 @@ export default function PushDiagnostics() {
     if (!token) return;
     setRetesting(true);
     setResult(null);
-    try {
-      setResult(await retestCurrentPush(`Bearer ${token}`, false));
-    } finally {
-      setRetesting(false);
-    }
+    setResultMode('retest');
+    try { setResult(await retestCurrentPush(`Bearer ${token}`, false)); }
+    finally { setRetesting(false); }
+  };
+
+  const testEmpty = async () => {
+    const token = authStorage.getToken();
+    if (!token) return;
+    setEmptyTesting(true);
+    setResult(null);
+    setResultMode('empty');
+    try { setResult(await testEmptyCurrentPush(`Bearer ${token}`)); }
+    finally { setEmptyTesting(false); }
   };
 
   const runLocal = async () => {
     setLocalRunning(true);
     setLocalResult(null);
-    try {
-      setLocalResult(await showLocalNotificationTest());
-    } finally {
-      setLocalRunning(false);
-    }
+    try { setLocalResult(await showLocalNotificationTest()); }
+    finally { setLocalRunning(false); }
   };
+
+  const busy = running || retesting || emptyTesting;
 
   const row = (label: string, ok: boolean) => (
     <div className="flex items-center justify-between gap-3 py-3 border-b border-border/50 last:border-0">
@@ -64,59 +74,57 @@ export default function PushDiagnostics() {
       <div className="max-w-xl mx-auto space-y-4 page-in" dir="rtl">
         <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
-              <BellRing className="w-5 h-5" />
-            </div>
+            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center"><BellRing className="w-5 h-5" /></div>
             <div>
               <h1 className="text-xl font-black">فحص وإصلاح الإشعارات</h1>
-              <p className="text-xs text-muted-foreground mt-1">يتأكد من الاشتراك الحالي، ثم يرسل Push حقيقي لهذا الجهاز ويتابع وصوله للـService Worker.</p>
+              <p className="text-xs text-muted-foreground mt-1">اختبارات منفصلة لنفس اشتراك هذا الجهاز لتحديد مكان توقف Web Push بدقة.</p>
             </div>
           </div>
 
-          <Button onClick={run} disabled={running || retesting} className="w-full h-11 mt-4 rounded-2xl font-black gap-2">
+          <Button onClick={run} disabled={busy} className="w-full h-11 mt-4 rounded-2xl font-black gap-2">
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             {running ? 'جارٍ الإصلاح وتتبع وصول Push...' : 'إصلاح واختبار Push الحقيقي'}
           </Button>
 
-          <Button variant="secondary" onClick={retest} disabled={running || retesting} className="w-full h-11 mt-3 rounded-2xl font-black gap-2">
+          <Button variant="secondary" onClick={retest} disabled={busy} className="w-full h-11 mt-3 rounded-2xl font-black gap-2">
             {retesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             {retesting ? 'جارٍ الإرسال على نفس الاشتراك...' : 'إرسال Push مرة ثانية بدون تجديد الاشتراك'}
           </Button>
-          <p className="text-[11px] text-muted-foreground mt-2 leading-5">الزر الثاني لا يعمل unsubscribe أو subscribe؛ يستخدم نفس endpoint الموجود على الجهاز كما هو.</p>
+
+          <Button variant="outline" onClick={testEmpty} disabled={busy} className="w-full h-11 mt-3 rounded-2xl font-black gap-2">
+            {emptyTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
+            {emptyTesting ? 'جارٍ إرسال Push بدون payload...' : 'اختبار Push بدون payload'}
+          </Button>
+          <p className="text-[11px] text-muted-foreground mt-2 leading-5">الاختبار الثالث يرسل Web Push فارغًا لنفس endpoint. لو وصل، يبقى المشكلة في تشفير payload أو مفاتيح p256dh/auth. لو لم يصل أيضًا، يبقى الاشتراك نفسه لا يتلقى من FCM.</p>
         </div>
 
         <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-              <Smartphone className="w-5 h-5" />
-            </div>
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center"><Smartphone className="w-5 h-5" /></div>
             <div>
               <h2 className="text-base font-black">اختبار عرض محلي</h2>
               <p className="text-xs text-muted-foreground mt-1">لا يستخدم FCM ولا السيرفر؛ يطلب من المتصفح عرض إشعار على هذا الجهاز مباشرة.</p>
             </div>
           </div>
-
           <Button variant="outline" onClick={runLocal} disabled={localRunning} className="w-full h-11 mt-4 rounded-2xl font-black gap-2">
             {localRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <BellRing className="w-4 h-4" />}
             {localRunning ? 'جارٍ الاختبار المحلي...' : 'إظهار إشعار محلي الآن'}
           </Button>
-
           {localResult && (
             <div className="mt-4 rounded-2xl bg-muted/50 p-4 text-sm space-y-2">
               {row('إذن الإشعارات مسموح', localResult.permission === 'granted')}
               {row('Service Worker شغال', localResult.serviceWorker)}
               {row('المتصفح قبل أمر عرض الإشعار', localResult.ok)}
-              {localResult.error ? (
-                <div className="text-red-500 font-bold">❌ {localResult.error}</div>
-              ) : (
-                <div className="font-bold text-foreground leading-6">طبقة عرض الإشعارات المحلية سليمة على هذا الجهاز.</div>
-              )}
+              {localResult.error ? <div className="text-red-500 font-bold">❌ {localResult.error}</div> : <div className="font-bold text-foreground leading-6">طبقة عرض الإشعارات المحلية سليمة على هذا الجهاز.</div>}
             </div>
           )}
         </div>
 
         {result && (
           <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
+            <div className="text-xs font-bold text-muted-foreground mb-2">
+              الاختبار الحالي: {resultMode === 'empty' ? 'Push بدون payload' : resultMode === 'retest' ? 'إعادة إرسال على نفس الاشتراك' : 'إصلاح واختبار عادي'}
+            </div>
             {row('المتصفح يدعم Web Push', result.supported)}
             {row('إذن الإشعارات مسموح', result.permission === 'granted')}
             {row('Service Worker شغال', result.serviceWorker)}
@@ -128,14 +136,14 @@ export default function PushDiagnostics() {
             <div className="mt-4 rounded-2xl bg-muted/50 p-4 text-sm space-y-2">
               {result.endpointHost && <div className="text-muted-foreground text-xs">مزود Push: {result.endpointHost}</div>}
               {result.swPushEvent?.receivedAt && <div className="text-muted-foreground text-xs">وقت وصول الحدث: {new Date(result.swPushEvent.receivedAt).toLocaleString('ar-SA')}</div>}
-              {result.swPushEvent?.title && <div className="text-muted-foreground text-xs">عنوان الـpayload: {result.swPushEvent.title}</div>}
-
               {result.error ? (
                 <div className="text-red-500 font-bold">❌ {result.error}</div>
               ) : result.swPushReceived ? (
-                <div className="text-emerald-500 font-bold leading-6">✅ FCM قبل الرسالة والـService Worker استلمها فعلًا.</div>
+                <div className="text-emerald-500 font-bold leading-6">✅ وصل push event للـService Worker.</div>
+              ) : resultMode === 'empty' ? (
+                <div className="text-amber-500 font-bold leading-6">⚠️ حتى الـPush الفارغ رجع FCM 201 ولم يصل للـService Worker. إذًا المشكلة ليست تشفير payload؛ المشكلة في تسليم FCM لهذا الاشتراك/Chrome نفسه.</div>
               ) : (
-                <div className="text-amber-500 font-bold leading-6">⚠️ FCM قبل الرسالة، لكن لم نسجل وصول push event للـService Worker خلال نافذة الانتظار. جرّب زر «إرسال Push مرة ثانية بدون تجديد الاشتراك»؛ لو كرر 201 بدون SW ACK، يبقى المشكلة في تسليم FCM للاشتراك الحالي نفسه.</div>
+                <div className="text-amber-500 font-bold leading-6">⚠️ FCM قبل الرسالة، لكن لم نسجل وصول push event للـService Worker خلال نافذة الانتظار.</div>
               )}
             </div>
           </div>
