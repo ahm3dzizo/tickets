@@ -1,9 +1,31 @@
 // public/sw.js — Service Worker for push notifications
 const ICON  = '/logo-192.png';
 const BADGE = '/logo-192.png';
+const PUSH_DEBUG_CACHE = 'knot-push-debug-v1';
+const PUSH_DEBUG_URL = '/__push-debug__/latest';
 
 self.addEventListener('install',  () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(clients.claim()));
+
+async function savePushDebug(data) {
+  try {
+    const cache = await caches.open(PUSH_DEBUG_CACHE);
+    await cache.put(
+      new Request(PUSH_DEBUG_URL),
+      new Response(JSON.stringify({
+        receivedAt: new Date().toISOString(),
+        title: data?.title || '',
+        body: data?.body || '',
+        tag: data?.tag || '',
+        url: data?.url || '/',
+      }), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      })
+    );
+  } catch (err) {
+    console.warn('[sw] failed to persist push debug event', err);
+  }
+}
 
 // ── Push handler ─────────────────────────────────────────────────────────────
 self.addEventListener('push', event => {
@@ -22,7 +44,10 @@ self.addEventListener('push', event => {
     data:               { url: data.url || '/' },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(Promise.all([
+    savePushDebug(data),
+    self.registration.showNotification(title, options),
+  ]));
 });
 
 // ── Notification click — navigate to url ─────────────────────────────────────
