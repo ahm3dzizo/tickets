@@ -4,10 +4,33 @@ import prisma from './db.js';
 
 const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:admin@knot-sys.com';
 const DB_KEY = 'vapidKeys';
+const DEFAULT_PUSH_ICON = '/icon.png';
+const DEFAULT_PUSH_BADGE = '/logo-192.png';
 
 let _publicKey = '';
 let _privateKey = '';
 let _ready = false;
+
+function cleanNotificationText(value: string): string {
+  return String(value || '')
+    .replace(/\p{Extended_Pictographic}/gu, '')
+    .replace(/[\uFE0E\uFE0F]/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
+    .trim();
+}
+
+function normalizePayload(payload: PushPayload) {
+  return {
+    ...payload,
+    title: cleanNotificationText(payload.title),
+    body: cleanNotificationText(payload.body),
+    icon: payload.icon || DEFAULT_PUSH_ICON,
+    badge: DEFAULT_PUSH_BADGE,
+    dir: 'rtl',
+    lang: 'ar',
+  };
+}
 
 export async function initVapid(): Promise<void> {
   const row = await prisma.systemSetting.findUnique({ where: { key: DB_KEY } });
@@ -52,7 +75,7 @@ async function _send(endpoint: string, p256dh: string, auth: string, subId: stri
   try {
     const result = await webpush.sendNotification(
       { endpoint, keys: { p256dh, auth } },
-      JSON.stringify({ ...payload, icon: payload.icon || '/logo-192.png', badge: '/logo-192.png', dir: 'rtl', lang: 'ar' }),
+      JSON.stringify(normalizePayload(payload)),
       { TTL: 120 },
     );
     return { id: subId, ok: true, statusCode: result.statusCode };
