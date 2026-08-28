@@ -69,6 +69,22 @@ async function _send(endpoint: string, p256dh: string, auth: string, subId: stri
   }
 }
 
+async function _sendEmpty(endpoint: string, p256dh: string, auth: string, subId: string): Promise<PushDeliveryResult> {
+  try {
+    const result = await webpush.sendNotification(
+      { endpoint, keys: { p256dh, auth } },
+      undefined,
+      { TTL: 120 },
+    );
+    return { id: subId, ok: true, statusCode: result.statusCode };
+  } catch (err: any) {
+    const statusCode = err?.statusCode;
+    const body = String(err?.body || err?.message || 'Empty push failed');
+    console.warn(`[push] empty delivery failed sub=${subId} status=${statusCode || 'unknown'}: ${body}`);
+    return { id: subId, ok: false, statusCode, error: body };
+  }
+}
+
 export async function sendPushToSubscriptionDetailed(
   uid: string,
   endpoint: string,
@@ -78,6 +94,16 @@ export async function sendPushToSubscriptionDetailed(
   const sub = await prisma.pushSubscription.findFirst({ where: { uid, endpoint } });
   if (!sub) return null;
   return _send(sub.endpoint, sub.p256dh, sub.auth, sub.id, payload);
+}
+
+export async function sendEmptyPushToSubscriptionDetailed(
+  uid: string,
+  endpoint: string,
+): Promise<PushDeliveryResult | null> {
+  if (!_ready) return null;
+  const sub = await prisma.pushSubscription.findFirst({ where: { uid, endpoint } });
+  if (!sub) return null;
+  return _sendEmpty(sub.endpoint, sub.p256dh, sub.auth, sub.id);
 }
 
 export async function sendPushToUserDetailed(uid: string, payload: PushPayload): Promise<PushDeliveryResult[]> {
