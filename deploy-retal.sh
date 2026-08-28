@@ -128,7 +128,9 @@ if [ "$MODE" = "frontend" ] || [ "$MODE" = "all" ]; then
     echo "✅ PWA strategy: injectManifest"
     [ -f public/sw.js ] || fail "public/sw.js is missing"
     grep -Fq "self.skipWaiting()" public/sw.js || fail "self.skipWaiting() is missing from public/sw.js"
-    grep -Eq "clients\.claim\(\)" public/sw.js || fail "clients.claim() is missing from public/sw.js"
+    if ! grep -Eq "clients\.claim\(\)|clientsClaim\(\)" public/sw.js; then
+      fail "clients claim is missing from public/sw.js"
+    fi
     grep -Fq "self.addEventListener('push'" public/sw.js || fail "push event handler is missing from public/sw.js"
     echo "✅ Custom Service Worker activation and push handler verified"
   else
