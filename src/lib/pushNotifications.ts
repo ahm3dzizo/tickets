@@ -33,16 +33,11 @@ async function ensureSubscription(reg: ServiceWorkerRegistration, publicKey: str
   const existing = await reg.pushManager.getSubscription();
   if (existing) {
     const currentKey = existing.options.applicationServerKey;
-    if (arraysEqual(currentKey, expectedKey)) {
-      return { sub: existing, created: false };
-    }
+    if (arraysEqual(currentKey, expectedKey)) return { sub: existing, created: false };
     await existing.unsubscribe().catch(() => {});
   }
 
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: expectedKey,
-  });
+  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: expectedKey });
   return { sub, created: true };
 }
 
@@ -64,11 +59,9 @@ export async function registerPush(authHeader: string, isTech = false): Promise<
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return false;
-
     const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
     const { publicKey } = await keyRes.json();
     if (!publicKey) return false;
-
     const reg = await getRegistration();
     const { sub } = await ensureSubscription(reg, publicKey);
     await saveSubscription(sub, authHeader, isTech);
@@ -79,24 +72,15 @@ export async function registerPush(authHeader: string, isTech = false): Promise<
   }
 }
 
-export type PushDebugEvent = {
-  receivedAt: string;
-  title?: string;
-  body?: string;
-  tag?: string;
-  url?: string;
-};
+export type PushDebugEvent = { receivedAt: string; title?: string; body?: string; tag?: string; url?: string };
 
 export async function getLastPushDebugEvent(): Promise<PushDebugEvent | null> {
   if (!('caches' in window)) return null;
   try {
     const cache = await caches.open(PUSH_DEBUG_CACHE);
     const response = await cache.match(PUSH_DEBUG_URL);
-    if (!response) return null;
-    return await response.json();
-  } catch {
-    return null;
-  }
+    return response ? await response.json() : null;
+  } catch { return null; }
 }
 
 export async function clearPushDebugEvent(): Promise<void> {
@@ -124,41 +108,23 @@ export type PushRepairResult = {
   error?: string;
 };
 
-export type LocalNotificationResult = {
-  ok: boolean;
-  permission: NotificationPermission | 'unsupported';
-  serviceWorker: boolean;
-  error?: string;
-};
+export type LocalNotificationResult = { ok: boolean; permission: NotificationPermission | 'unsupported'; serviceWorker: boolean; error?: string };
 
 export async function showLocalNotificationTest(): Promise<LocalNotificationResult> {
-  const result: LocalNotificationResult = {
-    ok: false,
-    permission: 'unsupported',
-    serviceWorker: false,
-  };
-
+  const result: LocalNotificationResult = { ok: false, permission: 'unsupported', serviceWorker: false };
   try {
     if (!isPushSupported()) throw new Error('المتصفح لا يدعم إشعارات Web Push');
     const permission = await Notification.requestPermission();
     result.permission = permission;
     if (permission !== 'granted') throw new Error('إذن الإشعارات غير مسموح');
-
     const reg = await getRegistration();
     result.serviceWorker = !!reg.active;
     if (!result.serviceWorker) throw new Error('Service Worker غير نشط');
-
     await reg.showNotification('🔔 اختبار محلي من Knot', {
       body: 'هذا الإشعار لا يستخدم FCM أو السيرفر. لو ظهر فطبقة عرض إشعارات المتصفح سليمة.',
-      icon: '/logo-192.png',
-      badge: '/logo-192.png',
-      tag: `knot-local-test-${Date.now()}`,
-      requireInteraction: true,
-      dir: 'rtl',
-      lang: 'ar',
-      data: { url: '/push-test' },
+      icon: '/logo-192.png', badge: '/logo-192.png', tag: `knot-local-test-${Date.now()}`,
+      requireInteraction: true, dir: 'rtl', lang: 'ar', data: { url: '/push-test' },
     });
-
     result.ok = true;
     return result;
   } catch (err: any) {
@@ -167,17 +133,24 @@ export async function showLocalNotificationTest(): Promise<LocalNotificationResu
   }
 }
 
+async function waitForPushDebug(waitMs: number): Promise<{ swPushReceived: boolean; swPushEvent: PushDebugEvent | null }> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < waitMs) {
+    await sleep(750);
+    const debugEvent = await getLastPushDebugEvent();
+    if (debugEvent) return { swPushReceived: true, swPushEvent: debugEvent };
+  }
+  return { swPushReceived: false, swPushEvent: null };
+}
+
 async function testSubscriptionDelivery(sub: PushSubscription, authHeader: string, isTech: boolean, waitMs = 12_000): Promise<Pick<PushRepairResult, 'testAccepted' | 'delivered' | 'subscriptions' | 'statusCode' | 'swPushReceived' | 'swPushEvent'>> {
   await clearPushDebugEvent();
-
   const testRes = await fetch('/api/push/' + (isTech ? 'test-self-tech' : 'test-self'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: authHeader },
     body: JSON.stringify({ endpoint: sub.endpoint }),
   });
   const test = await testRes.json().catch(() => ({}));
   if (!testRes.ok) throw new Error(test?.error || `فشل اختبار الإشعار (${testRes.status})`);
-
   const out = {
     testAccepted: test.success === true,
     delivered: Number(test.delivered || 0),
@@ -186,66 +159,33 @@ async function testSubscriptionDelivery(sub: PushSubscription, authHeader: strin
     swPushReceived: false,
     swPushEvent: null as PushDebugEvent | null,
   };
-
   if (!out.testAccepted) throw new Error(test?.result?.error || 'السيرفر لم يتمكن من تسليم الاختبار لهذا الجهاز');
-
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < waitMs) {
-    await sleep(750);
-    const debugEvent = await getLastPushDebugEvent();
-    if (debugEvent) {
-      out.swPushReceived = true;
-      out.swPushEvent = debugEvent;
-      break;
-    }
-  }
-
+  Object.assign(out, await waitForPushDebug(waitMs));
   return out;
 }
 
 export async function repairAndTestPush(authHeader: string, isTech = false): Promise<PushRepairResult> {
-  const result: PushRepairResult = {
-    supported: false,
-    permission: 'unsupported',
-    serviceWorker: false,
-    subscribed: false,
-    saved: false,
-    testAccepted: false,
-    delivered: 0,
-    subscriptions: 0,
-    swPushReceived: false,
-    swPushEvent: null,
-  };
-
+  const result: PushRepairResult = { supported: false, permission: 'unsupported', serviceWorker: false, subscribed: false, saved: false, testAccepted: false, delivered: 0, subscriptions: 0, swPushReceived: false, swPushEvent: null };
   try {
     if (!isPushSupported()) throw new Error('المتصفح لا يدعم Web Push');
     result.supported = true;
-
     const permission = await Notification.requestPermission();
     result.permission = permission;
     if (permission !== 'granted') throw new Error('إذن الإشعارات غير مسموح');
-
     const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
     if (!keyRes.ok) throw new Error('تعذر جلب مفتاح VAPID');
     const { publicKey } = await keyRes.json();
     if (!publicKey) throw new Error('مفتاح VAPID غير موجود');
-
     const reg = await getRegistration();
     result.serviceWorker = !!reg.active;
-
     const { sub, created } = await ensureSubscription(reg, publicKey);
     result.subscribed = !!sub;
     result.subscriptionCreated = created;
     try { result.endpointHost = new URL(sub.endpoint).hostname; } catch {}
-
     await saveSubscription(sub, authHeader, isTech);
     result.saved = true;
-
-    // Fresh FCM registrations can need a few seconds before the first delivery.
     if (created) await sleep(8_000);
-
-    const delivery = await testSubscriptionDelivery(sub, authHeader, isTech, 12_000);
-    Object.assign(result, delivery);
+    Object.assign(result, await testSubscriptionDelivery(sub, authHeader, isTech, 12_000));
     return result;
   } catch (err: any) {
     result.error = err?.message || String(err);
@@ -254,38 +194,54 @@ export async function repairAndTestPush(authHeader: string, isTech = false): Pro
 }
 
 export async function retestCurrentPush(authHeader: string, isTech = false): Promise<PushRepairResult> {
-  const result: PushRepairResult = {
-    supported: false,
-    permission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
-    serviceWorker: false,
-    subscribed: false,
-    subscriptionCreated: false,
-    saved: false,
-    testAccepted: false,
-    delivered: 0,
-    subscriptions: 0,
-    swPushReceived: false,
-    swPushEvent: null,
-  };
-
+  const result: PushRepairResult = { supported: false, permission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported', serviceWorker: false, subscribed: false, subscriptionCreated: false, saved: false, testAccepted: false, delivered: 0, subscriptions: 0, swPushReceived: false, swPushEvent: null };
   try {
     if (!isPushSupported()) throw new Error('المتصفح لا يدعم Web Push');
     result.supported = true;
     if (Notification.permission !== 'granted') throw new Error('إذن الإشعارات غير مسموح');
-
     const reg = await getRegistration();
     result.serviceWorker = !!reg.active;
     const sub = await reg.pushManager.getSubscription();
     if (!sub) throw new Error('لا يوجد Push Subscription حالي على هذا الجهاز');
-
     result.subscribed = true;
     try { result.endpointHost = new URL(sub.endpoint).hostname; } catch {}
-
     await saveSubscription(sub, authHeader, isTech);
     result.saved = true;
+    Object.assign(result, await testSubscriptionDelivery(sub, authHeader, isTech, 15_000));
+    return result;
+  } catch (err: any) {
+    result.error = err?.message || String(err);
+    return result;
+  }
+}
 
-    const delivery = await testSubscriptionDelivery(sub, authHeader, isTech, 15_000);
-    Object.assign(result, delivery);
+export async function testEmptyCurrentPush(authHeader: string): Promise<PushRepairResult> {
+  const result: PushRepairResult = { supported: false, permission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported', serviceWorker: false, subscribed: false, subscriptionCreated: false, saved: false, testAccepted: false, delivered: 0, subscriptions: 0, swPushReceived: false, swPushEvent: null };
+  try {
+    if (!isPushSupported()) throw new Error('المتصفح لا يدعم Web Push');
+    result.supported = true;
+    if (Notification.permission !== 'granted') throw new Error('إذن الإشعارات غير مسموح');
+    const reg = await getRegistration();
+    result.serviceWorker = !!reg.active;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) throw new Error('لا يوجد Push Subscription حالي على هذا الجهاز');
+    result.subscribed = true;
+    try { result.endpointHost = new URL(sub.endpoint).hostname; } catch {}
+    await saveSubscription(sub, authHeader, false);
+    result.saved = true;
+    await clearPushDebugEvent();
+    const testRes = await fetch('/api/push/test-self-empty', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    });
+    const test = await testRes.json().catch(() => ({}));
+    if (!testRes.ok) throw new Error(test?.error || `فشل اختبار Push الفارغ (${testRes.status})`);
+    result.testAccepted = test.success === true;
+    result.delivered = Number(test.delivered || 0);
+    result.subscriptions = Number(test.subscriptions || 0);
+    result.statusCode = Number(test?.result?.statusCode || 0) || undefined;
+    if (!result.testAccepted) throw new Error(test?.result?.error || 'FCM رفض Push الفارغ');
+    Object.assign(result, await waitForPushDebug(15_000));
     return result;
   } catch (err: any) {
     result.error = err?.message || String(err);
@@ -299,15 +255,9 @@ export async function unregisterPush(): Promise<void> {
     const reg = await navigator.serviceWorker.getRegistration('/');
     const sub = await reg?.pushManager.getSubscription();
     if (!sub) return;
-    await fetch('/api/push/unsubscribe', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ endpoint: sub.endpoint }),
-    });
+    await fetch('/api/push/unsubscribe', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) });
     await sub.unsubscribe();
-  } catch (err) {
-    console.warn('[push] Failed to unregister push:', err);
-  }
+  } catch (err) { console.warn('[push] Failed to unregister push:', err); }
 }
 
 export function isPushSupported(): boolean {
