@@ -14,15 +14,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function applicationServerKeyMatches(existing: ArrayBuffer | null, expected: Uint8Array): boolean {
-  if (!existing || existing.byteLength !== expected.byteLength) return false;
-  const a = new Uint8Array(existing);
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== expected[i]) return false;
-  }
-  return true;
-}
-
 async function getRegistration(): Promise<ServiceWorkerRegistration> {
   const reg = await navigator.serviceWorker.register(SW_PATH, { scope: '/', updateViaCache: 'none' });
   await reg.update().catch(() => {});
@@ -30,17 +21,20 @@ async function getRegistration(): Promise<ServiceWorkerRegistration> {
   return reg;
 }
 
-async function ensureCurrentSubscription(
-  reg: ServiceWorkerRegistration,
-  publicKey: string,
-): Promise<{ sub: PushSubscription; createdFresh: boolean }> {
+function arraysEqual(a: ArrayBuffer | null, b: Uint8Array): boolean {
+  if (!a) return false;
+  const aa = new Uint8Array(a);
+  if (aa.length !== b.length) return false;
+  return aa.every((v, i) => v === b[i]);
+}
+
+async function ensureSubscription(reg: ServiceWorkerRegistration, publicKey: string): Promise<{ sub: PushSubscription; created: boolean }> {
   const expectedKey = urlBase64ToUint8Array(publicKey);
   const existing = await reg.pushManager.getSubscription();
-
   if (existing) {
-    const currentKey = existing.options?.applicationServerKey || null;
-    if (applicationServerKeyMatches(currentKey, expectedKey)) {
-      return { sub: existing, createdFresh: false };
+    const currentKey = existing.options.applicationServerKey;
+    if (arraysEqual(currentKey, expectedKey)) {
+      return { sub: existing, created: false };
     }
     await existing.unsubscribe().catch(() => {});
   }
@@ -49,7 +43,7 @@ async function ensureCurrentSubscription(
     userVisibleOnly: true,
     applicationServerKey: expectedKey,
   });
-  return { sub, createdFresh: true };
+  return { sub, created: true };
 }
 
 async function saveSubscription(sub: PushSubscription, authHeader: string, isTech: boolean): Promise<void> {
@@ -76,7 +70,7 @@ export async function registerPush(authHeader: string, isTech = false): Promise<
     if (!publicKey) return false;
 
     const reg = await getRegistration();
-    const { sub } = await ensureCurrentSubscription(reg, publicKey);
+    const { sub } = await ensureSubscription(reg, publicKey);
     await saveSubscription(sub, authHeader, isTech);
     return true;
   } catch (err) {
@@ -118,13 +112,13 @@ export type PushRepairResult = {
   permission: NotificationPermission | 'unsupported';
   serviceWorker: boolean;
   subscribed: boolean;
+  subscriptionCreated?: boolean;
   saved: boolean;
   testAccepted: boolean;
   delivered: number;
   subscriptions: number;
   statusCode?: number;
   endpointHost?: string;
-  createdFresh?: boolean;
   swPushReceived?: boolean;
   swPushEvent?: PushDebugEvent | null;
   error?: string;
@@ -173,6 +167,42 @@ export async function showLocalNotificationTest(): Promise<LocalNotificationResu
   }
 }
 
+async function testSubscriptionDelivery(sub: PushSubscription, authHeader: string, isTech: boolean, waitMs = 12_000): Promise<Pick<PushRepairResult, 'testAccepted' | 'delivered' | 'subscriptions' | 'statusCode' | 'swPushReceived' | 'swPushEvent'>> {
+  await clearPushDebugEvent();
+
+  const testRes = await fetch('/api/push/' + (isTech ? 'test-self-tech' : 'test-self'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+    body: JSON.stringify({ endpoint: sub.endpoint }),
+  });
+  const test = await testRes.json().catch(() => ({}));
+  if (!testRes.ok) throw new Error(test?.error || `فشل اختبار الإشعار (${testRes.status})`);
+
+  const out = {
+    testAccepted: test.success === true,
+    delivered: Number(test.delivered || 0),
+    subscriptions: Number(test.subscriptions || 0),
+    statusCode: Number(test?.result?.statusCode || 0) || undefined,
+    swPushReceived: false,
+    swPushEvent: null as PushDebugEvent | null,
+  };
+
+  if (!out.testAccepted) throw new Error(test?.result?.error || 'السيرفر لم يتمكن من تسليم الاختبار لهذا الجهاز');
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < waitMs) {
+    await sleep(750);
+    const debugEvent = await getLastPushDebugEvent();
+    if (debugEvent) {
+      out.swPushReceived = true;
+      out.swPushEvent = debugEvent;
+      break;
+    }
+  }
+
+  return out;
+}
+
 export async function repairAndTestPush(authHeader: string, isTech = false): Promise<PushRepairResult> {
   const result: PushRepairResult = {
     supported: false,
@@ -203,48 +233,59 @@ export async function repairAndTestPush(authHeader: string, isTech = false): Pro
     const reg = await getRegistration();
     result.serviceWorker = !!reg.active;
 
-    const ensured = await ensureCurrentSubscription(reg, publicKey);
-    const sub = ensured.sub;
-    result.createdFresh = ensured.createdFresh;
+    const { sub, created } = await ensureSubscription(reg, publicKey);
     result.subscribed = !!sub;
+    result.subscriptionCreated = created;
     try { result.endpointHost = new URL(sub.endpoint).hostname; } catch {}
 
     await saveSubscription(sub, authHeader, isTech);
     result.saved = true;
 
-    await clearPushDebugEvent();
+    // Fresh FCM registrations can need a few seconds before the first delivery.
+    if (created) await sleep(8_000);
 
-    // Avoid racing FCM immediately after creating a brand-new endpoint.
-    // Existing subscriptions are reused and do not incur this delay.
-    if (ensured.createdFresh) await sleep(8_000);
+    const delivery = await testSubscriptionDelivery(sub, authHeader, isTech, 12_000);
+    Object.assign(result, delivery);
+    return result;
+  } catch (err: any) {
+    result.error = err?.message || String(err);
+    return result;
+  }
+}
 
-    const testRes = await fetch('/api/push/' + (isTech ? 'test-self-tech' : 'test-self'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
-      body: JSON.stringify({ endpoint: sub.endpoint }),
-    });
-    const test = await testRes.json().catch(() => ({}));
-    if (!testRes.ok) throw new Error(test?.error || `فشل اختبار الإشعار (${testRes.status})`);
+export async function retestCurrentPush(authHeader: string, isTech = false): Promise<PushRepairResult> {
+  const result: PushRepairResult = {
+    supported: false,
+    permission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
+    serviceWorker: false,
+    subscribed: false,
+    subscriptionCreated: false,
+    saved: false,
+    testAccepted: false,
+    delivered: 0,
+    subscriptions: 0,
+    swPushReceived: false,
+    swPushEvent: null,
+  };
 
-    result.testAccepted = test.success === true;
-    result.delivered = Number(test.delivered || 0);
-    result.subscriptions = Number(test.subscriptions || 0);
-    result.statusCode = Number(test?.result?.statusCode || 0) || undefined;
+  try {
+    if (!isPushSupported()) throw new Error('المتصفح لا يدعم Web Push');
+    result.supported = true;
+    if (Notification.permission !== 'granted') throw new Error('إذن الإشعارات غير مسموح');
 
-    if (!result.testAccepted) {
-      throw new Error(test?.result?.error || 'السيرفر لم يتمكن من تسليم الاختبار لهذا الجهاز');
-    }
+    const reg = await getRegistration();
+    result.serviceWorker = !!reg.active;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) throw new Error('لا يوجد Push Subscription حالي على هذا الجهاز');
 
-    for (let i = 0; i < 16; i += 1) {
-      await sleep(750);
-      const debugEvent = await getLastPushDebugEvent();
-      if (debugEvent) {
-        result.swPushReceived = true;
-        result.swPushEvent = debugEvent;
-        break;
-      }
-    }
+    result.subscribed = true;
+    try { result.endpointHost = new URL(sub.endpoint).hostname; } catch {}
 
+    await saveSubscription(sub, authHeader, isTech);
+    result.saved = true;
+
+    const delivery = await testSubscriptionDelivery(sub, authHeader, isTech, 15_000);
+    Object.assign(result, delivery);
     return result;
   } catch (err: any) {
     result.error = err?.message || String(err);
