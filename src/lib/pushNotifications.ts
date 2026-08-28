@@ -36,7 +36,6 @@ async function ensureSubscription(reg: ServiceWorkerRegistration, publicKey: str
     if (arraysEqual(currentKey, expectedKey)) return { sub: existing, created: false };
     await existing.unsubscribe().catch(() => {});
   }
-
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: expectedKey });
   return { sub, created: true };
 }
@@ -52,10 +51,17 @@ async function saveSubscription(sub: PushSubscription, authHeader: string, isTec
   if (!response.ok) throw new Error(`Failed to save push subscription (${response.status})`);
 }
 
+async function removeServerSubscription(endpoint: string): Promise<void> {
+  await fetch('/api/push/unsubscribe', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint }),
+  }).catch(() => {});
+}
+
 export async function registerPush(authHeader: string, isTech = false): Promise<boolean> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return false;
   if (Notification.permission === 'denied') return false;
-
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return false;
@@ -105,6 +111,8 @@ export type PushRepairResult = {
   endpointHost?: string;
   swPushReceived?: boolean;
   swPushEvent?: PushDebugEvent | null;
+  endpointChanged?: boolean;
+  oldEndpointHost?: string;
   error?: string;
 };
 
@@ -249,13 +257,61 @@ export async function testEmptyCurrentPush(authHeader: string): Promise<PushRepa
   }
 }
 
+export async function hardResetPush(authHeader: string, isTech = false): Promise<PushRepairResult> {
+  const result: PushRepairResult = { supported: false, permission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported', serviceWorker: false, subscribed: false, subscriptionCreated: true, saved: false, testAccepted: false, delivered: 0, subscriptions: 0, swPushReceived: false, swPushEvent: null, endpointChanged: false };
+  try {
+    if (!isPushSupported()) throw new Error('المتصفح لا يدعم Web Push');
+    result.supported = true;
+    const permission = await Notification.requestPermission();
+    result.permission = permission;
+    if (permission !== 'granted') throw new Error('إذن الإشعارات غير مسموح');
+
+    const oldReg = await navigator.serviceWorker.getRegistration('/');
+    const oldSub = await oldReg?.pushManager.getSubscription();
+    const oldEndpoint = oldSub?.endpoint || '';
+    if (oldEndpoint) {
+      try { result.oldEndpointHost = new URL(oldEndpoint).hostname; } catch {}
+      await removeServerSubscription(oldEndpoint);
+      await oldSub?.unsubscribe().catch(() => {});
+    }
+    if (oldReg) await oldReg.unregister().catch(() => {});
+    await clearPushDebugEvent();
+    await sleep(2_000);
+
+    const keyRes = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
+    if (!keyRes.ok) throw new Error('تعذر جلب مفتاح VAPID');
+    const { publicKey } = await keyRes.json();
+    if (!publicKey) throw new Error('مفتاح VAPID غير موجود');
+
+    const reg = await getRegistration();
+    result.serviceWorker = !!reg.active;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+    result.subscribed = true;
+    result.endpointChanged = !oldEndpoint || oldEndpoint !== sub.endpoint;
+    try { result.endpointHost = new URL(sub.endpoint).hostname; } catch {}
+
+    await saveSubscription(sub, authHeader, isTech);
+    result.saved = true;
+
+    await sleep(10_000);
+    Object.assign(result, await testSubscriptionDelivery(sub, authHeader, isTech, 20_000));
+    return result;
+  } catch (err: any) {
+    result.error = err?.message || String(err);
+    return result;
+  }
+}
+
 export async function unregisterPush(): Promise<void> {
   if (!('serviceWorker' in navigator)) return;
   try {
     const reg = await navigator.serviceWorker.getRegistration('/');
     const sub = await reg?.pushManager.getSubscription();
     if (!sub) return;
-    await fetch('/api/push/unsubscribe', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) });
+    await removeServerSubscription(sub.endpoint);
     await sub.unsubscribe();
   } catch (err) { console.warn('[push] Failed to unregister push:', err); }
 }
