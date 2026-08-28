@@ -69,16 +69,16 @@ self.addEventListener('push', event => {
   let data = {};
   try { data = event.data?.json() || {}; } catch {}
 
-  const title   = data.title   || 'إشعار';
+  const title = data.title || 'إشعار';
   const options = {
-    body:               data.body               || '',
-    icon:               data.icon               || '/logo-192.png',
-    badge:              '/logo-192.png',
-    tag:                data.tag                || 'notification',
+    body: data.body || '',
+    icon: data.icon || '/icon.png',
+    badge: data.badge || '/logo-192.png',
+    tag: data.tag || 'notification',
     requireInteraction: data.requireInteraction || false,
-    dir:                'rtl',
-    lang:               'ar',
-    data:               { url: data.url || '/' },
+    dir: 'rtl',
+    lang: 'ar',
+    data: { url: data.url || '/' },
   };
 
   event.waitUntil(Promise.all([
