@@ -14,6 +14,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function applicationServerKeyMatches(existing: ArrayBuffer | null, expected: Uint8Array): boolean {
+  if (!existing || existing.byteLength !== expected.byteLength) return false;
+  const a = new Uint8Array(existing);
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== expected[i]) return false;
+  }
+  return true;
+}
+
 async function getRegistration(): Promise<ServiceWorkerRegistration> {
   const reg = await navigator.serviceWorker.register(SW_PATH, { scope: '/', updateViaCache: 'none' });
   await reg.update().catch(() => {});
@@ -21,15 +30,26 @@ async function getRegistration(): Promise<ServiceWorkerRegistration> {
   return reg;
 }
 
-async function subscribeFresh(reg: ServiceWorkerRegistration, publicKey: string): Promise<PushSubscription> {
+async function ensureCurrentSubscription(
+  reg: ServiceWorkerRegistration,
+  publicKey: string,
+): Promise<{ sub: PushSubscription; createdFresh: boolean }> {
+  const expectedKey = urlBase64ToUint8Array(publicKey);
   const existing = await reg.pushManager.getSubscription();
+
   if (existing) {
+    const currentKey = existing.options?.applicationServerKey || null;
+    if (applicationServerKeyMatches(currentKey, expectedKey)) {
+      return { sub: existing, createdFresh: false };
+    }
     await existing.unsubscribe().catch(() => {});
   }
-  return reg.pushManager.subscribe({
+
+  const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
+    applicationServerKey: expectedKey,
   });
+  return { sub, createdFresh: true };
 }
 
 async function saveSubscription(sub: PushSubscription, authHeader: string, isTech: boolean): Promise<void> {
@@ -56,13 +76,7 @@ export async function registerPush(authHeader: string, isTech = false): Promise<
     if (!publicKey) return false;
 
     const reg = await getRegistration();
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
-    }
+    const { sub } = await ensureCurrentSubscription(reg, publicKey);
     await saveSubscription(sub, authHeader, isTech);
     return true;
   } catch (err) {
@@ -110,6 +124,7 @@ export type PushRepairResult = {
   subscriptions: number;
   statusCode?: number;
   endpointHost?: string;
+  createdFresh?: boolean;
   swPushReceived?: boolean;
   swPushEvent?: PushDebugEvent | null;
   error?: string;
@@ -188,7 +203,9 @@ export async function repairAndTestPush(authHeader: string, isTech = false): Pro
     const reg = await getRegistration();
     result.serviceWorker = !!reg.active;
 
-    const sub = await subscribeFresh(reg, publicKey);
+    const ensured = await ensureCurrentSubscription(reg, publicKey);
+    const sub = ensured.sub;
+    result.createdFresh = ensured.createdFresh;
     result.subscribed = !!sub;
     try { result.endpointHost = new URL(sub.endpoint).hostname; } catch {}
 
@@ -196,6 +213,10 @@ export async function repairAndTestPush(authHeader: string, isTech = false): Pro
     result.saved = true;
 
     await clearPushDebugEvent();
+
+    // Avoid racing FCM immediately after creating a brand-new endpoint.
+    // Existing subscriptions are reused and do not incur this delay.
+    if (ensured.createdFresh) await sleep(8_000);
 
     const testRes = await fetch('/api/push/' + (isTech ? 'test-self-tech' : 'test-self'), {
       method: 'POST',
@@ -214,7 +235,7 @@ export async function repairAndTestPush(authHeader: string, isTech = false): Pro
       throw new Error(test?.result?.error || 'السيرفر لم يتمكن من تسليم الاختبار لهذا الجهاز');
     }
 
-    for (let i = 0; i < 8; i += 1) {
+    for (let i = 0; i < 16; i += 1) {
       await sleep(750);
       const debugEvent = await getLastPushDebugEvent();
       if (debugEvent) {
