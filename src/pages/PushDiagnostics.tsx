@@ -55,13 +55,13 @@ export default function PushDiagnostics() {
             </div>
             <div>
               <h1 className="text-xl font-black">فحص وإصلاح الإشعارات</h1>
-              <p className="text-xs text-muted-foreground mt-1">يجدد اشتراك هذا الجهاز ثم يرسل Push حقيقي له فقط.</p>
+              <p className="text-xs text-muted-foreground mt-1">يجدد اشتراك هذا الجهاز ثم يرسل Push حقيقي له فقط، ويتأكد هل Service Worker استلمه فعلًا.</p>
             </div>
           </div>
 
           <Button onClick={run} disabled={running} className="w-full h-11 mt-4 rounded-2xl font-black gap-2">
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            {running ? 'جارٍ الإصلاح والاختبار...' : 'إصلاح واختبار Push الحقيقي'}
+            {running ? 'جارٍ الإصلاح وتتبع وصول Push...' : 'إصلاح واختبار Push الحقيقي'}
           </Button>
         </div>
 
@@ -105,13 +105,27 @@ export default function PushDiagnostics() {
             {row('تم إنشاء Push Subscription جديد', result.subscribed)}
             {row('تم حفظ اشتراك هذا الجهاز على السيرفر', result.saved)}
             {row(`FCM قبل رسالة هذا الجهاز${result.statusCode ? ` — ${result.statusCode}` : ''}`, result.testAccepted && result.delivered === 1)}
+            {row('Service Worker استلم push event فعليًا', result.swPushReceived === true)}
 
-            <div className="mt-4 rounded-2xl bg-muted/50 p-4 text-sm space-y-1">
+            <div className="mt-4 rounded-2xl bg-muted/50 p-4 text-sm space-y-2">
               {result.endpointHost && <div className="text-muted-foreground text-xs">مزود Push: {result.endpointHost}</div>}
+              {result.swPushEvent?.receivedAt && (
+                <div className="text-muted-foreground text-xs">وقت وصول الحدث: {new Date(result.swPushEvent.receivedAt).toLocaleString('ar-SA')}</div>
+              )}
+              {result.swPushEvent?.title && (
+                <div className="text-muted-foreground text-xs">عنوان الـpayload: {result.swPushEvent.title}</div>
+              )}
+
               {result.error ? (
                 <div className="text-red-500 font-bold">❌ {result.error}</div>
+              ) : result.swPushReceived ? (
+                <div className="text-emerald-500 font-bold leading-6">
+                  ✅ FCM قبل الرسالة والـService Worker استلمها فعلًا. لو الإشعار نفسه لم يظهر، نركز على تنفيذ showNotification داخل حدث push.
+                </div>
               ) : (
-                <div className="text-emerald-500 font-bold">✅ تم اختبار هذا الجهاز فقط، وFCM قبل الرسالة{result.statusCode ? ` بحالة ${result.statusCode}` : ''}.</div>
+                <div className="text-amber-500 font-bold leading-6">
+                  ⚠️ FCM قبل الرسالة، لكن لم نسجل وصول push event للـService Worker خلال 6 ثوانٍ. المشكلة بين FCM واشتراك المتصفح/الجهاز، وليست في عرض الإشعارات المحلي.
+                </div>
               )}
             </div>
           </div>
