@@ -1,11 +1,23 @@
-// public/sw.js — Service Worker for push notifications
-const ICON  = '/logo-192.png';
-const BADGE = '/logo-192.png';
+// public/sw.js — Service Worker: push notifications + Workbox precache
+import { clientsClaim } from 'workbox-core';
+import { precacheAndRoute } from 'workbox-precaching';
+import { registerRoute } from 'workbox-routing';
+import { NetworkFirst } from 'workbox-strategies';
+
+// ── Workbox precache (manifest injected by vite-plugin-pwa at build time) ─────
+self.skipWaiting();
+clientsClaim();
+precacheAndRoute(self.__WB_MANIFEST || []);
+
+// ── Firestore runtime cache ───────────────────────────────────────────────────
+registerRoute(
+  ({ url }) => url.hostname === 'firestore.googleapis.com',
+  new NetworkFirst({ cacheName: 'firestore-cache', networkTimeoutSeconds: 10 })
+);
+
+// ── Push debug helpers ────────────────────────────────────────────────────────
 const PUSH_DEBUG_CACHE = 'knot-push-debug-v1';
 const PUSH_DEBUG_URL = '/__push-debug__/latest';
-
-self.addEventListener('install',  () => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(clients.claim()));
 
 async function savePushDebug(data) {
   try {
@@ -52,7 +64,7 @@ async function ackPushToServer(data) {
   }
 }
 
-// ── Push handler ─────────────────────────────────────────────────────────────
+// ── Push handler ──────────────────────────────────────────────────────────────
 self.addEventListener('push', event => {
   let data = {};
   try { data = event.data?.json() || {}; } catch {}
@@ -60,8 +72,8 @@ self.addEventListener('push', event => {
   const title   = data.title   || 'إشعار';
   const options = {
     body:               data.body               || '',
-    icon:               data.icon               || ICON,
-    badge:              BADGE,
+    icon:               data.icon               || '/logo-192.png',
+    badge:              '/logo-192.png',
     tag:                data.tag                || 'notification',
     requireInteraction: data.requireInteraction || false,
     dir:                'rtl',
@@ -76,7 +88,7 @@ self.addEventListener('push', event => {
   ]));
 });
 
-// ── Notification click — navigate to url ─────────────────────────────────────
+// ── Notification click — navigate to url ──────────────────────────────────────
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const url = event.notification.data?.url || '/';
