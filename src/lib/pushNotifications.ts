@@ -1,11 +1,17 @@
 // src/lib/pushNotifications.ts — Browser push subscription manager
 const SW_PATH = '/sw.js';
+const PUSH_DEBUG_CACHE = 'knot-push-debug-v1';
+const PUSH_DEBUG_URL = '/__push-debug__/latest';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(base64);
   return Uint8Array.from({ length: raw.length }, (_, i) => raw.charCodeAt(i));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function getRegistration(): Promise<ServiceWorkerRegistration> {
@@ -65,6 +71,34 @@ export async function registerPush(authHeader: string, isTech = false): Promise<
   }
 }
 
+export type PushDebugEvent = {
+  receivedAt: string;
+  title?: string;
+  body?: string;
+  tag?: string;
+  url?: string;
+};
+
+export async function getLastPushDebugEvent(): Promise<PushDebugEvent | null> {
+  if (!('caches' in window)) return null;
+  try {
+    const cache = await caches.open(PUSH_DEBUG_CACHE);
+    const response = await cache.match(PUSH_DEBUG_URL);
+    if (!response) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function clearPushDebugEvent(): Promise<void> {
+  if (!('caches' in window)) return;
+  try {
+    const cache = await caches.open(PUSH_DEBUG_CACHE);
+    await cache.delete(PUSH_DEBUG_URL);
+  } catch {}
+}
+
 export type PushRepairResult = {
   supported: boolean;
   permission: NotificationPermission | 'unsupported';
@@ -76,6 +110,8 @@ export type PushRepairResult = {
   subscriptions: number;
   statusCode?: number;
   endpointHost?: string;
+  swPushReceived?: boolean;
+  swPushEvent?: PushDebugEvent | null;
   error?: string;
 };
 
@@ -132,6 +168,8 @@ export async function repairAndTestPush(authHeader: string, isTech = false): Pro
     testAccepted: false,
     delivered: 0,
     subscriptions: 0,
+    swPushReceived: false,
+    swPushEvent: null,
   };
 
   try {
@@ -157,6 +195,8 @@ export async function repairAndTestPush(authHeader: string, isTech = false): Pro
     await saveSubscription(sub, authHeader, isTech);
     result.saved = true;
 
+    await clearPushDebugEvent();
+
     const testRes = await fetch('/api/push/' + (isTech ? 'test-self-tech' : 'test-self'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: authHeader },
@@ -173,6 +213,17 @@ export async function repairAndTestPush(authHeader: string, isTech = false): Pro
     if (!result.testAccepted) {
       throw new Error(test?.result?.error || 'السيرفر لم يتمكن من تسليم الاختبار لهذا الجهاز');
     }
+
+    for (let i = 0; i < 8; i += 1) {
+      await sleep(750);
+      const debugEvent = await getLastPushDebugEvent();
+      if (debugEvent) {
+        result.swPushReceived = true;
+        result.swPushEvent = debugEvent;
+        break;
+      }
+    }
+
     return result;
   } catch (err: any) {
     result.error = err?.message || String(err);
