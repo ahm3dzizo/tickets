@@ -27,6 +27,31 @@ async function savePushDebug(data) {
   }
 }
 
+async function ackPushToServer(data) {
+  try {
+    let endpointHost = '';
+    try {
+      const sub = await self.registration.pushManager.getSubscription();
+      if (sub?.endpoint) endpointHost = new URL(sub.endpoint).hostname;
+    } catch {}
+
+    await fetch('/api/push/sw-ack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tag: data?.tag || '',
+        title: data?.title || '',
+        receivedAt: new Date().toISOString(),
+        endpointHost,
+        href: self.location.href,
+      }),
+      keepalive: true,
+    });
+  } catch (err) {
+    console.warn('[sw] failed to ack push event to server', err);
+  }
+}
+
 // ── Push handler ─────────────────────────────────────────────────────────────
 self.addEventListener('push', event => {
   let data = {};
@@ -46,6 +71,7 @@ self.addEventListener('push', event => {
 
   event.waitUntil(Promise.all([
     savePushDebug(data),
+    ackPushToServer(data),
     self.registration.showNotification(title, options),
   ]));
 });
