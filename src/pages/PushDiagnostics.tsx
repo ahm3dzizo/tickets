@@ -1,66 +1,67 @@
 import { useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
-import { BellRing, CheckCircle2, Loader2, RefreshCw, XCircle, Smartphone, Send, FlaskConical } from 'lucide-react';
+import { BellRing, CheckCircle2, Loader2, RefreshCw, XCircle, Smartphone, Send, FlaskConical, RotateCcw } from 'lucide-react';
 import { authStorage } from '@/lib/api';
 import {
   repairAndTestPush,
   retestCurrentPush,
   testEmptyCurrentPush,
+  hardResetPush,
   showLocalNotificationTest,
   type PushRepairResult,
   type LocalNotificationResult,
 } from '@/lib/pushNotifications';
 
-type ResultMode = 'normal' | 'retest' | 'empty';
+type ResultMode = 'normal' | 'retest' | 'empty' | 'hard-reset';
 
 export default function PushDiagnostics() {
   const [running, setRunning] = useState(false);
   const [retesting, setRetesting] = useState(false);
   const [emptyTesting, setEmptyTesting] = useState(false);
+  const [hardResetting, setHardResetting] = useState(false);
   const [localRunning, setLocalRunning] = useState(false);
   const [result, setResult] = useState<PushRepairResult | null>(null);
   const [resultMode, setResultMode] = useState<ResultMode>('normal');
   const [localResult, setLocalResult] = useState<LocalNotificationResult | null>(null);
 
+  const getToken = () => authStorage.getToken();
+
   const run = async () => {
-    const token = authStorage.getToken();
-    if (!token) return;
-    setRunning(true);
-    setResult(null);
-    setResultMode('normal');
+    const token = getToken(); if (!token) return;
+    setRunning(true); setResult(null); setResultMode('normal');
     try { setResult(await repairAndTestPush(`Bearer ${token}`, false)); }
     finally { setRunning(false); }
   };
 
   const retest = async () => {
-    const token = authStorage.getToken();
-    if (!token) return;
-    setRetesting(true);
-    setResult(null);
-    setResultMode('retest');
+    const token = getToken(); if (!token) return;
+    setRetesting(true); setResult(null); setResultMode('retest');
     try { setResult(await retestCurrentPush(`Bearer ${token}`, false)); }
     finally { setRetesting(false); }
   };
 
   const testEmpty = async () => {
-    const token = authStorage.getToken();
-    if (!token) return;
-    setEmptyTesting(true);
-    setResult(null);
-    setResultMode('empty');
+    const token = getToken(); if (!token) return;
+    setEmptyTesting(true); setResult(null); setResultMode('empty');
     try { setResult(await testEmptyCurrentPush(`Bearer ${token}`)); }
     finally { setEmptyTesting(false); }
   };
 
+  const hardReset = async () => {
+    const token = getToken(); if (!token) return;
+    setHardResetting(true); setResult(null); setResultMode('hard-reset');
+    try { setResult(await hardResetPush(`Bearer ${token}`, false)); }
+    finally { setHardResetting(false); }
+  };
+
   const runLocal = async () => {
-    setLocalRunning(true);
-    setLocalResult(null);
+    setLocalRunning(true); setLocalResult(null);
     try { setLocalResult(await showLocalNotificationTest()); }
     finally { setLocalRunning(false); }
   };
 
-  const busy = running || retesting || emptyTesting;
+  const busy = running || retesting || emptyTesting || hardResetting;
 
   const row = (label: string, ok: boolean) => (
     <div className="flex items-center justify-between gap-3 py-3 border-b border-border/50 last:border-0">
@@ -95,7 +96,12 @@ export default function PushDiagnostics() {
             {emptyTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />}
             {emptyTesting ? 'جارٍ إرسال Push بدون payload...' : 'اختبار Push بدون payload'}
           </Button>
-          <p className="text-[11px] text-muted-foreground mt-2 leading-5">الاختبار الثالث يرسل Web Push فارغًا لنفس endpoint. لو وصل، يبقى المشكلة في تشفير payload أو مفاتيح p256dh/auth. لو لم يصل أيضًا، يبقى الاشتراك نفسه لا يتلقى من FCM.</p>
+
+          <Button variant="destructive" onClick={hardReset} disabled={busy} className="w-full h-11 mt-3 rounded-2xl font-black gap-2">
+            {hardResetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            {hardResetting ? 'جارٍ عمل Hard Reset للاشتراك...' : 'Hard Reset لاشتراك هذا الجهاز'}
+          </Button>
+          <p className="text-[11px] text-muted-foreground mt-2 leading-5">الـHard Reset يحذف endpoint الحالي من السيرفر، يعمل unsubscribe من Chrome، يلغي Service Worker، يسجله من جديد، ثم ينشئ Push Subscription جديد تمامًا ويختبره.</p>
         </div>
 
         <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
@@ -123,23 +129,27 @@ export default function PushDiagnostics() {
         {result && (
           <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
             <div className="text-xs font-bold text-muted-foreground mb-2">
-              الاختبار الحالي: {resultMode === 'empty' ? 'Push بدون payload' : resultMode === 'retest' ? 'إعادة إرسال على نفس الاشتراك' : 'إصلاح واختبار عادي'}
+              الاختبار الحالي: {resultMode === 'hard-reset' ? 'Hard Reset كامل' : resultMode === 'empty' ? 'Push بدون payload' : resultMode === 'retest' ? 'إعادة إرسال على نفس الاشتراك' : 'إصلاح واختبار عادي'}
             </div>
             {row('المتصفح يدعم Web Push', result.supported)}
             {row('إذن الإشعارات مسموح', result.permission === 'granted')}
             {row('Service Worker شغال', result.serviceWorker)}
             {row(result.subscriptionCreated ? 'تم إنشاء Push Subscription جديد' : 'تم استخدام Push Subscription الحالي', result.subscribed)}
+            {resultMode === 'hard-reset' && row('الـendpoint الجديد مختلف عن القديم', result.endpointChanged === true)}
             {row('تم حفظ اشتراك هذا الجهاز على السيرفر', result.saved)}
             {row(`FCM قبل رسالة هذا الجهاز${result.statusCode ? ` — ${result.statusCode}` : ''}`, result.testAccepted && result.delivered === 1)}
             {row('Service Worker استلم push event فعليًا', result.swPushReceived === true)}
 
             <div className="mt-4 rounded-2xl bg-muted/50 p-4 text-sm space-y-2">
-              {result.endpointHost && <div className="text-muted-foreground text-xs">مزود Push: {result.endpointHost}</div>}
+              {result.oldEndpointHost && <div className="text-muted-foreground text-xs">مزود الـendpoint القديم: {result.oldEndpointHost}</div>}
+              {result.endpointHost && <div className="text-muted-foreground text-xs">مزود Push الحالي: {result.endpointHost}</div>}
               {result.swPushEvent?.receivedAt && <div className="text-muted-foreground text-xs">وقت وصول الحدث: {new Date(result.swPushEvent.receivedAt).toLocaleString('ar-SA')}</div>}
               {result.error ? (
                 <div className="text-red-500 font-bold">❌ {result.error}</div>
               ) : result.swPushReceived ? (
                 <div className="text-emerald-500 font-bold leading-6">✅ وصل push event للـService Worker.</div>
+              ) : resultMode === 'hard-reset' ? (
+                <div className="text-amber-500 font-bold leading-6">⚠️ حتى بعد Hard Reset وإنشاء اشتراك جديد لم يصل push event. لو الـendpoint اتغير وFCM رجع 201، فالمشكلة خارج كود الاشتراك نفسه ونركز على Chrome/Google Push Service على الجهاز أو نجرب جهاز/متصفح آخر للمقارنة.</div>
               ) : resultMode === 'empty' ? (
                 <div className="text-amber-500 font-bold leading-6">⚠️ حتى الـPush الفارغ رجع FCM 201 ولم يصل للـService Worker. إذًا المشكلة ليست تشفير payload؛ المشكلة في تسليم FCM لهذا الاشتراك/Chrome نفسه.</div>
               ) : (
