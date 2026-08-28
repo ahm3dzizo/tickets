@@ -79,6 +79,49 @@ export type PushRepairResult = {
   error?: string;
 };
 
+export type LocalNotificationResult = {
+  ok: boolean;
+  permission: NotificationPermission | 'unsupported';
+  serviceWorker: boolean;
+  error?: string;
+};
+
+export async function showLocalNotificationTest(): Promise<LocalNotificationResult> {
+  const result: LocalNotificationResult = {
+    ok: false,
+    permission: 'unsupported',
+    serviceWorker: false,
+  };
+
+  try {
+    if (!isPushSupported()) throw new Error('المتصفح لا يدعم إشعارات Web Push');
+    const permission = await Notification.requestPermission();
+    result.permission = permission;
+    if (permission !== 'granted') throw new Error('إذن الإشعارات غير مسموح');
+
+    const reg = await getRegistration();
+    result.serviceWorker = !!reg.active;
+    if (!result.serviceWorker) throw new Error('Service Worker غير نشط');
+
+    await reg.showNotification('🔔 اختبار محلي من Knot', {
+      body: 'هذا الإشعار لا يستخدم FCM أو السيرفر. لو ظهر فطبقة عرض إشعارات المتصفح سليمة.',
+      icon: '/logo-192.png',
+      badge: '/logo-192.png',
+      tag: `knot-local-test-${Date.now()}`,
+      requireInteraction: true,
+      dir: 'rtl',
+      lang: 'ar',
+      data: { url: '/push-test' },
+    });
+
+    result.ok = true;
+    return result;
+  } catch (err: any) {
+    result.error = err?.message || String(err);
+    return result;
+  }
+}
+
 export async function repairAndTestPush(authHeader: string, isTech = false): Promise<PushRepairResult> {
   const result: PushRepairResult = {
     supported: false,
