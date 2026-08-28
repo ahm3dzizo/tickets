@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
-import { BellRing, CheckCircle2, Loader2, RefreshCw, XCircle, Smartphone } from 'lucide-react';
+import { BellRing, CheckCircle2, Loader2, RefreshCw, XCircle, Smartphone, Send } from 'lucide-react';
 import { authStorage } from '@/lib/api';
 import {
   repairAndTestPush,
+  retestCurrentPush,
   showLocalNotificationTest,
   type PushRepairResult,
   type LocalNotificationResult,
@@ -12,6 +13,7 @@ import {
 
 export default function PushDiagnostics() {
   const [running, setRunning] = useState(false);
+  const [retesting, setRetesting] = useState(false);
   const [localRunning, setLocalRunning] = useState(false);
   const [result, setResult] = useState<PushRepairResult | null>(null);
   const [localResult, setLocalResult] = useState<LocalNotificationResult | null>(null);
@@ -25,6 +27,18 @@ export default function PushDiagnostics() {
       setResult(await repairAndTestPush(`Bearer ${token}`, false));
     } finally {
       setRunning(false);
+    }
+  };
+
+  const retest = async () => {
+    const token = authStorage.getToken();
+    if (!token) return;
+    setRetesting(true);
+    setResult(null);
+    try {
+      setResult(await retestCurrentPush(`Bearer ${token}`, false));
+    } finally {
+      setRetesting(false);
     }
   };
 
@@ -55,14 +69,20 @@ export default function PushDiagnostics() {
             </div>
             <div>
               <h1 className="text-xl font-black">فحص وإصلاح الإشعارات</h1>
-              <p className="text-xs text-muted-foreground mt-1">يجدد اشتراك هذا الجهاز ثم يرسل Push حقيقي له فقط، ويتأكد هل Service Worker استلمه فعلًا.</p>
+              <p className="text-xs text-muted-foreground mt-1">يتأكد من الاشتراك الحالي، ثم يرسل Push حقيقي لهذا الجهاز ويتابع وصوله للـService Worker.</p>
             </div>
           </div>
 
-          <Button onClick={run} disabled={running} className="w-full h-11 mt-4 rounded-2xl font-black gap-2">
+          <Button onClick={run} disabled={running || retesting} className="w-full h-11 mt-4 rounded-2xl font-black gap-2">
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             {running ? 'جارٍ الإصلاح وتتبع وصول Push...' : 'إصلاح واختبار Push الحقيقي'}
           </Button>
+
+          <Button variant="secondary" onClick={retest} disabled={running || retesting} className="w-full h-11 mt-3 rounded-2xl font-black gap-2">
+            {retesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {retesting ? 'جارٍ الإرسال على نفس الاشتراك...' : 'إرسال Push مرة ثانية بدون تجديد الاشتراك'}
+          </Button>
+          <p className="text-[11px] text-muted-foreground mt-2 leading-5">الزر الثاني لا يعمل unsubscribe أو subscribe؛ يستخدم نفس endpoint الموجود على الجهاز كما هو.</p>
         </div>
 
         <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
@@ -89,9 +109,7 @@ export default function PushDiagnostics() {
               {localResult.error ? (
                 <div className="text-red-500 font-bold">❌ {localResult.error}</div>
               ) : (
-                <div className="font-bold text-foreground leading-6">
-                  لو ما ظهرش إشعار بعنوان «اختبار محلي من Knot» بعد نجاح الخطوات دي، فالمشكلة من إعدادات إشعارات Android/المتصفح وليست من السيرفر أو FCM.
-                </div>
+                <div className="font-bold text-foreground leading-6">طبقة عرض الإشعارات المحلية سليمة على هذا الجهاز.</div>
               )}
             </div>
           )}
@@ -102,30 +120,22 @@ export default function PushDiagnostics() {
             {row('المتصفح يدعم Web Push', result.supported)}
             {row('إذن الإشعارات مسموح', result.permission === 'granted')}
             {row('Service Worker شغال', result.serviceWorker)}
-            {row('تم إنشاء Push Subscription جديد', result.subscribed)}
+            {row(result.subscriptionCreated ? 'تم إنشاء Push Subscription جديد' : 'تم استخدام Push Subscription الحالي', result.subscribed)}
             {row('تم حفظ اشتراك هذا الجهاز على السيرفر', result.saved)}
             {row(`FCM قبل رسالة هذا الجهاز${result.statusCode ? ` — ${result.statusCode}` : ''}`, result.testAccepted && result.delivered === 1)}
             {row('Service Worker استلم push event فعليًا', result.swPushReceived === true)}
 
             <div className="mt-4 rounded-2xl bg-muted/50 p-4 text-sm space-y-2">
               {result.endpointHost && <div className="text-muted-foreground text-xs">مزود Push: {result.endpointHost}</div>}
-              {result.swPushEvent?.receivedAt && (
-                <div className="text-muted-foreground text-xs">وقت وصول الحدث: {new Date(result.swPushEvent.receivedAt).toLocaleString('ar-SA')}</div>
-              )}
-              {result.swPushEvent?.title && (
-                <div className="text-muted-foreground text-xs">عنوان الـpayload: {result.swPushEvent.title}</div>
-              )}
+              {result.swPushEvent?.receivedAt && <div className="text-muted-foreground text-xs">وقت وصول الحدث: {new Date(result.swPushEvent.receivedAt).toLocaleString('ar-SA')}</div>}
+              {result.swPushEvent?.title && <div className="text-muted-foreground text-xs">عنوان الـpayload: {result.swPushEvent.title}</div>}
 
               {result.error ? (
                 <div className="text-red-500 font-bold">❌ {result.error}</div>
               ) : result.swPushReceived ? (
-                <div className="text-emerald-500 font-bold leading-6">
-                  ✅ FCM قبل الرسالة والـService Worker استلمها فعلًا. لو الإشعار نفسه لم يظهر، نركز على تنفيذ showNotification داخل حدث push.
-                </div>
+                <div className="text-emerald-500 font-bold leading-6">✅ FCM قبل الرسالة والـService Worker استلمها فعلًا.</div>
               ) : (
-                <div className="text-amber-500 font-bold leading-6">
-                  ⚠️ FCM قبل الرسالة، لكن لم نسجل وصول push event للـService Worker خلال 6 ثوانٍ. المشكلة بين FCM واشتراك المتصفح/الجهاز، وليست في عرض الإشعارات المحلي.
-                </div>
+                <div className="text-amber-500 font-bold leading-6">⚠️ FCM قبل الرسالة، لكن لم نسجل وصول push event للـService Worker خلال نافذة الانتظار. جرّب زر «إرسال Push مرة ثانية بدون تجديد الاشتراك»؛ لو كرر 201 بدون SW ACK، يبقى المشكلة في تسليم FCM للاشتراك الحالي نفسه.</div>
               )}
             </div>
           </div>
