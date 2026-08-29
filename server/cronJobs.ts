@@ -459,11 +459,12 @@ async function runMinutePushJobs() {
 // ── Schedule ─────────────────────────────────────────────────────────────────
 export function startCronJobs() {
   const WEEKDAYS = '0-4';
+  const ADMIN_DAYS = '0-4,6';
 
   cron.schedule(`0 5 * * ${WEEKDAYS}`, notifyTechniciansAppointments, { timezone: 'UTC' });
   cron.schedule(`10 5 * * ${WEEKDAYS}`, notifySupervisorsAttendance, { timezone: 'UTC' });
   cron.schedule(`0 13 * * ${WEEKDAYS}`, notifyEngineersClosureSummary, { timezone: 'UTC' });
-  cron.schedule(`0 13 * * ${WEEKDAYS}`, notifyAdminDailySummary, { timezone: 'UTC' });
+  cron.schedule(`0 13 * * ${ADMIN_DAYS}`, notifyAdminDailySummary, { timezone: 'UTC' });
   cron.schedule(`0 5,7,9,11,13 * * ${WEEKDAYS}`, notifyLateTickets, { timezone: 'UTC' });
 
   // Operational notifications: every minute, all days.
