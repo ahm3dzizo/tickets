@@ -14,16 +14,150 @@ import prisma from "../db.js";
 import { normalizeArabic, classifyFromKeywordsDB, loadKeywordsFromDB } from "../classifier/keywords.js";
 import { buildTypeToSpecialtyMap, selectSupervisorCoverage, uniqueStringList } from "../classifier/db-helpers.js";
 
+type ImportDateFormat = "DD/MM/YYYY" | "MM/DD/YYYY";
+
+type ParsedSlashDate = {
+  first: number;
+  second: number;
+  year: number;
+};
+
+function parseDelimitedDateParts(raw: unknown): ParsedSlashDate | null {
+  if (typeof raw !== "string") return null;
+
+  const match = raw
+    .trim()
+    .match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s*,?\s+.*)?$/);
+
+  if (!match) return null;
+
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  let year = Number(match[3]);
+  if (year < 100) year += 2000;
+
+  if (
+    !Number.isInteger(first) ||
+    !Number.isInteger(second) ||
+    !Number.isInteger(year) ||
+    first < 1 ||
+    first > 31 ||
+    second < 1 ||
+    second > 31 ||
+    year < 2000
+  ) {
+    return null;
+  }
+
+  return { first, second, year };
+}
+
+function buildCandidateUtc(parts: ParsedSlashDate, format: ImportDateFormat): number | null {
+  const month = format === "MM/DD/YYYY" ? parts.first : parts.second;
+  const day = format === "MM/DD/YYYY" ? parts.second : parts.first;
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  const candidate = new Date(Date.UTC(parts.year, month - 1, day, 12, 0, 0));
+  if (
+    candidate.getUTCFullYear() !== parts.year ||
+    candidate.getUTCMonth() !== month - 1 ||
+    candidate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return candidate.getTime();
+}
+
+function detectRecentImportDateFormat(rows: any[], dateColumn: string): ImportDateFormat {
+  const parsedDates = rows
+    .map((row) => parseDelimitedDateParts(row[dateColumn]))
+    .filter((value): value is ParsedSlashDate => value !== null);
+
+  if (parsedDates.length === 0) {
+    console.warn("[IMPORT DATE FORMAT] No delimited dates found; using DD/MM/YYYY");
+    return "DD/MM/YYYY";
+  }
+
+  // A value above 12 cannot be a month, so any such row is decisive.
+  let ddEvidence = 0;
+  let mmEvidence = 0;
+  for (const parts of parsedDates) {
+    if (parts.first > 12 && parts.second <= 12) ddEvidence++;
+    if (parts.second > 12 && parts.first <= 12) mmEvidence++;
+  }
+
+  if (ddEvidence !== mmEvidence) {
+    const detected: ImportDateFormat = ddEvidence > mmEvidence ? "DD/MM/YYYY" : "MM/DD/YYYY";
+    console.log(
+      `[IMPORT DATE FORMAT] Decisive rows | DD/MM: ${ddEvidence} | MM/DD: ${mmEvidence} | Detected: ${detected}`
+    );
+    return detected;
+  }
+
+  // Regular imports contain current/recent tickets. When all dates are
+  // ambiguous (for example 01/09 and 09/01), choose one format for the whole
+  // file by selecting the interpretation whose dates are closest to "now" in
+  // Saudi Arabia. This also handles files spanning the previous/current month.
+  const saudiNow = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh" })
+  );
+  const referenceUtc = Date.UTC(
+    saudiNow.getFullYear(),
+    saudiNow.getMonth(),
+    saudiNow.getDate(),
+    12,
+    0,
+    0
+  );
+
+  const score = (format: ImportDateFormat) => {
+    let totalDistance = 0;
+    let validCount = 0;
+
+    for (const parts of parsedDates) {
+      const candidate = buildCandidateUtc(parts, format);
+      if (candidate === null) continue;
+      totalDistance += Math.abs(candidate - referenceUtc);
+      validCount++;
+    }
+
+    return { totalDistance, validCount };
+  };
+
+  const dd = score("DD/MM/YYYY");
+  const mm = score("MM/DD/YYYY");
+
+  if (dd.validCount !== mm.validCount) {
+    const detected: ImportDateFormat = dd.validCount > mm.validCount ? "DD/MM/YYYY" : "MM/DD/YYYY";
+    console.log(
+      `[IMPORT DATE FORMAT] Validity score | DD/MM: ${dd.validCount} | MM/DD: ${mm.validCount} | Detected: ${detected}`
+    );
+    return detected;
+  }
+
+  const detected: ImportDateFormat =
+    mm.totalDistance < dd.totalDistance ? "MM/DD/YYYY" : "DD/MM/YYYY";
+
+  console.log(
+    `[IMPORT DATE FORMAT] Recent-file proximity | DD/MM distance: ${dd.totalDistance} | ` +
+    `MM/DD distance: ${mm.totalDistance} | Detected: ${detected}`
+  );
+
+  return detected;
+}
+
 // بيحلل ملف الإكسل ويكتشف صف العناوين، ويفلتر التذاكر المغلقة القديمة جداً.
 // (كان ده شغال في worker thread منفصل عبر ملف مؤقت، لكن نصوص القالب المتداخلة
 // جوه الكود كانت بتتفسر غلط، وملف الـ worker المؤقت في /tmp مكانش قادر يلاقي
 // حزمة xlsx أصلاً — فالاستيراد كان بيفشل. التحليل نفسه سريع جداً حتى لآلاف
 // الصفوف، فمفيش داعي لتعقيد الـ worker thread من الأساس.)
 function parseExcelAndDetectHeaders(
-  buffer: Buffer, 
-  fieldAliases: Record<string, string[]>, 
+  buffer: Buffer,
+  fieldAliases: Record<string, string[]>,
   skipDateFilter: boolean = false
-): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: "DD/MM/YYYY" | "MM/DD/YYYY" } {
+): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: ImportDateFormat } {
   const wb = XLSX.read(buffer, { type: "buffer", cellFormula: false, cellHTML: false, cellStyles: false, cellNF: false, sheetStubs: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
@@ -52,92 +186,25 @@ function parseExcelAndDetectHeaders(
     mapping[key] = autoMatch(cols, aliases);
   }
 
-  // ============================================================
-  // Detect Excel Date Format using the LAST VALID DATE in the
-  // SAME EXCEL FILE and the CURRENT MONTH in Saudi Arabia.
-  //
-  // Example in August:
-  //
-  //   18/08/2026
-  //    ^  ^
-  //    |  +-- current month => DD/MM/YYYY
-  //
-  //   08/18/2026
-  //    ^
-  //    +----- current month => MM/DD/YYYY
-  //
-  // We intentionally do NOT use the database date here.
-  // We also do NOT use "max first part / max second part",
-  // because that can silently reverse ambiguous dates.
-  // ============================================================
+  let detectedFormat: ImportDateFormat = "DD/MM/YYYY";
 
-  let detectedFormat: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY";
+  if (mapping["createdAt"] && !skipDateFilter) {
+    detectedFormat = detectRecentImportDateFormat(allData, mapping["createdAt"]);
+  } else if (mapping["createdAt"]) {
+    // Historical/all-ticket imports may legitimately contain old dates, so do
+    // not infer their layout from proximity to the current date.
+    const parsedDates = allData
+      .map((row) => parseDelimitedDateParts(row[mapping["createdAt"]]))
+      .filter((value): value is ParsedSlashDate => value !== null);
 
-  if (mapping["createdAt"]) {
-    // Current month according to Saudi Arabia timezone.
-    const saudiNow = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh" })
+    const ddEvidence = parsedDates.filter((p) => p.first > 12 && p.second <= 12).length;
+    const mmEvidence = parsedDates.filter((p) => p.second > 12 && p.first <= 12).length;
+    if (mmEvidence > ddEvidence) detectedFormat = "MM/DD/YYYY";
+
+    console.log(
+      `[IMPORT DATE FORMAT] Historical import | DD/MM evidence: ${ddEvidence} | ` +
+      `MM/DD evidence: ${mmEvidence} | Detected: ${detectedFormat}`
     );
-    const currentMonth = saudiNow.getMonth() + 1;
-
-    let lastDateParts: { first: number; second: number } | null = null;
-
-    // Search from the END of the Excel file.
-    // The last valid ticket date is our reference.
-    for (let i = allData.length - 1; i >= 0; i--) {
-      const rawDate = allData[i][mapping["createdAt"]];
-
-      if (typeof rawDate !== "string") continue;
-
-      const str = rawDate.trim();
-      if (!str || !str.includes("/")) continue;
-
-      const parts = str.split("/");
-
-      if (parts.length < 2) continue;
-
-      const first = parseInt(parts[0], 10);
-      const second = parseInt(parts[1], 10);
-
-      if (
-        Number.isInteger(first) &&
-        Number.isInteger(second) &&
-        first >= 1 &&
-        first <= 31 &&
-        second >= 1 &&
-        second <= 31
-      ) {
-        lastDateParts = { first, second };
-        break;
-      }
-    }
-
-    if (lastDateParts) {
-      const { first, second } = lastDateParts;
-
-      if (first === currentMonth && second !== currentMonth) {
-        // Example: 08/18/2026 in August
-        detectedFormat = "MM/DD/YYYY";
-      } else if (second === currentMonth && first !== currentMonth) {
-        // Example: 18/08/2026 in August
-        detectedFormat = "DD/MM/YYYY";
-      } else {
-        // Ambiguous or unrelated month:
-        // keep Saudi Arabia default.
-        detectedFormat = "DD/MM/YYYY";
-      }
-
-      console.log(
-        `[IMPORT DATE FORMAT] Last Excel date: ${first}/${second} | ` +
-        `Current Saudi month: ${currentMonth} | ` +
-        `Detected: ${detectedFormat}`
-      );
-    } else {
-      console.warn(
-        "[IMPORT DATE FORMAT] No valid slash-formatted date found in Excel; " +
-        "using default DD/MM/YYYY"
-      );
-    }
   }
 
   let maxTime = 0;
@@ -320,7 +387,7 @@ function excelSerialToDate(serial: number): Date {
 
 function normalizeDate(
   raw: unknown,
-  formatHint: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY"
+  formatHint: ImportDateFormat = "DD/MM/YYYY"
 ): string {
   if (raw === null || raw === undefined || String(raw).trim() === "") {
     return new Date().toISOString().split("T")[0];
@@ -341,16 +408,13 @@ function normalizeDate(
 
   const str = String(raw).trim();
 
-  // ------------------------------------------------------------
   // Handle dates such as:
   // 8/16/2026, 1:22 PM
   // 18/08/2026, 1:22 PM
-  // 8/16/2026
-  // 18/08/2026
-  // ------------------------------------------------------------
-
+  // 8-16-2026
+  // 18-08-2026
   const match = str.match(
-    /^(\\d{1,2})[\\/](\\d{1,2})[\\/](\\d{2,4})(?:\\s*,?\\s+.*)?$/
+    /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s*,?\s+.*)?$/
   );
 
   if (match) {
@@ -410,7 +474,7 @@ function normalizeDate(
   return str.split("T")[0] || new Date().toISOString().split("T")[0];
 }
 
-function normalizeClosedAt(raw: unknown, issuedAt: string, formatHint: "DD/MM/YYYY" | "MM/DD/YYYY" = "DD/MM/YYYY"): string | null {
+function normalizeClosedAt(raw: unknown, issuedAt: string, formatHint: ImportDateFormat = "DD/MM/YYYY"): string | null {
   if (raw === null || raw === undefined || String(raw).trim() === "") return null;
   if (raw instanceof Date && !isNaN(raw.getTime())) return raw.toISOString();
   if (typeof raw === "number" && raw > 40000) {
@@ -492,7 +556,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     // ── 2 & 3. Parse Excel + detect headers ──────────────────────────────────
     const buffer = fs.readFileSync(filePath);
     fs.unlinkSync(filePath); // حذف الملف المؤقت فوراً
-    
+
     const fieldAliases: Record<string, string[]> = {
       ticketId:    ["رقم التذكرة", "ID", "id", "الرقم", "#", "رقم الطلب", "Case Number"],
       excelUnitReference: ["رقم الفيلا", "فيلا", "villa", "رقم الوحدة", "الوحدة", "Unit"],
@@ -549,9 +613,9 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     const existingMap = new Map(existingRows.map((t) => [normalizeTicketId(String(t.ticketId).trim()), t]));
     // Excel-only lookup:
-// The Excel value is used ONLY to resolve the real Unit record.
-// After resolution, the system works exclusively with Unit.id.
-const excelUnitLookup = new Map<string, {
+    // The Excel value is used ONLY to resolve the real Unit record.
+    // After resolution, the system works exclusively with Unit.id.
+    const excelUnitLookup = new Map<string, {
       id: string;
       clientId: string | null;
     }>();
@@ -644,10 +708,10 @@ const excelUnitLookup = new Map<string, {
         seenInFile.add(ticketId);
 
         const description = String(get("description") || "").trim();
-        
+
         // تجاهل صفوف المواعيد التي يتم تصديرها من النظام (كأنها تذاكر جديدة)
         if ((description.startsWith("الموعد") || description.startsWith("موعد")) && description.length < 100) {
-          skippedInFile++; 
+          skippedInFile++;
           continue;
         }
 
