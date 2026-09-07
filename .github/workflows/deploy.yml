@@ -93,6 +93,7 @@ jobs:
             -i "$KEY_FILE" \
             -p "$SSH_PORT" \
             -o BatchMode=yes \
+            -o ConnectTimeout=15 \
             -o IdentitiesOnly=yes \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=3 \
@@ -187,8 +188,8 @@ jobs:
 
           echo "Deploying $(git rev-parse --short=12 HEAD)"
 
-          echo "Installing locked dependencies..."
-          npm ci --legacy-peer-deps --no-audit --no-fund
+          echo "Installing locked dependencies including peer dependencies..."
+          npm ci --no-audit --no-fund
 
           echo "Generating Prisma client..."
           npx prisma generate
