@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { authApi, usersApi, whatsappApi, whatsappBotApi, settingsApi, projectsApi } from '@/lib/api';
+import { authApi, usersApi, whatsappApi, whatsappBotApi, settingsApi, projectsApi, authStorage } from '@/lib/api';
+import { registerPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
 import type { WorkHoursConfig, WorkHoursSettings } from '@/lib/api';
 import type { Project } from '@/types';
 import { toast } from 'sonner';
@@ -705,15 +706,18 @@ export default function Settings() {
           <div className="border-t border-border/40 pt-4 space-y-2">
             <p className="text-foreground font-bold text-sm text-right">إعدادات المتصفح</p>
             <Button onClick={async () => {
-              if (!('Notification' in window)) { toast.error('المتصفح لا يدعم الإشعارات'); return; }
-              if (Notification.permission === 'denied') { toast.error('الإشعارات محظورة — افتح إعدادات المتصفح'); return; }
-              const p = await Notification.requestPermission();
-              if (p === 'granted') toast.success('تم تفعيل إشعارات المتصفح 🎉');
-              else toast.error('تم رفض صلاحية الإشعارات');
+              if (!isPushSupported()) { toast.error('هذا المتصفح لا يدعم إشعارات التطبيق'); return; }
+              if (getPushPermission() === 'denied') { toast.error('الإشعارات محظورة — اسمح بها من إعدادات التطبيق أو المتصفح'); return; }
+              const token = authStorage.getToken();
+              if (!token) { toast.error('انتهت الجلسة — سجّل الدخول مرة أخرى'); return; }
+              const enabled = await registerPush(`Bearer ${token}`);
+              if (enabled) toast.success('تم تشغيل إشعارات التطبيق 🎉');
+              else if (getPushPermission() === 'denied') toast.error('لم يتم السماح بالإشعارات');
+              else toast.error('تعذر تشغيل الإشعارات، حاول مرة أخرى');
             }} variant="outline" className="w-full rounded-xl h-11 justify-between px-4">
               <Bell className="w-4 h-4 ml-2" />
               <span className="flex-1 text-right text-sm">
-                طلب صلاحية إشعارات المتصفح
+                تشغيل إشعارات التطبيق
                 {typeof window !== 'undefined' && 'Notification' in window && (
                   <span className={cn('mr-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
                     Notification.permission === 'granted' ? 'bg-emerald-500/10 text-emerald-500' :
