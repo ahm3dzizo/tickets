@@ -16,6 +16,7 @@ import userRoutes from "./routes/users.js";
 import projectRoutes from "./routes/projects.js";
 import clientRoutes from "./routes/clients.js";
 import ticketRoutes from "./routes/tickets.js";
+import ticketAttachmentRoutes from "./routes/ticket-attachments.js";
 import technicianRoutes from "./routes/technicians.js";
 import classifyRoutes from "./routes/classify.js";
 import reportRoutes from "./routes/report.js";
@@ -38,6 +39,7 @@ import notificationRoutes from "./routes/notifications.js";
 import warehouseRoutes from "./routes/warehouse.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
+import { requireTicketMutationAccess } from "./middleware/ticket-access.js";
 import { startCronJobs } from "./cronJobs.js";
 import { initVapid } from "./pushService.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
@@ -83,6 +85,11 @@ async function startServer() {
   app.use("/api/users", userRoutes);
   app.use("/api/projects", projectRoutes);
   app.use("/api/clients", clientRoutes);
+  app.use("/api/ticket-attachments", ticketAttachmentRoutes);
+  // Defense in depth for ticket edits: authenticated users may only mutate
+  // tickets in projects they can access, and explicit supervisor assignments
+  // must stay inside the same project.
+  app.put("/api/tickets/:id", requireAuth, requireTicketMutationAccess);
   app.use("/api/tickets", ticketRoutes);
   app.use("/api/technicians", technicianRoutes);
   app.use("/api/tech", techAuthRoutes);

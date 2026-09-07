@@ -96,6 +96,7 @@ export interface Ticket {
   assignedSupervisorId?: string;
   assignedSupervisors?: { id: string; name: string; specialty?: string }[];
   detectedTypes?: string[];
+  detectedSubTypeIds?: string[];
   subTypeId?: string | null;
   subTypeName?: string | null;
   appointmentTime?: string | null;

@@ -23,11 +23,9 @@ import { Layout } from '@/components/layout/Layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
+import { TicketEditDialog } from '@/components/tickets/TicketEditDialog';
 import { TicketMediaCarousel } from '@/components/tickets/TicketMediaCarousel';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
 import { ticketsApi, projectsApi, clientsApi, auditApi, settingsApi, whatsappApi } from '@/lib/api';
@@ -35,13 +33,10 @@ import { cn } from '@/lib/utils';
 import { formatTicketDate, formatTicketDateTime } from '@/lib/ticketDate';
 import { extractTicketMedia } from '@/lib/ticketMedia';
 import { ticketDetailText } from '@/i18n/ticketDetail';
-import { invalidateTicketCache } from '@/lib/ticketCache';
 import { Client, Project, Ticket } from '@/types';
 import { toast } from 'sonner';
 
 const t = ticketDetailText.ar;
-const STATUS_OPTIONS = ['open', 'in_progress', 'waiting', 'pending', 'completed', 'closed', 'absent', 'out_of_scope'] as const;
-const PRIORITY_OPTIONS = ['9', '7', '6', '4', '3'] as const;
 
 function normalizeStatus(status: string): string {
   if (status === 'in-progress') return 'in_progress';
@@ -119,10 +114,6 @@ export default function TicketDetailCarousel() {
   const [editOpen, setEditOpen] = useState(false);
   const [showAllAudit, setShowAllAudit] = useState(false);
   const [waSending, setWaSending] = useState(false);
-  const [editSaving, setEditSaving] = useState(false);
-  const [editStatus, setEditStatus] = useState('open');
-  const [editPriority, setEditPriority] = useState('3');
-  const [editDescription, setEditDescription] = useState('');
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -169,34 +160,6 @@ export default function TicketDetailCarousel() {
     const raw = ticket.detectedTypes?.length ? ticket.detectedTypes : [ticket.type];
     return [...new Set(raw.filter(Boolean))];
   }, [ticket]);
-
-  const openEdit = () => {
-    if (!ticket) return;
-    setEditStatus(normalizeStatus(ticket.status));
-    setEditPriority(String(ticket.priority));
-    setEditDescription(ticket.description ?? '');
-    setEditOpen(true);
-  };
-
-  const saveEdit = async () => {
-    if (!ticket) return;
-    setEditSaving(true);
-    try {
-      await ticketsApi.update(ticket.id, {
-        status: editStatus,
-        priority: Number.isFinite(Number(editPriority)) ? Number(editPriority) : editPriority,
-        description: editDescription,
-      });
-      invalidateTicketCache();
-      toast.success(t.updateSuccess);
-      setEditOpen(false);
-      await loadData();
-    } catch {
-      toast.error(t.updateFailed);
-    } finally {
-      setEditSaving(false);
-    }
-  };
 
   const sendWhatsApp = async () => {
     if (!ticket) return;
@@ -349,7 +312,7 @@ export default function TicketDetailCarousel() {
               <FileText className="h-5 w-5 text-primary" />
               {t.ticketInfo}
             </CardTitle>
-            <Button variant="ghost" size="sm" className="rounded-xl bg-primary/5 text-primary" onClick={openEdit}>
+            <Button variant="ghost" size="sm" className="rounded-xl bg-primary/5 text-primary" onClick={() => setEditOpen(true)}>
               <Pencil className="me-1.5 h-4 w-4" />
               {t.edit}
             </Button>
@@ -450,11 +413,11 @@ export default function TicketDetailCarousel() {
             <div className="min-w-0 [&>button]:h-14 [&>button]:w-full [&>button]:min-w-0 [&>button]:justify-center [&>button]:overflow-hidden [&>button]:border-amber-500/20 [&>button]:bg-amber-500/10 [&>button]:text-amber-700 dark:[&>button]:text-amber-300">
               <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
             </div>
-            <Button variant="outline" className="h-14 min-w-0 rounded-2xl border-emerald-500/20 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300" onClick={openEdit}>
+            <Button variant="outline" className="h-14 min-w-0 rounded-2xl border-emerald-500/20 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300" onClick={() => setEditOpen(true)}>
               <MessageSquareText className="me-2 h-4 w-4 shrink-0" />
               <span className="truncate">{t.addNote}</span>
             </Button>
-            <Button variant="outline" className="h-14 min-w-0 rounded-2xl border-violet-500/20 bg-violet-500/10 text-violet-700 hover:bg-violet-500/15 dark:text-violet-300" onClick={openEdit}>
+            <Button variant="outline" className="h-14 min-w-0 rounded-2xl border-violet-500/20 bg-violet-500/10 text-violet-700 hover:bg-violet-500/15 dark:text-violet-300" onClick={() => setEditOpen(true)}>
               <Paperclip className="me-2 h-4 w-4 shrink-0" />
               <span className="truncate">{t.addAttachment}</span>
             </Button>
@@ -519,48 +482,12 @@ export default function TicketDetailCarousel() {
         )}
       </div>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] overflow-y-auto rounded-3xl sm:max-w-lg" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="text-right">{t.editTitle}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">{t.status}</label>
-              <Select value={editStatus} onValueChange={setEditStatus}>
-                <SelectTrigger className="w-full rounded-xl"><SelectValue placeholder={t.selectStatus} /></SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map(value => <SelectItem key={value} value={value}>{t.statuses[value]}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">{t.priority}</label>
-              <Select value={editPriority} onValueChange={setEditPriority}>
-                <SelectTrigger className="w-full rounded-xl"><SelectValue placeholder={t.selectPriority} /></SelectTrigger>
-                <SelectContent>
-                  {PRIORITY_OPTIONS.map(value => <SelectItem key={value} value={value}>{t.priorities[value]}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">{t.description}</label>
-              <Textarea
-                value={editDescription}
-                onChange={event => setEditDescription(event.target.value)}
-                placeholder={t.descriptionPlaceholder}
-                className="min-h-36 rounded-xl text-right"
-              />
-              <p className="text-[11px] leading-5 text-muted-foreground">{t.videoLinkHint}</p>
-            </div>
-          </div>
-          <DialogFooter className="sm:justify-start">
-            <Button onClick={saveEdit} disabled={editSaving} className="w-full rounded-xl sm:w-auto">
-              {editSaving ? t.saving : t.save}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TicketEditDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        ticket={ticket}
+        onSaved={loadData}
+      />
 
       <CloseTicketDialog
         open={closeOpen}

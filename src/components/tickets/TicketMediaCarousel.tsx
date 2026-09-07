@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, ImageIcon, PlayCircle, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { authStorage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { isDisplayableTicketMedia, TicketMediaItem } from '@/lib/ticketMedia';
 import { ticketDetailText } from '@/i18n/ticketDetail';
@@ -12,9 +13,63 @@ interface TicketMediaCarouselProps {
   className?: string;
 }
 
+function isProtectedTicketAttachment(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.origin === window.location.origin && parsed.pathname.startsWith('/api/ticket-attachments/');
+  } catch {
+    return false;
+  }
+}
+
 function MediaSlide({ item }: { item: TicketMediaItem }) {
+  const protectedAttachment = isProtectedTicketAttachment(item.url);
   const [failed, setFailed] = useState(false);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(protectedAttachment ? null : item.url);
   const isVideo = item.kind === 'video' || item.kind === 'youtube' || item.kind === 'vimeo';
+
+  useEffect(() => {
+    setFailed(false);
+
+    if (!protectedAttachment) {
+      setSourceUrl(item.url);
+      return;
+    }
+
+    const token = authStorage.getToken();
+    if (!token) {
+      setSourceUrl(null);
+      setFailed(true);
+      return;
+    }
+
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    setSourceUrl(null);
+
+    fetch(item.url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.blob();
+      })
+      .then(blob => {
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSourceUrl(objectUrl);
+      })
+      .catch(error => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setFailed(true);
+      });
+
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [item.url, protectedAttachment]);
 
   if (failed) {
     return (
@@ -44,12 +99,20 @@ function MediaSlide({ item }: { item: TicketMediaItem }) {
     );
   }
 
+  if (!sourceUrl) {
+    return (
+      <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted/20 sm:aspect-video">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+      </div>
+    );
+  }
+
   if (item.kind === 'video') {
     return (
       <div className="flex aspect-[4/3] w-full items-center justify-center bg-black sm:aspect-video">
         <video
-          key={item.url}
-          src={item.url}
+          key={sourceUrl}
+          src={sourceUrl}
           controls
           controlsList="nodownload"
           playsInline
@@ -66,7 +129,7 @@ function MediaSlide({ item }: { item: TicketMediaItem }) {
   return (
     <div className="flex aspect-[4/3] w-full items-center justify-center bg-black/5 sm:aspect-video">
       <img
-        src={item.url}
+        src={sourceUrl}
         alt={t.imageAttachment}
         loading="lazy"
         decoding="async"
