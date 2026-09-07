@@ -68,7 +68,7 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
+      <div className="flex h-screen w-full max-w-full overflow-x-hidden items-center justify-center bg-background">
         <img src="/logo.png" alt="Tickets" className="w-40 h-40 object-contain animate-pulse" />
       </div>
     );
@@ -98,7 +98,7 @@ function AppContent() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-background text-foreground selection:bg-primary/30">
+      <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-background text-foreground selection:bg-primary/30">
         <Routes>
           <Route path="/login" element={user && !requiresProfileCompletion ? <Navigate to="/" /> : <Login />} />
           <Route path="/" element={protectedElement(<Dashboard />)} />
