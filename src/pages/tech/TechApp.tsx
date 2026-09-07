@@ -29,36 +29,11 @@ import {
   Settings,
   Briefcase,
   Shield,
+  BellRing,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import './tech.css';
-import { registerPush, unregisterPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
-import { Bell, BellRing, BellOff } from 'lucide-react';
-
-// Push notification button for the TechApp header
-function TechPushButton({ token, lang }: { token: string | null; lang: TechLang }) {
-  const [perm, setPerm] = React.useState<NotificationPermission>('default');
-  React.useEffect(() => { if (isPushSupported()) setPerm(getPushPermission()); }, []);
-  if (!isPushSupported() || !token) return null;
-  const toggle = async () => {
-    if (perm === 'granted') {
-      await unregisterPush();
-      setPerm('default');
-      toast.info(t(lang, 'notificationsDisabled'));
-    } else {
-      const ok = await registerPush(`Bearer ${token}`, true);
-      const p = getPushPermission();
-      setPerm(p);
-      if (ok) toast.success(`✅ ${t(lang, 'notificationsEnabled')}`);
-      else if (p === 'denied') toast.error(t(lang, 'notificationsDenied'));
-    }
-  };
-  return (
-    <button onClick={toggle} className="tech-icon-btn" title={t(lang, perm === 'granted' ? 'notificationsDisable' : 'notificationsEnable')}>
-      {perm === 'granted' ? <BellRing size={18} style={{ color: '#22c55e' }} /> : perm === 'denied' ? <BellOff size={18} style={{ opacity: 0.5 }} /> : <Bell size={18} style={{ opacity: 0.5 }} />}
-    </button>
-  );
-}
+import { registerPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
 
 type Tab = 'home' | 'appointments' | 'profile';
 type Theme = 'light' | 'dark' | 'system';
@@ -143,6 +118,16 @@ export default function TechApp() {
   const [actionLoading, setActionLoading] = useState(false);
   const [expandedApptId, setExpandedApptId] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const handleEnablePush = async () => {
+    if (!token || !isPushSupported() || getPushPermission() === 'denied') {
+      toast.error(t(lang, 'notificationsDenied'));
+      return;
+    }
+    const enabled = await registerPush(`Bearer ${token}`, true);
+    if (enabled) toast.success(`✅ ${t(lang, 'notificationsEnabled')}`);
+    else if (getPushPermission() === 'denied') toast.error(t(lang, 'notificationsDenied'));
+  };
 
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
@@ -711,6 +696,24 @@ export default function TechApp() {
           </div>
         </section>
 
+        {/* Notifications */}
+        <section className="tech-settings-card slide-up">
+          <div className="tech-settings-header">
+            <BellRing size={16} />
+            {t(lang, 'notificationsEnable')}
+          </div>
+          <button
+            onClick={handleEnablePush}
+            className="tech-btn tech-btn-success"
+            type="button"
+          >
+            <BellRing size={17} />
+            {getPushPermission() === 'granted'
+              ? t(lang, 'notificationsEnabled')
+              : t(lang, 'notificationsEnable')}
+          </button>
+        </section>
+
         {/* Account Info */}
         <section className="tech-info-card slide-up">
           <div className="tech-settings-header">
@@ -748,7 +751,6 @@ export default function TechApp() {
         </div>
 
         <div className="tech-header-actions">
-          <TechPushButton token={token} lang={lang} />
           <button
             onClick={() => { setLoading(true); fetchData(); }}
             className="tech-icon-btn"
