@@ -7,8 +7,10 @@ export interface TicketMediaItem {
 }
 
 const URL_RE = /https?:\/\/[^\s<>"']+/gi;
-const DIRECT_VIDEO_RE = /\.(mp4|webm|ogg|m4v)(?:$|[?#])/i;
-const IMAGE_RE = /\.(png|jpe?g|webp|gif|avif)(?:$|[?#])/i;
+const DIRECT_VIDEO_RE = /\.(mp4|webm|ogg|ogv|m4v|mov)(?:$|[?#])/i;
+const IMAGE_RE = /\.(png|jpe?g|webp|gif|avif|bmp)(?:$|[?#])/i;
+const VIDEO_MIME_HINT_RE = /(?:video%2F|video\/)(?:mp4|webm|ogg|quicktime|x-m4v)/i;
+const IMAGE_MIME_HINT_RE = /(?:image%2F|image\/)(?:png|jpe?g|webp|gif|avif|bmp)/i;
 
 function trimTrailingPunctuation(value: string): string {
   return value.replace(/[),.،؛;\]}]+$/g, '');
@@ -42,9 +44,18 @@ function youtubeId(parsed: URL): string | null {
 
 function vimeoId(parsed: URL): string | null {
   const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-  if (host !== 'vimeo.com') return null;
+  if (host !== 'vimeo.com' && host !== 'player.vimeo.com') return null;
   const id = parsed.pathname.split('/').filter(Boolean).find(part => /^\d+$/.test(part));
   return id ?? null;
+}
+
+function mediaHint(parsed: URL): string {
+  const raw = `${parsed.pathname}${parsed.search}`;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }
 
 export function classifyTicketMedia(url: string): TicketMediaItem | null {
@@ -56,7 +67,7 @@ export function classifyTicketMedia(url: string): TicketMediaItem | null {
     return {
       url: parsed.toString(),
       kind: 'youtube',
-      embedUrl: `https://www.youtube-nocookie.com/embed/${ytId}`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${ytId}?playsinline=1&rel=0`,
     };
   }
 
@@ -65,19 +76,25 @@ export function classifyTicketMedia(url: string): TicketMediaItem | null {
     return {
       url: parsed.toString(),
       kind: 'vimeo',
-      embedUrl: `https://player.vimeo.com/video/${vmId}`,
+      embedUrl: `https://player.vimeo.com/video/${vmId}?playsinline=1`,
     };
   }
 
-  if (DIRECT_VIDEO_RE.test(parsed.pathname + parsed.search)) {
+  const hint = mediaHint(parsed);
+
+  if (DIRECT_VIDEO_RE.test(hint) || VIDEO_MIME_HINT_RE.test(hint)) {
     return { url: parsed.toString(), kind: 'video' };
   }
 
-  if (IMAGE_RE.test(parsed.pathname + parsed.search)) {
+  if (IMAGE_RE.test(hint) || IMAGE_MIME_HINT_RE.test(hint)) {
     return { url: parsed.toString(), kind: 'image' };
   }
 
   return { url: parsed.toString(), kind: 'link' };
+}
+
+export function isDisplayableTicketMedia(item: TicketMediaItem): boolean {
+  return item.kind === 'image' || item.kind === 'video' || item.kind === 'youtube' || item.kind === 'vimeo';
 }
 
 export function extractTicketMedia(text?: string | null): {
