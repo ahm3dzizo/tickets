@@ -57,14 +57,23 @@ export async function requireTicketMutationAccess(
         return;
       }
 
-      const ids = [...new Set(
-        req.body.assignedSupervisorIds
-          .filter((value: unknown): value is string => typeof value === "string")
-          .map((value: string) => value.trim())
-          .filter(Boolean),
-      )];
+      const rawIds: unknown[] = req.body.assignedSupervisorIds;
+      const normalizedIds: string[] = [];
+      for (const value of rawIds) {
+        if (typeof value !== "string") {
+          res.status(400).json({ error: "INVALID_SUPERVISOR_IDS" });
+          return;
+        }
+        const normalized = value.trim();
+        if (!normalized) {
+          res.status(400).json({ error: "INVALID_SUPERVISOR_IDS" });
+          return;
+        }
+        normalizedIds.push(normalized);
+      }
 
-      if (ids.length !== req.body.assignedSupervisorIds.length) {
+      const ids: string[] = [...new Set<string>(normalizedIds)];
+      if (ids.length !== rawIds.length) {
         res.status(400).json({ error: "INVALID_SUPERVISOR_IDS" });
         return;
       }
