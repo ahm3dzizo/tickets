@@ -36,6 +36,7 @@ export const ticketDetailText = {
     contactClient: 'إرسال تحديث للعميل',
     sending: 'جارٍ الإرسال...',
     callClient: 'اتصال بالعميل',
+    openWhatsAppChat: 'فتح محادثة واتساب',
     mediaTitle: 'الوسائط والمرفقات',
     mediaSubtitle: 'عرض الصور والفيديوهات المرتبطة بالتذكرة',
     mediaViewerOnly: 'عارض وسائط فقط',
