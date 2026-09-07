@@ -243,6 +243,7 @@ export default function TicketDetailCarousel() {
   const statusLabel = t.statuses[ticket.status] ?? t.statuses[normalizeStatus(ticket.status)] ?? ticket.status;
   const priorityLabel = t.priorities[String(ticket.priority)] ?? String(ticket.priority);
   const displayAudit = showAllAudit ? auditLog : auditLog.slice(0, 4);
+  const clientPhone = normalizePhone(client?.phone);
 
   return (
     <Layout>
@@ -261,28 +262,38 @@ export default function TicketDetailCarousel() {
               </Button>
 
               <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <h1 className="break-words text-xl font-black tracking-tight text-foreground sm:text-2xl">
-                      {t.ticketTitle} #{ticket.ticketId}
-                    </h1>
-                    {media.cleanText && (
-                      <p className="mt-1 line-clamp-3 break-words text-sm leading-6 text-muted-foreground">
-                        {media.cleanText}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <Badge variant="outline" className={cn('rounded-full px-3 py-1 text-xs font-black', priorityClass(ticket.priority))}>
-                      {priorityLabel}
-                    </Badge>
-                    <Badge variant="outline" className={cn('rounded-full px-3 py-1 text-xs font-black', statusClass(ticket.status))}>
-                      {statusLabel}
-                    </Badge>
-                  </div>
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h1 className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-foreground sm:text-2xl">
+                    {t.ticketTitle} #{ticket.ticketId}
+                  </h1>
+
+                  {clientPhone && (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <a
+                        href={`tel:+${clientPhone}`}
+                        aria-label={t.callClient}
+                        title={t.callClient}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/15 bg-primary/5 text-primary transition-colors hover:bg-primary/10"
+                      >
+                        <PhoneCall className="h-4 w-4" />
+                      </a>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label={t.contactClient}
+                        title={t.contactClient}
+                        className="h-9 w-9 rounded-xl border-emerald-500/25 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400"
+                        disabled={waSending}
+                        onClick={sendWhatsApp}
+                      >
+                        <MessageSquareText className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
                   {ticket.unitNumber && (
                     <span className="rounded-lg bg-muted/60 px-2.5 py-1 text-xs font-bold text-foreground">
                       {t.villa}{' '}
@@ -294,11 +305,39 @@ export default function TicketDetailCarousel() {
                     </span>
                   )}
                   {client?.name && (
-                    <span className="rounded-lg bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                    <span className="max-w-full break-words rounded-lg bg-muted/60 px-2.5 py-1 text-xs font-semibold text-foreground">
                       {client.name}
                     </span>
                   )}
+                  <Badge variant="outline" className={cn('rounded-full px-3 py-1 text-xs font-black', priorityClass(ticket.priority))}>
+                    {priorityLabel}
+                  </Badge>
+                  <Badge variant="outline" className={cn('rounded-full px-3 py-1 text-xs font-black', statusClass(ticket.status))}>
+                    {statusLabel}
+                  </Badge>
                 </div>
+
+                {media.cleanText && (
+                  <div className="mt-4 min-w-0 rounded-2xl bg-muted/35 px-3.5 py-3 sm:px-4">
+                    <p className="mb-1 text-[11px] font-bold text-muted-foreground">{t.description}</p>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">
+                      {media.cleanText}
+                    </p>
+                  </div>
+                )}
+
+                {(types.length > 0 || ticket.subTypeName) && (
+                  <div className="mt-3 flex min-w-0 items-start gap-2 rounded-2xl border border-border/60 px-3.5 py-2.5">
+                    <Tag className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-bold text-muted-foreground">{t.type}</p>
+                      <div className="mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-sm font-bold text-foreground">
+                        {types.map(type => <span key={type}>{t.types[type] ?? type}</span>)}
+                        {ticket.subTypeName && <span className="text-muted-foreground">· {ticket.subTypeName}</span>}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -323,12 +362,6 @@ export default function TicketDetailCarousel() {
                   <Badge variant="outline" className={cn('rounded-full px-3 py-1 text-xs font-black', priorityClass(ticket.priority))}>
                     {priorityLabel}
                   </Badge>
-                </CompactInfo>
-                <CompactInfo icon={Tag} label={t.type}>
-                  <div className="flex flex-wrap gap-1.5">
-                    {types.map(type => <span key={type}>{t.types[type] ?? type}</span>)}
-                    {ticket.subTypeName && <span className="text-muted-foreground">· {ticket.subTypeName}</span>}
-                  </div>
                 </CompactInfo>
                 <CompactInfo icon={BriefcaseBusiness} label={t.project}>
                   {project ? (
@@ -373,32 +406,12 @@ export default function TicketDetailCarousel() {
               </div>
             </div>
 
-            {(client?.phone || ticket.appointmentTime || ticket.appointment?.date) && (
-              <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 border-t border-border/60 pt-3">
-                <div className="min-w-0 flex-1 rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            {(ticket.appointmentTime || ticket.appointment?.date) && (
+              <div className="mt-3 border-t border-border/60 pt-3">
+                <div className="min-w-0 rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                   <span className="font-semibold">{t.visitAppointment}: </span>
                   <span className="tabular-nums text-foreground" dir="ltr">{appointmentDisplay(ticket)}</span>
                 </div>
-                {client?.phone && (
-                  <a
-                    href={`tel:+${normalizePhone(client.phone)}`}
-                    className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-border px-3 text-xs font-bold text-primary hover:bg-primary/5"
-                  >
-                    <PhoneCall className="h-4 w-4" />
-                    {t.callClient}
-                  </a>
-                )}
-                {client?.phone && (
-                  <Button
-                    variant="outline"
-                    className="h-9 shrink-0 rounded-xl text-xs text-emerald-600 dark:text-emerald-400"
-                    disabled={waSending}
-                    onClick={sendWhatsApp}
-                  >
-                    <MessageSquareText className="me-1.5 h-4 w-4" />
-                    {waSending ? t.sending : t.contactClient}
-                  </Button>
-                )}
               </div>
             )}
           </CardContent>
