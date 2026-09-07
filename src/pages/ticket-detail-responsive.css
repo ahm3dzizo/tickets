@@ -1,0 +1,65 @@
+.ticket-detail-responsive {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.ticket-detail-responsive > *,
+.ticket-detail-responsive main,
+.ticket-detail-responsive main > div,
+.ticket-detail-responsive main > div > div {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.ticket-detail-responsive [data-slot='card'],
+.ticket-detail-responsive [data-slot='card-header'],
+.ticket-detail-responsive [data-slot='card-content'] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.ticket-detail-responsive [data-slot='card'] {
+  overflow: hidden;
+}
+
+.ticket-detail-responsive [data-slot='card-header'] > *,
+.ticket-detail-responsive [data-slot='card-content'] > *,
+.ticket-detail-responsive .grid > *,
+.ticket-detail-responsive .flex > * {
+  min-width: 0;
+}
+
+.ticket-detail-responsive img,
+.ticket-detail-responsive video,
+.ticket-detail-responsive iframe {
+  display: block;
+  max-width: 100%;
+}
+
+.ticket-detail-responsive p,
+.ticket-detail-responsive a,
+.ticket-detail-responsive span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .ticket-detail-responsive [data-slot='card-header'] {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .ticket-detail-responsive [data-slot='card-content'] button,
+  .ticket-detail-responsive [data-slot='card-content'] a {
+    max-width: 100%;
+  }
+
+  .ticket-detail-responsive [data-slot='card-content'] button {
+    min-width: 0;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+  }
+}
