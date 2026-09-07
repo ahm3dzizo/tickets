@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Ticket, Users, Settings, LogOut, Bell, BellOff, BellRing,
+  LayoutDashboard, Ticket, Users, Settings, LogOut, Bell,
   Briefcase, UserCheck, HardHat, CalendarClock, ClipboardList,
   CheckCheck, Moon, Sun, Settings2, BarChart3, X, CloudLightning, ShieldCheck, Package,
   Clock,
@@ -9,9 +9,6 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
-import { registerPush, unregisterPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
-import { authStorage } from '@/lib/api';
-import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,34 +64,6 @@ export function Navbar() {
   const { resolvedTheme, setTheme } = useTheme();
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(user?.uid ?? null);
   const isLight = resolvedTheme === 'light';
-
-  // Push notification permission state
-  const [pushPerm, setPushPerm] = useState<NotificationPermission>('default');
-  useEffect(() => {
-    if (isPushSupported()) setPushPerm(getPushPermission());
-  }, []);
-  // Auto-register on login if permission already granted
-  useEffect(() => {
-    if (!user || pushPerm !== 'granted') return;
-    const token = authStorage.getToken();
-    if (token) registerPush(`Bearer ${token}`).catch(() => {});
-  }, [user, pushPerm]);
-
-  const handlePushToggle = async () => {
-    const token = authStorage.getToken();
-    if (!token) return;
-    if (pushPerm === 'granted') {
-      await unregisterPush();
-      setPushPerm('default');
-      toast.info('تم إيقاف الإشعارات');
-    } else {
-      const ok = await registerPush(`Bearer ${token}`);
-      const perm = getPushPermission();
-      setPushPerm(perm);
-      if (ok) toast.success('✅ تم تفعيل الإشعارات — ستصلك تنبيهات المواعيد والتذاكر');
-      else if (perm === 'denied') toast.error('تم رفض الإذن من المتصفح — يمكنك السماح من إعدادات المتصفح');
-    }
-  };
 
   const toggleTheme = () => setTheme(isLight ? 'dark' : 'light');
 
@@ -273,20 +242,6 @@ export function Navbar() {
           >
             {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </Button>
-          {isPushSupported() && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handlePushToggle}
-              title={pushPerm === 'granted' ? 'إيقاف الإشعارات' : 'تفعيل الإشعارات'}
-              className={cn(
-                'rounded-xl h-9 w-9',
-                pushPerm === 'granted' ? 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              )}
-            >
-              {pushPerm === 'granted' ? <BellRing className="w-4 h-4" /> : pushPerm === 'denied' ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4 opacity-50" />}
-            </Button>
-          )}
           <NotifBell side="bottom" />
         </div>
       </header>
@@ -481,20 +436,6 @@ export function Navbar() {
               {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
             </Button>
             <div className="flex-1 flex justify-center gap-1">
-              {isPushSupported() && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handlePushToggle}
-                  title={pushPerm === 'granted' ? 'إيقاف الإشعارات' : 'تفعيل الإشعارات'}
-                  className={cn(
-                    'rounded-xl h-9 w-9',
-                    pushPerm === 'granted' ? 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}
-                >
-                  {pushPerm === 'granted' ? <BellRing className="w-4 h-4" /> : pushPerm === 'denied' ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4 opacity-50" />}
-                </Button>
-              )}
               <NotifBell side="left" />
             </div>
           </div>
