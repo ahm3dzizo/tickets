@@ -1,55 +1,267 @@
-name: Deploy API
+name: Production Deploy
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retal-production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Deploy tickets to Ubuntu PM2 server
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Validate SSH secrets
+        env:
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USERNAME }}
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SSH_PORT: ${{ secrets.SERVER_PORT || '22' }}
+        run: |
+          set -Eeuo pipefail
 
-    - name: Deploy to Server via SSH
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USERNAME }}
-        port: ${{ secrets.SERVER_PORT }}
-        password: ${{ secrets.SERVER_PASSWORD }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
-        script_stop: true
-        script: |
-          cd /opt/retal-api
-          echo "▶  Cleaning up and pulling..."
-          rm -f open-wa-session.*
-          git fetch origin
-          git checkout main
-          git reset --hard origin/main
-          git pull origin main
-          echo "▶  npm install..."
-          npm install --silent
-          echo "▶  npx prisma db push..."
-          npx prisma migrate deploy 2>/dev/null || npx prisma db push
-          echo "▶  npm run build (frontend + backend)..."
-          rm -rf dist
-          rm -rf node_modules/.vite
+          test -n "$SSH_HOST" || { echo "Missing SERVER_HOST secret"; exit 1; }
+          test -n "$SSH_USER" || { echo "Missing SERVER_USERNAME secret"; exit 1; }
+          test -n "$SSH_KEY" || { echo "Missing SERVER_SSH_KEY secret"; exit 1; }
+
+          case "$SSH_HOST" in
+            ''|*[!A-Za-z0-9._:-]*)
+              echo "SERVER_HOST contains unsupported characters"
+              exit 1
+              ;;
+          esac
+
+          case "$SSH_USER" in
+            ''|*[!A-Za-z0-9_-]*)
+              echo "SERVER_USERNAME must be a plain SSH username"
+              exit 1
+              ;;
+          esac
+
+          case "$SSH_PORT" in
+            ''|*[!0-9]*)
+              echo "SERVER_PORT must contain digits only"
+              exit 1
+              ;;
+          esac
+
+          KEY_CHECK_FILE="$RUNNER_TEMP/retal_ssh_key_check"
+          trap 'rm -f "$KEY_CHECK_FILE"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$KEY_CHECK_FILE"
+          chmod 600 "$KEY_CHECK_FILE"
+          ssh-keygen -y -f "$KEY_CHECK_FILE" >/dev/null || {
+            echo "SERVER_SSH_KEY is not a valid private SSH key"
+            exit 1
+          }
+
+          echo "SSH key fingerprint: $(ssh-keygen -lf "$KEY_CHECK_FILE" | awk '{print $2}')"
+
+      - name: Deploy over SSH
+        env:
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USERNAME }}
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SSH_PORT: ${{ secrets.SERVER_PORT || '22' }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+
+          case "$DEPLOY_SHA" in
+            *[!0-9a-f]*|'')
+              echo "Invalid Git commit SHA"
+              exit 1
+              ;;
+          esac
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          KEY_FILE=~/.ssh/retal_production_key
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          trap 'rm -f "$KEY_FILE"' EXIT
+
+          ssh \
+            -i "$KEY_FILE" \
+            -p "$SSH_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=3 \
+            -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$SSH_HOST" \
+            "DEPLOY_SHA='$DEPLOY_SHA' bash -se" <<'REMOTE'
+          set -Eeuo pipefail
+
+          APP_DIR="/opt/retal-api"
+          WEB_DIR="/var/www/retal"
+          NEXT_WEB_DIR="/var/www/retal.next"
+          PREV_WEB_DIR="/var/www/retal.prev"
+          PM2_APP="retal-api"
+          ML_APP="retal-ml"
+          PUBLIC_URL="https://tickets.knot-sys.com"
+
+          command -v git >/dev/null
+          command -v node >/dev/null
+          command -v npm >/dev/null
+          command -v pm2 >/dev/null
+          command -v curl >/dev/null
+          command -v sudo >/dev/null
+          sudo -n true
+
+          cd "$APP_DIR"
+
+          echo "============================================================"
+          echo "RETAL AUTOMATIC PRODUCTION DEPLOY"
+          echo "============================================================"
+          echo "Requested commit: ${DEPLOY_SHA:0:12}"
+
+          # Runtime-generated ML files are intentionally preserved across deploys.
+          # Any other tracked server-side change aborts the deployment.
+          RUNTIME_BACKUP="$(mktemp -d /tmp/retal-runtime.XXXXXX)"
+          cleanup_runtime_backup() {
+            rm -rf "$RUNTIME_BACKUP"
+          }
+          trap cleanup_runtime_backup EXIT
+
+          unexpected_dirty=0
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            changed_path="${line:3}"
+            case "$changed_path" in
+              ml/db_tickets.csv|ml/model.pkl)
+                echo "Preserving runtime-generated file: $changed_path"
+                mkdir -p "$RUNTIME_BACKUP/$(dirname "$changed_path")"
+                cp -a "$changed_path" "$RUNTIME_BACKUP/$changed_path"
+                ;;
+              *)
+                echo "Unexpected tracked server change: $line"
+                unexpected_dirty=1
+                ;;
+            esac
+          done < <(git status --porcelain=v1 --untracked-files=no)
+
+          if [ "$unexpected_dirty" -ne 0 ]; then
+            echo "Deployment aborted rather than overwriting unexpected local changes."
+            exit 1
+          fi
+
+          # Preserve generated ML state even when Git currently reports it clean.
+          for runtime_file in ml/db_tickets.csv ml/model.pkl; do
+            if [ -f "$runtime_file" ] && [ ! -f "$RUNTIME_BACKUP/$runtime_file" ]; then
+              mkdir -p "$RUNTIME_BACKUP/$(dirname "$runtime_file")"
+              cp -a "$runtime_file" "$RUNTIME_BACKUP/$runtime_file"
+            fi
+          done
+
+          echo "Fetching main..."
+          git fetch --prune origin main
+
+          if ! git cat-file -e "$DEPLOY_SHA^{commit}" 2>/dev/null; then
+            echo "Requested commit is not available after fetch"
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$DEPLOY_SHA" origin/main; then
+            echo "Requested commit is not part of origin/main"
+            exit 1
+          fi
+
+          git checkout -f main
+          git reset --hard "$DEPLOY_SHA"
+
+          # Restore runtime ML state after the code checkout.
+          for runtime_file in ml/db_tickets.csv ml/model.pkl; do
+            if [ -f "$RUNTIME_BACKUP/$runtime_file" ]; then
+              cp -a "$RUNTIME_BACKUP/$runtime_file" "$runtime_file"
+            fi
+          done
+
+          echo "Deploying $(git rev-parse --short=12 HEAD)"
+
+          echo "Installing locked dependencies..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+          echo "Generating Prisma client..."
+          npx prisma generate
+
+          echo "Running TypeScript validation..."
+          npm run lint
+
+          echo "Building application..."
+          rm -rf dist node_modules/.vite
           npm run build
-          echo "✔  Build ready"
-          echo "▶  Copying frontend to Nginx root..."
-          rm -rf /var/www/retal/*
-          cp -r dist/* /var/www/retal/
-          echo "▶  Clearing Nginx cache & reloading..."
-          [ -d /var/cache/nginx ] && rm -rf /var/cache/nginx/* || true
-          [ -d /tmp/nginx_cache ] && rm -rf /tmp/nginx_cache/* || true
-          nginx -s reload 2>/dev/null || systemctl reload nginx 2>/dev/null || true
-          echo "✔  Nginx reloaded"
-          echo "▶  pm2 restart API..."
-          pm2 restart retal-api --update-env
-          echo "▶  pm2 start/restart ML service..."
-          pm2 describe retal-ml > /dev/null 2>&1 && pm2 restart retal-ml || pm2 start ml/ecosystem.config.cjs
-          echo "✔  Services ready"
-          pm2 list
+          test -f dist/index.html || { echo "dist/index.html missing"; exit 1; }
+          test -f dist/sw.js || { echo "dist/sw.js missing"; exit 1; }
+
+          echo "Applying database migrations..."
+          npx prisma migrate deploy
+
+          echo "Preparing frontend release..."
+          sudo -n rm -rf "$NEXT_WEB_DIR"
+          sudo -n mkdir -p "$NEXT_WEB_DIR"
+          sudo -n cp -a dist/. "$NEXT_WEB_DIR/"
+          sudo -n chown -R www-data:www-data "$NEXT_WEB_DIR"
+
+          echo "Validating Nginx configuration..."
+          sudo -n nginx -t
+
+          echo "Switching frontend release..."
+          sudo -n rm -rf "$PREV_WEB_DIR"
+          if sudo -n test -d "$WEB_DIR"; then
+            sudo -n mv "$WEB_DIR" "$PREV_WEB_DIR"
+          fi
+          sudo -n mv "$NEXT_WEB_DIR" "$WEB_DIR"
+          sudo -n systemctl reload nginx
+
+          echo "Restarting API..."
+          pm2 describe "$PM2_APP" >/dev/null 2>&1 || {
+            echo "PM2 process '$PM2_APP' not found"
+            exit 1
+          }
+          pm2 restart "$PM2_APP" --update-env
+
+          echo "Restarting ML service..."
+          if pm2 describe "$ML_APP" >/dev/null 2>&1; then
+            pm2 restart "$ML_APP" --update-env
+          else
+            pm2 start ml/ecosystem.config.cjs
+          fi
+          pm2 save
+
+          echo "Checking local API health..."
+          healthy=0
+          for attempt in $(seq 1 15); do
+            if curl -fsS --max-time 5 http://127.0.0.1:3001/api/health | grep -q '"status":"ok"'; then
+              healthy=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$healthy" -ne 1 ]; then
+            echo "Local API health check failed"
+            pm2 status "$PM2_APP" || true
+            exit 1
+          fi
+
+          echo "Checking public health endpoint..."
+          curl -fsS --retry 5 --retry-delay 2 --max-time 10 "$PUBLIC_URL/api/health" | grep -q '"status":"ok"'
+
+          echo "Checking deployed frontend..."
+          curl -fsSI --retry 5 --retry-delay 2 --max-time 10 "$PUBLIC_URL/" >/dev/null
+          curl -fsSI --retry 5 --retry-delay 2 --max-time 10 "$PUBLIC_URL/sw.js" >/dev/null
+
+          echo "============================================================"
+          echo "PRODUCTION DEPLOY COMPLETE"
+          echo "Commit: $(git rev-parse --short=12 HEAD)"
+          echo "============================================================"
+          REMOTE
