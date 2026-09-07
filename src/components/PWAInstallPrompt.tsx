@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { Download, X, Share, BellRing, Check, MoreVertical, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { authStorage } from '@/lib/api';
+import { registerPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
 
 const PROMPT_DISABLED_KEY = 'retal:onboarding-prompt-disabled';
 const DRAG_DISMISS_THRESHOLD = 80;
@@ -24,6 +27,7 @@ export function PWAInstallPrompt() {
   const [needsNotif, setNeedsNotif]         = useState(false);
   const [needsPWA, setNeedsPWA]             = useState(false);
   const [notifGranted, setNotifGranted]     = useState(false);
+  const { user } = useAuth();
 
   /* ── Drag state ──────────────────────────────────────────────────────── */
   const cardRef    = useRef<HTMLDivElement>(null);
@@ -36,7 +40,7 @@ export function PWAInstallPrompt() {
     const p = getPlatform();
     setPlatform(p);
 
-    if (localStorage.getItem(PROMPT_DISABLED_KEY) === 'true') return;
+    if (!user || localStorage.getItem(PROMPT_DISABLED_KEY) === 'true') return;
 
     const isPWAInstalled  = window.matchMedia('(display-mode: standalone)').matches;
     const notifPermission = 'Notification' in window ? Notification.permission : 'denied';
@@ -76,7 +80,7 @@ export function PWAInstallPrompt() {
       window.removeEventListener('beforeinstallprompt', onBeforeInstall);
       clearTimeout(timer);
     };
-  }, []);
+  }, [user]);
 
   /* ── Actions ─────────────────────────────────────────────────────────── */
   const handleInstall = async () => {
@@ -86,21 +90,42 @@ export function PWAInstallPrompt() {
     if (outcome === 'accepted') {
       setNeedsPWA(false);
       (window as any).__deferredPWAPrompt = null;
-      if (!needsNotif || notifGranted) setVisible(false);
+      if (platform?.isAndroid) {
+        toast.success('تم التثبيت — افتح التطبيق من الشاشة الرئيسية لتفعيل الإشعارات');
+        setVisible(false);
+      } else if (!needsNotif || notifGranted) {
+        setVisible(false);
+      }
     }
     setDeferredPrompt(null);
   };
 
   const handleEnableNotif = async () => {
-    if (!('Notification' in window)) return;
-    const result = await Notification.requestPermission();
-    if (result === 'granted') {
+    if (!user || !isPushSupported()) {
+      toast.error('هذا المتصفح لا يدعم إشعارات التطبيق');
+      return;
+    }
+    const token = authStorage.getToken();
+    if (!token) {
+      toast.error('انتهت الجلسة — سجّل الدخول مرة أخرى');
+      return;
+    }
+    if (getPushPermission() === 'denied') {
+      toast.error('الإشعارات محظورة — اسمح بها من إعدادات التطبيق أو المتصفح');
+      return;
+    }
+
+    const enabled = await registerPush(`Bearer ${token}`);
+    const permission = getPushPermission();
+    if (enabled) {
       toast.success('تم تفعيل الإشعارات بنجاح 🎉');
       setNotifGranted(true);
       setNeedsNotif(false);
       if (!needsPWA) setTimeout(() => setVisible(false), 1200);
+    } else if (permission === 'denied') {
+      toast.error('لم يتم السماح بالإشعارات');
     } else {
-      toast.error('لم يتم تفعيل الإشعارات');
+      toast.error('تعذر تشغيل الإشعارات، حاول مرة أخرى');
     }
   };
 
@@ -125,7 +150,7 @@ export function PWAInstallPrompt() {
   if (!platform || !visible) return null;
 
   // Show notif section if permission is default
-  const showNotifSection = needsNotif;
+  const showNotifSection = needsNotif && !(platform.isAndroid && needsPWA);
   // Show PWA section whenever the app isn't installed in standalone mode
   // (with or without deferred prompt — we'll show manual instructions as fallback)
   const showPWASection = needsPWA;
@@ -239,6 +264,11 @@ export function PWAInstallPrompt() {
                 <p className="text-[10px] text-muted-foreground mt-0.5">وصول سريع وتجربة أفضل بدون متصفح</p>
               </div>
             </div>
+            {platform.isAndroid && needsNotif && (
+              <p className="text-[10px] text-primary font-medium text-right">
+                بعد التثبيت افتح التطبيق من الشاشة الرئيسية لتفعيل الإشعارات.
+              </p>
+            )}
 
             {/* iOS Safari */}
             {platform.isIOS && (
