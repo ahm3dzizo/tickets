@@ -119,14 +119,16 @@ jobs:
           sudo -n true
 
           cd "$APP_DIR"
+          PREVIOUS_SHA="$(git rev-parse HEAD)"
 
           echo "============================================================"
           echo "RETAL AUTOMATIC PRODUCTION DEPLOY"
           echo "============================================================"
-          echo "Requested commit: ${DEPLOY_SHA:0:12}"
+          echo "Current server commit: ${PREVIOUS_SHA:0:12}"
+          echo "Requested commit:      ${DEPLOY_SHA:0:12}"
 
-          # Runtime-generated ML files are intentionally preserved across deploys.
-          # Any other tracked server-side change aborts the deployment.
+          # Preserve server-generated ML state. Any other tracked change aborts
+          # instead of being silently overwritten.
           RUNTIME_BACKUP="$(mktemp -d /tmp/retal-runtime.XXXXXX)"
           cleanup_runtime_backup() {
             rm -rf "$RUNTIME_BACKUP"
@@ -155,7 +157,6 @@ jobs:
             exit 1
           fi
 
-          # Preserve generated ML state even when Git currently reports it clean.
           for runtime_file in ml/db_tickets.csv ml/model.pkl; do
             if [ -f "$runtime_file" ] && [ ! -f "$RUNTIME_BACKUP/$runtime_file" ]; then
               mkdir -p "$RUNTIME_BACKUP/$(dirname "$runtime_file")"
@@ -179,7 +180,6 @@ jobs:
           git checkout -f main
           git reset --hard "$DEPLOY_SHA"
 
-          # Restore runtime ML state after the code checkout.
           for runtime_file in ml/db_tickets.csv ml/model.pkl; do
             if [ -f "$RUNTIME_BACKUP/$runtime_file" ]; then
               cp -a "$RUNTIME_BACKUP/$runtime_file" "$runtime_file"
@@ -203,8 +203,21 @@ jobs:
           test -f dist/index.html || { echo "dist/index.html missing"; exit 1; }
           test -f dist/sw.js || { echo "dist/sw.js missing"; exit 1; }
 
-          echo "Applying database migrations..."
-          npx prisma migrate deploy
+          echo "Checking database migration plan..."
+          if [ -d prisma/migrations ] && \
+             [ -n "$(find prisma/migrations -type f -name migration.sql -print -quit)" ]; then
+            echo "Applying checked-in Prisma migrations..."
+            npx prisma migrate deploy
+          else
+            echo "No Prisma migration history is checked in."
+            if git diff --quiet "$PREVIOUS_SHA" "$DEPLOY_SHA" -- prisma/schema.prisma; then
+              echo "Prisma schema is unchanged; skipping database mutation safely."
+            else
+              echo "Prisma schema changed but no migration history exists."
+              echo "Deployment aborted: create and review a Prisma baseline/migration first."
+              exit 1
+            fi
+          fi
 
           echo "Preparing frontend release..."
           sudo -n rm -rf "$NEXT_WEB_DIR"
