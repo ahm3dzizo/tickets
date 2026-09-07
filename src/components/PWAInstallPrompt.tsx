@@ -90,12 +90,7 @@ export function PWAInstallPrompt() {
     if (outcome === 'accepted') {
       setNeedsPWA(false);
       (window as any).__deferredPWAPrompt = null;
-      if (platform?.isAndroid) {
-        toast.success('تم التثبيت — افتح التطبيق من الشاشة الرئيسية لتفعيل الإشعارات');
-        setVisible(false);
-      } else if (!needsNotif || notifGranted) {
-        setVisible(false);
-      }
+      if (!needsNotif || notifGranted) setVisible(false);
     }
     setDeferredPrompt(null);
   };
@@ -150,7 +145,7 @@ export function PWAInstallPrompt() {
   if (!platform || !visible) return null;
 
   // Show notif section if permission is default
-  const showNotifSection = needsNotif && !(platform.isAndroid && needsPWA);
+  const showNotifSection = needsNotif;
   // Show PWA section whenever the app isn't installed in standalone mode
   // (with or without deferred prompt — we'll show manual instructions as fallback)
   const showPWASection = needsPWA;
@@ -264,11 +259,6 @@ export function PWAInstallPrompt() {
                 <p className="text-[10px] text-muted-foreground mt-0.5">وصول سريع وتجربة أفضل بدون متصفح</p>
               </div>
             </div>
-            {platform.isAndroid && needsNotif && (
-              <p className="text-[10px] text-primary font-medium text-right">
-                بعد التثبيت افتح التطبيق من الشاشة الرئيسية لتفعيل الإشعارات.
-              </p>
-            )}
 
             {/* iOS Safari */}
             {platform.isIOS && (
