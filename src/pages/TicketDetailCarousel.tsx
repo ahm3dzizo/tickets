@@ -28,7 +28,7 @@ import { ReassignSupervisorButton } from '@/components/tickets/ReassignSuperviso
 import { TicketEditDialog } from '@/components/tickets/TicketEditDialog';
 import { TicketMediaCarousel } from '@/components/tickets/TicketMediaCarousel';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
-import { ticketsApi, projectsApi, clientsApi, auditApi, settingsApi, whatsappApi } from '@/lib/api';
+import { ticketsApi, projectsApi, clientsApi, auditApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { formatTicketDate, formatTicketDateTime } from '@/lib/ticketDate';
 import { extractTicketMedia } from '@/lib/ticketMedia';
@@ -113,7 +113,6 @@ export default function TicketDetailCarousel() {
   const [closeOpen, setCloseOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [showAllAudit, setShowAllAudit] = useState(false);
-  const [waSending, setWaSending] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -161,30 +160,16 @@ export default function TicketDetailCarousel() {
     return [...new Set(raw.filter(Boolean))];
   }, [ticket]);
 
-  const sendWhatsApp = async () => {
-    if (!ticket) return;
+  const openWhatsAppChat = () => {
     const phone = normalizePhone(client?.phone);
     if (!phone) {
       toast.error(t.phoneMissing);
       return;
     }
 
-    setWaSending(true);
-    try {
-      const templates = await settingsApi.getWhatsAppTemplates();
-      const template = templates.openingMsg || t.whatsappDefault;
-      const message = template
-        .replace(/{ticketId}/g, ticket.ticketId || '')
-        .replace(/{description}/g, media.cleanText || ticket.description || '')
-        .replace(/{unitNumber}/g, ticket.unitNumber || '');
-      const response = await whatsappApi.send(phone, message);
-      if (!response?.sent) throw new Error('send_failed');
-      toast.success(t.whatsappSent);
-    } catch {
-      toast.error(t.whatsappFailed);
-    } finally {
-      setWaSending(false);
-    }
+    // Open the client's WhatsApp conversation only. No message is composed or
+    // sent through the server, so the user remains in control of what is sent.
+    window.open(`https://wa.me/${encodeURIComponent(phone)}`, '_blank', 'noopener,noreferrer');
   };
 
   if (loading) {
@@ -244,11 +229,10 @@ export default function TicketDetailCarousel() {
                         type="button"
                         variant="outline"
                         size="icon"
-                        aria-label={t.contactClient}
-                        title={t.contactClient}
+                        aria-label={t.openWhatsAppChat}
+                        title={t.openWhatsAppChat}
                         className="h-9 w-9 rounded-xl border-emerald-500/25 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400"
-                        disabled={waSending}
-                        onClick={sendWhatsApp}
+                        onClick={openWhatsAppChat}
                       >
                         <MessageSquareText className="h-4 w-4" />
                       </Button>
