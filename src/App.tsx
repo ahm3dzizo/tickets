@@ -10,7 +10,7 @@ import TicketTypesAdminPage from './pages/TicketTypesAdminPage';
 import Dashboard from '@/pages/Dashboard';
 import Login from '@/pages/Login';
 import TicketsList from '@/pages/TicketsList';
-import TicketDetail from '@/pages/TicketDetail';
+import TicketDetail from '@/pages/TicketDetailModern';
 import Team from '@/pages/Team';
 import Settings from '@/pages/Settings';
 import PushDiagnostics from '@/pages/PushDiagnostics';
