@@ -76,9 +76,45 @@ export function getTicketListCacheStats() {
   };
 }
 
+async function nudgeRelevantWorkers(pathname: string, method: string): Promise<void> {
+  const shouldNudgeClassifier =
+    pathname.startsWith('/api/import-excel') ||
+    (method === 'POST' && (pathname === '/api/tickets' || pathname.startsWith('/api/tickets/bulk')));
+
+  const shouldNudgeTranslation =
+    pathname.startsWith('/api/tickets') ||
+    pathname.startsWith('/api/appointments') ||
+    pathname.startsWith('/api/import-excel') ||
+    pathname.startsWith('/api/classify') ||
+    pathname.startsWith('/api/whatsapp') ||
+    pathname.startsWith('/api/shift') ||
+    pathname.startsWith('/api/tech/appointments');
+
+  try {
+    const jobs: Promise<unknown>[] = [];
+
+    if (shouldNudgeClassifier) {
+      jobs.push(
+        import('../classifier/gemini-worker.js').then(module => module.nudgeGeminiWorker())
+      );
+    }
+
+    if (shouldNudgeTranslation) {
+      jobs.push(
+        import('../translation-worker.js').then(module => module.nudgeTranslationWorker())
+      );
+    }
+
+    if (jobs.length > 0) await Promise.allSettled(jobs);
+  } catch {
+    // Worker nudges are an optimization only; API mutations must never fail because of them.
+  }
+}
+
 /**
  * Clears the ticket-list response cache after successful mutations from any
- * API surface that can indirectly change ticket list data.
+ * API surface that can indirectly change ticket list data, and wakes adaptive
+ * background workers only when the mutation can create/change their work.
  */
 export function invalidateTicketCacheAfterRelevantMutation(
   req: Request,
@@ -99,6 +135,7 @@ export function invalidateTicketCacheAfterRelevantMutation(
   res.once("finish", () => {
     if (res.statusCode >= 200 && res.statusCode < 400) {
       invalidateTicketListResponseCache();
+      void nudgeRelevantWorkers(pathname, req.method);
     }
   });
 
