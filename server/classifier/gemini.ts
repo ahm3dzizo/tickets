@@ -1,8 +1,7 @@
 /**
  * AI classifier — fallback when keyword confidence is too low.
- * Prefers OpenRouter (set OPENROUTER_API_KEY, defaults to the free
- * google/gemma-4-26b-a4b-it:free model) and falls back to NaraRouter
- * (set NARA_API_KEY) if no OpenRouter key is configured.
+ * Prefers NaraRouter (set NARA_API_KEY, defaults to agnes-2.5-flash)
+ * and falls back to OpenRouter when NaraRouter is unavailable.
  */
 
 import prisma from "../db.js";
@@ -11,7 +10,7 @@ import { invalidateKeywordCache } from "./keywords.js";
 import { nudgeReclassifyWorker } from "./reclassify-worker.js";
 
 const NARA_URL = "https://router.bynara.id/v1/chat/completions";
-const NARA_MODEL = "mistral-large";
+const NARA_MODEL = process.env.NARA_MODEL || "agnes-2.5-flash";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free";
 
@@ -34,13 +33,13 @@ function providerAvailable(label: string): boolean {
   return Date.now() > (_pausedUntil[label] ?? 0);
 }
 
-// ── Provider cascade: OpenRouter → NaraRouter ──────────────────────────────
+// ── Provider cascade: NaraRouter → OpenRouter ──────────────────────────────
 function getProvider(): ProviderConfig | null {
-  if (process.env.OPENROUTER_API_KEY && providerAvailable("OpenRouter")) {
-    return { url: OPENROUTER_URL, model: OPENROUTER_MODEL, apiKey: process.env.OPENROUTER_API_KEY, label: "OpenRouter" };
-  }
   if (process.env.NARA_API_KEY && providerAvailable("NaraRouter")) {
     return { url: NARA_URL, model: NARA_MODEL, apiKey: process.env.NARA_API_KEY, label: "NaraRouter" };
+  }
+  if (process.env.OPENROUTER_API_KEY && providerAvailable("OpenRouter")) {
+    return { url: OPENROUTER_URL, model: OPENROUTER_MODEL, apiKey: process.env.OPENROUTER_API_KEY, label: "OpenRouter" };
   }
   return null;
 }
@@ -230,7 +229,7 @@ export async function classifyWithGemini(
     { role: "user",   content: `البلاغ: "${description}"` },
   ];
 
-  // Try providers in cascade order (OpenRouter → NaraRouter)
+  // Try providers in cascade order (NaraRouter → OpenRouter)
   for (let attempt = 0; attempt < 2; attempt++) {
     const provider = getProvider();
     if (!provider) break;
