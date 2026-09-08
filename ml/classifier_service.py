@@ -7,6 +7,7 @@ Runs on port 5050 alongside the Node.js server.
 Endpoints:
   GET  /health
   GET  /classes
+  POST /reload
   POST /classify          → {primaryType, subType, subTypeConf, allTypes, confidence, source}
   POST /classify/batch    → list of above
 """
@@ -14,7 +15,7 @@ Endpoints:
 import re
 import pickle
 import pathlib
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
 
@@ -38,29 +39,47 @@ def normalize(text: str) -> str:
     text = re.sub(r"[^؀-ۿ\s]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
-# ── Load main model ──────────────────────────────────────────────────────────
-print(f"[ML] Loading main model ...")
+# ── Model loading ─────────────────────────────────────────────────────────────
 pipeline = None
-classes = []
-try:
+classes: list[str] = []
+subtype_models: dict[str, dict] = {}
+
+def load_models() -> None:
+    """Load model files atomically so a failed reload keeps the current model alive."""
+    global pipeline, classes, subtype_models
+
+    print("[ML] Loading main model ...")
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(f"{MODEL_PATH} not found. Please run ml/train.py first.")
+
     with open(MODEL_PATH, "rb") as f:
         bundle = pickle.load(f)
-    pipeline = bundle["pipeline"]
-    classes  = bundle["classes"]
-    print(f"[ML] Main model ready — {len(classes)} classes")
-except FileNotFoundError:
-    print(f"[ML] ERROR: {MODEL_PATH} not found. Please run ml/train.py first.")
 
-# ── Load sub-type models ─────────────────────────────────────────────────────
-subtype_models: dict[str, dict] = {}
-for type_key, path in SUBTYPE_MODEL_PATHS.items():
-    if path.exists():
-        with open(path, "rb") as f:
-            st = pickle.load(f)
-        subtype_models[type_key] = st
-        print(f"[ML] Sub-type model for '{type_key}': {st['classes']}")
-    else:
-        print(f"[ML] No sub-type model for '{type_key}' (run train_subtype.py)")
+    new_pipeline = bundle["pipeline"]
+    new_classes = list(bundle["classes"])
+    new_subtype_models: dict[str, dict] = {}
+
+    for type_key, model_path in SUBTYPE_MODEL_PATHS.items():
+        if model_path.exists():
+            with open(model_path, "rb") as f:
+                st = pickle.load(f)
+            new_subtype_models[type_key] = st
+            print(f"[ML] Sub-type model for '{type_key}': {st['classes']}")
+        else:
+            print(f"[ML] No sub-type model for '{type_key}' (run train_subtype.py)")
+
+    # Swap only after every required model loaded successfully.
+    pipeline = new_pipeline
+    classes = new_classes
+    subtype_models = new_subtype_models
+    print(f"[ML] Main model ready — {len(classes)} classes")
+
+try:
+    load_models()
+except FileNotFoundError as exc:
+    print(f"[ML] ERROR: {exc}")
+except Exception as exc:
+    print(f"[ML] ERROR loading model: {exc}")
 
 # ── Sub-type prediction helper ───────────────────────────────────────────────
 SUBTYPE_THRESHOLD = 0.35   # min confidence to assign a sub-type
@@ -78,7 +97,7 @@ def predict_subtype(text: str, primary_type: str) -> tuple[str | None, float]:
     return model["classes"][top], round(conf, 4)
 
 # ── App ─────────────────────────────────────────────────────────────────────
-app = FastAPI(title="Ticket Classifier", version="2.0")
+app = FastAPI(title="Ticket Classifier", version="2.1")
 
 class ClassifyRequest(BaseModel):
     description: str
@@ -98,6 +117,19 @@ def health():
 @app.get("/classes")
 def get_classes():
     return {"classes": classes}
+
+@app.post("/reload")
+def reload_model():
+    try:
+        load_models()
+    except Exception as exc:
+        print(f"[ML] Reload failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "status": "reloaded",
+        "classes": len(classes),
+        "subtype_models": list(subtype_models.keys()),
+    }
 
 @app.post("/classify")
 def classify(req: ClassifyRequest):
