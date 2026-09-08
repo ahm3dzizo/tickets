@@ -1,28 +1,37 @@
 /**
- * Stale-while-revalidate ticket cache.
+ * Persistent stale-while-revalidate ticket cache.
  *
- * - Returns cached data instantly while fetching fresh data in the background.
- * - Cache entries expire after CACHE_TTL_MS; background revalidation starts
- *   after STALE_AFTER_MS even if data is still considered "fresh".
- * - Call invalidate() (or pass a key wildcard) after any mutation so the next
- *   getAll() always fetches fresh data.
+ * Goals:
+ * - Show cached tickets quickly, including after a page/app reload.
+ * - Revalidate in the background instead of blocking the whole page.
+ * - Scope persisted cache by authenticated user so data is never reused across accounts.
+ * - Keep stale data briefly after invalidation, then replace it when the fresh request finishes.
  */
 
-const CACHE_TTL_MS   = 5 * 60 * 1000; // 5 min — hard expiry
-const STALE_AFTER_MS = 60 * 1000;     // 1 min — trigger background refresh
+const FRESH_FOR_MS       = 60 * 1000;            // 1 min — no refresh needed
+const MAX_STALE_AGE_MS   = 24 * 60 * 60 * 1000; // 24h — usable instantly while revalidating
+const DB_NAME            = 'retal-ticket-cache-v2';
+const DB_VERSION         = 1;
+const DB_STORE           = 'entries';
+const CACHE_VERSION      = 'v2';
 
 type CacheKey = string;
 
 interface CacheEntry {
   data: any[];
   fetchedAt: number;
-  /** in-flight promise so multiple callers share one request */
   inflight?: Promise<any[]>;
+}
+
+interface PersistedCacheEntry {
+  key: string;
+  data: any[];
+  fetchedAt: number;
 }
 
 const store = new Map<CacheKey, CacheEntry>();
 
-function buildKey(params?: Record<string, string | string[] | boolean | undefined>): CacheKey {
+function buildParamKey(params?: Record<string, string | string[] | boolean | undefined>): string {
   if (!params) return '__all__';
   const sorted = Object.entries(params)
     .filter(([, v]) => v !== undefined)
@@ -32,24 +41,172 @@ function buildKey(params?: Record<string, string | string[] | boolean | undefine
   return sorted || '__all__';
 }
 
-/** Invalidate cache entries. Pass a key prefix to target specific param sets. */
-export function invalidateTicketCache(keyPrefix?: string) {
-  if (!keyPrefix) {
-    store.clear();
-    return;
+function simpleHash(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
-  for (const key of store.keys()) {
-    if (key.startsWith(keyPrefix)) store.delete(key);
+  return (hash >>> 0).toString(36);
+}
+
+function decodeJwtUserId(token: string): string | null {
+  try {
+    const payloadPart = token.split('.')[1];
+    if (!payloadPart) return null;
+    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const payload = JSON.parse(atob(padded));
+    const id = payload?.uid || payload?.sub || payload?.userId;
+    return typeof id === 'string' && id ? id : null;
+  } catch {
+    return null;
   }
 }
 
+function currentUserScope(): string {
+  if (typeof window === 'undefined') return 'server';
+  const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
+  if (!token) return 'anonymous';
+  return decodeJwtUserId(token) || `token-${simpleHash(token)}`;
+}
+
+function buildKey(params?: Record<string, string | string[] | boolean | undefined>): CacheKey {
+  return `${CACHE_VERSION}:${currentUserScope()}:${buildParamKey(params)}`;
+}
+
+function canUseIndexedDb(): boolean {
+  return typeof window !== 'undefined' && typeof indexedDB !== 'undefined';
+}
+
+let dbPromise: Promise<IDBDatabase | null> | null = null;
+
+function openCacheDb(): Promise<IDBDatabase | null> {
+  if (!canUseIndexedDb()) return Promise.resolve(null);
+  if (dbPromise) return dbPromise;
+
+  dbPromise = new Promise(resolve => {
+    try {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(DB_STORE)) {
+          db.createObjectStore(DB_STORE, { keyPath: 'key' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+
+  return dbPromise;
+}
+
+async function readPersisted(key: string): Promise<PersistedCacheEntry | null> {
+  const db = await openCacheDb();
+  if (!db) return null;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(DB_STORE, 'readonly');
+      const request = tx.objectStore(DB_STORE).get(key);
+      request.onsuccess = () => resolve(request.result ?? null);
+      request.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function writePersisted(key: string, data: any[], fetchedAt: number): Promise<void> {
+  const db = await openCacheDb();
+  if (!db) return;
+  await new Promise<void>(resolve => {
+    try {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).put({ key, data, fetchedAt } satisfies PersistedCacheEntry);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function markPersistedStale(keyPrefix?: string): Promise<void> {
+  const db = await openCacheDb();
+  if (!db) return;
+  const scopePrefix = `${CACHE_VERSION}:${currentUserScope()}:`;
+  const wantedPrefix = keyPrefix ? `${scopePrefix}${keyPrefix}` : scopePrefix;
+
+  await new Promise<void>(resolve => {
+    try {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      const storeRef = tx.objectStore(DB_STORE);
+      const cursorReq = storeRef.openCursor();
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result;
+        if (!cursor) return;
+        const value = cursor.value as PersistedCacheEntry;
+        if (typeof value?.key === 'string' && value.key.startsWith(wantedPrefix)) {
+          cursor.update({ ...value, fetchedAt: 0 });
+        }
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+function startRevalidation(
+  key: string,
+  entry: CacheEntry,
+  fetchFn: () => Promise<any[]>,
+  onUpdate?: (data: any[]) => void,
+): void {
+  if (entry.inflight) return;
+
+  const promise = fetchFn()
+    .then(fresh => {
+      const fetchedAt = Date.now();
+      store.set(key, { data: fresh, fetchedAt });
+      void writePersisted(key, fresh, fetchedAt);
+      onUpdate?.(fresh);
+      return fresh;
+    })
+    .catch(() => entry.data)
+    .finally(() => {
+      const current = store.get(key);
+      if (current?.inflight === promise) delete current.inflight;
+    });
+
+  store.set(key, { ...entry, inflight: promise });
+}
+
+/** Mark cached ticket data stale after a mutation without discarding it. */
+export function invalidateTicketCache(keyPrefix?: string) {
+  const scopePrefix = `${CACHE_VERSION}:${currentUserScope()}:`;
+  const wantedPrefix = keyPrefix ? `${scopePrefix}${keyPrefix}` : scopePrefix;
+
+  for (const [key, entry] of store.entries()) {
+    if (key.startsWith(wantedPrefix)) {
+      store.set(key, { ...entry, fetchedAt: 0 });
+    }
+  }
+
+  void markPersistedStale(keyPrefix);
+}
+
 /**
- * Wrap ticketsApi.getAll with stale-while-revalidate caching.
- *
- * @param fetchFn   The real fetch function (ticketsApi.getAll bound to params)
- * @param params    Query params — used to build the cache key
- * @param onUpdate  Called with fresh data when background revalidation completes
- * @returns         Cached data if available, else waits for first fetch
+ * Memory cache is immediate. IndexedDB survives refresh/app restart.
+ * Cached values up to 24h old are rendered first, then refreshed in background.
  */
 export async function getCachedTickets(
   fetchFn: () => Promise<any[]>,
@@ -58,53 +215,57 @@ export async function getCachedTickets(
 ): Promise<any[]> {
   const key = buildKey(params);
   const now = Date.now();
-  const entry = store.get(key);
 
+  let entry = store.get(key);
   if (entry) {
     const age = now - entry.fetchedAt;
-
-    if (age < CACHE_TTL_MS) {
-      // Cache is still within hard expiry — return immediately
-      if (age > STALE_AFTER_MS && !entry.inflight) {
-        // Trigger background revalidation without blocking the caller
-        const promise = fetchFn().then(fresh => {
-          store.set(key, { data: fresh, fetchedAt: Date.now() });
-          onUpdate?.(fresh);
-          return fresh;
-        }).catch(() => entry.data).finally(() => {
-          const current = store.get(key);
-          if (current) delete (current as any).inflight;
-        });
-        store.set(key, { ...entry, inflight: promise });
+    if (age <= MAX_STALE_AGE_MS || entry.fetchedAt === 0) {
+      if (age > FRESH_FOR_MS || entry.fetchedAt === 0) {
+        startRevalidation(key, entry, fetchFn, onUpdate);
       }
       return entry.data;
     }
   }
 
-  // No valid cache — if there's an in-flight request share it
+  const persisted = await readPersisted(key);
+  if (persisted?.data && Array.isArray(persisted.data)) {
+    const age = now - persisted.fetchedAt;
+    if (age <= MAX_STALE_AGE_MS || persisted.fetchedAt === 0) {
+      entry = { data: persisted.data, fetchedAt: persisted.fetchedAt };
+      store.set(key, entry);
+      if (age > FRESH_FOR_MS || persisted.fetchedAt === 0) {
+        startRevalidation(key, entry, fetchFn, onUpdate);
+      }
+      return persisted.data;
+    }
+  }
+
   if (entry?.inflight) return entry.inflight;
 
-  // Fresh fetch
   const promise = fetchFn().then(data => {
-    store.set(key, { data, fetchedAt: Date.now() });
+    const fetchedAt = Date.now();
+    store.set(key, { data, fetchedAt });
+    void writePersisted(key, data, fetchedAt);
     return data;
   });
 
   store.set(key, { data: entry?.data ?? [], fetchedAt: entry?.fetchedAt ?? 0, inflight: promise });
 
-  const data = await promise;
-  const current = store.get(key);
-  if (current) delete (current as any).inflight;
-  return data;
+  try {
+    return await promise;
+  } finally {
+    const current = store.get(key);
+    if (current?.inflight === promise) delete current.inflight;
+  }
 }
 
-/** Peek at cached data synchronously without triggering a fetch. */
+/** Peek at memory cache synchronously without triggering a fetch. */
 export function peekCachedTickets(
   params?: Record<string, string | string[] | boolean | undefined>,
 ): any[] | null {
   const key = buildKey(params);
   const entry = store.get(key);
   if (!entry) return null;
-  if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) return null;
+  if (Date.now() - entry.fetchedAt > MAX_STALE_AGE_MS && entry.fetchedAt !== 0) return null;
   return entry.data;
 }
