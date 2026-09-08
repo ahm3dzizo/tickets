@@ -40,7 +40,10 @@ import warehouseRoutes from "./routes/warehouse.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { requireTicketMutationAccess } from "./middleware/ticket-access.js";
-import { ticketListResponseCache } from "./middleware/ticket-list-cache.js";
+import {
+  invalidateTicketCacheAfterRelevantMutation,
+  ticketListResponseCache,
+} from "./middleware/ticket-list-cache.js";
 import { startCronJobs } from "./cronJobs.js";
 import { initVapid } from "./pushService.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
@@ -79,6 +82,7 @@ async function startServer() {
   });
   app.use("/api/", globalLimiter);
   app.use(express.json({ limit: "10mb" }));
+  app.use("/api/", invalidateTicketCacheAfterRelevantMutation);
 
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
