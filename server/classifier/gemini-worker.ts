@@ -12,7 +12,7 @@ import { invalidateTicketListResponseCache } from "../middleware/ticket-list-cac
 import { nudgeTranslationWorker } from "../translation-worker.js";
 import { classifyBatchWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
 import { classifyBatchWithML } from "./ml-client.js";
-import { buildTypeToSpecialtyMap, buildTypeKeyToIdMap, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
+import { buildContextPayload, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
 
 const BATCH_SIZE              = 10;
 const MIN_DESC_LEN            = 5;
@@ -81,7 +81,6 @@ async function runWorker(): Promise<void> {
     if (Date.now() < _pausedUntil) {
       scheduleNext(_pausedUntil - Date.now());
     } else if (processed >= BATCH_SIZE) {
-      // There is probably a backlog; drain it quickly.
       _idleLevel = 0;
       scheduleNext(BUSY_DELAY_MS);
     } else if (processed > 0) {
@@ -170,10 +169,16 @@ async function processBatch(): Promise<number> {
     }
   }
 
-  const [typeToSpecialty, typeKeyToId] = await Promise.all([
-    buildTypeToSpecialtyMap(),
-    buildTypeKeyToIdMap(),
-  ]);
+  // Reuse the classifier's 10-minute reference-data cache instead of querying
+  // ticket types/specialties again for every worker batch.
+  const refData = await buildContextPayload();
+  const typeToSpecialty: Record<string, string> = {};
+  const typeKeyToId: Record<string, string> = {};
+  for (const type of refData.types as any[]) {
+    typeToSpecialty[type.key] = type.specialty?.key || "general";
+    typeKeyToId[type.key] = type.id;
+  }
+
   const now = new Date();
   let wroteTicket = false;
 
