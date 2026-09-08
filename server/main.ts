@@ -40,6 +40,7 @@ import warehouseRoutes from "./routes/warehouse.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { requireTicketMutationAccess } from "./middleware/ticket-access.js";
+import { ticketListResponseCache } from "./middleware/ticket-list-cache.js";
 import { startCronJobs } from "./cronJobs.js";
 import { initVapid } from "./pushService.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
@@ -86,6 +87,10 @@ async function startServer() {
   app.use("/api/projects", projectRoutes);
   app.use("/api/clients", clientRoutes);
   app.use("/api/ticket-attachments", ticketAttachmentRoutes);
+  // Validate auth before the server-side ticket list cache. GET /api/tickets
+  // can then be served from RAM without touching Prisma while all cached data
+  // remains scoped to the authenticated uid + query filters.
+  app.use("/api/tickets", requireAuth, ticketListResponseCache);
   // Defense in depth for ticket edits: authenticated users may only mutate
   // tickets in projects they can access, and explicit supervisor assignments
   // must stay inside the same project.
