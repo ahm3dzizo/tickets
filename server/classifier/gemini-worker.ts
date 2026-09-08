@@ -7,6 +7,7 @@
  */
 
 import prisma from "../db.js";
+import { invalidateTicketListResponseCache } from "../middleware/ticket-list-cache.js";
 import { classifyBatchWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
 import { classifyBatchWithML } from "./ml-client.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
@@ -105,6 +106,7 @@ async function processBatch(): Promise<void> {
   const now             = new Date();
   const typeRecords     = await prisma.ticketType.findMany({ select: { id: true, key: true } });
   const typeKeyToId     = Object.fromEntries(typeRecords.map(t => [t.key, t.id]));
+  let wroteTicket = false;
 
   for (const ticket of valid) {
     const geminiResult = geminiById[ticket.id];
@@ -156,7 +158,12 @@ async function processBatch(): Promise<void> {
 
     if (Object.keys(updateData).length > 0) {
       await prisma.ticket.update({ where: { id: ticket.id }, data: updateData });
+      wroteTicket = true;
     }
+  }
+
+  if (wroteTicket) {
+    invalidateTicketListResponseCache();
   }
 
   if (aiRequestFailed && needGemini.length > 0) {
