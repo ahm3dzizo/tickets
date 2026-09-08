@@ -8,6 +8,8 @@ import { ticketDetailText } from '@/i18n/ticketDetail';
 
 const t = ticketDetailText.ar;
 
+type ResolvedMediaKind = 'image' | 'video';
+
 interface TicketMediaCarouselProps {
   items: TicketMediaItem[];
   className?: string;
@@ -22,14 +24,55 @@ function isProtectedTicketAttachment(url: string): boolean {
   }
 }
 
-function MediaSlide({ item }: { item: TicketMediaItem }) {
+function kindFromContentType(contentType?: string | null): ResolvedMediaKind | null {
+  const normalized = String(contentType || '').toLowerCase();
+  if (normalized.startsWith('video/')) return 'video';
+  if (normalized.startsWith('image/')) return 'image';
+  return null;
+}
+
+async function detectBlobKind(blob: Blob, responseContentType?: string | null): Promise<ResolvedMediaKind | null> {
+  // Prefer the actual file signature over an extension/MIME hint. This also
+  // handles legacy attachments that were saved with the wrong extension.
+  try {
+    const bytes = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+    const ascii = String.fromCharCode(...bytes);
+
+    if (bytes.length >= 12 && ascii.slice(4, 8) === 'ftyp') return 'video';
+    if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return 'video';
+    if (bytes.length >= 4 && ascii.slice(0, 4) === 'OggS') return 'video';
+
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image';
+    if (bytes.length >= 8 && bytes[0] === 0x89 && ascii.slice(1, 4) === 'PNG') return 'image';
+    if (bytes.length >= 6 && (ascii.slice(0, 6) === 'GIF87a' || ascii.slice(0, 6) === 'GIF89a')) return 'image';
+    if (bytes.length >= 12 && ascii.slice(0, 4) === 'RIFF' && ascii.slice(8, 12) === 'WEBP') return 'image';
+  } catch {
+    // Fall through to MIME detection.
+  }
+
+  return kindFromContentType(blob.type) || kindFromContentType(responseContentType);
+}
+
+function MediaSlide({
+  item,
+  onKindResolved,
+}: {
+  item: TicketMediaItem;
+  onKindResolved?: (kind: ResolvedMediaKind) => void;
+}) {
   const protectedAttachment = isProtectedTicketAttachment(item.url);
+  const initialKind: ResolvedMediaKind = item.kind === 'video' ? 'video' : 'image';
   const [failed, setFailed] = useState(false);
+  const [fallbackAttempted, setFallbackAttempted] = useState(false);
+  const [resolvedKind, setResolvedKind] = useState<ResolvedMediaKind>(initialKind);
   const [sourceUrl, setSourceUrl] = useState<string | null>(protectedAttachment ? null : item.url);
-  const isVideo = item.kind === 'video' || item.kind === 'youtube' || item.kind === 'vimeo';
+  const isEmbeddedVideo = item.kind === 'youtube' || item.kind === 'vimeo';
+  const isVideo = isEmbeddedVideo || resolvedKind === 'video';
 
   useEffect(() => {
     setFailed(false);
+    setFallbackAttempted(false);
+    setResolvedKind(initialKind);
 
     if (!protectedAttachment) {
       setSourceUrl(item.url);
@@ -51,12 +94,22 @@ function MediaSlide({ item }: { item: TicketMediaItem }) {
       headers: { Authorization: `Bearer ${token}` },
       signal: controller.signal,
     })
-      .then(response => {
+      .then(async response => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.blob();
+        const responseContentType = response.headers.get('content-type');
+        const blob = await response.blob();
+        return { blob, responseContentType };
       })
-      .then(blob => {
+      .then(async ({ blob, responseContentType }) => {
         if (controller.signal.aborted) return;
+
+        const detectedKind = await detectBlobKind(blob, responseContentType);
+        if (controller.signal.aborted) return;
+        if (detectedKind) {
+          setResolvedKind(detectedKind);
+          onKindResolved?.(detectedKind);
+        }
+
         objectUrl = URL.createObjectURL(blob);
         setSourceUrl(objectUrl);
       })
@@ -69,7 +122,7 @@ function MediaSlide({ item }: { item: TicketMediaItem }) {
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [item.url, protectedAttachment]);
+  }, [item.url, protectedAttachment, initialKind, onKindResolved]);
 
   if (failed) {
     return (
@@ -82,7 +135,7 @@ function MediaSlide({ item }: { item: TicketMediaItem }) {
     );
   }
 
-  if (item.kind === 'youtube' || item.kind === 'vimeo') {
+  if (isEmbeddedVideo) {
     return (
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-black sm:aspect-video">
         <iframe
@@ -107,7 +160,7 @@ function MediaSlide({ item }: { item: TicketMediaItem }) {
     );
   }
 
-  if (item.kind === 'video') {
+  if (resolvedKind === 'video') {
     return (
       <div className="flex aspect-[4/3] w-full items-center justify-center bg-black sm:aspect-video">
         <video
@@ -118,7 +171,13 @@ function MediaSlide({ item }: { item: TicketMediaItem }) {
           playsInline
           preload="metadata"
           className="h-full w-full object-contain"
-          onError={() => setFailed(true)}
+          onError={() => {
+            if (fallbackAttempted && item.kind === 'image') {
+              setResolvedKind('image');
+              onKindResolved?.('image');
+            }
+            setFailed(true);
+          }}
         >
           {t.videoLoadFailed}
         </video>
@@ -135,7 +194,18 @@ function MediaSlide({ item }: { item: TicketMediaItem }) {
         decoding="async"
         referrerPolicy="no-referrer"
         className="h-full w-full object-contain"
-        onError={() => setFailed(true)}
+        onError={() => {
+          // Some legacy/external media URLs look like images even though they
+          // actually return a video. If image rendering fails, try the same URL
+          // once as a video before showing the final failure state.
+          if (!fallbackAttempted) {
+            setFallbackAttempted(true);
+            setResolvedKind('video');
+            onKindResolved?.('video');
+            return;
+          }
+          setFailed(true);
+        }}
       />
     </div>
   );
@@ -145,6 +215,7 @@ export function TicketMediaCarousel({ items, className }: TicketMediaCarouselPro
   const displayItems = useMemo(() => items.filter(isDisplayableTicketMedia), [items]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [resolvedKinds, setResolvedKinds] = useState<Record<string, ResolvedMediaKind>>({});
 
   useEffect(() => {
     if (activeIndex >= displayItems.length) setActiveIndex(0);
@@ -152,6 +223,7 @@ export function TicketMediaCarousel({ items, className }: TicketMediaCarouselPro
 
   useEffect(() => {
     setActiveIndex(0);
+    setResolvedKinds({});
   }, [items]);
 
   const hasMany = displayItems.length > 1;
@@ -197,6 +269,8 @@ export function TicketMediaCarousel({ items, className }: TicketMediaCarouselPro
   }
 
   const current = displayItems[activeIndex];
+  const currentKind = resolvedKinds[current.url] ?? current.kind;
+  const currentIsImage = currentKind === 'image';
 
   return (
     <div
@@ -210,7 +284,15 @@ export function TicketMediaCarousel({ items, className }: TicketMediaCarouselPro
       onTouchEnd={handleTouchEnd}
     >
       <div className="relative min-w-0 max-w-full overflow-hidden">
-        <MediaSlide key={`${current.kind}:${current.url}`} item={current} />
+        <MediaSlide
+          key={`${current.kind}:${current.url}`}
+          item={current}
+          onKindResolved={kind => {
+            setResolvedKinds(previousKinds => previousKinds[current.url] === kind
+              ? previousKinds
+              : { ...previousKinds, [current.url]: kind });
+          }}
+        />
 
         {hasMany && (
           <>
@@ -242,12 +324,12 @@ export function TicketMediaCarousel({ items, className }: TicketMediaCarouselPro
 
       <div className="flex min-w-0 items-center justify-between gap-3 border-t border-border/60 px-3 py-2.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-2 text-xs font-bold text-foreground">
-          {current.kind === 'image' ? (
+          {currentIsImage ? (
             <ImageIcon className="h-4 w-4 shrink-0 text-primary" />
           ) : (
             <Video className="h-4 w-4 shrink-0 text-primary" />
           )}
-          <span>{current.kind === 'image' ? t.imageAttachment : t.videoAttachment}</span>
+          <span>{currentIsImage ? t.imageAttachment : t.videoAttachment}</span>
         </div>
 
         {hasMany && (
