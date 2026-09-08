@@ -3,7 +3,7 @@
  * ─────────────────────────
  * Every day at 03:00:
  * 1. Exports all classified tickets from DB → ml/db_tickets.csv
- * 2. Runs python3 ml/train.py
+ * 2. Runs ml/train.py with the ML virtualenv Python
  * 3. Calls POST /reload on the ML service so it picks up the new model
  */
 
@@ -19,6 +19,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ML_DIR    = path.resolve(__dirname, "../../ml");
 const DB_CSV    = path.join(ML_DIR, "db_tickets.csv");
 const ML_URL    = process.env.ML_SERVICE_URL ?? "http://127.0.0.1:5050";
+const ML_PYTHON = process.env.ML_PYTHON ?? path.join(ML_DIR, ".venv/bin/python");
 
 let _timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -71,21 +72,52 @@ async function exportTicketsToCSV(): Promise<number> {
   return rows.length - 1; // exclude header
 }
 
+async function resolveTrainingPython(): Promise<string> {
+  try {
+    await fs.access(ML_PYTHON);
+    return ML_PYTHON;
+  } catch {
+    console.warn(`[TrainWorker] ML Python not found at ${ML_PYTHON}; falling back to system python3`);
+    return "python3";
+  }
+}
+
 async function runTrain(): Promise<void> {
   console.log("[TrainWorker] Starting daily training...");
 
   const count = await exportTicketsToCSV();
   console.log(`[TrainWorker] Exported ${count} tickets → db_tickets.csv`);
 
-  const { stdout, stderr } = await execAsync(`python3 ${path.join(ML_DIR, "train.py")}`, {
-    cwd:     ML_DIR,
-    timeout: 5 * 60_000,
-    env:     { ...process.env, PYTHONPATH: ML_DIR },
-  });
+  const python = await resolveTrainingPython();
+  const trainScript = path.join(ML_DIR, "train.py");
+  console.log(`[TrainWorker] Python: ${python}`);
 
-  if (stdout) console.log(`[TrainWorker] train.py: ${stdout.slice(-300)}`);
+  let stdout = "";
+  let stderr = "";
+  try {
+    const result = await execAsync(`"${python}" -u "${trainScript}"`, {
+      cwd:     ML_DIR,
+      timeout: 5 * 60_000,
+      env:     { ...process.env, PYTHONPATH: ML_DIR },
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    stdout = result.stdout;
+    stderr = result.stderr;
+  } catch (err: any) {
+    const failedStdout = String(err?.stdout ?? "");
+    const failedStderr = String(err?.stderr ?? "");
+    if (failedStdout) {
+      console.error(`[TrainWorker] train.py stdout before failure:\n${failedStdout.slice(-4000)}`);
+    }
+    if (failedStderr) {
+      console.error(`[TrainWorker] train.py stderr:\n${failedStderr.slice(-4000)}`);
+    }
+    throw err;
+  }
+
+  if (stdout) console.log(`[TrainWorker] train.py: ${stdout.slice(-1000)}`);
   if (stderr && !stderr.includes("UserWarning")) {
-    console.warn(`[TrainWorker] train.py stderr: ${stderr.slice(-200)}`);
+    console.warn(`[TrainWorker] train.py stderr: ${stderr.slice(-1000)}`);
   }
 
   // Reload ML service with new model
