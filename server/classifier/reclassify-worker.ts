@@ -5,11 +5,8 @@
  * and re-runs the classifier on tickets whose descriptions contain those keywords.
  *
  * Priority: open/in_progress tickets first, then closed.
- * Runs every 30 seconds, processes up to 5 pending keywords per tick,
- * and up to 40 tickets per keyword.
- *
- * When a ticket's type changes, supervisors are automatically re-assigned
- * based on the new specialty.
+ * Uses event nudges for immediate work and progressively backs off to a 5-minute
+ * heartbeat while idle.
  */
 
 import prisma from "../db.js";
@@ -17,73 +14,112 @@ import { invalidateTicketListResponseCache } from "../middleware/ticket-list-cac
 import { loadKeywordsFromDB, classifyFromKeywordsDB, invalidateKeywordCache } from "./keywords.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
 
-const INTERVAL_MS         = 30_000;  // 30 s between ticks
-const KEYWORDS_PER_TICK   = 5;       // pending keywords processed per tick
-const TICKETS_PER_KEYWORD = 40;      // max tickets reclassified per keyword
+const KEYWORDS_PER_TICK   = 5;
+const TICKETS_PER_KEYWORD = 40;
+const BUSY_DELAY_MS       = 1_000;
+const IDLE_DELAYS_MS      = [30_000, 60_000, 2 * 60_000, 5 * 60_000];
 
-let _timer: ReturnType<typeof setInterval> | null = null;
+let _timer: ReturnType<typeof setTimeout> | null = null;
 let _running = false;
-
-// In-memory nudge: if true, next tick runs immediately (don't wait for interval)
+let _started = false;
 let _nudged = false;
+let _idleLevel = 0;
 
-export function startReclassifyWorker(): void {
-  if (_timer) return;
-  console.log("[ReclassifyWorker] Started — watches learned keywords every 30 s");
-
-  _timer = setInterval(async () => {
-    if (_running) return;
-    _nudged = false;
-    _running = true;
-    try {
-      await processPendingKeywords();
-    } finally {
-      _running = false;
-    }
-  }, INTERVAL_MS);
-}
-
-export function stopReclassifyWorker(): void {
+function clearWorkerTimer(): void {
   if (_timer) {
-    clearInterval(_timer);
+    clearTimeout(_timer);
     _timer = null;
-    console.log("[ReclassifyWorker] Stopped");
   }
 }
 
-/**
- * Call this right after a keyword is learned so the worker processes it
- * on the very next tick instead of waiting up to 30 s.
- */
-export function nudgeReclassifyWorker(): void {
-  if (_running) return;
-  _nudged = true;
-  // Fire immediately — don't wait for the interval
-  setImmediate(async () => {
-    if (!_nudged || _running) return;
-    _nudged = false;
-    _running = true;
-    try {
-      await processPendingKeywords();
-    } finally {
-      _running = false;
+function scheduleNext(delayMs: number): void {
+  if (!_started) return;
+  clearWorkerTimer();
+  _timer = setTimeout(() => void runWorker(), Math.max(0, delayMs));
+}
+
+function nextIdleDelay(): number {
+  const index = Math.min(_idleLevel, IDLE_DELAYS_MS.length - 1);
+  const delay = IDLE_DELAYS_MS[index];
+  _idleLevel = Math.min(index + 1, IDLE_DELAYS_MS.length - 1);
+  return delay;
+}
+
+async function runWorker(): Promise<void> {
+  if (!_started) return;
+  if (_running) {
+    _nudged = true;
+    return;
+  }
+
+  _running = true;
+  let pendingCount = 0;
+  try {
+    pendingCount = await processPendingKeywords();
+  } catch (err: any) {
+    console.error('[ReclassifyWorker] unexpected error:', err?.message || err);
+  } finally {
+    _running = false;
+    if (!_started) return;
+
+    if (_nudged) {
+      _nudged = false;
+      _idleLevel = 0;
+      scheduleNext(0);
+      return;
     }
-  });
+
+    if (pendingCount >= KEYWORDS_PER_TICK) {
+      _idleLevel = 0;
+      scheduleNext(BUSY_DELAY_MS);
+    } else if (pendingCount > 0) {
+      _idleLevel = 0;
+      scheduleNext(IDLE_DELAYS_MS[0]);
+    } else {
+      scheduleNext(nextIdleDelay());
+    }
+  }
+}
+
+export function startReclassifyWorker(): void {
+  if (_started) return;
+  _started = true;
+  _idleLevel = 0;
+  console.log("[ReclassifyWorker] Started — event-driven with 30s → 5m idle heartbeat");
+  scheduleNext(0);
+}
+
+export function stopReclassifyWorker(): void {
+  if (!_started) return;
+  _started = false;
+  _nudged = false;
+  clearWorkerTimer();
+  console.log("[ReclassifyWorker] Stopped");
+}
+
+/** Wake immediately after a new learned keyword is marked pending. */
+export function nudgeReclassifyWorker(): void {
+  if (!_started) return;
+  _idleLevel = 0;
+  if (_running) {
+    _nudged = true;
+    return;
+  }
+  scheduleNext(0);
 }
 
 // ── Core logic ──────────────────────────────────────────────────────────────
 
-async function processPendingKeywords(): Promise<void> {
+async function processPendingKeywords(): Promise<number> {
   const pendingKeywords = await prisma.ticketTypeKeyword.findMany({
     where: { pendingReclassify: true },
     take: KEYWORDS_PER_TICK,
-    orderBy: { updatedAt: "asc" }, // oldest pending first
+    orderBy: { updatedAt: "asc" },
     select: { id: true, keyword: true, typeId: true },
   });
 
-  if (pendingKeywords.length === 0) return;
+  if (pendingKeywords.length === 0) return 0;
 
-  // Force fresh keyword cache so new weights are used
   const keywords = await loadKeywordsFromDB(true);
   const typeToSpecialty = await buildTypeToSpecialtyMap();
 
@@ -97,11 +133,11 @@ async function processPendingKeywords(): Promise<void> {
       });
     } catch (err: any) {
       console.error(`[ReclassifyWorker] Error on keyword "${kw.keyword}":`, err.message);
-      // Leave pendingReclassify = true → will retry next tick
     }
   }
 
   invalidateKeywordCache();
+  return pendingKeywords.length;
 }
 
 async function reclassifyForKeyword(
@@ -109,14 +145,12 @@ async function reclassifyForKeyword(
   keywords: Awaited<ReturnType<typeof loadKeywordsFromDB>>,
   typeToSpecialty: Record<string, string>
 ): Promise<void> {
-  // Tickets whose description contains the keyword (case-insensitive).
-  // Open/in_progress first (closedAt IS NULL → nulls first).
   const tickets = await prisma.ticket.findMany({
     where: {
       description: { contains: keyword, mode: "insensitive" },
     },
     orderBy: [
-      { closedAt: { sort: "asc", nulls: "first" } }, // open tickets first
+      { closedAt: { sort: "asc", nulls: "first" } },
       { createdAt: "desc" },
     ],
     take: TICKETS_PER_KEYWORD,
@@ -140,9 +174,6 @@ async function reclassifyForKeyword(
 
     const result = classifyFromKeywordsDB(ticket.description, keywords);
 
-    // Only reclassify if:
-    // 1. New type is meaningful
-    // 2. New type is different from current type
     if (
       result.primaryType === "unclassified" ||
       result.primaryType === ticket.type
@@ -150,13 +181,12 @@ async function reclassifyForKeyword(
 
     const allTypes = uniqueStringList(result.allTypes).filter(type => type !== "unclassified");
     const updateData: Record<string, any> = {
-      type:         result.primaryType,
+      type: result.primaryType,
       detectedTypes: allTypes,
-      typeId:       result.typeId   ?? null,
-      subTypeId:    result.subTypeId ?? null,
+      typeId: result.typeId ?? null,
+      subTypeId: result.subTypeId ?? null,
     };
 
-    // Update supervisors when specialty changes
     if (ticket.projectId) {
       try {
         const specialties = [
