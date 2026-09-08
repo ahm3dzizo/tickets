@@ -13,6 +13,7 @@
  */
 
 import prisma from "../db.js";
+import { invalidateTicketListResponseCache } from "../middleware/ticket-list-cache.js";
 import { loadKeywordsFromDB, classifyFromKeywordsDB, invalidateKeywordCache } from "./keywords.js";
 import { buildTypeToSpecialtyMap, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
 
@@ -178,6 +179,7 @@ async function reclassifyForKeyword(
   }
 
   if (changed > 0) {
+    invalidateTicketListResponseCache();
     console.log(
       `[ReclassifyWorker] keyword "${keyword}" → reclassified ${changed}/${tickets.length} tickets`
     );
