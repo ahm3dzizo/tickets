@@ -4,55 +4,123 @@
  * 1. Tries ML model first (batch) — fast, free, no quota
  * 2. Sends only low-confidence ML tickets to AI
  * 3. Leaves low-confidence tickets pending when AI fails so a later pass retries them
+ * 4. Uses adaptive polling and can be nudged immediately after ticket mutations
  */
 
 import prisma from "../db.js";
 import { invalidateTicketListResponseCache } from "../middleware/ticket-list-cache.js";
+import { nudgeTranslationWorker } from "../translation-worker.js";
 import { classifyBatchWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
 import { classifyBatchWithML } from "./ml-client.js";
-import { buildTypeToSpecialtyMap, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
+import { buildTypeToSpecialtyMap, buildTypeKeyToIdMap, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
 
-const INTERVAL_MS          = 15_000;
-const BATCH_SIZE           = 10;
-const MIN_DESC_LEN         = 5;
-const ML_CONFIDENCE_THRESHOLD  = 0.70;
-const RATE_LIMIT_PAUSE_RPM = 70_000;
-const RATE_LIMIT_PAUSE_RPD = 60 * 60_000;
+const BATCH_SIZE              = 10;
+const MIN_DESC_LEN            = 5;
+const ML_CONFIDENCE_THRESHOLD = 0.70;
+const RATE_LIMIT_PAUSE_RPM    = 70_000;
+const RATE_LIMIT_PAUSE_RPD    = 60 * 60_000;
+const BUSY_DELAY_MS           = 1_000;
+const IDLE_DELAYS_MS          = [15_000, 30_000, 60_000, 5 * 60_000];
 
-let _timer: ReturnType<typeof setInterval> | null = null;
-let _running   = false;
+let _timer: ReturnType<typeof setTimeout> | null = null;
+let _running = false;
+let _started = false;
+let _nudged = false;
+let _idleLevel = 0;
 let _pausedUntil = 0;
 
-export function startGeminiWorker(): void {
-  if (_timer) return;
-  console.log("[ClassifyWorker] Started — ML primary, AI fallback, every 15 s");
-
-  const run = async () => {
-    if (_running) return;
-    if (Date.now() < _pausedUntil) return;
-    _running = true;
-    try {
-      await processBatch();
-    } catch (error: any) {
-      console.error('[ClassifyWorker] unexpected error:', error?.message || error);
-    } finally {
-      _running = false;
-    }
-  };
-
-  void run();
-  _timer = setInterval(() => void run(), INTERVAL_MS);
-}
-
-export function stopGeminiWorker(): void {
+function clearWorkerTimer(): void {
   if (_timer) {
-    clearInterval(_timer);
+    clearTimeout(_timer);
     _timer = null;
-    console.log("[ClassifyWorker] Stopped");
   }
 }
 
-async function processBatch(): Promise<void> {
+function scheduleNext(delayMs: number): void {
+  if (!_started) return;
+  clearWorkerTimer();
+  _timer = setTimeout(() => void runWorker(), Math.max(0, delayMs));
+}
+
+function nextIdleDelay(): number {
+  const index = Math.min(_idleLevel, IDLE_DELAYS_MS.length - 1);
+  const delay = IDLE_DELAYS_MS[index];
+  _idleLevel = Math.min(index + 1, IDLE_DELAYS_MS.length - 1);
+  return delay;
+}
+
+async function runWorker(): Promise<void> {
+  if (!_started) return;
+  if (_running) {
+    _nudged = true;
+    return;
+  }
+
+  if (Date.now() < _pausedUntil) {
+    scheduleNext(_pausedUntil - Date.now());
+    return;
+  }
+
+  _running = true;
+  let processed = 0;
+  try {
+    processed = await processBatch();
+  } catch (error: any) {
+    console.error('[ClassifyWorker] unexpected error:', error?.message || error);
+  } finally {
+    _running = false;
+    if (!_started) return;
+
+    if (_nudged) {
+      _nudged = false;
+      _idleLevel = 0;
+      scheduleNext(0);
+      return;
+    }
+
+    if (Date.now() < _pausedUntil) {
+      scheduleNext(_pausedUntil - Date.now());
+    } else if (processed >= BATCH_SIZE) {
+      // There is probably a backlog; drain it quickly.
+      _idleLevel = 0;
+      scheduleNext(BUSY_DELAY_MS);
+    } else if (processed > 0) {
+      _idleLevel = 0;
+      scheduleNext(IDLE_DELAYS_MS[0]);
+    } else {
+      scheduleNext(nextIdleDelay());
+    }
+  }
+}
+
+export function startGeminiWorker(): void {
+  if (_started) return;
+  _started = true;
+  _idleLevel = 0;
+  console.log("[ClassifyWorker] Started — adaptive ML primary / AI fallback (15s → 5m idle)");
+  scheduleNext(0);
+}
+
+export function stopGeminiWorker(): void {
+  if (!_started) return;
+  _started = false;
+  _nudged = false;
+  clearWorkerTimer();
+  console.log("[ClassifyWorker] Stopped");
+}
+
+/** Wake classification immediately after a successful ticket mutation/import. */
+export function nudgeGeminiWorker(): void {
+  if (!_started) return;
+  _idleLevel = 0;
+  if (_running) {
+    _nudged = true;
+    return;
+  }
+  scheduleNext(0);
+}
+
+async function processBatch(): Promise<number> {
   const tickets = await prisma.ticket.findMany({
     where: {
       geminiClassifiedAt: null,
@@ -65,7 +133,7 @@ async function processBatch(): Promise<void> {
   });
 
   const valid = tickets.filter(t => t.description && t.description.length >= MIN_DESC_LEN);
-  if (valid.length === 0) return;
+  if (valid.length === 0) return 0;
 
   const batchItems = valid.map(t => ({ id: t.id, description: t.description! }));
 
@@ -88,7 +156,7 @@ async function processBatch(): Promise<void> {
       } catch (err: any) {
         aiRequestFailed = true;
         if (err.message?.includes("429") || err.message?.includes("quota")) {
-          const isDaily = err.message?.includes("PerDay") || err.message?.includes("per_day");
+          const isDaily = err.message?.includes("PerDay") || err.message?.includes("per_day") || err.message?.includes("per-day");
           const pause   = isDaily ? RATE_LIMIT_PAUSE_RPD : RATE_LIMIT_PAUSE_RPM;
           _pausedUntil  = Date.now() + pause;
           console.warn(`[ClassifyWorker] ⏸ AI ${isDaily ? "daily" : "per-min"} limit — pausing ${pause / 60000}m`);
@@ -102,10 +170,11 @@ async function processBatch(): Promise<void> {
     }
   }
 
-  const typeToSpecialty = await buildTypeToSpecialtyMap();
-  const now             = new Date();
-  const typeRecords     = await prisma.ticketType.findMany({ select: { id: true, key: true } });
-  const typeKeyToId     = Object.fromEntries(typeRecords.map(t => [t.key, t.id]));
+  const [typeToSpecialty, typeKeyToId] = await Promise.all([
+    buildTypeToSpecialtyMap(),
+    buildTypeKeyToIdMap(),
+  ]);
+  const now = new Date();
   let wroteTicket = false;
 
   for (const ticket of valid) {
@@ -164,9 +233,12 @@ async function processBatch(): Promise<void> {
 
   if (wroteTicket) {
     invalidateTicketListResponseCache();
+    nudgeTranslationWorker();
   }
 
   if (aiRequestFailed && needGemini.length > 0) {
     console.warn(`[ClassifyWorker] ${needGemini.length} low-confidence ticket(s) remain queued for a later AI retry`);
   }
+
+  return valid.length;
 }
