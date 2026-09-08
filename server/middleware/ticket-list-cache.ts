@@ -1,8 +1,20 @@
-import type { NextFunction, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import type { AuthRequest } from "../auth.js";
 
 const DEFAULT_TTL_MS = 5 * 60_000;
 const MAX_ENTRIES = 12;
+const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const TICKET_MUTATION_PREFIXES = [
+  "/api/tickets",
+  "/api/appointments",
+  "/api/import-excel",
+  "/api/classify",
+  "/api/whatsapp",
+  "/api/whatsapp-bot",
+  "/api/users",
+  "/api/shift",
+  "/api/tech/appointments",
+];
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
@@ -65,11 +77,39 @@ export function getTicketListCacheStats() {
 }
 
 /**
+ * Clears the ticket-list response cache after successful mutations from any
+ * API surface that can indirectly change ticket list data.
+ */
+export function invalidateTicketCacheAfterRelevantMutation(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!MUTATION_METHODS.has(req.method)) {
+    next();
+    return;
+  }
+
+  const pathname = req.originalUrl.split("?", 1)[0] || "";
+  if (!TICKET_MUTATION_PREFIXES.some(prefix => pathname.startsWith(prefix))) {
+    next();
+    return;
+  }
+
+  res.once("finish", () => {
+    if (res.statusCode >= 200 && res.statusCode < 400) {
+      invalidateTicketListResponseCache();
+    }
+  });
+
+  next();
+}
+
+/**
  * Server-side cache for GET /api/tickets only.
  *
  * requireAuth must run before this middleware so cached responses are still
  * protected by normal JWT validation. Cache keys are scoped by uid + query.
- * Successful ticket mutations automatically invalidate all cached lists.
  */
 export function ticketListResponseCache(
   req: AuthRequest,
@@ -79,13 +119,6 @@ export function ticketListResponseCache(
   const isListGet = req.method === "GET" && (req.path === "/" || req.path === "");
 
   if (!isListGet) {
-    if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
-      res.once("finish", () => {
-        if (res.statusCode >= 200 && res.statusCode < 400) {
-          invalidateTicketListResponseCache();
-        }
-      });
-    }
     next();
     return;
   }
