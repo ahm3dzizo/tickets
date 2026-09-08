@@ -63,6 +63,14 @@ async function allowEitherAuth(req: any, res: any, next: any) {
 
 function configuredProviders(): TranslationProvider[] {
   const providers: TranslationProvider[] = [];
+  if (process.env.NARA_API_KEY) {
+    providers.push({
+      label: 'NaraRouter',
+      url: 'https://router.bynara.id/v1/chat/completions',
+      apiKey: process.env.NARA_API_KEY,
+      model: process.env.NARA_TRANSLATION_MODEL || process.env.NARA_MODEL || 'agnes-2.5-flash',
+    });
+  }
   if (process.env.OPENROUTER_API_KEY) {
     providers.push({
       label: 'OpenRouter',
@@ -71,14 +79,6 @@ function configuredProviders(): TranslationProvider[] {
       model: process.env.OPENROUTER_TRANSLATION_MODEL
         || process.env.OPENROUTER_MODEL
         || 'openrouter/free',
-    });
-  }
-  if (process.env.NARA_API_KEY) {
-    providers.push({
-      label: 'NaraRouter',
-      url: 'https://router.bynara.id/v1/chat/completions',
-      apiKey: process.env.NARA_API_KEY,
-      model: process.env.NARA_TRANSLATION_MODEL || 'mistral-large',
     });
   }
   return providers;
