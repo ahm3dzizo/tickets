@@ -31,7 +31,7 @@ import ocrRoutes from "./routes/ocr.js";
 import importExcelRoutes from "./routes/import-excel.js";
 import contractorRoutes from "./routes/contractors.js";
 import warrantiesRoutes from "./routes/warranties.js";
-import techAuthRoutes from "./routes/tech-auth.js";
+import techAuthRoutes, { requireTechAuth } from "./routes/tech-auth.js";
 import techTicketActionRoutes from "./routes/tech-ticket-actions.js";
 import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
@@ -45,6 +45,10 @@ import {
   invalidateTicketCacheAfterRelevantMutation,
   ticketListResponseCache,
 } from "./middleware/ticket-list-cache.js";
+import {
+  invalidateTechReadCacheAfterMutation,
+  techReadResponseCache,
+} from "./middleware/tech-read-cache.js";
 import { startCronJobs } from "./cronJobs.js";
 import { initVapid } from "./pushService.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
@@ -84,6 +88,7 @@ async function startServer() {
   app.use("/api/", globalLimiter);
   app.use(express.json({ limit: "10mb" }));
   app.use("/api/", invalidateTicketCacheAfterRelevantMutation);
+  app.use("/api/", invalidateTechReadCacheAfterMutation);
 
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
@@ -102,6 +107,14 @@ async function startServer() {
   app.put("/api/tickets/:id", requireAuth, requireTicketMutationAccess);
   app.use("/api/tickets", ticketRoutes);
   app.use("/api/technicians", technicianRoutes);
+
+  // The technician PWA refreshes these views frequently. Authenticate first,
+  // then answer cache hits from RAM before Prisma-backed route handlers run.
+  // Relevant mutations invalidate the cache immediately above.
+  app.get("/api/tech/appointments", requireTechAuth, techReadResponseCache);
+  app.get("/api/tech/me/active-session", requireTechAuth, techReadResponseCache);
+  app.get("/api/shift/today", requireTechAuth, techReadResponseCache);
+
   app.use("/api/tech", techAuthRoutes);
   // These explicit technician actions override the legacy attendance handlers
   // so ticket outcomes and appointment completion stay deliberate and audited.
