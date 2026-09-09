@@ -31,7 +31,7 @@ import ocrRoutes from "./routes/ocr.js";
 import importExcelRoutes from "./routes/import-excel.js";
 import contractorRoutes from "./routes/contractors.js";
 import warrantiesRoutes from "./routes/warranties.js";
-import techAuthRoutes, { requireTechAuth } from "./routes/tech-auth.js";
+import techAuthRoutes from "./routes/tech-auth.js";
 import techTicketActionRoutes from "./routes/tech-ticket-actions.js";
 import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
@@ -46,9 +46,12 @@ import {
   ticketListResponseCache,
 } from "./middleware/ticket-list-cache.js";
 import {
+  applyDefaultTechAppointmentWindow,
   invalidateTechReadCacheAfterMutation,
+  requireCachedTechReadAuth,
   techReadResponseCache,
 } from "./middleware/tech-read-cache.js";
+import { requireTechOperationalLocation } from "./middleware/tech-location-guard.js";
 import { startCronJobs } from "./cronJobs.js";
 import { initVapid } from "./pushService.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
@@ -87,6 +90,7 @@ async function startServer() {
   });
   app.use("/api/", globalLimiter);
   app.use(express.json({ limit: "10mb" }));
+  app.use("/api/", requireTechOperationalLocation);
   app.use("/api/", invalidateTicketCacheAfterRelevantMutation);
   app.use("/api/", invalidateTechReadCacheAfterMutation);
 
@@ -108,12 +112,18 @@ async function startServer() {
   app.use("/api/tickets", ticketRoutes);
   app.use("/api/technicians", technicianRoutes);
 
-  // The technician PWA refreshes these views frequently. Authenticate first,
-  // then answer cache hits from RAM before Prisma-backed route handlers run.
-  // Relevant mutations invalidate the cache immediately above.
-  app.get("/api/tech/appointments", requireTechAuth, techReadResponseCache);
-  app.get("/api/tech/me/active-session", requireTechAuth, techReadResponseCache);
-  app.get("/api/shift/today", requireTechAuth, techReadResponseCache);
+  // High-frequency technician reads: verify the JWT every time, cache account
+  // state briefly, then serve payload hits from RAM. Appointment requests that
+  // omit filters are bounded to a useful operational window before the cache key
+  // is built, avoiding downloads of the technician's entire history.
+  app.get(
+    "/api/tech/appointments",
+    applyDefaultTechAppointmentWindow,
+    requireCachedTechReadAuth,
+    techReadResponseCache,
+  );
+  app.get("/api/tech/me/active-session", requireCachedTechReadAuth, techReadResponseCache);
+  app.get("/api/shift/today", requireCachedTechReadAuth, techReadResponseCache);
 
   app.use("/api/tech", techAuthRoutes);
   // These explicit technician actions override the legacy attendance handlers
