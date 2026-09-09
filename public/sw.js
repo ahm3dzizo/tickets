@@ -16,9 +16,9 @@ registerRoute(
 );
 
 // ── Technician PWA hot-read cache ─────────────────────────────────────────────
-// The tech app refreshes these endpoints frequently. Keep a short, auth-scoped
-// copy in the service worker so most polls do not cross the network at all. A
-// stale copy can also keep the field UI readable during a temporary outage.
+// Keep operational reads auth-scoped in the service worker. Fresh reads avoid
+// needless network traffic; stale reads can keep appointments/ticket details
+// visible through a temporary outage without ever crossing technician accounts.
 const TECH_RUNTIME_CACHE = 'retal-tech-runtime-v1';
 const TECH_FRESH_MS = 60 * 1000;
 const TECH_MAX_STALE_MS = 24 * 60 * 60 * 1000;
@@ -27,6 +27,10 @@ const TECH_READ_PATHS = new Set([
   '/api/tech/me/active-session',
   '/api/shift/today',
 ]);
+
+function isTechReadPath(pathname) {
+  return TECH_READ_PATHS.has(pathname) || /^\/api\/tech\/tickets\/[^/]+$/.test(pathname);
+}
 
 function simpleHash(value) {
   let hash = 2166136261;
@@ -70,15 +74,13 @@ async function techReadHandler({ request }) {
   const cachedAt = Number(cached?.headers.get('X-Tech-Cached-At') || 0);
   const age = cachedAt > 0 ? Date.now() - cachedAt : Number.POSITIVE_INFINITY;
 
-  if (cached && age <= TECH_FRESH_MS) {
-    return cached;
-  }
+  if (cached && age <= TECH_FRESH_MS) return cached;
 
   try {
     const response = await fetch(request);
 
     // Never allow an old cached payload to hide a revoked/expired technician
-    // session. Delete the scoped copy and surface the auth failure immediately.
+    // session or an authorization change.
     if (response.status === 401 || response.status === 403) {
       await cache.delete(key);
       return response;
@@ -101,7 +103,7 @@ registerRoute(
   ({ url, request }) =>
     request.method === 'GET' &&
     url.origin === self.location.origin &&
-    TECH_READ_PATHS.has(url.pathname),
+    isTechReadPath(url.pathname),
   techReadHandler,
 );
 
