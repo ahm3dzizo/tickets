@@ -1,4 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
+import prisma from '../db.js';
+import { APP_JWT_SECRET } from '../config.js';
 import type { TechAuthRequest } from '../routes/tech-auth.js';
 
 /**
@@ -6,20 +9,31 @@ import type { TechAuthRequest } from '../routes/tech-auth.js';
  *
  * The mobile/PWA UI refreshes frequently. These payloads only change after a
  * known mutation, so repeatedly rebuilding them from Prisma wastes DB capacity.
- * We keep successful JSON responses in RAM and invalidate them immediately after
- * relevant writes. Authentication still runs before this middleware, so cached
- * data is always scoped to the authenticated technician.
+ * Successful responses are kept in RAM and invalidated immediately after
+ * relevant writes. Hot-read authentication is also cached briefly so a true
+ * cache HIT can be served with zero Prisma queries while JWT verification still
+ * happens on every request.
  */
 
 const TTL_MS = 5 * 60_000;
+const AUTH_TTL_MS = 60_000;
 const MAX_ENTRIES = 500;
+const DEFAULT_APPOINTMENT_PAST_DAYS = 14;
+const DEFAULT_APPOINTMENT_FUTURE_DAYS = 45;
 
 type CacheEntry = {
   expiresAt: number;
   payload: unknown;
 };
 
+type AuthStateEntry = {
+  expiresAt: number;
+  isActive: boolean;
+  profileCompleted: boolean;
+};
+
 const cache = new Map<string, CacheEntry>();
+const authStateCache = new Map<string, AuthStateEntry>();
 
 function normalizedQuery(req: Request): string {
   return Object.entries(req.query)
@@ -44,6 +58,9 @@ function pruneExpired(now = Date.now()) {
   for (const [key, entry] of cache.entries()) {
     if (entry.expiresAt <= now) cache.delete(key);
   }
+  for (const [key, entry] of authStateCache.entries()) {
+    if (entry.expiresAt <= now) authStateCache.delete(key);
+  }
   while (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value as string | undefined;
     if (!oldest) break;
@@ -54,17 +71,118 @@ function pruneExpired(now = Date.now()) {
 export function invalidateTechReadCache(technicianId?: string | null) {
   if (!technicianId) {
     cache.clear();
+    authStateCache.clear();
     return;
   }
   const prefix = `${technicianId}|`;
   for (const key of cache.keys()) {
     if (key.startsWith(prefix)) cache.delete(key);
   }
+  authStateCache.delete(technicianId);
 }
 
 /**
- * Mount only after requireTechAuth. A cache HIT never reaches Prisma-backed
- * route handlers; a MISS lets the normal handler execute and captures its JSON.
+ * Lightweight auth for the three high-frequency read routes only.
+ * JWT integrity is checked on every request. Database account state is cached
+ * for at most 60 seconds and is invalidated immediately by technician/admin
+ * mutations passing through this process.
+ */
+export async function requireCachedTechReadAuth(
+  req: TechAuthRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  try {
+    const payload = jwt.verify(header.slice(7), APP_JWT_SECRET) as any;
+    if (payload.role !== 'technician' || !payload.technicianId) {
+      res.status(403).json({ error: 'Forbidden: Technician only' });
+      return;
+    }
+
+    const technicianId = String(payload.technicianId);
+    const now = Date.now();
+    let state = authStateCache.get(technicianId);
+
+    if (!state || state.expiresAt <= now) {
+      const tech = await prisma.technician.findUnique({
+        where: { id: technicianId },
+        select: { isActive: true, profileCompleted: true },
+      });
+      state = {
+        expiresAt: now + AUTH_TTL_MS,
+        isActive: Boolean(tech?.isActive),
+        profileCompleted: Boolean(tech?.profileCompleted),
+      };
+      authStateCache.set(technicianId, state);
+    }
+
+    if (!state.isActive) {
+      res.status(403).json({ code: 'TECHNICIAN_DISABLED', error: 'حساب الفني غير نشط.' });
+      return;
+    }
+    if (!state.profileCompleted) {
+      res.status(403).json({ code: 'PROFILE_INCOMPLETE', error: 'أكمل الملف الشخصي أولاً قبل استخدام تطبيق الفني.' });
+      return;
+    }
+
+    req.technicianId = technicianId;
+    next();
+  } catch (err: any) {
+    if (err?.name === 'JsonWebTokenError' || err?.name === 'TokenExpiredError') {
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
+    console.error('[tech-read-cache] auth error:', err);
+    res.status(500).json({ error: 'Authorization check failed' });
+  }
+}
+
+function riyadhDateString(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Riyadh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find(part => part.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+function addDateDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+/**
+ * The old tech client omitted date filters and therefore downloaded every
+ * historical/future appointment (plus nested tickets) every refresh. Keep a
+ * useful operational window by default while preserving explicit date/from/to
+ * queries for future history screens.
+ */
+export function applyDefaultTechAppointmentWindow(
+  req: TechAuthRequest,
+  _res: Response,
+  next: NextFunction,
+) {
+  if (!req.query.date && !req.query.from && !req.query.to) {
+    const today = riyadhDateString();
+    req.query.from = addDateDays(today, -DEFAULT_APPOINTMENT_PAST_DAYS);
+    req.query.to = addDateDays(today, DEFAULT_APPOINTMENT_FUTURE_DAYS);
+  }
+  next();
+}
+
+/**
+ * Mount only after requireCachedTechReadAuth. A cache HIT never reaches
+ * Prisma-backed route handlers; a MISS lets the normal handler execute and
+ * captures its JSON.
  */
 export function techReadResponseCache(req: TechAuthRequest, res: Response, next: NextFunction) {
   if (req.method !== 'GET') {
@@ -105,7 +223,7 @@ export function techReadResponseCache(req: TechAuthRequest, res: Response, next:
  * tickets, work sessions, shifts, technician assignments, or technician state.
  * For technician-authenticated writes we invalidate only that technician. Admin /
  * supervisor writes invalidate the small shared cache because they may affect any
- * technician's assignment list.
+ * technician's assignment list or account state.
  */
 export function invalidateTechReadCacheAfterMutation(
   req: Request,
