@@ -34,6 +34,7 @@ import warrantiesRoutes from "./routes/warranties.js";
 import techAuthRoutes, { requireTechAuth } from "./routes/tech-auth.js";
 import techVisitReadRoutes from "./routes/tech-visit-read.js";
 import techVisitPhaseRoutes from "./routes/tech-visit-phases.js";
+import techVisitSupervisorRoutes from "./routes/tech-visit-supervisor.js";
 import techTicketActionRoutes from "./routes/tech-ticket-actions.js";
 import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
@@ -75,7 +76,6 @@ async function startServer() {
   app.set("trust proxy", "loopback");
   const httpServer = createServer(app);
   globalIo = setupSocket(httpServer);
-  
   (global as any).__io = globalIo;
 
   app.use(helmet({
@@ -108,21 +108,11 @@ async function startServer() {
   app.use("/api/projects", projectRoutes);
   app.use("/api/clients", clientRoutes);
   app.use("/api/ticket-attachments", ticketAttachmentRoutes);
-  // Validate auth before the server-side ticket list cache. GET /api/tickets
-  // can then be served from RAM without touching Prisma while all cached data
-  // remains scoped to the authenticated uid + query filters.
   app.use("/api/tickets", requireAuth, ticketListResponseCache);
-  // Defense in depth for ticket edits: authenticated users may only mutate
-  // tickets in projects they can access, and explicit supervisor assignments
-  // must stay inside the same project.
   app.put("/api/tickets/:id", requireAuth, requireTicketMutationAccess);
   app.use("/api/tickets", ticketRoutes);
   app.use("/api/technicians", technicianRoutes);
 
-  // High-frequency technician reads: verify the JWT every time, cache account
-  // state briefly, then serve payload hits from RAM. Appointment requests that
-  // omit filters are bounded to a useful operational window before the cache key
-  // is built, avoiding downloads of the technician's entire history.
   app.get(
     "/api/tech/appointments",
     applyDefaultTechAppointmentWindow,
@@ -131,14 +121,8 @@ async function startServer() {
   );
   app.get("/api/tech/me/active-session", requireCachedTechReadAuth, techReadResponseCache);
   app.get("/api/shift/today", requireCachedTechReadAuth, techReadResponseCache);
-  // The first ticket-detail miss still passes through the underlying full
-  // technician authorization. Successful payloads are then cached per technician
-  // and invalidated by any ticket/appointment mutation.
   app.get("/api/tech/tickets/:id", requireCachedTechReadAuth, techReadResponseCache);
 
-  // Operational write preflight. Authentication/business guards run BEFORE GPS
-  // validation or visit-history reads, so unauthenticated requests always fail as
-  // auth failures and can never trigger appointment/session database work.
   const techVisitActionPaths = [
     "/api/tech/appointments/:appointmentId/claim",
     "/api/tech/appointments/:appointmentId/travel",
@@ -165,12 +149,12 @@ async function startServer() {
   );
   app.post("/api/shift/break/start", requireTechAuth, blockBreakWithActiveVisit);
 
-  // State-machine reads/actions are mounted before legacy technician handlers so
-  // claimed → en_route → arrived → in_progress becomes the authoritative flow.
   app.use("/api/tech", techVisitReadRoutes);
   app.use("/api/tech", techVisitPhaseRoutes);
   app.use("/api/tech", techAuthRoutes);
   app.use("/api/tech", techTicketActionRoutes);
+  // Phase-aware/scoped live attendance shadows the legacy live endpoint below.
+  app.use("/api", techVisitSupervisorRoutes);
   app.use("/api", attendanceRoutes);
   app.use("/api", translationRoutes);
   app.use("/api/classify", classifyRoutes);
