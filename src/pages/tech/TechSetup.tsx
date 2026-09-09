@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
 import { translateTechTaxonomy } from '@/i18n/techTaxonomy';
-import { Loader2, Upload } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Lock, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import './tech.css';
 
@@ -12,45 +12,102 @@ const LANGUAGES = [
   { code: 'en', label: 'EN' },
   { code: 'hi', label: 'हिंदी' },
   { code: 'ur', label: 'اردو' },
-];
+] as const;
 
 const SPECIALTIES = ['plumbing', 'electrical', 'hvac', 'carpentry', 'general'];
 const CLOTHING_SIZES = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-const SHOE_SIZES = Array.from({ length: 10 }, (_, i) => String(38 + i)); // 38-47
+const SHOE_SIZES = Array.from({ length: 10 }, (_, i) => String(38 + i));
+const MAX_ID_PHOTO_BYTES = 4.5 * 1024 * 1024;
+
+const PIN_HINT: Record<TechLang, string> = {
+  ar: 'اختر رمز PIN جديد مكوّن من 6 أرقام. سيحل محل الرمز المؤقت.',
+  en: 'Choose a new 6-digit PIN. It will replace the temporary PIN.',
+  hi: 'नया 6 अंकों का PIN चुनें। यह अस्थायी PIN को बदल देगा।',
+  ur: 'نیا 6 ہندسوں کا PIN منتخب کریں۔ یہ عارضی PIN کی جگہ لے گا۔',
+};
+
+const CONFIRM_PIN_LABEL: Record<TechLang, string> = {
+  ar: 'تأكيد PIN الجديد',
+  en: 'Confirm new PIN',
+  hi: 'नए PIN की पुष्टि करें',
+  ur: 'نئے PIN کی تصدیق کریں',
+};
 
 export default function TechSetup() {
-  const { token, setProfile } = useTechAuth();
+  const { token, techProfile, setProfile } = useTechAuth() as any;
   const navigate = useNavigate();
-  
-  const [lang, setLang] = useState<TechLang>(() => {
-    return (localStorage.getItem('tech_language') as TechLang) || 'ar';
-  });
+
+  const storedLanguage = (() => {
+    try { return (localStorage.getItem('tech_language') as TechLang) || 'ar'; }
+    catch { return 'ar' as TechLang; }
+  })();
+
+  const [lang, setLang] = useState<TechLang>(storedLanguage);
   const [loading, setLoading] = useState(false);
+  const [showPin, setShowPin] = useState(false);
+  const [showPinConfirm, setShowPinConfirm] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: '',
+    fullName: techProfile?.name || '',
     idNumber: '',
-    employeeId: '',
-    experienceLevel: '',
-    specialty: SPECIALTIES[0],
-    clothingSize: CLOTHING_SIZES[2],
-    shoeSize: SHOE_SIZES[4],
-    preferredLang: ((localStorage.getItem('tech_language') as TechLang) || 'ar')
+    employeeId: techProfile?.employeeId || '',
+    experienceLevel: techProfile?.experienceLevel || '',
+    specialty: techProfile?.specialty || SPECIALTIES[0],
+    clothingSize: techProfile?.clothingSize || CLOTHING_SIZES[2],
+    shoeSize: techProfile?.shoeSize || SHOE_SIZES[4],
+    preferredLang: storedLanguage,
+    newPin: '',
+    confirmPin: '',
   });
-  
+
   const [idPhoto, setIdPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const specialtyLocked = Boolean(techProfile?.specialty);
+
+  useEffect(() => {
+    if (!token) navigate('/tech/login', { replace: true });
+  }, [token, navigate]);
+
+  useEffect(() => {
+    if (!techProfile) return;
+    setFormData(prev => ({
+      ...prev,
+      fullName: prev.fullName || techProfile.name || '',
+      employeeId: prev.employeeId || techProfile.employeeId || '',
+      experienceLevel: prev.experienceLevel || techProfile.experienceLevel || '',
+      specialty: techProfile.specialty || prev.specialty,
+      clothingSize: techProfile.clothingSize || prev.clothingSize,
+      shoeSize: techProfile.shoeSize || prev.shoeSize,
+    }));
+  }, [techProfile]);
+
+  useEffect(() => () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setIdPhoto(file);
-      setPhotoPreview(URL.createObjectURL(file));
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error(lang === 'ar' ? 'استخدم صورة JPG أو PNG أو WEBP فقط' : 'Use a JPG, PNG, or WEBP image');
+      e.target.value = '';
+      return;
     }
+    if (file.size > MAX_ID_PHOTO_BYTES) {
+      toast.error(lang === 'ar' ? 'حجم صورة الهوية كبير جداً' : 'The ID image is too large');
+      e.target.value = '';
+      return;
+    }
+
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setIdPhoto(file);
+    setPhotoPreview(URL.createObjectURL(file));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.fullName || !formData.idNumber || !formData.employeeId) {
+
+    if (!formData.fullName.trim() || !formData.idNumber.trim() || !formData.employeeId.trim()) {
       toast.error(t(lang, 'fillMandatory'));
       return;
     }
@@ -58,50 +115,63 @@ export default function TechSetup() {
       toast.error(t(lang, 'idPhotoRequired'));
       return;
     }
+    if (!/^\d{6}$/.test(formData.newPin)) {
+      toast.error(PIN_HINT[lang]);
+      return;
+    }
+    if (formData.newPin !== formData.confirmPin) {
+      toast.error(lang === 'ar' ? 'رمزا PIN غير متطابقين' : 'PIN values do not match');
+      return;
+    }
+    if (!token) {
+      navigate('/tech/login', { replace: true });
+      return;
+    }
 
     setLoading(true);
     try {
-      // 1. Convert photo to base64 (same pattern as Settings.tsx)
-      let idPhotoUrl = '';
-      if (idPhoto) {
-        idPhotoUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(idPhoto);
-        });
-      }
+      const idPhotoUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(idPhoto);
+      });
 
-      // 2. Submit profile completion
       const res = await fetch('/api/tech/profile/complete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name: formData.fullName,
-          idNumber: formData.idNumber,
-          employeeId: formData.employeeId,
+          name: formData.fullName.trim(),
+          idNumber: formData.idNumber.trim(),
+          employeeId: formData.employeeId.trim(),
           experienceLevel: formData.experienceLevel || null,
-          specialty: formData.specialty,
+          specialty: techProfile?.specialty || formData.specialty,
           clothingSize: formData.clothingSize,
           shoeSize: formData.shoeSize,
           language: formData.preferredLang,
-          idPhotoUrl
-        })
+          idPhotoUrl,
+          newPassword: formData.newPin,
+        }),
       });
 
-      if (!res.ok) throw new Error(t(lang, 'profileCompletedError'));
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || t(lang, 'profileCompletedError'));
+      }
 
       const data = await res.json();
       setProfile(data.profile ?? data);
-      localStorage.setItem('tech_language', formData.preferredLang);
-      navigate('/tech');
+      try {
+        localStorage.setItem('tech_language', formData.preferredLang);
+        localStorage.setItem('tech_profile', JSON.stringify(data.profile ?? data));
+      } catch {}
       toast.success(t(lang, 'profileCompletedSuccess'));
-      
+      navigate('/tech', { replace: true });
     } catch (err: any) {
-      toast.error(lang === 'ar' && err.message ? err.message : t(lang, 'profileCompletedError'));
+      toast.error(lang === 'ar' && err?.message ? err.message : t(lang, 'profileCompletedError'));
     } finally {
       setLoading(false);
     }
@@ -112,8 +182,6 @@ export default function TechSetup() {
   return (
     <div className="tech-app" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="tech-container slide-up pb-8">
-        
-        {/* Language selector for setup */}
         <div className="flex justify-center gap-2 mb-6 mt-4">
           {LANGUAGES.map((l) => (
             <button
@@ -123,7 +191,7 @@ export default function TechSetup() {
               onClick={() => {
                 const newLang = l.code as TechLang;
                 setLang(newLang);
-                localStorage.setItem('tech_language', newLang);
+                try { localStorage.setItem('tech_language', newLang); } catch {}
                 setFormData(prev => ({ ...prev, preferredLang: newLang }));
               }}
             >
@@ -139,30 +207,32 @@ export default function TechSetup() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="tech-glass p-5 rounded-2xl space-y-4">
-            
             <div>
               <label className="block text-sm text-[var(--tech-text-muted)] mb-1 px-1">
                 {t(lang, 'fullName')}
               </label>
-              <input 
-                type="text" 
-                className="tech-input" 
+              <input
+                type="text"
+                className="tech-input"
                 value={formData.fullName}
-                onChange={e => setFormData({...formData, fullName: e.target.value})}
+                onChange={e => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
+                autoComplete="name"
+                maxLength={120}
                 required
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-[var(--tech-text-muted)] mb-1 px-1">
                   {t(lang, 'idNumber')}
                 </label>
-                <input 
-                  type="text" 
-                  className="tech-input" 
+                <input
+                  type="text"
+                  className="tech-input"
                   value={formData.idNumber}
-                  onChange={e => setFormData({...formData, idNumber: e.target.value})}
+                  onChange={e => setFormData(prev => ({ ...prev, idNumber: e.target.value }))}
+                  maxLength={80}
                   required
                 />
               </div>
@@ -170,11 +240,12 @@ export default function TechSetup() {
                 <label className="block text-sm text-[var(--tech-text-muted)] mb-1 px-1">
                   {t(lang, 'employeeId')}
                 </label>
-                <input 
-                  type="text" 
-                  className="tech-input" 
+                <input
+                  type="text"
+                  className="tech-input"
                   value={formData.employeeId}
-                  onChange={e => setFormData({...formData, employeeId: e.target.value})}
+                  onChange={e => setFormData(prev => ({ ...prev, employeeId: e.target.value }))}
+                  maxLength={80}
                   required
                 />
               </div>
@@ -189,9 +260,8 @@ export default function TechSetup() {
                 min="0"
                 max="50"
                 className="tech-input"
-                placeholder={t(lang, 'experienceLevel')}
                 value={formData.experienceLevel}
-                onChange={e => setFormData({...formData, experienceLevel: e.target.value})}
+                onChange={e => setFormData(prev => ({ ...prev, experienceLevel: e.target.value }))}
               />
             </div>
 
@@ -199,14 +269,22 @@ export default function TechSetup() {
               <label className="block text-sm text-[var(--tech-text-muted)] mb-1 px-1">
                 {t(lang, 'specialty')}
               </label>
-              <select 
+              <select
                 className="tech-input appearance-none"
                 value={formData.specialty}
-                onChange={e => setFormData({...formData, specialty: e.target.value})}
-                style={{ backgroundImage: 'none' }}
+                disabled={specialtyLocked}
+                onChange={e => setFormData(prev => ({ ...prev, specialty: e.target.value }))}
+                style={{ backgroundImage: 'none', opacity: specialtyLocked ? 0.72 : 1 }}
               >
-                {SPECIALTIES.map(s => <option key={s} value={s}>{translateTechTaxonomy(s, lang)}</option>)}
+                {SPECIALTIES.map(s => (
+                  <option key={s} value={s}>{translateTechTaxonomy(s, lang)}</option>
+                ))}
               </select>
+              {specialtyLocked && (
+                <div className="text-[11px] text-[var(--tech-text-muted)] mt-1 px-1">
+                  {lang === 'ar' ? 'التخصص محدد من الإدارة' : 'Specialty is assigned by management'}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -214,10 +292,10 @@ export default function TechSetup() {
                 <label className="block text-sm text-[var(--tech-text-muted)] mb-1 px-1">
                   {t(lang, 'clothingSize')}
                 </label>
-                <select 
+                <select
                   className="tech-input appearance-none"
                   value={formData.clothingSize}
-                  onChange={e => setFormData({...formData, clothingSize: e.target.value})}
+                  onChange={e => setFormData(prev => ({ ...prev, clothingSize: e.target.value }))}
                 >
                   {CLOTHING_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -226,10 +304,10 @@ export default function TechSetup() {
                 <label className="block text-sm text-[var(--tech-text-muted)] mb-1 px-1">
                   {t(lang, 'shoeSize')}
                 </label>
-                <select 
+                <select
                   className="tech-input appearance-none"
                   value={formData.shoeSize}
-                  onChange={e => setFormData({...formData, shoeSize: e.target.value})}
+                  onChange={e => setFormData(prev => ({ ...prev, shoeSize: e.target.value }))}
                 >
                   {SHOE_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -241,26 +319,87 @@ export default function TechSetup() {
                 {t(lang, 'idPhoto')}
               </label>
               <div className="border-2 border-dashed border-[var(--tech-border)] rounded-xl p-4 text-center">
-                <input 
-                  type="file" 
-                  accept="image/*"
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
                   onChange={handlePhotoChange}
                   className="hidden"
                   id="id-photo-upload"
                 />
                 <label htmlFor="id-photo-upload" className="cursor-pointer flex flex-col items-center">
                   {photoPreview ? (
-                    <img src={photoPreview} alt="Preview" className="w-full h-32 object-cover rounded-lg mb-2" />
+                    <img src={photoPreview} alt={t(lang, 'idPhoto')} className="w-full h-32 object-cover rounded-lg mb-2" />
                   ) : (
                     <Upload className="w-8 h-8 text-[var(--tech-text-muted)] mb-2" />
                   )}
                   <span className="text-sm text-[var(--tech-accent-blue)] font-medium">
-                    {photoPreview ? 'Change Photo' : 'Upload ID Photo'}
+                    {t(lang, 'idPhoto')}
                   </span>
                 </label>
               </div>
             </div>
+          </div>
 
+          <div className="tech-glass p-5 rounded-2xl space-y-3">
+            <div className="flex items-center gap-2 font-bold text-sm">
+              <Lock className="w-4 h-4" />
+              {t(lang, 'password')}
+            </div>
+            <p className="text-xs text-[var(--tech-text-muted)]">{PIN_HINT[lang]}</p>
+
+            <div className="relative">
+              <input
+                type={showPin ? 'text' : 'password'}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                autoComplete="new-password"
+                className="tech-input"
+                style={{ paddingInlineEnd: 44 }}
+                value={formData.newPin}
+                onChange={e => setFormData(prev => ({ ...prev, newPin: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                placeholder="••••••"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin(v => !v)}
+                className="absolute top-1/2 -translate-y-1/2 end-3 text-[var(--tech-text-muted)]"
+                aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
+              >
+                {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs text-[var(--tech-text-muted)] mb-1 px-1">
+                {CONFIRM_PIN_LABEL[lang]}
+              </label>
+              <div className="relative">
+                <input
+                  type={showPinConfirm ? 'text' : 'password'}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  autoComplete="new-password"
+                  className="tech-input"
+                  style={{ paddingInlineEnd: 44 }}
+                  value={formData.confirmPin}
+                  onChange={e => setFormData(prev => ({ ...prev, confirmPin: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                  placeholder="••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPinConfirm(v => !v)}
+                  className="absolute top-1/2 -translate-y-1/2 end-3 text-[var(--tech-text-muted)]"
+                  aria-label={showPinConfirm ? 'Hide PIN' : 'Show PIN'}
+                >
+                  {showPinConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
           </div>
 
           <button
