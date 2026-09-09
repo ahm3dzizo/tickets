@@ -52,6 +52,7 @@ import {
   techReadResponseCache,
 } from "./middleware/tech-read-cache.js";
 import { requireTechOperationalLocation } from "./middleware/tech-location-guard.js";
+import { auditTechSessionLifecycle } from "./middleware/tech-session-audit.js";
 import { startCronJobs } from "./cronJobs.js";
 import { initVapid } from "./pushService.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
@@ -91,6 +92,7 @@ async function startServer() {
   app.use("/api/", globalLimiter);
   app.use(express.json({ limit: "10mb" }));
   app.use("/api/", requireTechOperationalLocation);
+  app.use("/api/", auditTechSessionLifecycle);
   app.use("/api/", invalidateTicketCacheAfterRelevantMutation);
   app.use("/api/", invalidateTechReadCacheAfterMutation);
 
