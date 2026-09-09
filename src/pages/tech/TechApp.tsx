@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
+import { visitT } from '@/i18n/techVisit';
 import { hasTechTaxonomy, translateTechTaxonomy } from '@/i18n/techTaxonomy';
 import { techApi } from '@/lib/api';
+import { collectTechLocation } from '@/lib/techLocation';
+import { techVisitApi, type TechVisitPhase } from '@/lib/techVisitApi';
 import {
   Loader2,
   Home,
@@ -18,7 +21,8 @@ import {
   ChevronUp,
   Ticket,
   User,
-  CheckCircle2,  Play,
+  CheckCircle2,
+  Play,
   Pause,
   Timer,
   MoreVertical,
@@ -30,6 +34,8 @@ import {
   Briefcase,
   Shield,
   BellRing,
+  Navigation,
+  MapPin,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import './tech.css';
@@ -37,64 +43,7 @@ import { registerPush, isPushSupported, getPushPermission } from '@/lib/pushNoti
 
 type Tab = 'home' | 'appointments' | 'profile';
 type Theme = 'light' | 'dark' | 'system';
-
-type AttendanceLocation = {
-  lat: number;
-  lng: number;
-  accuracy: number;
-  sampledAt: number;
-  sampleCount: number;
-  sampleSpreadM: number;
-  speed?: number | null;
-  altitudeAccuracy?: number | null;
-};
-
-function distanceMeters(a: GeolocationCoordinates, b: GeolocationCoordinates) {
-  const radius = 6371000;
-  const toRad = (value: number) => value * Math.PI / 180;
-  const latDelta = toRad(b.latitude - a.latitude);
-  const lngDelta = toRad(b.longitude - a.longitude);
-  const lat1 = toRad(a.latitude);
-  const lat2 = toRad(b.latitude);
-  const h = Math.sin(latDelta / 2) ** 2
-    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(lngDelta / 2) ** 2;
-  return radius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-}
-
-async function collectAttendanceLocation(lang: TechLang): Promise<AttendanceLocation> {
-  if (!navigator.geolocation) {
-    throw new Error(t(lang, 'locationUnsupported'));
-  }
-
-  const samples: GeolocationPosition[] = [];
-  for (let index = 0; index < 3; index += 1) {
-    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        timeout: 10000,
-        maximumAge: 0,
-        enableHighAccuracy: true,
-      });
-    });
-    samples.push(position);
-    if (index < 2) await new Promise(resolve => window.setTimeout(resolve, 450));
-  }
-
-  const best = [...samples].sort((a, b) => a.coords.accuracy - b.coords.accuracy)[0];
-  const spreads = samples.flatMap((sample, index) =>
-    samples.slice(index + 1).map(other => distanceMeters(sample.coords, other.coords))
-  );
-
-  return {
-    lat: best.coords.latitude,
-    lng: best.coords.longitude,
-    accuracy: best.coords.accuracy,
-    sampledAt: best.timestamp,
-    sampleCount: samples.length,
-    sampleSpreadM: spreads.length ? Math.max(...spreads) : 0,
-    speed: Number.isFinite(best.coords.speed) ? best.coords.speed : null,
-    altitudeAccuracy: Number.isFinite(best.coords.altitudeAccuracy) ? best.coords.altitudeAccuracy : null,
-  };
-}
+type PhaseAction = 'travel' | 'arrive' | 'start-work' | null;
 
 function getStoredTheme(): Theme {
   try {
@@ -142,7 +91,6 @@ export default function TechApp() {
   const lang = (techProfile?.language || 'ar') as TechLang;
   const isRtl = lang === 'ar' || lang === 'ur';
 
-  // Apply data-theme attribute
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -161,8 +109,6 @@ export default function TechApp() {
         techApi.getAppointments(),
       ]);
 
-      // Never turn a network/server error into a fake empty state. Keep the last
-      // known field data on screen and update whichever request actually worked.
       if (shiftResult.status === 'fulfilled') {
         setShift(shiftResult.value);
       } else {
@@ -193,9 +139,6 @@ export default function TechApp() {
 
     void fetchData();
 
-    // Adaptive refresh: do not poll while the PWA is hidden. Server + service
-    // worker caches already protect the DB/network, and mutations refresh
-    // immediately, so a two-minute heartbeat is enough as a safety net.
     const refreshIfVisible = () => {
       if (document.visibilityState === 'visible') void fetchData();
     };
@@ -218,7 +161,7 @@ export default function TechApp() {
   const handleClockIn = async () => {
     setActionLoading(true);
     try {
-      const location = await collectAttendanceLocation(lang);
+      const location = await collectTechLocation(lang);
       await techApi.clockIn({ ...location, projectId: techProfile?.projectId });
       toast.success(t(lang, 'shiftActive'));
       await fetchData();
@@ -233,7 +176,7 @@ export default function TechApp() {
     if (!window.confirm(t(lang, 'clockOutConfirm'))) return;
     setActionLoading(true);
     try {
-      const location = await collectAttendanceLocation(lang);
+      const location = await collectTechLocation(lang);
       await techApi.clockOut({
         lat: location.lat,
         lng: location.lng,
@@ -373,7 +316,6 @@ export default function TechApp() {
 
   const renderHome = () => (
     <>
-      {/* Hero */}
       <section className="tech-hero slide-up">
         <div className="tech-hero-top">
           <div>
@@ -420,7 +362,6 @@ export default function TechApp() {
         </div>
       </section>
 
-      {/* Shift Actions */}
       <section className="tech-shift-card slide-up">
         <div className="tech-section-label">
           <Timer size={15} />
@@ -491,7 +432,6 @@ export default function TechApp() {
         )}
       </section>
 
-      {/* Stats */}
       <section className="tech-stats-grid slide-up">
         <div className="tech-stat-card">
           <div className="tech-stat-icon blue">
@@ -522,7 +462,6 @@ export default function TechApp() {
         </div>
       </section>
 
-      {/* Today Appointments Preview */}
       <section className="tech-section slide-up">
         <div className="tech-section-heading">
           <div>
@@ -648,7 +587,6 @@ export default function TechApp() {
 
     return (
       <>
-        {/* Profile Hero */}
         <div className="tech-profile-hero slide-up">
           <div className="tech-profile-avatar-lg">
             {techProfile?.name?.charAt(0)?.toUpperCase() || '👷'}
@@ -668,7 +606,6 @@ export default function TechApp() {
           </div>
         </div>
 
-        {/* Quick Stats */}
         <section className="tech-stats-grid slide-up">
           <div className="tech-stat-card">
             <div className="tech-stat-icon blue"><Calendar size={18} /></div>
@@ -693,7 +630,6 @@ export default function TechApp() {
           </div>
         </section>
 
-        {/* Language switcher */}
         <section className="tech-settings-card slide-up">
           <div className="tech-settings-header">
             <Globe size={16} />
@@ -713,7 +649,6 @@ export default function TechApp() {
           </div>
         </section>
 
-        {/* Theme switcher */}
         <section className="tech-settings-card slide-up">
           <div className="tech-settings-header">
             <Sun size={16} />
@@ -733,7 +668,6 @@ export default function TechApp() {
           </div>
         </section>
 
-        {/* Notifications */}
         <section className="tech-settings-card slide-up">
           <div className="tech-settings-header">
             <BellRing size={16} />
@@ -751,7 +685,6 @@ export default function TechApp() {
           </button>
         </section>
 
-        {/* Account Info */}
         <section className="tech-info-card slide-up">
           <div className="tech-settings-header">
             <Settings size={16} />
@@ -869,7 +802,7 @@ function AppointmentCard({
   navigate: ReturnType<typeof useNavigate>;
   translateText: (value?: string | null) => string;
   translateType: (value?: string | null) => string;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
 }) {
   const tickets = appt.tickets || [];
   const isCompleted = appt.status === 'completed';
@@ -880,28 +813,30 @@ function AppointmentCard({
 
   const isClaimedByMe = appt.isClaimedByMe === true;
   const isClaimedByOther = appt.isClaimedByOther === true;
-  const isPausedByMe = appt.isPausedByMe === true;
   const session = appt.workSession || null;
-  const isRunning = isClaimedByMe && !isPausedByMe;
+  const phase = (appt.phase || session?.status || null) as TechVisitPhase | null;
+  const isPausedByMe = isClaimedByMe && phase === 'paused';
+  const isRunning = isClaimedByMe && phase === 'in_progress';
+  const unresolvedTickets = tickets.filter((ticket: any) =>
+    ['open', 'pending', 'in_progress', 'note'].includes(String(ticket.status || '').toLowerCase())
+  ).length;
 
   const [claiming, setClaiming] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [pausing, setPausing] = useState(false);
   const [resuming, setResuming] = useState(false);
+  const [phaseLoading, setPhaseLoading] = useState<PhaseAction>(null);
   const [showPostpone, setShowPostpone] = useState(false);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!isRunning || !session?.claimedAt) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
   }, [isRunning, session?.claimedAt]);
 
-  // Effective elapsed time:
-  //   in_progress → wall clock (now - claimedAt) - totalPausedMins*60
-  //   paused      → up to pausedAt, minus prior pauses
   const elapsedSecs = (() => {
-    if (!session?.claimedAt) return 0;
+    if (!session?.claimedAt || (!isRunning && !isPausedByMe)) return 0;
     const start = new Date(session.claimedAt).getTime();
     const end = isPausedByMe && session.pausedAt
       ? new Date(session.pausedAt).getTime()
@@ -921,8 +856,13 @@ function AppointmentCard({
   const firstWorkTicket =
     tickets.find((ticket: any) => String(ticket.status).toLowerCase() === 'in_progress') ||
     tickets.find((ticket: any) =>
-      ['pending', 'open', 'waiting', 'contractor'].includes(String(ticket.status).toLowerCase())
-    );
+      ['pending', 'open', 'waiting', 'contractor', 'note'].includes(String(ticket.status).toLowerCase())
+    ) || tickets[0];
+
+  const openWork = () => {
+    if (firstWorkTicket?.id) navigate(`/tech/ticket/${firstWorkTicket.id}`);
+    else onToggle();
+  };
 
   const handleClaimAppointment = async () => {
     if (claiming || isCompleted) return;
@@ -930,23 +870,18 @@ function AppointmentCard({
       toast.error(t(lang, 'finishActiveAppointmentFirst'));
       return;
     }
-    if (isClaimedByMe) {
-      if (firstWorkTicket?.id) navigate(`/tech/ticket/${firstWorkTicket.id}`);
-      else onToggle();
-      return;
-    }
+    if (isClaimedByMe) return;
+
     setClaiming(true);
     try {
-      const location = await collectAttendanceLocation(lang);
+      const location = await collectTechLocation(lang);
       await techApi.claimAppointment(appt.id, {
         lat: location.lat,
         lng: location.lng,
         accuracy: location.accuracy,
       });
-      toast.success(t(lang, 'appointmentClaimed'));
-      onRefresh?.();
-      if (firstWorkTicket?.id) navigate(`/tech/ticket/${firstWorkTicket.id}`);
-      else onToggle();
+      toast.success(visitT(lang, 'claimed'));
+      await onRefresh?.();
     } catch (err: any) {
       toast.error(err?.code === 'ACTIVE_APPOINTMENT_EXISTS'
         ? t(lang, 'finishActiveAppointmentFirst')
@@ -956,19 +891,70 @@ function AppointmentCard({
     }
   };
 
+  const handleTravel = async () => {
+    if (phaseLoading) return;
+    setPhaseLoading('travel');
+    try {
+      await techVisitApi.travel(appt.id);
+      toast.success(visitT(lang, 'enRoute'));
+      await onRefresh?.();
+    } catch (err: any) {
+      toast.error(lang === 'ar' && err?.message ? err.message : visitT(lang, 'phaseActionFailed'));
+    } finally {
+      setPhaseLoading(null);
+    }
+  };
+
+  const handleArrive = async () => {
+    if (phaseLoading) return;
+    setPhaseLoading('arrive');
+    try {
+      const location = await collectTechLocation(lang);
+      await techVisitApi.arrive(appt.id, location);
+      toast.success(visitT(lang, 'arrived'));
+      await onRefresh?.();
+    } catch (err: any) {
+      toast.error(lang === 'ar' && err?.message ? err.message : visitT(lang, 'phaseActionFailed'));
+    } finally {
+      setPhaseLoading(null);
+    }
+  };
+
+  const handleStartWork = async () => {
+    if (phaseLoading) return;
+    setPhaseLoading('start-work');
+    try {
+      const location = await collectTechLocation(lang);
+      await techVisitApi.startWork(appt.id, location);
+      toast.success(visitT(lang, 'workInProgress'));
+      await onRefresh?.();
+      openWork();
+    } catch (err: any) {
+      toast.error(lang === 'ar' && err?.message ? err.message : visitT(lang, 'phaseActionFailed'));
+    } finally {
+      setPhaseLoading(null);
+    }
+  };
+
   const handleFinishAppointment = async () => {
-    if (finishing) return;
+    if (finishing || phase !== 'in_progress') return;
+    if (unresolvedTickets > 0) {
+      toast.error(visitT(lang, 'remainingOutcomes'));
+      openWork();
+      return;
+    }
     if (!window.confirm(t(lang, 'finishAppointmentConfirm'))) return;
     setFinishing(true);
     try {
-      const location = await collectAttendanceLocation(lang);
+      const location = await collectTechLocation(lang);
       await techApi.finishAppointment(appt.id, {
         lat: location.lat,
         lng: location.lng,
         accuracy: location.accuracy,
       } as any);
       toast.success(t(lang, 'finishAppointmentSuccess'));
-      onRefresh?.();
+      await onRefresh?.();
+      window.dispatchEvent(new Event('tech-active-appointment-finished'));
     } catch (err: any) {
       toast.error(lang === 'ar' && err?.message ? err.message : t(lang, 'finishAppointmentError'));
     } finally {
@@ -977,14 +963,14 @@ function AppointmentCard({
   };
 
   const handlePauseAppointment = async () => {
-    if (pausing) return;
+    if (pausing || phase !== 'in_progress') return;
     const reason = window.prompt(t(lang, 'pausePrompt'), '');
-    if (reason === null) return; // cancelled
+    if (reason === null) return;
     setPausing(true);
     try {
       await techApi.pauseAppointment(appt.id, reason.trim() || undefined);
       toast.success(t(lang, 'pauseSuccess'));
-      onRefresh?.();
+      await onRefresh?.();
     } catch (err: any) {
       toast.error(lang === 'ar' && err?.message ? err.message : t(lang, 'pauseError'));
     } finally {
@@ -993,12 +979,12 @@ function AppointmentCard({
   };
 
   const handleResumeAppointment = async () => {
-    if (resuming) return;
+    if (resuming || phase !== 'paused') return;
     setResuming(true);
     try {
       await techApi.resumeAppointment(appt.id);
       toast.success(t(lang, 'resumeSuccess'));
-      onRefresh?.();
+      await onRefresh?.();
     } catch (err: any) {
       toast.error(err?.code === 'ACTIVE_APPOINTMENT_EXISTS'
         ? t(lang, 'resumeConflict')
@@ -1058,10 +1044,12 @@ function AppointmentCard({
       <ApptCardActions
         appt={appt}
         lang={lang}
+        phase={phase}
         expanded={expanded}
         onToggle={onToggle}
         tickets={tickets}
         completedTickets={completedTickets}
+        unresolvedTickets={unresolvedTickets}
         isCompleted={isCompleted}
         isClaimedByMe={isClaimedByMe}
         isClaimedByOther={isClaimedByOther}
@@ -1072,7 +1060,12 @@ function AppointmentCard({
         finishing={finishing}
         pausing={pausing}
         resuming={resuming}
+        phaseLoading={phaseLoading}
         onClaim={handleClaimAppointment}
+        onTravel={handleTravel}
+        onArrive={handleArrive}
+        onStartWork={handleStartWork}
+        onOpenWork={openWork}
         onFinish={handleFinishAppointment}
         onPause={handlePauseAppointment}
         onResume={handleResumeAppointment}
@@ -1088,7 +1081,7 @@ function AppointmentCard({
               className="tech-ticket-item"
             >
               <div>
-                <strong>{ticket.itemCode || ticket.id?.slice(0, 8)}</strong>
+                <strong>{ticket.itemCode || ticket.ticketId || ticket.id?.slice(0, 8)}</strong>
                 <span>{translateText(ticket.description) || t(lang, 'noDescription')}</span>
               </div>
               <span className="tech-ticket-status">{statusLabel(ticket.status)}</span>
@@ -1104,25 +1097,86 @@ function AppointmentCard({
           currentDate={appt.date}
           currentTime={appt.time}
           onClose={() => setShowPostpone(false)}
-          onDone={() => { setShowPostpone(false); onRefresh?.(); }}
+          onDone={() => { setShowPostpone(false); void onRefresh?.(); }}
         />
       )}
     </article>
   );
 }
 
+function VisitPhaseSteps({ phase, lang }: { phase: TechVisitPhase | null; lang: TechLang }) {
+  if (!phase || ['completed', 'cancelled'].includes(phase)) return null;
+
+  const steps: { phase: TechVisitPhase; label: string }[] = [
+    { phase: 'claimed', label: visitT(lang, 'claimed') },
+    { phase: 'en_route', label: visitT(lang, 'enRoute') },
+    { phase: 'arrived', label: visitT(lang, 'arrived') },
+    { phase: 'in_progress', label: visitT(lang, 'workInProgress') },
+  ];
+  const effectivePhase = phase === 'paused' ? 'in_progress' : phase;
+  const currentIndex = Math.max(0, steps.findIndex(step => step.phase === effectivePhase));
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+      gap: 5,
+      marginTop: 10,
+      padding: '9px 8px',
+      borderRadius: 12,
+      background: 'rgba(100,116,139,0.07)',
+      border: '1px solid var(--tech-border, rgba(100,116,139,0.15))',
+    }}>
+      {steps.map((step, index) => {
+        const done = index < currentIndex;
+        const active = index === currentIndex;
+        return (
+          <div key={step.phase} style={{ minWidth: 0, textAlign: 'center' }}>
+            <div style={{
+              width: 20,
+              height: 20,
+              margin: '0 auto 4px',
+              borderRadius: 999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              fontWeight: 900,
+              background: done ? '#22c55e' : active ? '#3b82f6' : 'rgba(100,116,139,0.18)',
+              color: done || active ? '#fff' : 'var(--tech-text-muted, #64748b)',
+            }}>
+              {done ? '✓' : index + 1}
+            </div>
+            <div style={{
+              fontSize: 9,
+              lineHeight: 1.2,
+              fontWeight: active ? 800 : 650,
+              opacity: done || active ? 1 : 0.55,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {step.label}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ApptCardActions({
-  appt, lang, expanded, onToggle, tickets, completedTickets,
+  appt, lang, phase, expanded, onToggle, tickets, completedTickets, unresolvedTickets,
   isCompleted, isClaimedByMe, isClaimedByOther, isPausedByMe, claimBlocked,
-  elapsedLabel, claiming, finishing, pausing, resuming,
-  onClaim, onFinish, onPause, onResume, onPostpone,
+  elapsedLabel, claiming, finishing, pausing, resuming, phaseLoading,
+  onClaim, onTravel, onArrive, onStartWork, onOpenWork, onFinish, onPause, onResume, onPostpone,
 }: {
-  appt: any; lang: TechLang; expanded: boolean; onToggle: () => void;
-  tickets: any[]; completedTickets: number;
+  appt: any; lang: TechLang; phase: TechVisitPhase | null; expanded: boolean; onToggle: () => void;
+  tickets: any[]; completedTickets: number; unresolvedTickets: number;
   isCompleted: boolean; isClaimedByMe: boolean; isClaimedByOther: boolean;
   isPausedByMe: boolean; claimBlocked: boolean; elapsedLabel: string;
-  claiming: boolean; finishing: boolean; pausing: boolean; resuming: boolean;
-  onClaim: () => void; onFinish: () => void; onPause: () => void;
+  claiming: boolean; finishing: boolean; pausing: boolean; resuming: boolean; phaseLoading: PhaseAction;
+  onClaim: () => void; onTravel: () => void; onArrive: () => void; onStartWork: () => void;
+  onOpenWork: () => void; onFinish: () => void; onPause: () => void;
   onResume: () => void; onPostpone: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1137,7 +1191,6 @@ function ApptCardActions({
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [menuOpen]);
 
-  // Row 1: contact icons + status
   const statusPill = (() => {
     if (isCompleted) {
       return (
@@ -1161,29 +1214,60 @@ function ApptCardActions({
         </span>
       );
     }
-    if (isClaimedByMe) {
+    if (!isClaimedByMe) return null;
+
+    const baseStyle: React.CSSProperties = {
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 800,
+    };
+
+    if (phase === 'paused') {
       return (
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 800,
-          fontVariantNumeric: 'tabular-nums',
-          background: isPausedByMe ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.14)',
-          color: isPausedByMe ? '#f59e0b' : '#3b82f6',
-          border: isPausedByMe ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(59,130,246,0.3)',
-        }}>
-          {isPausedByMe ? <Pause size={12} /> : <Timer size={12} />}
-          {elapsedLabel}
-          {isPausedByMe && <span style={{ fontSize: 10 }}>{t(lang, 'pausedShort')}</span>}
+        <span style={{ ...baseStyle, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)' }}>
+          <Pause size={12} /> {t(lang, 'pausedShort')} · {elapsedLabel}
         </span>
       );
     }
-    return null;
+    if (phase === 'in_progress') {
+      return (
+        <span style={{ ...baseStyle, background: 'rgba(59,130,246,0.14)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.3)', fontVariantNumeric: 'tabular-nums' }}>
+          <Timer size={12} /> {visitT(lang, 'workInProgress')} · {elapsedLabel}
+        </span>
+      );
+    }
+    if (phase === 'en_route') {
+      return (
+        <span style={{ ...baseStyle, background: 'rgba(59,130,246,0.12)', color: '#2563eb', border: '1px solid rgba(59,130,246,0.25)' }}>
+          <Navigation size={12} /> {visitT(lang, 'enRoute')}
+        </span>
+      );
+    }
+    if (phase === 'arrived') {
+      return (
+        <span style={{ ...baseStyle, background: 'rgba(139,92,246,0.12)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.25)' }}>
+          <MapPin size={12} /> {visitT(lang, 'arrived')}
+        </span>
+      );
+    }
+    return (
+      <span style={{ ...baseStyle, background: 'rgba(34,197,94,0.12)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.25)' }}>
+        <CheckCircle2 size={12} /> {visitT(lang, 'claimed')}
+      </span>
+    );
   })();
 
-  // Primary action button
+  const phaseButtonStyle: React.CSSProperties = {
+    flex: 1,
+    height: 40,
+    fontSize: 13,
+    fontWeight: 800,
+    border: 'none',
+    color: '#fff',
+  };
+
   const primaryAction = (() => {
-    if (isCompleted) return null;
-    if (isClaimedByOther) return null;
+    if (isCompleted || isClaimedByOther) return null;
+
     if (isPausedByMe) {
       return (
         <button
@@ -1196,32 +1280,65 @@ function ApptCardActions({
         </button>
       );
     }
-    if (isClaimedByMe) {
+
+    if (isClaimedByMe && phase === 'claimed') {
+      return (
+        <button onClick={onTravel} disabled={phaseLoading !== null} className="tech-btn" style={{ ...phaseButtonStyle, background: '#2563eb' }}>
+          {phaseLoading === 'travel' ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} />}
+          {visitT(lang, 'startTravel')}
+        </button>
+      );
+    }
+
+    if (isClaimedByMe && phase === 'en_route') {
+      return (
+        <button onClick={onArrive} disabled={phaseLoading !== null} className="tech-btn" style={{ ...phaseButtonStyle, background: '#7c3aed' }}>
+          {phaseLoading === 'arrive' ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
+          {visitT(lang, 'markArrived')}
+        </button>
+      );
+    }
+
+    if (isClaimedByMe && phase === 'arrived') {
+      return (
+        <button onClick={onStartWork} disabled={phaseLoading !== null} className="tech-btn" style={{ ...phaseButtonStyle, background: '#0891b2' }}>
+          {phaseLoading === 'start-work' ? <Loader2 size={16} className="animate-spin" /> : <Briefcase size={16} />}
+          {visitT(lang, 'startWork')}
+        </button>
+      );
+    }
+
+    if (isClaimedByMe && phase === 'in_progress') {
+      if (unresolvedTickets > 0) {
+        return (
+          <button onClick={onOpenWork} className="tech-btn" style={{ ...phaseButtonStyle, background: '#2563eb' }}>
+            <Ticket size={16} />
+            {visitT(lang, 'continueWork')} ({unresolvedTickets})
+          </button>
+        );
+      }
       return (
         <button
           onClick={onFinish} disabled={finishing}
           className="tech-btn"
-          style={{
-            flex: 1, height: 40, fontSize: 13, fontWeight: 800,
-            background: 'linear-gradient(180deg,#ef4444,#dc2626)', color: '#fff', border: 'none',
-          }}
+          style={{ ...phaseButtonStyle, background: 'linear-gradient(180deg,#22c55e,#16a34a)' }}
         >
           {finishing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
           {t(lang, 'finishAppointment')}
         </button>
       );
     }
+
     return (
       <button
         onClick={onClaim} disabled={claiming || claimBlocked}
         className="tech-btn"
         style={{
-          flex: 1, height: 40, fontSize: 13, fontWeight: 800,
+          ...phaseButtonStyle,
           background: claimBlocked
             ? 'rgba(100,116,139,0.15)'
             : 'linear-gradient(180deg,#22c55e,#16a34a)',
           color: claimBlocked ? '#94a3b8' : '#fff',
-          border: 'none',
           cursor: claimBlocked ? 'not-allowed' : 'pointer',
         }}
       >
@@ -1237,7 +1354,6 @@ function ApptCardActions({
     );
   })();
 
-  // Overflow menu items (only when I'm actively on this appointment)
   const hasMenu = isClaimedByMe && !isCompleted;
 
   return (
@@ -1282,6 +1398,23 @@ function ApptCardActions({
         </div>
       </div>
 
+      {isClaimedByMe && <VisitPhaseSteps phase={phase} lang={lang} />}
+
+      {isClaimedByMe && phase === 'in_progress' && unresolvedTickets === 0 && (
+        <div style={{
+          marginTop: 8,
+          padding: '7px 9px',
+          borderRadius: 10,
+          background: 'rgba(34,197,94,0.09)',
+          border: '1px solid rgba(34,197,94,0.18)',
+          color: '#16a34a',
+          fontSize: 11,
+          fontWeight: 750,
+        }}>
+          {visitT(lang, 'allOutcomesReady')}
+        </div>
+      )}
+
       {primaryAction && (
         <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'stretch' }}>
           {primaryAction}
@@ -1307,7 +1440,7 @@ function ApptCardActions({
                   border: '1px solid var(--tech-border, #e2e8f0)',
                   boxShadow: '0 10px 30px rgba(0,0,0,0.15)', zIndex: 20,
                 }}>
-                  {!isPausedByMe && (
+                  {phase === 'in_progress' && (
                     <button
                       onClick={() => { setMenuOpen(false); onPause(); }}
                       disabled={pausing}
@@ -1326,7 +1459,7 @@ function ApptCardActions({
                     style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                       padding: '10px 12px', background: 'transparent', border: 0,
-                      borderTop: '1px solid var(--tech-border, #e2e8f0)',
+                      borderTop: phase === 'in_progress' ? '1px solid var(--tech-border, #e2e8f0)' : 0,
                       color: '#8b5cf6', fontWeight: 700, fontSize: 13, cursor: 'pointer',
                       textAlign: 'start',
                     }}
