@@ -6,14 +6,32 @@ import './index.css';
 
 import { registerSW } from 'virtual:pwa-register';
 
+function applyRouteManifest() {
+  const isTechRoute = window.location.pathname === '/tech' || window.location.pathname.startsWith('/tech/');
+  const manifestHref = isTechRoute ? '/tech-manifest.webmanifest' : '/manifest.webmanifest';
+  let manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+  if (!manifest) {
+    manifest = document.createElement('link');
+    manifest.rel = 'manifest';
+    document.head.appendChild(manifest);
+  }
+  if (manifest.getAttribute('href') !== manifestHref) manifest.setAttribute('href', manifestHref);
+
+  const theme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (theme && isTechRoute) theme.setAttribute('content', '#09192d');
+}
+
+// Select the technician manifest before Chrome evaluates installability and
+// before beforeinstallprompt can fire. This makes an install started from /tech
+// reopen the standalone technician app at /tech rather than the admin dashboard.
+applyRouteManifest();
+window.addEventListener('popstate', applyRouteManifest);
+
 // ── Capture beforeinstallprompt IMMEDIATELY before React mounts ──────────
-// The browser fires this event very early (often before React finishes loading auth).
-// We store it globally so PWAInstallPrompt can pick it up whenever it mounts.
 (window as any).__deferredPWAPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   (window as any).__deferredPWAPrompt = e;
-  // Notify any mounted React component that the prompt is now available
   window.dispatchEvent(new Event('pwa-prompt-captured'));
 });
 
