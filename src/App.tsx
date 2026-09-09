@@ -127,6 +127,8 @@ function AppContent() {
           <Route path="/tech/login" element={<TechLogin />} />
           <Route path="/tech/setup" element={<TechSetup />} />
           <Route path="/tech/ticket/:id" element={<TechTicketDetail />} />
+          <Route path="/tech/appointments" element={<TechAppWithRecovery />} />
+          <Route path="/tech/appointment/:id" element={<TechAppWithRecovery />} />
           <Route path="/tech" element={<TechAppWithRecovery />} />
         </Routes>
         <Toaster position="top-right" />
