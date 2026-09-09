@@ -1,6 +1,5 @@
 // server/cronJobs.ts — Scheduled push notifications
-// Runs in Saudi Arabia timezone (UTC+3): cron times below are local SA time converted to UTC
-// Sun–Thu workweek: day-of-week 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu
+// Operational dates are evaluated explicitly in Asia/Riyadh.
 import cron from 'node-cron';
 import prisma from './db.js';
 import { sendPushToUser, sendPushToRoles } from './pushService.js';
@@ -11,23 +10,21 @@ const APPOINTMENT_SNAPSHOT_KEY = 'pushAppointmentSnapshotV1';
 const IMPORT_PUSH_PREFIX = 'pushImportNotified:';
 const APPOINTMENT_REMINDER_PREFIX = 'pushAppointmentReminder:';
 
+type PushPayload = {
+  title: string;
+  body: string;
+  tag: string;
+  url: string;
+  requireInteraction?: boolean;
+};
+
+type TechLanguage = 'ar' | 'en' | 'hi' | 'ur';
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 async function getWorkHours() {
   const s = await prisma.systemSetting.findUnique({ where: { key: 'workHours' } });
   return (s?.value as any) || DEFAULT_WORK_HOURS;
-}
-
-function today0() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function today24() {
-  const d = new Date();
-  d.setHours(23, 59, 59, 999);
-  return d;
 }
 
 function todayDateInRiyadh() {
@@ -41,6 +38,14 @@ function todayDateInRiyadh() {
   return `${value('year')}-${value('month')}-${value('day')}`;
 }
 
+function today0() {
+  return new Date(`${todayDateInRiyadh()}T00:00:00+03:00`);
+}
+
+function today24() {
+  return new Date(`${todayDateInRiyadh()}T23:59:59.999+03:00`);
+}
+
 function appointmentMoment(date: string, time?: string | null): Date | null {
   if (!date || !time || !/^\d{1,2}:\d{2}$/.test(time)) return null;
   const normalizedTime = time.length === 4 ? `0${time}` : time;
@@ -48,31 +53,125 @@ function appointmentMoment(date: string, time?: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-async function sendToAppointmentPeople(
+function normalizedTechLanguage(value?: string | null): TechLanguage {
+  return value === 'en' || value === 'hi' || value === 'ur' ? value : 'ar';
+}
+
+async function technicianLanguages(ids: string[]): Promise<Map<string, TechLanguage>> {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  if (!uniqueIds.length) return new Map();
+  const rows = await prisma.technician.findMany({
+    where: { id: { in: uniqueIds }, isActive: true },
+    select: { id: true, language: true },
+  });
+  return new Map(rows.map(row => [row.id, normalizedTechLanguage(row.language)]));
+}
+
+function techAppointmentCopy(
+  lang: TechLanguage,
+  kind: 'morning' | 'reminder' | 'assigned' | 'updated' | 'cancelled' | 'deleted',
+  data: { count?: number; unit?: string; date?: string; time?: string | null; mins?: number; summary?: string },
+): { title: string; body: string } {
+  const unit = data.unit || '—';
+  const date = data.date || '';
+  const time = data.time ? ` ${data.time}` : '';
+
+  if (lang === 'en') {
+    if (kind === 'morning') return { title: `Today's appointments (${data.count || 0})`, body: data.summary || '' };
+    if (kind === 'reminder') return { title: 'Appointment coming up', body: `Unit ${unit} at ${data.time || '—'} starts in about ${Math.max(1, data.mins || 1)} minutes.` };
+    if (kind === 'assigned') return { title: 'You were assigned an appointment', body: `Unit ${unit} — ${date}${time}` };
+    if (kind === 'updated') return { title: 'Appointment updated', body: `New schedule for unit ${unit}: ${date}${time}` };
+    if (kind === 'cancelled') return { title: 'Appointment cancelled', body: `Unit ${unit} — ${date}${time}` };
+    return { title: 'Appointment removed', body: `Unit ${unit} — ${date}${time}` };
+  }
+
+  if (lang === 'hi') {
+    if (kind === 'morning') return { title: `आज की अपॉइंटमेंट (${data.count || 0})`, body: data.summary || '' };
+    if (kind === 'reminder') return { title: 'अपॉइंटमेंट जल्द शुरू होगी', body: `यूनिट ${unit} की अपॉइंटमेंट लगभग ${Math.max(1, data.mins || 1)} मिनट में शुरू होगी।` };
+    if (kind === 'assigned') return { title: 'आपको नई अपॉइंटमेंट दी गई है', body: `यूनिट ${unit} — ${date}${time}` };
+    if (kind === 'updated') return { title: 'अपॉइंटमेंट बदली गई', body: `यूनिट ${unit}: ${date}${time}` };
+    if (kind === 'cancelled') return { title: 'अपॉइंटमेंट रद्द हुई', body: `यूनिट ${unit} — ${date}${time}` };
+    return { title: 'अपॉइंटमेंट हटाई गई', body: `यूनिट ${unit} — ${date}${time}` };
+  }
+
+  if (lang === 'ur') {
+    if (kind === 'morning') return { title: `آج کی اپائنٹمنٹس (${data.count || 0})`, body: data.summary || '' };
+    if (kind === 'reminder') return { title: 'اپائنٹمنٹ قریب ہے', body: `یونٹ ${unit} کی اپائنٹمنٹ تقریباً ${Math.max(1, data.mins || 1)} منٹ میں شروع ہوگی۔` };
+    if (kind === 'assigned') return { title: 'آپ کو نئی اپائنٹمنٹ دی گئی ہے', body: `یونٹ ${unit} — ${date}${time}` };
+    if (kind === 'updated') return { title: 'اپائنٹمنٹ تبدیل ہوئی', body: `یونٹ ${unit}: ${date}${time}` };
+    if (kind === 'cancelled') return { title: 'اپائنٹمنٹ منسوخ ہوئی', body: `یونٹ ${unit} — ${date}${time}` };
+    return { title: 'اپائنٹمنٹ حذف ہوئی', body: `یونٹ ${unit} — ${date}${time}` };
+  }
+
+  if (kind === 'morning') return { title: `مواعيدك اليوم (${data.count || 0})`, body: data.summary || '' };
+  if (kind === 'reminder') return { title: 'موعد يقترب', body: `موعد الوحدة ${unit} الساعة ${data.time || '—'} يبدأ خلال حوالي ${Math.max(1, data.mins || 1)} دقيقة` };
+  if (kind === 'assigned') return { title: 'تم تعيينك على موعد', body: `الوحدة ${unit} — ${date}${time ? ` الساعة${time}` : ''}` };
+  if (kind === 'updated') return { title: 'تم تعديل الموعد', body: `الموعد الجديد للوحدة ${unit}: ${date}${time ? ` الساعة${time}` : ''}` };
+  if (kind === 'cancelled') return { title: 'تم إلغاء الموعد', body: `الوحدة ${unit} — ${date}${time ? ` الساعة${time}` : ''}` };
+  return { title: 'تم حذف الموعد', body: `الوحدة ${unit} — ${date}${time ? ` الساعة${time}` : ''}` };
+}
+
+async function sendAppointmentPeople(
   supervisorIds: string[],
   technicianIds: string[],
-  payload: { title: string; body: string; tag: string; url: string; requireInteraction?: boolean },
+  supervisorPayload: PushPayload,
+  techPayload: Omit<PushPayload, 'title' | 'body'> & {
+    kind: 'reminder' | 'assigned' | 'updated' | 'cancelled' | 'deleted';
+    data: { unit?: string; date?: string; time?: string | null; mins?: number };
+  },
 ) {
-  const recipients = new Set<string>([...supervisorIds, ...technicianIds].filter(Boolean));
-  await Promise.all([...recipients].map(uid => sendPushToUser(uid, payload)));
+  const supervisors = Array.from(new Set(supervisorIds.filter(Boolean)));
+  const technicians = Array.from(new Set(technicianIds.filter(Boolean)));
+  const languages = await technicianLanguages(technicians);
+
+  await Promise.all(supervisors.map(uid => sendPushToUser(uid, supervisorPayload)));
+  await Promise.all(technicians.map(uid => {
+    const copy = techAppointmentCopy(languages.get(uid) || 'ar', techPayload.kind, techPayload.data);
+    return sendPushToUser(uid, {
+      title: copy.title,
+      body: copy.body,
+      tag: techPayload.tag,
+      url: techPayload.url,
+      requireInteraction: techPayload.requireInteraction,
+    });
+  }));
 }
 
 // ── 1. Technician morning: today's open appointments (08:00 SA = 05:00 UTC) ──
 async function notifyTechniciansAppointments() {
   const appts = await prisma.appointment.findMany({
     where: { date: todayDateInRiyadh(), status: 'scheduled' },
-    include: { technician: true, unit: { include: { block: true } } },
+    include: { unit: { include: { block: true } } },
   });
+
   const byTech: Record<string, typeof appts> = {};
-  for (const a of appts) {
-    if (!a.technicianId) continue;
-    byTech[a.technicianId] ??= [];
-    byTech[a.technicianId].push(a);
+  for (const appointment of appts) {
+    const techIds = Array.from(new Set([
+      appointment.technicianId,
+      ...(appointment.technicianIds || []),
+    ].filter(Boolean) as string[]));
+    for (const techId of techIds) {
+      byTech[techId] ??= [];
+      byTech[techId].push(appointment);
+    }
   }
+
+  const languages = await technicianLanguages(Object.keys(byTech));
   for (const [techId, list] of Object.entries(byTech)) {
+    const lang = languages.get(techId) || 'ar';
+    const summary = list.slice(0, 3).map(appointment => {
+      const unit = appointment.unit?.unitNumber || '—';
+      const note = appointment.notes?.slice(0, 40) || '';
+      if (lang === 'en') return `Unit ${unit}${note ? ` — ${note}` : ''}`;
+      if (lang === 'hi') return `यूनिट ${unit}${note ? ` — ${note}` : ''}`;
+      if (lang === 'ur') return `یونٹ ${unit}${note ? ` — ${note}` : ''}`;
+      return `فيلا ${unit}${note ? ` — ${note}` : ''}`;
+    }).join('\n');
+    const copy = techAppointmentCopy(lang, 'morning', { count: list.length, summary });
+
     await sendPushToUser(techId, {
-      title: `مواعيدك اليوم (${list.length})`,
-      body: list.slice(0, 3).map(a => `فيلا ${a.unit?.unitNumber || '—'} — ${a.notes?.slice(0, 40) || ''}`).join('\n'),
+      title: copy.title,
+      body: copy.body,
       tag: 'tech-daily-appointments',
       url: '/tech/appointments',
     });
@@ -87,8 +186,8 @@ async function notifySupervisorsAttendance() {
     select: { projectId: true, id: true },
   });
   const ticketsByProject: Record<string, number> = {};
-  for (const t of openTickets) {
-    if (t.projectId) ticketsByProject[t.projectId] = (ticketsByProject[t.projectId] || 0) + 1;
+  for (const ticket of openTickets) {
+    if (ticket.projectId) ticketsByProject[ticket.projectId] = (ticketsByProject[ticket.projectId] || 0) + 1;
   }
 
   const supervisors = await prisma.user.findMany({
@@ -96,8 +195,8 @@ async function notifySupervisorsAttendance() {
     include: { projects: { select: { id: true, name: true } } },
   });
 
-  for (const sup of supervisors) {
-    const projectIds = sup.projects.map(p => p.id);
+  for (const supervisor of supervisors) {
+    const projectIds = supervisor.projects.map(project => project.id);
     if (!projectIds.length) continue;
 
     const allTechs = await prisma.technician.findMany({
@@ -107,23 +206,23 @@ async function notifySupervisorsAttendance() {
 
     const clockedIn = await prisma.shiftLog.findMany({
       where: {
-        technicianId: { in: allTechs.map(t => t.id) },
-        clockInAt: { gte: today0() },
+        technicianId: { in: allTechs.map(tech => tech.id) },
+        clockInAt: { gte: today0(), lte: today24() },
       },
       select: { technicianId: true },
     });
 
-    const clockedInIds = new Set(clockedIn.map(s => s.technicianId));
+    const clockedInIds = new Set(clockedIn.map(shift => shift.technicianId));
     const totalTechs = allTechs.length;
     const presentCount = clockedInIds.size;
     const absentCount = totalTechs - presentCount;
-    const openCount = projectIds.reduce((n, pid) => n + (ticketsByProject[pid] || 0), 0);
+    const openCount = projectIds.reduce((count, projectId) => count + (ticketsByProject[projectId] || 0), 0);
 
     let body = `${presentCount}/${totalTechs} فني سجلوا الحضور`;
     if (absentCount > 0) body += ` — ${absentCount} لم يسجلوا بعد`;
     if (openCount > 0) body += `\n${openCount} تذكرة مفتوحة اليوم`;
 
-    await sendPushToUser(sup.uid, {
+    await sendPushToUser(supervisor.uid, {
       title: 'ملخص بداية الدوام',
       body,
       tag: 'supervisor-morning-summary',
@@ -133,11 +232,11 @@ async function notifySupervisorsAttendance() {
   console.log(`[cron] Notified ${supervisors.length} supervisors about attendance`);
 }
 
-// ── 3. Engineer end-of-day: closure summary by supervisors ────────────────
+// ── 3. Engineer end-of-day: closure summary ─────────────────────────────────
 async function notifyEngineersClosureSummary() {
   const closed = await prisma.ticket.findMany({
     where: {
-      status: { in: ['closed', 'out_of_scope', 'absent'] },
+      status: { in: ['closed', 'completed', 'out_of_scope', 'absent'] },
       closedAt: { gte: today0(), lte: today24() },
     },
     select: { projectId: true },
@@ -148,14 +247,13 @@ async function notifyEngineersClosureSummary() {
     include: { projects: { select: { id: true } } },
   });
 
-  for (const eng of engineers) {
-    const myProjectIds = new Set(eng.projects.map(p => p.id));
-    const myClosures = closed.filter(t => t.projectId && myProjectIds.has(t.projectId));
-    if (myClosures.length === 0) continue;
-
-    await sendPushToUser(eng.uid, {
+  for (const engineer of engineers) {
+    const projectIds = new Set(engineer.projects.map(project => project.id));
+    const closures = closed.filter(ticket => ticket.projectId && projectIds.has(ticket.projectId));
+    if (!closures.length) continue;
+    await sendPushToUser(engineer.uid, {
       title: 'ملخص نهاية الدوام',
-      body: `تم إغلاق ${myClosures.length} تذكرة في مشاريعك اليوم`,
+      body: `تم إغلاق ${closures.length} تذكرة في مشاريعك اليوم`,
       tag: 'engineer-eod-summary',
       url: '/tickets?status=closed',
     });
@@ -163,7 +261,7 @@ async function notifyEngineersClosureSummary() {
   console.log(`[cron] Notified ${engineers.length} engineers about end-of-day closures`);
 }
 
-// ── 4. Late tickets: open > 24h — notify supervisors every 2 hours ────────
+// ── 4. Late tickets: open > 24h ──────────────────────────────────────────────
 async function notifyLateTickets() {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const lateTickets = await prisma.ticket.findMany({
@@ -182,14 +280,13 @@ async function notifyLateTickets() {
     include: { projects: { select: { id: true } } },
   });
 
-  for (const sup of supervisors) {
-    const myProjectIds = new Set(sup.projects.map(p => p.id));
-    const mine = lateTickets.filter(t => t.projectId && myProjectIds.has(t.projectId));
+  for (const supervisor of supervisors) {
+    const projectIds = new Set(supervisor.projects.map(project => project.id));
+    const mine = lateTickets.filter(ticket => ticket.projectId && projectIds.has(ticket.projectId));
     if (!mine.length) continue;
-
-    await sendPushToUser(sup.uid, {
+    await sendPushToUser(supervisor.uid, {
       title: `تذاكر متأخرة (${mine.length})`,
-      body: mine.slice(0, 3).map(t => `فيلا ${t.unit?.unitNumber || '—'}: ${t.description?.slice(0, 50) || ''}`).join('\n'),
+      body: mine.slice(0, 3).map(ticket => `فيلا ${ticket.unit?.unitNumber || '—'}: ${ticket.description?.slice(0, 50) || ''}`).join('\n'),
       tag: 'late-tickets',
       url: '/tickets?status=open',
       requireInteraction: true,
@@ -198,17 +295,17 @@ async function notifyLateTickets() {
   console.log(`[cron] Late ticket alerts sent — ${lateTickets.length} tickets`);
 }
 
-// ── 5. Admin daily summary at shift end (16:00 SA = 13:00 UTC) ────────────
+// ── 5. Admin daily summary ───────────────────────────────────────────────────
 async function notifyAdminDailySummary() {
   const [openCount, closedToday, activeTechs] = await Promise.all([
     prisma.ticket.count({ where: { status: 'open' } }),
     prisma.ticket.count({
       where: {
-        status: { in: ['closed', 'absent', 'out_of_scope'] },
+        status: { in: ['closed', 'completed', 'absent', 'out_of_scope'] },
         closedAt: { gte: today0(), lte: today24() },
       },
     }),
-    prisma.shiftLog.count({ where: { clockInAt: { gte: today0() }, clockOutAt: null } }),
+    prisma.shiftLog.count({ where: { clockInAt: { gte: today0(), lte: today24() }, clockOutAt: null } }),
   ]);
 
   await sendPushToRoles(['admin'], {
@@ -237,25 +334,41 @@ async function notifyUpcomingAppointments() {
   });
 
   const now = Date.now();
-  for (const a of appointments) {
-    const when = appointmentMoment(a.date, a.time);
+  for (const appointment of appointments) {
+    const when = appointmentMoment(appointment.date, appointment.time);
     if (!when) continue;
     const mins = (when.getTime() - now) / 60000;
     if (mins <= 0 || mins > 30) continue;
 
-    const reminderKey = `${APPOINTMENT_REMINDER_PREFIX}${a.id}:${a.date}:${a.time}`;
+    const reminderKey = `${APPOINTMENT_REMINDER_PREFIX}${appointment.id}:${appointment.date}:${appointment.time}`;
     const sent = await prisma.systemSetting.findUnique({ where: { key: reminderKey } });
     if (sent) continue;
 
-    const techIds = Array.from(new Set([a.technicianId, ...(a.technicianIds || [])].filter(Boolean) as string[]));
-    const unit = a.unit?.unitNumber || '—';
-    await sendToAppointmentPeople(a.supervisorIds || [], techIds, {
-      title: 'موعد يقترب',
-      body: `موعد الوحدة ${unit} الساعة ${a.time} يبدأ خلال حوالي ${Math.max(1, Math.round(mins))} دقيقة`,
-      tag: `appointment-reminder-${a.id}`,
-      url: '/appointments',
-      requireInteraction: true,
-    });
+    const techIds = Array.from(new Set([
+      appointment.technicianId,
+      ...(appointment.technicianIds || []),
+    ].filter(Boolean) as string[]));
+    const unit = appointment.unit?.unitNumber || '—';
+    const roundedMins = Math.max(1, Math.round(mins));
+
+    await sendAppointmentPeople(
+      appointment.supervisorIds || [],
+      techIds,
+      {
+        title: 'موعد يقترب',
+        body: `موعد الوحدة ${unit} الساعة ${appointment.time} يبدأ خلال حوالي ${roundedMins} دقيقة`,
+        tag: `appointment-reminder-${appointment.id}`,
+        url: `/appointments?appointment=${encodeURIComponent(appointment.id)}`,
+        requireInteraction: true,
+      },
+      {
+        kind: 'reminder',
+        data: { unit, date: appointment.date, time: appointment.time, mins: roundedMins },
+        tag: `appointment-reminder-${appointment.id}`,
+        url: `/tech/appointment/${encodeURIComponent(appointment.id)}`,
+        requireInteraction: true,
+      },
+    );
 
     await prisma.systemSetting.create({
       data: { key: reminderKey, value: { sentAt: new Date().toISOString() } },
@@ -289,22 +402,21 @@ async function notifyAppointmentChanges() {
   });
 
   const current: Record<string, AppointmentSnapshot> = {};
-  for (const a of appointments) {
-    current[a.id] = {
-      date: a.date,
-      time: a.time,
-      status: String(a.status),
-      supervisorIds: a.supervisorIds || [],
-      technicianId: a.technicianId || null,
-      technicianIds: a.technicianIds || [],
-      unitNumber: a.unit?.unitNumber || '—',
+  for (const appointment of appointments) {
+    current[appointment.id] = {
+      date: appointment.date,
+      time: appointment.time,
+      status: String(appointment.status),
+      supervisorIds: appointment.supervisorIds || [],
+      technicianId: appointment.technicianId || null,
+      technicianIds: appointment.technicianIds || [],
+      unitNumber: appointment.unit?.unitNumber || '—',
     };
   }
 
   const row = await prisma.systemSetting.findUnique({ where: { key: APPOINTMENT_SNAPSHOT_KEY } });
   const previous = (row?.value as Record<string, AppointmentSnapshot> | null) || null;
 
-  // First run only seeds the snapshot, to avoid flooding everyone after deploy.
   if (!previous) {
     await prisma.systemSetting.upsert({
       where: { key: APPOINTMENT_SNAPSHOT_KEY },
@@ -320,20 +432,29 @@ async function notifyAppointmentChanges() {
 
     const oldTechIds = Array.from(new Set([old.technicianId, ...(old.technicianIds || [])].filter(Boolean) as string[]));
     const newTechIds = Array.from(new Set([next.technicianId, ...(next.technicianIds || [])].filter(Boolean) as string[]));
-    const newAssignments = newTechIds.filter(t => !oldTechIds.includes(t));
+    const newAssignments = newTechIds.filter(technicianId => !oldTechIds.includes(technicianId));
     const techChanged = oldTechIds.join('|') !== newTechIds.join('|');
     const scheduleChanged = old.date !== next.date || old.time !== next.time;
     const cancelledNow = old.status !== 'cancelled' && next.status === 'cancelled';
 
     if (cancelledNow) {
-      await sendToAppointmentPeople(
-        Array.from(new Set([...(old.supervisorIds || []), ...(next.supervisorIds || [])])),
-        Array.from(new Set([...oldTechIds, ...newTechIds])),
+      const supervisors = Array.from(new Set([...(old.supervisorIds || []), ...(next.supervisorIds || [])]));
+      const technicians = Array.from(new Set([...oldTechIds, ...newTechIds]));
+      await sendAppointmentPeople(
+        supervisors,
+        technicians,
         {
           title: 'تم إلغاء الموعد',
           body: `تم إلغاء موعد الوحدة ${next.unitNumber} بتاريخ ${next.date}${next.time ? ` الساعة ${next.time}` : ''}`,
           tag: `appointment-cancelled-${id}`,
-          url: '/appointments',
+          url: `/appointments?appointment=${encodeURIComponent(id)}`,
+          requireInteraction: true,
+        },
+        {
+          kind: 'cancelled',
+          data: { unit: next.unitNumber, date: next.date, time: next.time },
+          tag: `appointment-cancelled-${id}`,
+          url: `/tech/appointment/${encodeURIComponent(id)}`,
           requireInteraction: true,
         },
       );
@@ -341,36 +462,55 @@ async function notifyAppointmentChanges() {
     }
 
     if (newAssignments.length > 0) {
-      await Promise.all(newAssignments.map(techId => sendPushToUser(techId, {
-        title: 'تم تعيينك على موعد',
-        body: `الوحدة ${next.unitNumber} — ${next.date}${next.time ? ` الساعة ${next.time}` : ''}`,
-        tag: `appointment-assigned-${id}`,
-        url: '/tech/appointments',
-        requireInteraction: true,
-      })));
+      const languages = await technicianLanguages(newAssignments);
+      await Promise.all(newAssignments.map(technicianId => {
+        const copy = techAppointmentCopy(languages.get(technicianId) || 'ar', 'assigned', {
+          unit: next.unitNumber,
+          date: next.date,
+          time: next.time,
+        });
+        return sendPushToUser(technicianId, {
+          title: copy.title,
+          body: copy.body,
+          tag: `appointment-assigned-${id}`,
+          url: `/tech/appointment/${encodeURIComponent(id)}`,
+          requireInteraction: true,
+        });
+      }));
 
       await Promise.all((next.supervisorIds || []).map(uid => sendPushToUser(uid, {
         title: 'تم تعيين فني على الموعد',
         body: `تم تعيين فني على موعد الوحدة ${next.unitNumber} — ${next.date}${next.time ? ` الساعة ${next.time}` : ''}`,
         tag: `appointment-tech-assigned-${id}`,
-        url: '/appointments',
+        url: `/appointments?appointment=${encodeURIComponent(id)}`,
       })));
     }
 
     if (scheduleChanged) {
-      await sendToAppointmentPeople(next.supervisorIds || [], newTechIds, {
-        title: 'تم تعديل الموعد',
-        body: `الموعد الجديد للوحدة ${next.unitNumber}: ${next.date}${next.time ? ` الساعة ${next.time}` : ''}`,
-        tag: `appointment-updated-${id}`,
-        url: '/appointments',
-        requireInteraction: true,
-      });
+      await sendAppointmentPeople(
+        next.supervisorIds || [],
+        newTechIds,
+        {
+          title: 'تم تعديل الموعد',
+          body: `الموعد الجديد للوحدة ${next.unitNumber}: ${next.date}${next.time ? ` الساعة ${next.time}` : ''}`,
+          tag: `appointment-updated-${id}`,
+          url: `/appointments?appointment=${encodeURIComponent(id)}`,
+          requireInteraction: true,
+        },
+        {
+          kind: 'updated',
+          data: { unit: next.unitNumber, date: next.date, time: next.time },
+          tag: `appointment-updated-${id}`,
+          url: `/tech/appointment/${encodeURIComponent(id)}`,
+          requireInteraction: true,
+        },
+      );
     } else if (techChanged && newAssignments.length === 0) {
       await Promise.all((next.supervisorIds || []).map(uid => sendPushToUser(uid, {
         title: 'تم تعديل الفني على الموعد',
         body: `تم تعديل تعيين الفني لموعد الوحدة ${next.unitNumber}`,
         tag: `appointment-tech-updated-${id}`,
-        url: '/appointments',
+        url: `/appointments?appointment=${encodeURIComponent(id)}`,
       })));
     }
   }
@@ -378,14 +518,25 @@ async function notifyAppointmentChanges() {
   // Physical deletion is treated as cancellation and notifies the last known people.
   for (const [id, old] of Object.entries(previous)) {
     if (current[id]) continue;
-    const oldTechIds = Array.from(new Set([old.technicianId, ...(old.technicianIds || [])].filter(Boolean) as string[]));
-    await sendToAppointmentPeople(old.supervisorIds || [], oldTechIds, {
-      title: 'تم إلغاء الموعد',
-      body: `تم حذف/إلغاء موعد الوحدة ${old.unitNumber} بتاريخ ${old.date}${old.time ? ` الساعة ${old.time}` : ''}`,
-      tag: `appointment-deleted-${id}`,
-      url: '/appointments',
-      requireInteraction: true,
-    });
+    const techIds = Array.from(new Set([old.technicianId, ...(old.technicianIds || [])].filter(Boolean) as string[]));
+    await sendAppointmentPeople(
+      old.supervisorIds || [],
+      techIds,
+      {
+        title: 'تم إلغاء الموعد',
+        body: `تم حذف/إلغاء موعد الوحدة ${old.unitNumber} بتاريخ ${old.date}${old.time ? ` الساعة ${old.time}` : ''}`,
+        tag: `appointment-deleted-${id}`,
+        url: '/appointments',
+        requireInteraction: true,
+      },
+      {
+        kind: 'deleted',
+        data: { unit: old.unitNumber, date: old.date, time: old.time },
+        tag: `appointment-deleted-${id}`,
+        url: '/tech/appointments',
+        requireInteraction: true,
+      },
+    );
   }
 
   await prisma.systemSetting.upsert({
@@ -431,7 +582,7 @@ async function notifySupervisorsAfterImports() {
       select: { uid: true },
     });
 
-    await Promise.all(supervisors.map(sup => sendPushToUser(sup.uid, {
+    await Promise.all(supervisors.map(supervisor => sendPushToUser(supervisor.uid, {
       title: 'تذاكر جديدة بعد الاستيراد',
       body: `تمت إضافة ${added} تذكرة جديدة في مشروع ${project.name}`,
       tag: `import-new-tickets-${project.id}-${importedAt}`,
@@ -467,7 +618,6 @@ export function startCronJobs() {
   cron.schedule(`0 13 * * ${ADMIN_DAYS}`, notifyAdminDailySummary, { timezone: 'UTC' });
   cron.schedule(`0 5,7,9,11,13 * * ${WEEKDAYS}`, notifyLateTickets, { timezone: 'UTC' });
 
-  // Operational notifications: every minute, all days.
   cron.schedule('* * * * *', runMinutePushJobs, { timezone: 'UTC' });
   void runMinutePushJobs();
 
