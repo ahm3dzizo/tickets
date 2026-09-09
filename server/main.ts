@@ -58,6 +58,7 @@ import { auditTechSessionLifecycle } from "./middleware/tech-session-audit.js";
 import {
   blockBreakWithActiveVisit,
   blockClockOutWithOpenVisit,
+  requireInProgressVisitForFinish,
 } from "./middleware/tech-visit-shift-guard.js";
 import { startCronJobs } from "./cronJobs.js";
 import { initVapid } from "./pushService.js";
@@ -152,6 +153,7 @@ async function startServer() {
   app.post(
     techVisitActionPaths,
     requireTechAuth,
+    requireInProgressVisitForFinish,
     requireTechOperationalLocation,
     auditTechSessionLifecycle,
   );
