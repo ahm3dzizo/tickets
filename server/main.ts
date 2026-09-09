@@ -32,6 +32,8 @@ import importExcelRoutes from "./routes/import-excel.js";
 import contractorRoutes from "./routes/contractors.js";
 import warrantiesRoutes from "./routes/warranties.js";
 import techAuthRoutes, { requireTechAuth } from "./routes/tech-auth.js";
+import techVisitReadRoutes from "./routes/tech-visit-read.js";
+import techVisitPhaseRoutes from "./routes/tech-visit-phases.js";
 import techTicketActionRoutes from "./routes/tech-ticket-actions.js";
 import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
@@ -53,6 +55,10 @@ import {
 } from "./middleware/tech-read-cache.js";
 import { requireTechOperationalLocation } from "./middleware/tech-location-guard.js";
 import { auditTechSessionLifecycle } from "./middleware/tech-session-audit.js";
+import {
+  blockBreakWithActiveVisit,
+  blockClockOutWithOpenVisit,
+} from "./middleware/tech-visit-shift-guard.js";
 import { startCronJobs } from "./cronJobs.js";
 import { initVapid } from "./pushService.js";
 import { startGeminiWorker } from "./classifier/gemini-worker.js";
@@ -134,6 +140,9 @@ async function startServer() {
   // auth failures and can never trigger appointment/session database work.
   const techVisitActionPaths = [
     "/api/tech/appointments/:appointmentId/claim",
+    "/api/tech/appointments/:appointmentId/travel",
+    "/api/tech/appointments/:appointmentId/arrive",
+    "/api/tech/appointments/:appointmentId/start-work",
     "/api/tech/appointments/:appointmentId/finish",
     "/api/tech/appointments/:appointmentId/cancel-claim",
     "/api/tech/appointments/:appointmentId/pause",
@@ -146,11 +155,19 @@ async function startServer() {
     requireTechOperationalLocation,
     auditTechSessionLifecycle,
   );
-  app.post("/api/shift/clock-out", requireTechAuth, requireTechOperationalLocation);
+  app.post(
+    "/api/shift/clock-out",
+    requireTechAuth,
+    blockClockOutWithOpenVisit,
+    requireTechOperationalLocation,
+  );
+  app.post("/api/shift/break/start", requireTechAuth, blockBreakWithActiveVisit);
 
+  // State-machine reads/actions are mounted before legacy technician handlers so
+  // claimed → en_route → arrived → in_progress becomes the authoritative flow.
+  app.use("/api/tech", techVisitReadRoutes);
+  app.use("/api/tech", techVisitPhaseRoutes);
   app.use("/api/tech", techAuthRoutes);
-  // These explicit technician actions override the legacy attendance handlers
-  // so ticket outcomes and appointment completion stay deliberate and audited.
   app.use("/api/tech", techTicketActionRoutes);
   app.use("/api", attendanceRoutes);
   app.use("/api", translationRoutes);
