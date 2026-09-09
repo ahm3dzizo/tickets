@@ -104,6 +104,14 @@ function getStoredTheme(): Theme {
   return 'system';
 }
 
+function localDateString(date = new Date()): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 export default function TechApp() {
   const { token, techProfile, logout, setProfile } = useTechAuth() as any;
   const navigate = useNavigate();
@@ -129,14 +137,7 @@ export default function TechApp() {
     else if (getPushPermission() === 'denied') toast.error(t(lang, 'notificationsDenied'));
   };
 
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const today = new Date();
-    return [
-      today.getFullYear(),
-      String(today.getMonth() + 1).padStart(2, '0'),
-      String(today.getDate()).padStart(2, '0'),
-    ].join('-');
-  });
+  const [selectedDate, setSelectedDate] = useState(() => localDateString());
 
   const lang = (techProfile?.language || 'ar') as TechLang;
   const isRtl = lang === 'ar' || lang === 'ur';
@@ -155,12 +156,28 @@ export default function TechApp() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [shiftData, apptsData] = await Promise.all([
-        techApi.getTodayShift().catch(() => null),
-        techApi.getAppointments().catch(() => []),
+      const [shiftResult, appointmentsResult] = await Promise.allSettled([
+        techApi.getTodayShift(),
+        techApi.getAppointments(),
       ]);
-      setShift(shiftData);
-      setAppointments(apptsData || []);
+
+      // Never turn a network/server error into a fake empty state. Keep the last
+      // known field data on screen and update whichever request actually worked.
+      if (shiftResult.status === 'fulfilled') {
+        setShift(shiftResult.value);
+      } else {
+        console.warn('[TechApp] shift refresh failed:', shiftResult.reason);
+      }
+
+      if (appointmentsResult.status === 'fulfilled') {
+        setAppointments(appointmentsResult.value || []);
+      } else {
+        console.warn('[TechApp] appointments refresh failed:', appointmentsResult.reason);
+      }
+
+      if (shiftResult.status === 'rejected' && appointmentsResult.status === 'rejected') {
+        console.warn('[TechApp] refresh failed; keeping cached/last-known UI data');
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -173,9 +190,24 @@ export default function TechApp() {
       navigate('/tech/login');
       return;
     }
-    fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+
+    void fetchData();
+
+    // Adaptive refresh: do not poll while the PWA is hidden. Server + service
+    // worker caches already protect the DB/network, and mutations refresh
+    // immediately, so a two-minute heartbeat is enough as a safety net.
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') void fetchData();
+    };
+    const interval = window.setInterval(refreshIfVisible, 120_000);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('online', refreshIfVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('online', refreshIfVisible);
+    };
   }, [token, navigate, fetchData]);
 
   const handleLogout = () => {
@@ -201,7 +233,12 @@ export default function TechApp() {
     if (!window.confirm(t(lang, 'clockOutConfirm'))) return;
     setActionLoading(true);
     try {
-      await techApi.clockOut();
+      const location = await collectAttendanceLocation(lang);
+      await techApi.clockOut({
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+      } as any);
       toast.success(t(lang, 'clockOutSuccess'));
       await fetchData();
     } catch (err: any) {
@@ -900,16 +937,12 @@ function AppointmentCard({
     }
     setClaiming(true);
     try {
-      let lat: number | undefined, lng: number | undefined, accuracy: number | undefined;
-      if (navigator.geolocation) {
-        try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, enableHighAccuracy: true });
-          });
-          lat = pos.coords.latitude; lng = pos.coords.longitude; accuracy = pos.coords.accuracy;
-        } catch {}
-      }
-      await techApi.claimAppointment(appt.id, { lat, lng, accuracy });
+      const location = await collectAttendanceLocation(lang);
+      await techApi.claimAppointment(appt.id, {
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+      });
       toast.success(t(lang, 'appointmentClaimed'));
       onRefresh?.();
       if (firstWorkTicket?.id) navigate(`/tech/ticket/${firstWorkTicket.id}`);
@@ -928,16 +961,12 @@ function AppointmentCard({
     if (!window.confirm(t(lang, 'finishAppointmentConfirm'))) return;
     setFinishing(true);
     try {
-      let lat: number | undefined, lng: number | undefined;
-      if (navigator.geolocation) {
-        try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, enableHighAccuracy: true });
-          });
-          lat = pos.coords.latitude; lng = pos.coords.longitude;
-        } catch {}
-      }
-      await techApi.finishAppointment(appt.id, { lat, lng });
+      const location = await collectAttendanceLocation(lang);
+      await techApi.finishAppointment(appt.id, {
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+      } as any);
       toast.success(t(lang, 'finishAppointmentSuccess'));
       onRefresh?.();
     } catch (err: any) {
@@ -1341,7 +1370,7 @@ function PostponeDialog({
   const [newDate, setNewDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+    return localDateString(d);
   });
   const [newTime, setNewTime] = useState<string>(currentTime || '');
   const [reason, setReason] = useState('');
@@ -1400,7 +1429,7 @@ function PostponeDialog({
             <label style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, display: 'block', marginBottom: 4 }}>{t(lang, 'newDate')}</label>
             <input
               type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
-              min={new Date().toISOString().slice(0, 10)}
+              min={localDateString()}
               style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '1px solid var(--tech-border, #cbd5e1)', background: 'transparent', color: 'inherit', fontSize: 13 }}
             />
           </div>
