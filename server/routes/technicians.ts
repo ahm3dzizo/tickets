@@ -4,6 +4,7 @@ import { requireAuth, AuthRequest, assertPhoneNumberUnique, normalizePhoneNumber
 
 const router = Router();
 const hasTechnician = prismaModelExists('technician');
+const OPEN_VISIT_PHASES = ['claimed', 'en_route', 'arrived', 'in_progress', 'paused'];
 
 const SAFE_TECH_SELECT = {
   id: true,
@@ -55,6 +56,17 @@ function canManageTechnicians(access: RequesterAccess): boolean {
 
 function projectAllowed(access: RequesterAccess, projectId: string | null | undefined): boolean {
   return access.role === 'admin' || (!!projectId && access.projectIds.includes(projectId));
+}
+
+async function findOpenTechnicianVisit(technicianId: string) {
+  return prisma.appointmentWorkSession.findFirst({
+    where: {
+      technicianId,
+      status: { in: OPEN_VISIT_PHASES },
+    },
+    select: { appointmentId: true, status: true },
+    orderBy: { updatedAt: 'desc' },
+  });
 }
 
 if (hasTechnician) {
@@ -146,7 +158,7 @@ if (hasTechnician) {
 
       const current = await prisma.technician.findUnique({
         where: { id: req.params.id },
-        select: { id: true, projectId: true, supervisorId: true },
+        select: { id: true, projectId: true, supervisorId: true, isActive: true },
       });
       if (!current) {
         res.status(404).json({ error: "الفني غير موجود" });
@@ -171,6 +183,22 @@ if (hasTechnician) {
       if (access.role === 'supervisor' && current.supervisorId && current.supervisorId !== access.uid) {
         res.status(403).json({ error: "هذا الفني يتبع مشرفاً آخر" });
         return;
+      }
+
+      const disabling = data.isActive !== undefined && !Boolean(data.isActive) && current.isActive;
+      const movingProject = data.projectId !== undefined && data.projectId !== current.projectId;
+      const movingSupervisor = data.supervisorId !== undefined && data.supervisorId !== current.supervisorId;
+      if (disabling || movingProject || movingSupervisor) {
+        const openVisit = await findOpenTechnicianVisit(req.params.id);
+        if (openVisit) {
+          res.status(409).json({
+            code: 'TECHNICIAN_HAS_OPEN_VISIT',
+            error: 'لا يمكن تعطيل أو نقل الفني أثناء وجود زيارة مفتوحة. أنهِ أو أجّل الموعد أولاً.',
+            activeAppointmentId: openVisit.appointmentId,
+            visitPhase: openVisit.status,
+          });
+          return;
+        }
       }
 
       const phoneNumber = data.phoneNumber !== undefined
@@ -231,18 +259,13 @@ if (hasTechnician) {
         return;
       }
 
-      const activeSession = await prisma.appointmentWorkSession.findFirst({
-        where: {
-          technicianId: req.params.id,
-          status: { in: ['in_progress', 'paused'] },
-        },
-        select: { appointmentId: true },
-      });
-      if (activeSession) {
+      const openVisit = await findOpenTechnicianVisit(req.params.id);
+      if (openVisit) {
         res.status(409).json({
-          code: 'TECHNICIAN_HAS_ACTIVE_SESSION',
-          error: 'لا يمكن حذف الفني أثناء وجود موعد عمل نشط. عطّل الحساب أو أنهِ الجلسة أولاً.',
-          activeAppointmentId: activeSession.appointmentId,
+          code: 'TECHNICIAN_HAS_OPEN_VISIT',
+          error: 'لا يمكن حذف الفني أثناء وجود زيارة مفتوحة. أنهِ أو أجّل الموعد أولاً.',
+          activeAppointmentId: openVisit.appointmentId,
+          visitPhase: openVisit.status,
         });
         return;
       }
