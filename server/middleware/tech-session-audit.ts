@@ -18,7 +18,7 @@ function requestPath(req: Request): string {
 function actionMatch(req: Request): { appointmentId: string; action: string } | null {
   if (req.method.toUpperCase() !== 'POST') return null;
   const match = requestPath(req).match(
-    /^\/api\/tech\/appointments\/([^/]+)\/(claim|finish|cancel-claim|pause|resume|postpone)$/,
+    /^\/api\/tech\/appointments\/([^/]+)\/(claim|travel|arrive|start-work|finish|cancel-claim|pause|resume|postpone)$/,
   );
   return match ? { appointmentId: match[1], action: match[2] } : null;
 }
@@ -29,8 +29,19 @@ function safeIso(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function compactSessionSnapshot(session: any, action: string) {
-  if (!session) return { action, session: null };
+function requestLocation(req: Request) {
+  const lat = Number(req.body?.lat);
+  const lng = Number(req.body?.lng);
+  const accuracy = Number(req.body?.accuracy);
+  return {
+    lat: Number.isFinite(lat) ? lat : null,
+    lng: Number.isFinite(lng) ? lng : null,
+    accuracy: Number.isFinite(accuracy) ? accuracy : null,
+  };
+}
+
+function compactSessionSnapshot(session: any, action: string, req?: Request) {
+  if (!session) return { action, session: null, requestLocation: req ? requestLocation(req) : null };
   return {
     action,
     sessionId: session.id || null,
@@ -51,6 +62,7 @@ function compactSessionSnapshot(session: any, action: string) {
     finishLat: session.finishLat ?? null,
     finishLng: session.finishLng ?? null,
     completionNotes: session.completionNotes || null,
+    requestLocation: req ? requestLocation(req) : null,
     recordedAt: new Date().toISOString(),
   };
 }
@@ -87,7 +99,8 @@ async function writeLifecycleAudit(
  * AppointmentWorkSession is still one-row-per-appointment today and a re-claim
  * can delete a completed/cancelled row. We snapshot the previous terminal row
  * before the claim and write it to TicketAudit only if the claim succeeds.
- * Every successful lifecycle action is also written as an immutable audit event.
+ * Every successful lifecycle action is also written as an immutable audit event,
+ * including the action GPS when supplied.
  */
 export async function auditTechSessionLifecycle(
   req: AuditRequest,
@@ -100,9 +113,6 @@ export async function auditTechSessionLifecycle(
     return;
   }
 
-  // Capture an old terminal session in memory before the legacy claim handler
-  // deletes it. Do not write anything yet: an unauthorized/failed claim must not
-  // create audit data.
   if (matched.action === 'claim') {
     try {
       const existing = await prisma.appointmentWorkSession.findUnique({
@@ -147,7 +157,7 @@ export async function auditTechSessionLifecycle(
       await writeLifecycleAudit(
         ticketIds,
         `tech_visit_${matched.action.replace('-', '_')}`,
-        compactSessionSnapshot(session, matched.action),
+        compactSessionSnapshot(session, matched.action, req),
         changedBy,
       );
     })().catch(error => {
