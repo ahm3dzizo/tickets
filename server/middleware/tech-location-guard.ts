@@ -14,11 +14,12 @@ function validCoordinate(value: unknown, min: number, max: number): number | nul
 /**
  * Guard the technician actions where the recorded field location matters.
  *
- * Attendance has a stricter multi-sample 200m office geofence. Appointment
- * claim/finish happen at field units, whose coordinates are not yet stored for
- * every unit, so for now we enforce a real usable GPS fix rather than a unit
- * geofence. Once unit coordinates are populated this middleware is the natural
- * place to add the second geofence.
+ * Attendance clock-in keeps its stricter multi-sample 200m office geofence.
+ * Appointment claim/finish and shift clock-out happen in the field, whose unit
+ * coordinates are not yet stored for every villa, so for now we require a real,
+ * reasonably accurate GPS fix instead of pretending we can enforce a unit
+ * geofence. Once Unit coordinates are available this is where proximity checks
+ * should be added.
  */
 export function requireTechOperationalLocation(
   req: Request,
@@ -33,8 +34,9 @@ export function requireTechOperationalLocation(
   const path = requestPath(req);
   const isClaim = /^\/api\/tech\/appointments\/[^/]+\/claim$/.test(path);
   const isFinish = /^\/api\/tech\/appointments\/[^/]+\/finish$/.test(path);
+  const isClockOut = path === '/api/shift/clock-out';
 
-  if (!isClaim && !isFinish) {
+  if (!isClaim && !isFinish && !isClockOut) {
     next();
     return;
   }
@@ -49,29 +51,26 @@ export function requireTechOperationalLocation(
     return;
   }
 
-  // Claim already sends accuracy from the browser and must have a reasonably
-  // precise fix. Finish currently sends lat/lng on all supported clients; if a
-  // newer client also sends accuracy, validate it with the same policy.
-  const accuracyProvided = req.body?.accuracy !== undefined && req.body?.accuracy !== null;
   const accuracy = Number(req.body?.accuracy);
-  if (isClaim && (!Number.isFinite(accuracy) || accuracy <= 0)) {
+  if (!Number.isFinite(accuracy) || accuracy <= 0) {
     res.status(422).json({
       code: 'TECH_LOCATION_ACCURACY_REQUIRED',
       error: 'تعذر التحقق من دقة موقعك. انتظر ثبات GPS ثم حاول مرة أخرى.',
     });
     return;
   }
-  if (accuracyProvided && (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > MAX_OPERATION_GPS_ACCURACY_M)) {
+  if (accuracy > MAX_OPERATION_GPS_ACCURACY_M) {
     res.status(422).json({
       code: 'TECH_LOCATION_INACCURATE',
       error: `دقة الموقع غير كافية. يجب أن تكون أفضل من ${MAX_OPERATION_GPS_ACCURACY_M} متر.`,
       maxAccuracyM: MAX_OPERATION_GPS_ACCURACY_M,
+      accuracyM: Math.round(accuracy),
     });
     return;
   }
 
   req.body.lat = lat;
   req.body.lng = lng;
-  if (accuracyProvided || isClaim) req.body.accuracy = accuracy;
+  req.body.accuracy = accuracy;
   next();
 }
