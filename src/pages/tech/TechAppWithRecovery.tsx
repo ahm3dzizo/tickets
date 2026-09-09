@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Pause, Play, Timer } from 'lucide-react';
+import { Briefcase, Loader2, MapPin, Navigation, Pause, Play, Timer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TechLang, t } from '@/i18n/tech';
+import { visitT } from '@/i18n/techVisit';
 import { techApi } from '@/lib/api';
+import { collectTechLocation } from '@/lib/techLocation';
+import { techVisitApi, type TechVisitPhase } from '@/lib/techVisitApi';
 import TechApp from './TechApp';
 
 function getStoredTechLanguage(): TechLang {
@@ -24,7 +27,7 @@ function getStoredTechLanguage(): TechLang {
 export default function TechAppWithRecovery() {
   const navigate = useNavigate();
   const [activeSession, setActiveSession] = useState<any>(null);
-  const [resuming, setResuming] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [lang, setLang] = useState<TechLang>(getStoredTechLanguage);
 
   const refreshActive = useCallback(async () => {
@@ -33,8 +36,6 @@ export default function TechAppWithRecovery() {
       setActiveSession(session);
       setLang(getStoredTechLanguage());
     } catch (error: any) {
-      // Keep the last known session if the network is temporarily unavailable.
-      // The service worker may also provide a scoped stale fallback.
       console.warn('[TechRecovery] active session lookup failed:', error);
     }
   }, []);
@@ -47,8 +48,6 @@ export default function TechAppWithRecovery() {
     };
     const onFinished = () => void refreshActive();
 
-    // A two-minute heartbeat is only a safety net. Mutations refresh explicitly,
-    // returning to the app refreshes immediately, and hidden PWAs do not poll.
     const timer = window.setInterval(refreshIfVisible, 120_000);
     window.addEventListener('tech-active-appointment-finished', onFinished);
     window.addEventListener('online', refreshIfVisible);
@@ -63,7 +62,8 @@ export default function TechAppWithRecovery() {
   }, [refreshActive]);
 
   const appointment = activeSession?.appointment;
-  const isPaused = activeSession?.status === 'paused';
+  const phase = (activeSession?.status || null) as TechVisitPhase | null;
+  const isPaused = phase === 'paused';
   const isRtl = lang === 'ar' || lang === 'ur';
 
   const unitNumber = useMemo(() => (
@@ -80,21 +80,6 @@ export default function TechAppWithRecovery() {
     return unresolved?.id || tickets[0]?.id || null;
   }, [appointment]);
 
-  const resumeActive = async () => {
-    if (!activeSession?.appointmentId || resuming) return;
-    setResuming(true);
-    try {
-      await techApi.resumeAppointment(activeSession.appointmentId);
-      toast.success(t(lang, 'resumeSuccess'));
-      await refreshActive();
-    } catch (error: any) {
-      toast.error(lang === 'ar' && error?.message ? error.message : t(lang, 'resumeError'));
-      await refreshActive();
-    } finally {
-      setResuming(false);
-    }
-  };
-
   const openActiveWork = () => {
     if (firstActionableTicketId) {
       navigate(`/tech/ticket/${firstActionableTicketId}`);
@@ -102,6 +87,89 @@ export default function TechAppWithRecovery() {
     }
     navigate('/tech/appointments');
   };
+
+  const runPrimaryAction = async () => {
+    if (!activeSession?.appointmentId || actionLoading) return;
+
+    if (phase === 'in_progress') {
+      openActiveWork();
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      if (phase === 'paused') {
+        await techApi.resumeAppointment(activeSession.appointmentId);
+        toast.success(t(lang, 'resumeSuccess'));
+      } else if (phase === 'claimed') {
+        await techVisitApi.travel(activeSession.appointmentId);
+        toast.success(visitT(lang, 'enRoute'));
+      } else if (phase === 'en_route') {
+        const location = await collectTechLocation(lang);
+        await techVisitApi.arrive(activeSession.appointmentId, location);
+        toast.success(visitT(lang, 'arrived'));
+      } else if (phase === 'arrived') {
+        const location = await collectTechLocation(lang);
+        await techVisitApi.startWork(activeSession.appointmentId, location);
+        toast.success(visitT(lang, 'workInProgress'));
+      }
+
+      await refreshActive();
+      if (phase === 'arrived') openActiveWork();
+    } catch (error: any) {
+      if (phase === 'paused') {
+        toast.error(lang === 'ar' && error?.message ? error.message : t(lang, 'resumeError'));
+      } else {
+        toast.error(lang === 'ar' && error?.message ? error.message : visitT(lang, 'phaseActionFailed'));
+      }
+      await refreshActive();
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const phaseTitle = (() => {
+    switch (phase) {
+      case 'claimed': return visitT(lang, 'claimed');
+      case 'en_route': return visitT(lang, 'enRoute');
+      case 'arrived': return visitT(lang, 'arrived');
+      case 'in_progress': return visitT(lang, 'workInProgress');
+      case 'paused': return t(lang, 'appointmentPaused');
+      default: return t(lang, 'appointmentInProgress');
+    }
+  })();
+
+  const primaryLabel = (() => {
+    switch (phase) {
+      case 'claimed': return visitT(lang, 'startTravel');
+      case 'en_route': return visitT(lang, 'markArrived');
+      case 'arrived': return visitT(lang, 'startWork');
+      case 'paused': return t(lang, 'resume');
+      default: return visitT(lang, 'continueWork');
+    }
+  })();
+
+  const phaseIcon = (() => {
+    switch (phase) {
+      case 'claimed': return <Play size={19} />;
+      case 'en_route': return <Navigation size={19} />;
+      case 'arrived': return <MapPin size={19} />;
+      case 'in_progress': return <Timer size={19} />;
+      case 'paused': return <Pause size={19} />;
+      default: return <Briefcase size={19} />;
+    }
+  })();
+
+  const buttonIcon = (() => {
+    if (actionLoading) return <Loader2 size={16} className="animate-spin" />;
+    switch (phase) {
+      case 'claimed': return <Navigation size={16} />;
+      case 'en_route': return <MapPin size={16} />;
+      case 'arrived': return <Briefcase size={16} />;
+      case 'paused': return <Play size={16} />;
+      default: return <Play size={16} />;
+    }
+  })();
 
   return (
     <>
@@ -137,12 +205,12 @@ export default function TechAppWithRecovery() {
               color: isPaused ? '#fbbf24' : '#60a5fa',
               flex: '0 0 auto',
             }}>
-              {isPaused ? <Pause size={19} /> : <Timer size={19} />}
+              {phaseIcon}
             </div>
 
             <button
               type="button"
-              onClick={openActiveWork}
+              onClick={() => navigate('/tech/appointments')}
               style={{
                 minWidth: 0,
                 flex: 1,
@@ -155,9 +223,7 @@ export default function TechAppWithRecovery() {
               }}
             >
               <div style={{ fontSize: 12, color: isPaused ? '#fcd34d' : '#93c5fd', fontWeight: 800 }}>
-                {isPaused
-                  ? t(lang, 'appointmentPaused')
-                  : t(lang, 'appointmentInProgress')}
+                {phaseTitle}
               </div>
               <div style={{ fontWeight: 900, marginTop: 2 }}>
                 {t(lang, 'villa')} {unitNumber} · {appointment.time || '--:--'}
@@ -167,32 +233,21 @@ export default function TechAppWithRecovery() {
               </div>
             </button>
 
-            {isPaused ? (
-              <button
-                onClick={resumeActive}
-                disabled={resuming}
-                className="tech-btn tech-btn-success"
-                style={{ minHeight: 42, padding: '0 13px', flex: '0 0 auto' }}
-              >
-                {resuming ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-                {t(lang, 'resume')}
-              </button>
-            ) : (
-              <button
-                onClick={openActiveWork}
-                className="tech-btn"
-                style={{
-                  minHeight: 42,
-                  padding: '0 13px',
-                  flex: '0 0 auto',
-                  background: '#2563eb',
-                  color: '#fff',
-                }}
-              >
-                <Play size={16} />
-                {t(lang, 'continueWork')}
-              </button>
-            )}
+            <button
+              onClick={runPrimaryAction}
+              disabled={actionLoading}
+              className={isPaused ? 'tech-btn tech-btn-success' : 'tech-btn'}
+              style={{
+                minHeight: 42,
+                padding: '0 13px',
+                flex: '0 0 auto',
+                background: isPaused ? undefined : '#2563eb',
+                color: '#fff',
+              }}
+            >
+              {buttonIcon}
+              {primaryLabel}
+            </button>
           </div>
         </div>
       )}
