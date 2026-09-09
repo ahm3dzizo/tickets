@@ -15,6 +15,131 @@ registerRoute(
   new NetworkFirst({ cacheName: 'firestore-cache', networkTimeoutSeconds: 10 })
 );
 
+// ── Technician PWA hot-read cache ─────────────────────────────────────────────
+// The tech app refreshes these endpoints frequently. Keep a short, auth-scoped
+// copy in the service worker so most polls do not cross the network at all. A
+// stale copy can also keep the field UI readable during a temporary outage.
+const TECH_RUNTIME_CACHE = 'retal-tech-runtime-v1';
+const TECH_FRESH_MS = 60 * 1000;
+const TECH_MAX_STALE_MS = 24 * 60 * 60 * 1000;
+const TECH_READ_PATHS = new Set([
+  '/api/tech/appointments',
+  '/api/tech/me/active-session',
+  '/api/shift/today',
+]);
+
+function simpleHash(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function techAuthScope(request) {
+  const auth = request.headers.get('authorization') || '';
+  return auth ? simpleHash(auth) : 'anonymous';
+}
+
+function techCacheRequest(request) {
+  const url = new URL(request.url);
+  const key = new URL(self.location.origin);
+  key.pathname = `/__tech-runtime-cache__${url.pathname}`;
+  for (const [name, value] of url.searchParams.entries()) key.searchParams.append(name, value);
+  key.searchParams.set('__scope', techAuthScope(request));
+  return new Request(key.toString(), { method: 'GET' });
+}
+
+async function storeTechResponse(cache, key, response) {
+  const copy = response.clone();
+  const body = await copy.blob();
+  const headers = new Headers(copy.headers);
+  headers.set('X-Tech-Cached-At', String(Date.now()));
+  await cache.put(key, new Response(body, {
+    status: copy.status,
+    statusText: copy.statusText,
+    headers,
+  }));
+}
+
+async function techReadHandler({ request }) {
+  const cache = await caches.open(TECH_RUNTIME_CACHE);
+  const key = techCacheRequest(request);
+  const cached = await cache.match(key);
+  const cachedAt = Number(cached?.headers.get('X-Tech-Cached-At') || 0);
+  const age = cachedAt > 0 ? Date.now() - cachedAt : Number.POSITIVE_INFINITY;
+
+  if (cached && age <= TECH_FRESH_MS) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(request);
+
+    // Never allow an old cached payload to hide a revoked/expired technician
+    // session. Delete the scoped copy and surface the auth failure immediately.
+    if (response.status === 401 || response.status === 403) {
+      await cache.delete(key);
+      return response;
+    }
+
+    if (response.ok) {
+      await storeTechResponse(cache, key, response);
+      return response;
+    }
+
+    if (cached && age <= TECH_MAX_STALE_MS && response.status >= 500) return cached;
+    return response;
+  } catch (error) {
+    if (cached && age <= TECH_MAX_STALE_MS) return cached;
+    throw error;
+  }
+}
+
+registerRoute(
+  ({ url, request }) =>
+    request.method === 'GET' &&
+    url.origin === self.location.origin &&
+    TECH_READ_PATHS.has(url.pathname),
+  techReadHandler,
+);
+
+async function invalidateTechRuntimeScope(request) {
+  const scope = techAuthScope(request);
+  if (scope === 'anonymous') return;
+  const cache = await caches.open(TECH_RUNTIME_CACHE);
+  const keys = await cache.keys();
+  await Promise.all(keys.map(key => {
+    try {
+      const url = new URL(key.url);
+      return url.searchParams.get('__scope') === scope ? cache.delete(key) : Promise.resolve(false);
+    } catch {
+      return Promise.resolve(false);
+    }
+  }));
+}
+
+// Own technician mutations invalidate the local PWA copies immediately. Admin /
+// supervisor changes are still picked up on the next 60-second revalidation.
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  const relevant =
+    url.pathname.startsWith('/api/tech/') ||
+    url.pathname.startsWith('/api/shift/');
+  if (!relevant) return;
+
+  event.respondWith((async () => {
+    const response = await fetch(request);
+    if (response.ok) await invalidateTechRuntimeScope(request);
+    return response;
+  })());
+});
+
 // ── Push debug helpers ────────────────────────────────────────────────────────
 const PUSH_DEBUG_CACHE = 'knot-push-debug-v1';
 const PUSH_DEBUG_URL = '/__push-debug__/latest';
