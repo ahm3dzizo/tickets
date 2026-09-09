@@ -33,25 +33,32 @@ export default function TechAppWithRecovery() {
       setActiveSession(session);
       setLang(getStoredTechLanguage());
     } catch (error: any) {
-      // An expired/disabled session is handled by TechApp's auth check. Recovery
-      // should never replace the entire technician UI with a false empty state.
+      // Keep the last known session if the network is temporarily unavailable.
+      // The service worker may also provide a scoped stale fallback.
       console.warn('[TechRecovery] active session lookup failed:', error);
     }
   }, []);
 
   useEffect(() => {
     void refreshActive();
-    const timer = window.setInterval(() => void refreshActive(), 30_000);
-    const onFinished = () => void refreshActive();
-    const onVisibility = () => {
+
+    const refreshIfVisible = () => {
       if (document.visibilityState === 'visible') void refreshActive();
     };
+    const onFinished = () => void refreshActive();
+
+    // A two-minute heartbeat is only a safety net. Mutations refresh explicitly,
+    // returning to the app refreshes immediately, and hidden PWAs do not poll.
+    const timer = window.setInterval(refreshIfVisible, 120_000);
     window.addEventListener('tech-active-appointment-finished', onFinished);
-    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('online', refreshIfVisible);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+
     return () => {
       window.clearInterval(timer);
       window.removeEventListener('tech-active-appointment-finished', onFinished);
-      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('online', refreshIfVisible);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
     };
   }, [refreshActive]);
 
