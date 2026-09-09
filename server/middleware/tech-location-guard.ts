@@ -12,14 +12,12 @@ function validCoordinate(value: unknown, min: number, max: number): number | nul
 }
 
 /**
- * Guard the technician actions where the recorded field location matters.
+ * Guard technician actions where field location matters.
  *
- * Attendance clock-in keeps its stricter multi-sample 200m office geofence.
- * Appointment claim/finish and shift clock-out happen in the field, whose unit
- * coordinates are not yet stored for every villa, so for now we require a real,
- * reasonably accurate GPS fix instead of pretending we can enforce a unit
- * geofence. Once Unit coordinates are available this is where proximity checks
- * should be added.
+ * Clock-in keeps its stricter multi-sample 200m project-office geofence.
+ * Claim, arrival, work-start, finish and clock-out require a real, reasonably
+ * accurate GPS fix. Unit coordinates are not yet populated consistently, so we
+ * intentionally do not invent a villa geofence until that data exists.
  */
 export function requireTechOperationalLocation(
   req: Request,
@@ -32,11 +30,11 @@ export function requireTechOperationalLocation(
   }
 
   const path = requestPath(req);
-  const isClaim = /^\/api\/tech\/appointments\/[^/]+\/claim$/.test(path);
-  const isFinish = /^\/api\/tech\/appointments\/[^/]+\/finish$/.test(path);
-  const isClockOut = path === '/api/shift/clock-out';
+  const requiresLocation =
+    /^\/api\/tech\/appointments\/[^/]+\/(claim|arrive|start-work|finish)$/.test(path) ||
+    path === '/api/shift/clock-out';
 
-  if (!isClaim && !isFinish && !isClockOut) {
+  if (!requiresLocation) {
     next();
     return;
   }
