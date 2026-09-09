@@ -1,69 +1,100 @@
-import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, Timer } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Loader2, Pause, Play, Timer } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
 import { techApi } from '@/lib/api';
 import TechApp from './TechApp';
 
+function getStoredTechLanguage(): TechLang {
+  try {
+    const storedProfile = localStorage.getItem('tech_profile');
+    if (storedProfile) {
+      const profile = JSON.parse(storedProfile);
+      if (['ar', 'en', 'hi', 'ur'].includes(profile?.language)) return profile.language;
+    }
+    const storedLanguage = localStorage.getItem('tech_language');
+    if (storedLanguage && ['ar', 'en', 'hi', 'ur'].includes(storedLanguage)) {
+      return storedLanguage as TechLang;
+    }
+  } catch {}
+  return 'ar';
+}
+
 export default function TechAppWithRecovery() {
-  const { techProfile } = useTechAuth() as any;
-  const lang = (techProfile?.language || 'ar') as TechLang;
-  const isRtl = lang === 'ar' || lang === 'ur';
+  const navigate = useNavigate();
   const [activeSession, setActiveSession] = useState<any>(null);
-  const [finishing, setFinishing] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [lang, setLang] = useState<TechLang>(getStoredTechLanguage);
 
   const refreshActive = useCallback(async () => {
     try {
-      setActiveSession(await techApi.getActiveSession());
-    } catch (error) {
+      const session = await techApi.getActiveSession();
+      setActiveSession(session);
+      setLang(getStoredTechLanguage());
+    } catch (error: any) {
+      // An expired/disabled session is handled by TechApp's auth check. Recovery
+      // should never replace the entire technician UI with a false empty state.
       console.warn('[TechRecovery] active session lookup failed:', error);
     }
   }, []);
 
   useEffect(() => {
     void refreshActive();
-    const timer = window.setInterval(() => void refreshActive(), 15_000);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(() => void refreshActive(), 30_000);
+    const onFinished = () => void refreshActive();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshActive();
+    };
+    window.addEventListener('tech-active-appointment-finished', onFinished);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('tech-active-appointment-finished', onFinished);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [refreshActive]);
 
-  const finishActive = async () => {
-    if (!activeSession?.appointmentId || finishing) return;
-    if (!window.confirm(t(lang, 'finishAppointmentConfirm'))) return;
+  const appointment = activeSession?.appointment;
+  const isPaused = activeSession?.status === 'paused';
+  const isRtl = lang === 'ar' || lang === 'ur';
 
-    setFinishing(true);
+  const unitNumber = useMemo(() => (
+    appointment?.unit?.unitNumber
+      || appointment?.tickets?.find((ticket: any) => ticket?.unit?.unitNumber)?.unit?.unitNumber
+      || '---'
+  ), [appointment]);
+
+  const firstActionableTicketId = useMemo(() => {
+    const tickets = appointment?.tickets || [];
+    const unresolved = tickets.find((ticket: any) =>
+      ['open', 'pending', 'in_progress', 'note'].includes(String(ticket?.status || '').toLowerCase())
+    );
+    return unresolved?.id || tickets[0]?.id || null;
+  }, [appointment]);
+
+  const resumeActive = async () => {
+    if (!activeSession?.appointmentId || resuming) return;
+    setResuming(true);
     try {
-      let lat: number | undefined;
-      let lng: number | undefined;
-      if (navigator.geolocation) {
-        try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              timeout: 5_000,
-              enableHighAccuracy: true,
-            });
-          });
-          lat = pos.coords.latitude;
-          lng = pos.coords.longitude;
-        } catch {}
-      }
-
-      await techApi.finishAppointment(activeSession.appointmentId, { lat, lng });
-      toast.success(t(lang, 'finishAppointmentSuccess'));
-      setActiveSession(null);
-      window.dispatchEvent(new Event('tech-active-appointment-finished'));
+      await techApi.resumeAppointment(activeSession.appointmentId);
+      toast.success(t(lang, 'resumeSuccess'));
+      await refreshActive();
     } catch (error: any) {
-      toast.error(lang === 'ar' && error?.message ? error.message : t(lang, 'finishAppointmentError'));
+      toast.error(lang === 'ar' && error?.message ? error.message : t(lang, 'resumeError'));
       await refreshActive();
     } finally {
-      setFinishing(false);
+      setResuming(false);
     }
   };
 
-  const appointment = activeSession?.appointment;
-  const unitNumber = appointment?.unit?.unitNumber
-    || appointment?.tickets?.find((ticket: any) => ticket?.unit?.unitNumber)?.unit?.unitNumber
-    || '---';
+  const openActiveWork = () => {
+    if (firstActionableTicketId) {
+      navigate(`/tech/ticket/${firstActionableTicketId}`);
+      return;
+    }
+    navigate('/tech/appointments');
+  };
 
   return (
     <>
@@ -80,7 +111,9 @@ export default function TechAppWithRecovery() {
             borderRadius: 18,
             padding: 14,
             background: 'rgba(9, 25, 45, 0.98)',
-            border: '1px solid rgba(59,130,246,0.45)',
+            border: isPaused
+              ? '1px solid rgba(245,158,11,0.5)'
+              : '1px solid rgba(59,130,246,0.45)',
             boxShadow: '0 14px 40px rgba(0,0,0,0.35)',
             color: '#f8fafc',
           }}
@@ -93,15 +126,31 @@ export default function TechAppWithRecovery() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'rgba(59,130,246,0.16)',
-              color: '#60a5fa',
+              background: isPaused ? 'rgba(245,158,11,0.16)' : 'rgba(59,130,246,0.16)',
+              color: isPaused ? '#fbbf24' : '#60a5fa',
               flex: '0 0 auto',
             }}>
-              <Timer size={19} />
+              {isPaused ? <Pause size={19} /> : <Timer size={19} />}
             </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 12, color: '#93c5fd', fontWeight: 800 }}>
-                {lang === 'ar' ? 'الموعد الجاري الآن' : lang === 'ur' ? 'موجودہ جاری اپائنٹمنٹ' : lang === 'hi' ? 'अभी चल रही अपॉइंटमेंट' : 'Active appointment'}
+
+            <button
+              type="button"
+              onClick={openActiveWork}
+              style={{
+                minWidth: 0,
+                flex: 1,
+                border: 0,
+                background: 'transparent',
+                color: 'inherit',
+                textAlign: 'start',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              <div style={{ fontSize: 12, color: isPaused ? '#fcd34d' : '#93c5fd', fontWeight: 800 }}>
+                {isPaused
+                  ? t(lang, 'appointmentPaused')
+                  : t(lang, 'appointmentInProgress')}
               </div>
               <div style={{ fontWeight: 900, marginTop: 2 }}>
                 {t(lang, 'villa')} {unitNumber} · {appointment.time || '--:--'}
@@ -109,28 +158,34 @@ export default function TechAppWithRecovery() {
               <div style={{ fontSize: 11, opacity: 0.72, marginTop: 2 }}>
                 {appointment.date}
               </div>
-            </div>
-            <button
-              onClick={finishActive}
-              disabled={finishing}
-              style={{
-                minHeight: 42,
-                padding: '0 13px',
-                borderRadius: 12,
-                border: 0,
-                display: 'inline-flex',
-                gap: 7,
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 900,
-                background: '#dc2626',
-                color: '#fff',
-                cursor: finishing ? 'wait' : 'pointer',
-              }}
-            >
-              {finishing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-              {t(lang, 'finishAppointment')}
             </button>
+
+            {isPaused ? (
+              <button
+                onClick={resumeActive}
+                disabled={resuming}
+                className="tech-btn tech-btn-success"
+                style={{ minHeight: 42, padding: '0 13px', flex: '0 0 auto' }}
+              >
+                {resuming ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                {t(lang, 'resume')}
+              </button>
+            ) : (
+              <button
+                onClick={openActiveWork}
+                className="tech-btn"
+                style={{
+                  minHeight: 42,
+                  padding: '0 13px',
+                  flex: '0 0 auto',
+                  background: '#2563eb',
+                  color: '#fff',
+                }}
+              >
+                <Play size={16} />
+                {t(lang, 'continueWork')}
+              </button>
+            )}
           </div>
         </div>
       )}
