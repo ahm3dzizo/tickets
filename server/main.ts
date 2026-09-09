@@ -31,7 +31,7 @@ import ocrRoutes from "./routes/ocr.js";
 import importExcelRoutes from "./routes/import-excel.js";
 import contractorRoutes from "./routes/contractors.js";
 import warrantiesRoutes from "./routes/warranties.js";
-import techAuthRoutes from "./routes/tech-auth.js";
+import techAuthRoutes, { requireTechAuth } from "./routes/tech-auth.js";
 import techTicketActionRoutes from "./routes/tech-ticket-actions.js";
 import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
@@ -91,8 +91,6 @@ async function startServer() {
   });
   app.use("/api/", globalLimiter);
   app.use(express.json({ limit: "10mb" }));
-  app.use("/api/", requireTechOperationalLocation);
-  app.use("/api/", auditTechSessionLifecycle);
   app.use("/api/", invalidateTicketCacheAfterRelevantMutation);
   app.use("/api/", invalidateTechReadCacheAfterMutation);
 
@@ -130,6 +128,25 @@ async function startServer() {
   // technician authorization. Successful payloads are then cached per technician
   // and invalidated by any ticket/appointment mutation.
   app.get("/api/tech/tickets/:id", requireCachedTechReadAuth, techReadResponseCache);
+
+  // Operational write preflight. Authentication/business guards run BEFORE GPS
+  // validation or visit-history reads, so unauthenticated requests always fail as
+  // auth failures and can never trigger appointment/session database work.
+  const techVisitActionPaths = [
+    "/api/tech/appointments/:appointmentId/claim",
+    "/api/tech/appointments/:appointmentId/finish",
+    "/api/tech/appointments/:appointmentId/cancel-claim",
+    "/api/tech/appointments/:appointmentId/pause",
+    "/api/tech/appointments/:appointmentId/resume",
+    "/api/tech/appointments/:appointmentId/postpone",
+  ];
+  app.post(
+    techVisitActionPaths,
+    requireTechAuth,
+    requireTechOperationalLocation,
+    auditTechSessionLifecycle,
+  );
+  app.post("/api/shift/clock-out", requireTechAuth, requireTechOperationalLocation);
 
   app.use("/api/tech", techAuthRoutes);
   // These explicit technician actions override the legacy attendance handlers
