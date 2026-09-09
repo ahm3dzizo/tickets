@@ -126,6 +126,10 @@ async function startServer() {
   );
   app.get("/api/tech/me/active-session", requireCachedTechReadAuth, techReadResponseCache);
   app.get("/api/shift/today", requireCachedTechReadAuth, techReadResponseCache);
+  // The first ticket-detail miss still passes through the underlying full
+  // technician authorization. Successful payloads are then cached per technician
+  // and invalidated by any ticket/appointment mutation.
+  app.get("/api/tech/tickets/:id", requireCachedTechReadAuth, techReadResponseCache);
 
   app.use("/api/tech", techAuthRoutes);
   // These explicit technician actions override the legacy attendance handlers
