@@ -32,6 +32,7 @@ import importExcelRoutes from "./routes/import-excel.js";
 import contractorRoutes from "./routes/contractors.js";
 import warrantiesRoutes from "./routes/warranties.js";
 import techAuthRoutes from "./routes/tech-auth.js";
+import techTicketActionRoutes from "./routes/tech-ticket-actions.js";
 import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
 import pushRoutes from "./routes/push.js";
@@ -102,6 +103,9 @@ async function startServer() {
   app.use("/api/tickets", ticketRoutes);
   app.use("/api/technicians", technicianRoutes);
   app.use("/api/tech", techAuthRoutes);
+  // These explicit technician actions override the legacy attendance handlers
+  // so ticket outcomes and appointment completion stay deliberate and audited.
+  app.use("/api/tech", techTicketActionRoutes);
   app.use("/api", attendanceRoutes);
   app.use("/api", translationRoutes);
   app.use("/api/classify", classifyRoutes);
