@@ -35,6 +35,7 @@ import techAuthRoutes, { requireTechAuth } from "./routes/tech-auth.js";
 import techVisitReadRoutes from "./routes/tech-visit-read.js";
 import techVisitPhaseRoutes from "./routes/tech-visit-phases.js";
 import techVisitSupervisorRoutes from "./routes/tech-visit-supervisor.js";
+import techShiftReadRoutes from "./routes/tech-shift-read.js";
 import techTicketActionRoutes from "./routes/tech-ticket-actions.js";
 import attendanceRoutes from "./routes/attendance.js";
 import translationRoutes from "./routes/translation.js";
@@ -153,6 +154,9 @@ async function startServer() {
   app.use("/api/tech", techVisitPhaseRoutes);
   app.use("/api/tech", techAuthRoutes);
   app.use("/api/tech", techTicketActionRoutes);
+  // Hot shift read is already auth-cached above; this handler reuses that auth
+  // and calculates today's boundary explicitly in Asia/Riyadh.
+  app.use("/api", techShiftReadRoutes);
   // Phase-aware/scoped live attendance shadows the legacy live endpoint below.
   app.use("/api", techVisitSupervisorRoutes);
   app.use("/api", attendanceRoutes);
