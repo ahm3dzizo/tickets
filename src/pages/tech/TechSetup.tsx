@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTechAuth } from '@/hooks/useTechAuth';
 import { TechLang, t } from '@/i18n/tech';
 import { translateTechTaxonomy } from '@/i18n/techTaxonomy';
-import { Eye, EyeOff, Loader2, Lock, Upload } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Loader2, Lock, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import './tech.css';
 
@@ -14,7 +14,6 @@ const LANGUAGES = [
   { code: 'ur', label: 'اردو' },
 ] as const;
 
-const SPECIALTIES = ['plumbing', 'electrical', 'hvac', 'carpentry', 'general'];
 const CLOTHING_SIZES = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 const SHOE_SIZES = Array.from({ length: 10 }, (_, i) => String(38 + i));
 const MAX_ID_PHOTO_BYTES = 4.5 * 1024 * 1024;
@@ -31,6 +30,13 @@ const CONFIRM_PIN_LABEL: Record<TechLang, string> = {
   en: 'Confirm new PIN',
   hi: 'नए PIN की पुष्टि करें',
   ur: 'نئے PIN کی تصدیق کریں',
+};
+
+const SPECIALTY_REQUIRED: Record<TechLang, string> = {
+  ar: 'لم يتم تعيين تخصص لك بعد. تواصل مع الإدارة لإضافة التخصص ثم أعد المحاولة.',
+  en: 'No specialty has been assigned yet. Ask management to assign one, then try again.',
+  hi: 'अभी कोई विशेषज्ञता निर्धारित नहीं की गई है। प्रबंधन से विशेषज्ञता निर्धारित करवाकर फिर प्रयास करें।',
+  ur: 'ابھی کوئی تخصص مقرر نہیں کیا گیا۔ انتظامیہ سے تخصص مقرر کروائیں پھر دوبارہ کوشش کریں۔',
 };
 
 export default function TechSetup() {
@@ -51,7 +57,6 @@ export default function TechSetup() {
     idNumber: '',
     employeeId: techProfile?.employeeId || '',
     experienceLevel: techProfile?.experienceLevel || '',
-    specialty: techProfile?.specialty || SPECIALTIES[0],
     clothingSize: techProfile?.clothingSize || CLOTHING_SIZES[2],
     shoeSize: techProfile?.shoeSize || SHOE_SIZES[4],
     preferredLang: storedLanguage,
@@ -61,7 +66,6 @@ export default function TechSetup() {
 
   const [idPhoto, setIdPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const specialtyLocked = Boolean(techProfile?.specialty);
 
   useEffect(() => {
     if (!token) navigate('/tech/login', { replace: true });
@@ -74,7 +78,6 @@ export default function TechSetup() {
       fullName: prev.fullName || techProfile.name || '',
       employeeId: prev.employeeId || techProfile.employeeId || '',
       experienceLevel: prev.experienceLevel || techProfile.experienceLevel || '',
-      specialty: techProfile.specialty || prev.specialty,
       clothingSize: techProfile.clothingSize || prev.clothingSize,
       shoeSize: techProfile.shoeSize || prev.shoeSize,
     }));
@@ -111,6 +114,10 @@ export default function TechSetup() {
       toast.error(t(lang, 'fillMandatory'));
       return;
     }
+    if (!techProfile?.specialty) {
+      toast.error(SPECIALTY_REQUIRED[lang]);
+      return;
+    }
     if (!idPhoto) {
       toast.error(t(lang, 'idPhotoRequired'));
       return;
@@ -130,31 +137,23 @@ export default function TechSetup() {
 
     setLoading(true);
     try {
-      const idPhotoUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(idPhoto);
-      });
+      const payload = new FormData();
+      payload.append('name', formData.fullName.trim());
+      payload.append('idNumber', formData.idNumber.trim());
+      payload.append('employeeId', formData.employeeId.trim());
+      if (formData.experienceLevel) payload.append('experienceLevel', String(formData.experienceLevel));
+      payload.append('clothingSize', formData.clothingSize);
+      payload.append('shoeSize', formData.shoeSize);
+      payload.append('language', formData.preferredLang);
+      payload.append('newPassword', formData.newPin);
+      payload.append('idPhoto', idPhoto, idPhoto.name);
 
       const res = await fetch('/api/tech/profile/complete', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          name: formData.fullName.trim(),
-          idNumber: formData.idNumber.trim(),
-          employeeId: formData.employeeId.trim(),
-          experienceLevel: formData.experienceLevel || null,
-          specialty: techProfile?.specialty || formData.specialty,
-          clothingSize: formData.clothingSize,
-          shoeSize: formData.shoeSize,
-          language: formData.preferredLang,
-          idPhotoUrl,
-          newPassword: formData.newPin,
-        }),
+        body: payload,
       });
 
       if (!res.ok) {
@@ -269,22 +268,19 @@ export default function TechSetup() {
               <label className="block text-sm text-[var(--tech-text-muted)] mb-1 px-1">
                 {t(lang, 'specialty')}
               </label>
-              <select
-                className="tech-input appearance-none"
-                value={formData.specialty}
-                disabled={specialtyLocked}
-                onChange={e => setFormData(prev => ({ ...prev, specialty: e.target.value }))}
-                style={{ backgroundImage: 'none', opacity: specialtyLocked ? 0.72 : 1 }}
-              >
-                {SPECIALTIES.map(s => (
-                  <option key={s} value={s}>{translateTechTaxonomy(s, lang)}</option>
-                ))}
-              </select>
-              {specialtyLocked && (
-                <div className="text-[11px] text-[var(--tech-text-muted)] mt-1 px-1">
-                  {lang === 'ar' ? 'التخصص محدد من الإدارة' : 'Specialty is assigned by management'}
+              {techProfile?.specialty ? (
+                <div className="tech-input flex items-center min-h-12 opacity-80 cursor-not-allowed">
+                  {translateTechTaxonomy(techProfile.specialty, lang)}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{SPECIALTY_REQUIRED[lang]}</span>
                 </div>
               )}
+              <div className="text-[11px] text-[var(--tech-text-muted)] mt-1 px-1">
+                {lang === 'ar' ? 'التخصص يتم تحديده من الإدارة فقط' : 'Specialty is assigned by management only'}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -404,7 +400,7 @@ export default function TechSetup() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !techProfile?.specialty}
             className="tech-btn tech-btn-success mt-6 text-lg"
           >
             {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : t(lang, 'saveProfile')}
