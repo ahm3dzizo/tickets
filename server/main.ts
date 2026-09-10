@@ -32,6 +32,7 @@ import importExcelRoutes from "./routes/import-excel.js";
 import contractorRoutes from "./routes/contractors.js";
 import warrantiesRoutes from "./routes/warranties.js";
 import techAuthRoutes, { requireTechAuth } from "./routes/tech-auth.js";
+import techProfileSecureRoutes from "./routes/tech-profile-secure.js";
 import techVisitReadRoutes from "./routes/tech-visit-read.js";
 import techVisitPhaseRoutes from "./routes/tech-visit-phases.js";
 import techVisitSupervisorRoutes from "./routes/tech-visit-supervisor.js";
@@ -154,6 +155,8 @@ async function startServer() {
 
   app.use("/api/tech", techVisitReadRoutes);
   app.use("/api/tech", techVisitPhaseRoutes);
+  // Secure multipart profile completion shadows the legacy base64 setup route.
+  app.use("/api/tech", techProfileSecureRoutes);
   app.use("/api/tech", techAuthRoutes);
   app.use("/api/tech", techTicketActionRoutes);
   // Hot shift read is already auth-cached above; this handler reuses that auth
