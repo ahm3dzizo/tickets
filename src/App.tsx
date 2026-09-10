@@ -33,6 +33,7 @@ import TechLogin from '@/pages/tech/TechLogin';
 import TechSetup from '@/pages/tech/TechSetup';
 import TechAppWithRecovery from '@/pages/tech/TechAppWithRecovery';
 import TechTicketDetail from '@/pages/tech/TechTicketDetail';
+import TechHistory from '@/pages/tech/TechHistory';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -127,6 +128,7 @@ function AppContent() {
           <Route path="/tech/login" element={<TechLogin />} />
           <Route path="/tech/setup" element={<TechSetup />} />
           <Route path="/tech/ticket/:id" element={<TechTicketDetail />} />
+          <Route path="/tech/history" element={<TechHistory />} />
           <Route path="/tech/appointments" element={<TechAppWithRecovery />} />
           <Route path="/tech/appointment/:id" element={<TechAppWithRecovery />} />
           <Route path="/tech" element={<TechAppWithRecovery />} />
