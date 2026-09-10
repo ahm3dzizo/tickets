@@ -1,8 +1,13 @@
 import { Router, type NextFunction, type Response } from 'express';
 import prisma from '../db.js';
 import { requireTechAuth, type TechAuthRequest } from './tech-auth.js';
+import techShiftWriteRoutes from './tech-shift-write.js';
 
 const router = Router();
+
+// Keep all technician shift writes ahead of the legacy attendance router.
+// This makes Riyadh-safe clock-in/out and the no-auto-finish policy authoritative.
+router.use(techShiftWriteRoutes);
 
 function requireTechAuthIfNeeded(req: TechAuthRequest, res: Response, next: NextFunction) {
   // main.ts hot-read preflight already verified the JWT/account and populated the
