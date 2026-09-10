@@ -66,9 +66,10 @@ export async function blockBreakWithActiveVisit(
 }
 
 /**
- * The state machine may only reach visit completion from in_progress. This keeps
- * a technician from jumping directly from claimed/en_route/arrived to finish,
- * even if all ticket rows happened to already carry non-blocking statuses.
+ * State-machine preflight used for visit actions mounted in main.ts.
+ * - Finish may only happen from in_progress.
+ * - Postpone requires an already claimed/open session owned by this technician;
+ *   merely seeing a supervisor-pool appointment is not enough to reschedule it.
  */
 export async function requireInProgressVisitForFinish(
   req: TechAuthRequest,
@@ -77,22 +78,48 @@ export async function requireInProgressVisitForFinish(
 ) {
   try {
     const path = String(req.originalUrl || req.url || '').split('?')[0];
-    if (!/^\/api\/tech\/appointments\/[^/]+\/finish$/.test(path)) {
+    const finishMatch = path.match(/^\/api\/tech\/appointments\/([^/]+)\/finish$/);
+    const postponeMatch = path.match(/^\/api\/tech\/appointments\/([^/]+)\/postpone$/);
+
+    if (!finishMatch && !postponeMatch) {
       next();
       return;
     }
 
-    const appointmentId = req.params.appointmentId;
+    const appointmentId = req.params.appointmentId || finishMatch?.[1] || postponeMatch?.[1];
     const session = await prisma.appointmentWorkSession.findUnique({
       where: { appointmentId },
       select: { technicianId: true, status: true },
     });
 
-    if (!session || session.technicianId !== req.technicianId) {
+    if (!session) {
+      res.status(409).json({
+        code: 'APPOINTMENT_NOT_CLAIMED',
+        error: postponeMatch
+          ? 'يجب استلام الموعد أولاً قبل تأجيله.'
+          : 'لم يتم استلام هذا الموعد بعد.',
+      });
+      return;
+    }
+
+    if (session.technicianId !== req.technicianId) {
       res.status(403).json({
         code: 'APPOINTMENT_SESSION_NOT_OWNED',
         error: 'جلسة هذا الموعد لا تخص هذا الفني.',
       });
+      return;
+    }
+
+    if (postponeMatch) {
+      if (!OPEN_VISIT_PHASES.includes(session.status)) {
+        res.status(409).json({
+          code: 'INVALID_VISIT_PHASE',
+          error: 'لا يمكن تأجيل جلسة منتهية أو ملغاة.',
+          currentPhase: session.status,
+        });
+        return;
+      }
+      next();
       return;
     }
 
@@ -108,7 +135,7 @@ export async function requireInProgressVisitForFinish(
 
     next();
   } catch (error) {
-    console.error('[tech-visit-shift-guard] finish phase check failed:', error);
+    console.error('[tech-visit-shift-guard] visit phase check failed:', error);
     res.status(500).json({ error: 'تعذر التحقق من مرحلة الموعد.' });
   }
 }
