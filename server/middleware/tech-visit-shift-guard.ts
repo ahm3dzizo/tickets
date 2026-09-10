@@ -3,6 +3,7 @@ import prisma from '../db.js';
 import type { TechAuthRequest } from '../routes/tech-auth.js';
 
 const OPEN_VISIT_PHASES = ['claimed', 'en_route', 'arrived', 'in_progress', 'paused'];
+const PRE_WORK_PHASES = ['claimed', 'en_route', 'arrived'];
 const BREAK_BLOCKING_PHASES = ['claimed', 'en_route', 'arrived', 'in_progress'];
 
 export async function blockClockOutWithOpenVisit(
@@ -70,6 +71,8 @@ export async function blockBreakWithActiveVisit(
  * - Finish may only happen from in_progress.
  * - Postpone requires an already claimed/open session owned by this technician;
  *   merely seeing a supervisor-pool appointment is not enough to reschedule it.
+ * - Cancel-claim is only for mistakes before maintenance starts. Once work has
+ *   started the visit must be paused, postponed, or finished with outcomes.
  */
 export async function requireInProgressVisitForFinish(
   req: TechAuthRequest,
@@ -80,13 +83,14 @@ export async function requireInProgressVisitForFinish(
     const path = String(req.originalUrl || req.url || '').split('?')[0];
     const finishMatch = path.match(/^\/api\/tech\/appointments\/([^/]+)\/finish$/);
     const postponeMatch = path.match(/^\/api\/tech\/appointments\/([^/]+)\/postpone$/);
+    const cancelMatch = path.match(/^\/api\/tech\/appointments\/([^/]+)\/cancel-claim$/);
 
-    if (!finishMatch && !postponeMatch) {
+    if (!finishMatch && !postponeMatch && !cancelMatch) {
       next();
       return;
     }
 
-    const appointmentId = req.params.appointmentId || finishMatch?.[1] || postponeMatch?.[1];
+    const appointmentId = req.params.appointmentId || finishMatch?.[1] || postponeMatch?.[1] || cancelMatch?.[1];
     const session = await prisma.appointmentWorkSession.findUnique({
       where: { appointmentId },
       select: { technicianId: true, status: true },
@@ -97,7 +101,9 @@ export async function requireInProgressVisitForFinish(
         code: 'APPOINTMENT_NOT_CLAIMED',
         error: postponeMatch
           ? 'يجب استلام الموعد أولاً قبل تأجيله.'
-          : 'لم يتم استلام هذا الموعد بعد.',
+          : cancelMatch
+            ? 'هذا الموعد غير مستلم حالياً.'
+            : 'لم يتم استلام هذا الموعد بعد.',
       });
       return;
     }
@@ -107,6 +113,19 @@ export async function requireInProgressVisitForFinish(
         code: 'APPOINTMENT_SESSION_NOT_OWNED',
         error: 'جلسة هذا الموعد لا تخص هذا الفني.',
       });
+      return;
+    }
+
+    if (cancelMatch) {
+      if (!PRE_WORK_PHASES.includes(session.status)) {
+        res.status(409).json({
+          code: 'CANCEL_CLAIM_AFTER_WORK_NOT_ALLOWED',
+          error: 'لا يمكن إلغاء الاستلام بعد بدء العمل. استخدم الإيقاف أو التأجيل أو إنهاء الموعد.',
+          currentPhase: session.status,
+        });
+        return;
+      }
+      next();
       return;
     }
 
