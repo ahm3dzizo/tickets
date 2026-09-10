@@ -45,6 +45,7 @@ import warehouseRoutes from "./routes/warehouse.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { requireTicketMutationAccess } from "./middleware/ticket-access.js";
+import { protectOpenTechVisitFromLegacyAutoFinish } from "./middleware/protect-tech-visit-completion.js";
 import {
   invalidateTicketCacheAfterRelevantMutation,
   ticketListResponseCache,
@@ -84,8 +85,8 @@ async function startServer() {
   }));
 
   const corsOptions = {
-    origin: process.env.NODE_ENV === "production" 
-      ? (process.env.FRONTEND_URL || false) 
+    origin: process.env.NODE_ENV === "production"
+      ? (process.env.FRONTEND_URL || false)
       : "*",
   };
   app.use(cors(corsOptions));
@@ -110,6 +111,7 @@ async function startServer() {
   app.use("/api/clients", clientRoutes);
   app.use("/api/ticket-attachments", ticketAttachmentRoutes);
   app.use("/api/tickets", requireAuth, ticketListResponseCache);
+  app.use("/api/tickets", protectOpenTechVisitFromLegacyAutoFinish);
   app.put("/api/tickets/:id", requireAuth, requireTicketMutationAccess);
   app.use("/api/tickets", ticketRoutes);
   app.use("/api/technicians", technicianRoutes);
