@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Briefcase, Loader2, MapPin, Navigation, Pause, Play, Timer } from 'lucide-react';
+import { Briefcase, History, Loader2, MapPin, Navigation, Pause, Play, Timer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TechLang, t } from '@/i18n/tech';
@@ -22,6 +22,13 @@ function getStoredTechLanguage(): TechLang {
     }
   } catch {}
   return 'ar';
+}
+
+function historyLabel(lang: TechLang): string {
+  if (lang === 'en') return 'History';
+  if (lang === 'hi') return 'इतिहास';
+  if (lang === 'ur') return 'ریکارڈ';
+  return 'السجل';
 }
 
 export default function TechAppWithRecovery() {
@@ -174,6 +181,36 @@ export default function TechAppWithRecovery() {
   return (
     <>
       <TechApp />
+
+      {!activeSession && (
+        <button
+          type="button"
+          onClick={() => navigate('/tech/history')}
+          aria-label={historyLabel(lang)}
+          style={{
+            position: 'fixed',
+            insetInlineEnd: 14,
+            bottom: 'calc(82px + env(safe-area-inset-bottom, 0px))',
+            zIndex: 65,
+            minHeight: 40,
+            borderRadius: 999,
+            padding: '0 13px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 7,
+            border: '1px solid var(--tech-border, rgba(100,116,139,0.25))',
+            background: 'var(--tech-card, rgba(255,255,255,0.96))',
+            color: 'var(--tech-text, #0f172a)',
+            boxShadow: '0 8px 22px rgba(15,23,42,0.15)',
+            fontSize: 12,
+            fontWeight: 850,
+          }}
+        >
+          <History size={15} />
+          {historyLabel(lang)}
+        </button>
+      )}
+
       {activeSession && appointment && (
         <div
           dir={isRtl ? 'rtl' : 'ltr'}
