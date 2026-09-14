@@ -6,48 +6,106 @@ const router = Router();
 const BLOCKING_PHASES = ['claimed', 'en_route', 'arrived', 'in_progress'];
 const OPEN_PHASES = [...BLOCKING_PHASES, 'paused'];
 
+async function reconcileExternallyClosedSessions(technicianId: string) {
+  const staleSessions = await prisma.appointmentWorkSession.findMany({
+    where: {
+      technicianId,
+      status: { in: OPEN_PHASES },
+      appointment: { status: { in: ['completed', 'cancelled'] } },
+    },
+    select: {
+      id: true,
+      status: true,
+      completionNotes: true,
+      appointment: { select: { status: true, updatedAt: true } },
+    },
+  });
+
+  for (const session of staleSessions) {
+    const cancelled = session.appointment.status === 'cancelled';
+    const note = cancelled
+      ? 'أُلغي الموعد من المشرف أثناء جلسة الفني.'
+      : 'أغلق المشرف الموعد — بانتظار الفني لتسجيل مدة العمل الفعلية.';
+
+    await prisma.appointmentWorkSession.updateMany({
+      where: { id: session.id, status: { in: OPEN_PHASES } },
+      data: {
+        status: cancelled ? 'cancelled' : 'awaiting_duration',
+        finishedAt: session.appointment.updatedAt || new Date(),
+        pausedAt: null,
+        completionNotes: session.completionNotes
+          ? `${session.completionNotes}\n${note}`
+          : note,
+      },
+    });
+  }
+}
+
 // Current visit recovery, including travel/arrival phases and paused work.
+// If the supervisor already closed an appointment, the session is no longer
+// considered active; instead we return it as awaiting_duration so the technician
+// can record the real work time without blocking today's appointments.
 router.get('/me/active-session', requireTechAuth, async (req: TechAuthRequest, res) => {
   try {
-    const session = await prisma.appointmentWorkSession.findFirst({
-      where: {
-        technicianId: req.technicianId!,
-        status: { in: OPEN_PHASES },
-      },
-      orderBy: { updatedAt: 'desc' },
-      include: {
-        appointment: {
-          include: {
-            unit: { include: { block: true } },
-            client: true,
-            project: {
-              select: {
-                id: true,
-                name: true,
-                officeLat: true,
-                officeLng: true,
-                officeAddress: true,
-                googleMapsUrl: true,
-              },
+    const technicianId = req.technicianId!;
+    await reconcileExternallyClosedSessions(technicianId);
+
+    const include = {
+      appointment: {
+        include: {
+          unit: { include: { block: true } },
+          client: true,
+          project: {
+            select: {
+              id: true,
+              name: true,
+              officeLat: true,
+              officeLng: true,
+              officeAddress: true,
+              googleMapsUrl: true,
             },
-            tickets: {
-              select: {
-                id: true,
-                ticketId: true,
-                description: true,
-                status: true,
-                type: true,
-                detectedTypes: true,
-                priority: true,
-                unit: { select: { unitNumber: true } },
-                client: { select: { name: true, phone: true } },
-              },
+          },
+          tickets: {
+            select: {
+              id: true,
+              ticketId: true,
+              description: true,
+              status: true,
+              type: true,
+              detectedTypes: true,
+              priority: true,
+              unit: { select: { unitNumber: true } },
+              client: { select: { name: true, phone: true } },
             },
           },
         },
       },
+    } as const;
+
+    const activeSession = await prisma.appointmentWorkSession.findFirst({
+      where: {
+        technicianId,
+        status: { in: OPEN_PHASES },
+      },
+      orderBy: { updatedAt: 'desc' },
+      include,
     });
-    res.json(session || null);
+
+    if (activeSession) {
+      res.json(activeSession);
+      return;
+    }
+
+    const pendingDuration = await prisma.appointmentWorkSession.findFirst({
+      where: {
+        technicianId,
+        status: 'awaiting_duration',
+      },
+      orderBy: { updatedAt: 'desc' },
+      include,
+    });
+
+    res.json(pendingDuration || null);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -64,9 +122,12 @@ router.get('/appointments', requireTechAuth, async (req: TechAuthRequest, res) =
       return;
     }
 
+    await reconcileExternallyClosedSessions(technician.id);
+
     // Claimed/travelling/arrived/working visits block another claim. Paused work
     // preserves ownership but intentionally frees the technician to take another
-    // visit, matching the existing operational policy.
+    // visit, matching the existing operational policy. awaiting_duration never
+    // blocks a new visit because the supervisor has already ended that appointment.
     const activeSession = await prisma.appointmentWorkSession.findFirst({
       where: { technicianId: technician.id, status: { in: BLOCKING_PHASES } },
       select: { appointmentId: true, claimedAt: true, status: true },
