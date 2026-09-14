@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authApi, authStorage, usersApi } from '../lib/api';
+import '../lib/userProfilePhotoFix';
 import { User } from '../types';
 
 interface LoginResponse {
@@ -33,11 +34,34 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function normalizeUserProfile(profile: User | null | undefined): User | null {
+  if (!profile) return null;
+
+  const rawPhoto = typeof profile.photoURL === 'string' ? profile.photoURL.trim() : '';
+  // blob: URLs are tab-local object URLs. Older Settings code persisted them,
+  // which guarantees a broken image after the next reload. Hide that invalid
+  // value and fall back to initials until the user saves a real uploaded photo.
+  const photoURL = rawPhoto && !rawPhoto.startsWith('blob:') ? rawPhoto : undefined;
+
+  return { ...profile, photoURL };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [requiresProfileCompletion, setRequiresProfileCompletion] = useState(false);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
+
+  useEffect(() => {
+    const onProfileUpdated = (event: Event) => {
+      const next = normalizeUserProfile((event as CustomEvent<User>).detail);
+      if (!next?.uid) return;
+      setUser(current => current?.uid === next.uid ? next : current);
+    };
+
+    window.addEventListener('retal-user-profile-updated', onProfileUpdated);
+    return () => window.removeEventListener('retal-user-profile-updated', onProfileUpdated);
+  }, []);
 
   useEffect(() => {
     const bootstrapAuth = async () => {
@@ -52,8 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const profile = await usersApi.getMe();
-        setUser(profile as User);
-        
+        setUser(normalizeUserProfile(profile as User));
         setRequiresProfileCompletion(profile.profileCompleted === false);
       } catch {
         authStorage.clearToken();
@@ -72,8 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!authStorage.getToken()) return;
     try {
       const profile = await usersApi.getMe();
-      setUser(profile as User);
-      
+      setUser(normalizeUserProfile(profile as User));
       setRequiresProfileCompletion(profile.profileCompleted === false);
     } catch {
       // keep existing user state
@@ -83,8 +105,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (identifier: string, pass: string) => {
     const result = await authApi.login(identifier, pass) as LoginResponse;
     authStorage.setToken(result.token);
-    setUser(result.user as User);
-    
+    setUser(normalizeUserProfile(result.user as User));
+
     const needsCompletion = result.requiresProfileCompletion ??
                            (result.user?.profileCompleted === false);
     setRequiresProfileCompletion(needsCompletion);
@@ -106,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         authStorage.setToken(result.token);
       }
 
-      setUser(result.user as User);
+      setUser(normalizeUserProfile(result.user as User));
       setRequiresProfileCompletion(false);
       setIsFirstLogin(false);
     } catch (error) {
