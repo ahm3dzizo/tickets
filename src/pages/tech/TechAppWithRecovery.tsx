@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Briefcase, History, Loader2, MapPin, Navigation, Pause, Play, Timer } from 'lucide-react';
+import {
+  Briefcase,
+  CheckCircle2,
+  Clock3,
+  History,
+  Loader2,
+  MapPin,
+  Navigation,
+  Pause,
+  Play,
+  Timer,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TechLang, t } from '@/i18n/tech';
@@ -31,10 +42,72 @@ function historyLabel(lang: TechLang): string {
   return 'السجل';
 }
 
+function recoveryCopy(
+  lang: TechLang,
+  key:
+    | 'supervisorClosed'
+    | 'recordDuration'
+    | 'hours'
+    | 'minutes'
+    | 'saveDuration'
+    | 'durationSaved'
+    | 'invalidDuration'
+    | 'finishVisit'
+    | 'remainingTickets',
+): string {
+  const ar = {
+    supervisorClosed: 'الموعد انتهى بواسطة المشرف',
+    recordDuration: 'سجّل مدة العمل الفعلية التي قضيتها في هذا الموعد.',
+    hours: 'ساعات',
+    minutes: 'دقائق',
+    saveDuration: 'حفظ مدة العمل',
+    durationSaved: 'تم حفظ مدة العمل وإغلاق الجلسة',
+    invalidDuration: 'أدخل مدة عمل صحيحة',
+    finishVisit: 'إنهاء الموعد',
+    remainingTickets: 'متابعة التذاكر',
+  };
+  const en = {
+    supervisorClosed: 'Appointment closed by supervisor',
+    recordDuration: 'Record the actual time you worked on this appointment.',
+    hours: 'Hours',
+    minutes: 'Minutes',
+    saveDuration: 'Save work time',
+    durationSaved: 'Work time saved and visit closed',
+    invalidDuration: 'Enter a valid work duration',
+    finishVisit: 'Finish appointment',
+    remainingTickets: 'Continue tickets',
+  };
+  const hi = {
+    supervisorClosed: 'सुपरवाइज़र ने अपॉइंटमेंट बंद कर दिया',
+    recordDuration: 'इस अपॉइंटमेंट पर वास्तविक काम का समय दर्ज करें।',
+    hours: 'घंटे',
+    minutes: 'मिनट',
+    saveDuration: 'समय सेव करें',
+    durationSaved: 'काम का समय सेव हो गया',
+    invalidDuration: 'सही कार्य अवधि दर्ज करें',
+    finishVisit: 'अपॉइंटमेंट समाप्त करें',
+    remainingTickets: 'टिकट जारी रखें',
+  };
+  const ur = {
+    supervisorClosed: 'سپروائزر نے اپائنٹمنٹ بند کر دی',
+    recordDuration: 'اس اپائنٹمنٹ پر اصل کام کا وقت درج کریں۔',
+    hours: 'گھنٹے',
+    minutes: 'منٹ',
+    saveDuration: 'کام کا وقت محفوظ کریں',
+    durationSaved: 'کام کا وقت محفوظ ہو گیا',
+    invalidDuration: 'درست دورانیہ درج کریں',
+    finishVisit: 'اپائنٹمنٹ ختم کریں',
+    remainingTickets: 'ٹکٹس جاری رکھیں',
+  };
+  return (lang === 'en' ? en : lang === 'hi' ? hi : lang === 'ur' ? ur : ar)[key];
+}
+
 export default function TechAppWithRecovery() {
   const navigate = useNavigate();
   const [activeSession, setActiveSession] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [durationHours, setDurationHours] = useState('0');
+  const [durationMinutes, setDurationMinutes] = useState('0');
   const [lang, setLang] = useState<TechLang>(getStoredTechLanguage);
 
   const refreshActive = useCallback(async () => {
@@ -71,6 +144,7 @@ export default function TechAppWithRecovery() {
   const appointment = activeSession?.appointment;
   const phase = (activeSession?.status || null) as TechVisitPhase | null;
   const isPaused = phase === 'paused';
+  const isAwaitingDuration = phase === 'awaiting_duration';
   const isRtl = lang === 'ar' || lang === 'ur';
 
   const unitNumber = useMemo(() => (
@@ -79,27 +153,100 @@ export default function TechAppWithRecovery() {
       || '---'
   ), [appointment]);
 
-  const firstActionableTicketId = useMemo(() => {
+  const unresolvedTickets = useMemo(() => {
     const tickets = appointment?.tickets || [];
-    const unresolved = tickets.find((ticket: any) =>
+    return tickets.filter((ticket: any) =>
       ['open', 'pending', 'in_progress', 'note'].includes(String(ticket?.status || '').toLowerCase())
     );
-    return unresolved?.id || tickets[0]?.id || null;
   }, [appointment]);
+
+  const firstActionableTicketId = useMemo(() => {
+    const tickets = appointment?.tickets || [];
+    return unresolvedTickets[0]?.id || tickets[0]?.id || null;
+  }, [appointment, unresolvedTickets]);
 
   const openActiveWork = () => {
     if (firstActionableTicketId) {
       navigate(`/tech/ticket/${firstActionableTicketId}`);
       return;
     }
-    navigate('/tech/appointments');
+    navigate('/tech');
+  };
+
+  const finishCurrentVisit = async () => {
+    if (!activeSession?.appointmentId || actionLoading) return;
+    if (unresolvedTickets.length > 0) {
+      openActiveWork();
+      return;
+    }
+    if (!window.confirm(t(lang, 'finishAppointmentConfirm'))) return;
+
+    setActionLoading(true);
+    try {
+      const location = await collectTechLocation(lang);
+      await techApi.finishAppointment(activeSession.appointmentId, {
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+      } as any);
+      toast.success(t(lang, 'finishAppointmentSuccess'));
+      setActiveSession(null);
+      window.dispatchEvent(new Event('tech-active-appointment-finished'));
+      await refreshActive();
+    } catch (error: any) {
+      toast.error(lang === 'ar' && error?.message ? error.message : t(lang, 'finishAppointmentError'));
+      await refreshActive();
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const confirmDuration = async () => {
+    if (!activeSession?.appointmentId || actionLoading) return;
+    const hours = Number.parseInt(durationHours || '0', 10);
+    const mins = Number.parseInt(durationMinutes || '0', 10);
+    const totalMinutes = hours * 60 + mins;
+
+    if (
+      !Number.isFinite(hours)
+      || !Number.isFinite(mins)
+      || hours < 0
+      || hours > 24
+      || mins < 0
+      || mins > 59
+      || totalMinutes < 0
+      || totalMinutes > 1440
+    ) {
+      toast.error(recoveryCopy(lang, 'invalidDuration'));
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await techVisitApi.confirmDuration(activeSession.appointmentId, totalMinutes);
+      toast.success(recoveryCopy(lang, 'durationSaved'));
+      setActiveSession(null);
+      setDurationHours('0');
+      setDurationMinutes('0');
+      window.dispatchEvent(new Event('tech-active-appointment-finished'));
+      await refreshActive();
+    } catch (error: any) {
+      toast.error(error?.message || recoveryCopy(lang, 'invalidDuration'));
+      await refreshActive();
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const runPrimaryAction = async () => {
     if (!activeSession?.appointmentId || actionLoading) return;
 
     if (phase === 'in_progress') {
-      openActiveWork();
+      if (unresolvedTickets.length === 0) {
+        await finishCurrentVisit();
+      } else {
+        openActiveWork();
+      }
       return;
     }
 
@@ -142,6 +289,7 @@ export default function TechAppWithRecovery() {
       case 'arrived': return visitT(lang, 'arrived');
       case 'in_progress': return visitT(lang, 'workInProgress');
       case 'paused': return t(lang, 'appointmentPaused');
+      case 'awaiting_duration': return recoveryCopy(lang, 'supervisorClosed');
       default: return t(lang, 'appointmentInProgress');
     }
   })();
@@ -152,18 +300,22 @@ export default function TechAppWithRecovery() {
       case 'en_route': return visitT(lang, 'markArrived');
       case 'arrived': return visitT(lang, 'startWork');
       case 'paused': return t(lang, 'resume');
+      case 'in_progress': return unresolvedTickets.length === 0
+        ? recoveryCopy(lang, 'finishVisit')
+        : `${recoveryCopy(lang, 'remainingTickets')} (${unresolvedTickets.length})`;
       default: return visitT(lang, 'continueWork');
     }
   })();
 
   const phaseIcon = (() => {
     switch (phase) {
-      case 'claimed': return <Play size={19} />;
-      case 'en_route': return <Navigation size={19} />;
-      case 'arrived': return <MapPin size={19} />;
-      case 'in_progress': return <Timer size={19} />;
-      case 'paused': return <Pause size={19} />;
-      default: return <Briefcase size={19} />;
+      case 'claimed': return <Play size={18} />;
+      case 'en_route': return <Navigation size={18} />;
+      case 'arrived': return <MapPin size={18} />;
+      case 'in_progress': return <Timer size={18} />;
+      case 'paused': return <Pause size={18} />;
+      case 'awaiting_duration': return <Clock3 size={18} />;
+      default: return <Briefcase size={18} />;
     }
   })();
 
@@ -174,6 +326,9 @@ export default function TechAppWithRecovery() {
       case 'en_route': return <MapPin size={16} />;
       case 'arrived': return <Briefcase size={16} />;
       case 'paused': return <Play size={16} />;
+      case 'in_progress': return unresolvedTickets.length === 0
+        ? <CheckCircle2 size={16} />
+        : <Play size={16} />;
       default: return <Play size={16} />;
     }
   })();
@@ -218,19 +373,24 @@ export default function TechAppWithRecovery() {
             position: 'fixed',
             left: 12,
             right: 12,
-            bottom: 88,
+            bottom: 'calc(78px + env(safe-area-inset-bottom, 0px))',
             zIndex: 90,
-            borderRadius: 18,
+            width: 'calc(100% - 24px)',
+            maxWidth: 520,
+            marginInline: 'auto',
+            borderRadius: 20,
             padding: 14,
-            background: 'rgba(9, 25, 45, 0.98)',
-            border: isPaused
-              ? '1px solid rgba(245,158,11,0.5)'
-              : '1px solid rgba(59,130,246,0.45)',
-            boxShadow: '0 14px 40px rgba(0,0,0,0.35)',
-            color: '#f8fafc',
+            background: 'var(--tech-card, #ffffff)',
+            border: isAwaitingDuration
+              ? '1px solid rgba(245,158,11,0.35)'
+              : isPaused
+                ? '1px solid rgba(245,158,11,0.3)'
+                : '1px solid rgba(37,99,235,0.22)',
+            boxShadow: '0 16px 44px rgba(15,23,42,0.22)',
+            color: 'var(--tech-text, #0f172a)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}>
             <div style={{
               width: 38,
               height: 38,
@@ -238,54 +398,141 @@ export default function TechAppWithRecovery() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: isPaused ? 'rgba(245,158,11,0.16)' : 'rgba(59,130,246,0.16)',
-              color: isPaused ? '#fbbf24' : '#60a5fa',
+              background: isAwaitingDuration
+                ? 'rgba(245,158,11,0.12)'
+                : isPaused
+                  ? 'rgba(245,158,11,0.12)'
+                  : 'rgba(37,99,235,0.10)',
+              color: isAwaitingDuration || isPaused ? '#d97706' : '#2563eb',
               flex: '0 0 auto',
             }}>
               {phaseIcon}
             </div>
 
-            <button
-              type="button"
-              onClick={() => navigate('/tech/appointments')}
-              style={{
-                minWidth: 0,
-                flex: 1,
-                border: 0,
-                background: 'transparent',
-                color: 'inherit',
-                textAlign: 'start',
-                cursor: 'pointer',
-                padding: 0,
-              }}
-            >
-              <div style={{ fontSize: 12, color: isPaused ? '#fcd34d' : '#93c5fd', fontWeight: 800 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{
+                fontSize: 12,
+                fontWeight: 900,
+                color: isAwaitingDuration || isPaused ? '#d97706' : '#2563eb',
+              }}>
                 {phaseTitle}
               </div>
-              <div style={{ fontWeight: 900, marginTop: 2 }}>
-                {t(lang, 'villa')} {unitNumber} · {appointment.time || '--:--'}
+              <div style={{ fontSize: 15, fontWeight: 950, marginTop: 2 }}>
+                {t(lang, 'villa')} {unitNumber}
+                <span style={{ opacity: 0.45, paddingInline: 6 }}>•</span>
+                {appointment.time || '--:--'}
               </div>
-              <div style={{ fontSize: 11, opacity: 0.72, marginTop: 2 }}>
+              <div style={{ fontSize: 11, opacity: 0.62, marginTop: 2 }}>
                 {appointment.date}
               </div>
-            </button>
+            </div>
+          </div>
 
+          {isAwaitingDuration ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={{
+                fontSize: 12,
+                lineHeight: 1.6,
+                color: 'var(--tech-muted, #64748b)',
+                marginBottom: 9,
+              }}>
+                {recoveryCopy(lang, 'recordDuration')}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <label style={{ display: 'grid', gap: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--tech-muted, #64748b)' }}>
+                    {recoveryCopy(lang, 'hours')}
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={24}
+                    value={durationHours}
+                    onChange={(event) => setDurationHours(event.target.value)}
+                    style={{
+                      width: '100%',
+                      height: 42,
+                      borderRadius: 11,
+                      border: '1px solid var(--tech-border, #e2e8f0)',
+                      background: 'var(--tech-bg, #f8fafc)',
+                      color: 'inherit',
+                      paddingInline: 12,
+                      fontWeight: 850,
+                      outline: 'none',
+                    }}
+                  />
+                </label>
+                <label style={{ display: 'grid', gap: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--tech-muted, #64748b)' }}>
+                    {recoveryCopy(lang, 'minutes')}
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={59}
+                    value={durationMinutes}
+                    onChange={(event) => setDurationMinutes(event.target.value)}
+                    style={{
+                      width: '100%',
+                      height: 42,
+                      borderRadius: 11,
+                      border: '1px solid var(--tech-border, #e2e8f0)',
+                      background: 'var(--tech-bg, #f8fafc)',
+                      color: 'inherit',
+                      paddingInline: 12,
+                      fontWeight: 850,
+                      outline: 'none',
+                    }}
+                  />
+                </label>
+              </div>
+
+              <button
+                type="button"
+                onClick={confirmDuration}
+                disabled={actionLoading}
+                className="tech-btn"
+                style={{
+                  width: '100%',
+                  minHeight: 44,
+                  marginTop: 10,
+                  borderRadius: 12,
+                  background: '#d97706',
+                  color: '#fff',
+                  fontWeight: 900,
+                }}
+              >
+                {actionLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                {recoveryCopy(lang, 'saveDuration')}
+              </button>
+            </div>
+          ) : (
             <button
+              type="button"
               onClick={runPrimaryAction}
               disabled={actionLoading}
               className={isPaused ? 'tech-btn tech-btn-success' : 'tech-btn'}
               style={{
-                minHeight: 42,
-                padding: '0 13px',
-                flex: '0 0 auto',
-                background: isPaused ? undefined : '#2563eb',
+                width: '100%',
+                minHeight: 44,
+                marginTop: 11,
+                borderRadius: 12,
+                background: isPaused
+                  ? undefined
+                  : phase === 'in_progress' && unresolvedTickets.length === 0
+                    ? '#16a34a'
+                    : '#2563eb',
                 color: '#fff',
+                fontWeight: 900,
               }}
             >
               {buttonIcon}
               {primaryLabel}
             </button>
-          </div>
+          )}
         </div>
       )}
     </>
