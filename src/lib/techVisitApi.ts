@@ -6,6 +6,7 @@ export type TechVisitPhase =
   | 'arrived'
   | 'in_progress'
   | 'paused'
+  | 'awaiting_duration'
   | 'completed'
   | 'cancelled';
 
@@ -17,6 +18,18 @@ export type TechVisitApiError = Error & {
 
 function techToken() {
   return localStorage.getItem('tech_token') || '';
+}
+
+async function parseTechResponse(res: Response) {
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) {
+    const error = new Error(body.error || `HTTP ${res.status}`) as TechVisitApiError;
+    error.code = body.code;
+    error.activeAppointmentId = body.activeAppointmentId || null;
+    error.remainingTicketIds = body.remainingTicketIds;
+    throw error;
+  }
+  return body;
 }
 
 async function postVisit(
@@ -33,16 +46,7 @@ async function postVisit(
     body: JSON.stringify(payload || {}),
   });
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    const error = new Error(body.error || `HTTP ${res.status}`) as TechVisitApiError;
-    error.code = body.code;
-    error.activeAppointmentId = body.activeAppointmentId || null;
-    error.remainingTicketIds = body.remainingTicketIds;
-    throw error;
-  }
-
-  return res.json() as Promise<{
+  return parseTechResponse(res) as Promise<{
     ok: boolean;
     phase: TechVisitPhase;
     session: any;
@@ -56,4 +60,15 @@ export const techVisitApi = {
     postVisit(appointmentId, 'arrive', location),
   startWork: (appointmentId: string, location: TechLocationSample) =>
     postVisit(appointmentId, 'start-work', location),
+  confirmDuration: async (appointmentId: string, minutes: number) => {
+    const res = await fetch(`/api/tech/appointments/${appointmentId}/confirm-duration`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${techToken()}`,
+      },
+      body: JSON.stringify({ minutes }),
+    });
+    return parseTechResponse(res) as Promise<{ ok: boolean; session: any; alreadyCompleted?: boolean }>;
+  },
 };
