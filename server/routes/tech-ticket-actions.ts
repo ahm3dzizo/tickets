@@ -122,6 +122,87 @@ router.patch(
   },
 );
 
+// POST /api/tech/appointments/:appointmentId/confirm-duration
+// A supervisor may complete an appointment while the technician still has an
+// open WorkSession. The read layer converts that session to awaiting_duration.
+// This endpoint lets the owning technician record the ACTUAL time they worked.
+// It intentionally does not require an active shift or GPS because the visit has
+// already been closed externally and this is a retroactive timesheet correction.
+router.post(
+  '/appointments/:appointmentId/confirm-duration',
+  requireTechAuth,
+  async (req: TechAuthRequest, res) => {
+    try {
+      const technicianId = req.technicianId!;
+      const appointmentId = req.params.appointmentId;
+      const minutes = Number(req.body?.minutes);
+
+      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 24 * 60) {
+        res.status(422).json({
+          code: 'INVALID_WORK_DURATION',
+          error: 'أدخل مدة العمل الفعلية بالدقائق من 0 إلى 1440 دقيقة.',
+        });
+        return;
+      }
+
+      const result = await prisma.$transaction(async tx => {
+        const session = await tx.appointmentWorkSession.findUnique({
+          where: { appointmentId },
+        });
+
+        if (!session) throw new Error('No session for this appointment');
+        if (session.technicianId !== technicianId) throw new Error('Not your appointment');
+
+        // Idempotent replay: once confirmed, never add the duration to the shift twice.
+        if (session.status === 'completed') {
+          return { session, alreadyCompleted: true };
+        }
+        if (session.status !== 'awaiting_duration') {
+          const error: any = new Error('هذا الموعد لا ينتظر تسجيل مدة العمل.');
+          error.code = 'DURATION_CONFIRMATION_NOT_REQUIRED';
+          throw error;
+        }
+
+        const pausedMins = Math.max(0, session.totalPausedMins || 0);
+        const durationNote = `مدة العمل التي أكدها الفني: ${minutes} دقيقة`;
+        const completionNotes = session.completionNotes
+          ? `${session.completionNotes}\n${durationNote}`
+          : durationNote;
+
+        const updatedSession = await tx.appointmentWorkSession.update({
+          where: { id: session.id },
+          data: {
+            status: 'completed',
+            finishedAt: session.finishedAt || new Date(),
+            pausedAt: null,
+            totalDurationMins: minutes,
+            totalElapsedMins: minutes + pausedMins,
+            completionNotes,
+          },
+        });
+
+        if (session.shiftLogId && minutes > 0) {
+          await tx.shiftLog.update({
+            where: { id: session.shiftLogId },
+            data: { totalWorkMinutes: { increment: minutes } },
+          }).catch(() => null);
+        }
+
+        return { session: updatedSession, alreadyCompleted: false };
+      });
+
+      res.json({ ok: true, ...result });
+    } catch (err: any) {
+      const code = err?.code;
+      const status = code === 'DURATION_CONFIRMATION_NOT_REQUIRED' ? 409 : 400;
+      res.status(status).json({
+        code,
+        error: err?.message || 'Failed to confirm work duration',
+      });
+    }
+  },
+);
+
 // POST /api/tech/appointments/:appointmentId/finish
 // Finishes only the technician visit/session. It NEVER silently changes ticket
 // outcomes. waiting/contractor are valid hand-off outcomes and remain open for
