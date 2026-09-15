@@ -188,6 +188,9 @@ jobs:
 
           echo "Deploying $(git rev-parse --short=12 HEAD)"
 
+          echo "Repairing legacy Retal TLS alias..."
+          bash scripts/ensure-retal-legacy-tls.sh retal-sub.nginx.conf
+
           echo "Installing locked dependencies including peer dependencies..."
           npm ci --no-audit --no-fund
 
