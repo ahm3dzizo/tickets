@@ -59,12 +59,13 @@ done < <(
 backup_file=""
 if sudo -n test -e "$TARGET_SITE"; then
   backup_file="$(mktemp /tmp/retal-sub.nginx.XXXXXX)"
-  sudo -n cp -a "$TARGET_SITE" "$backup_file"
+  sudo -n cat "$TARGET_SITE" > "$backup_file"
+  chmod 600 "$backup_file"
 fi
 
 rollback() {
   if [[ -n "$backup_file" && -f "$backup_file" ]]; then
-    sudo -n cp -a "$backup_file" "$TARGET_SITE" || true
+    sudo -n install -m 0644 "$backup_file" "$TARGET_SITE" || true
   else
     sudo -n rm -f "$TARGET_SITE" || true
   fi
