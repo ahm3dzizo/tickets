@@ -96,7 +96,13 @@ printf '%s\n' "$presented_cert" \
   | openssl x509 -noout -checkhost "$LEGACY_HOST" >/dev/null 2>&1 \
   || fail 'Nginx is still presenting a certificate that does not cover the legacy hostname'
 
-headers="$(curl -fsSI --resolve "${LEGACY_HOST}:443:127.0.0.1" "https://${LEGACY_HOST}/")"
+# Ignore proxy environment variables for the loopback validation. The previous
+# check already validates Nginx's SNI certificate directly on 127.0.0.1.
+headers="$(
+  curl --noproxy '*' -fsSI \
+    --resolve "${LEGACY_HOST}:443:127.0.0.1" \
+    "https://${LEGACY_HOST}/"
+)"
 printf '%s\n' "$headers" | grep -Eiq '^location:[[:space:]]+https://tickets\.knot-sys\.com/' \
   || fail "legacy hostname is not redirecting to https://${CANONICAL_HOST}/"
 
