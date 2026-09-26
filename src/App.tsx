@@ -7,6 +7,7 @@ import {
 } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import TicketTypesAdminPage from './pages/TicketTypesAdminPage';
+import Images from '@/pages/Images';
 import Dashboard from '@/pages/Dashboard';
 import Login from '@/pages/Login';
 import TicketsList from '@/pages/TicketsList';
@@ -42,6 +43,26 @@ import { ProfileCompletionModal } from '@/components/ProfileCompletionModal';
 import { WhatsAppConnectPrompt } from '@/components/whatsapp/WhatsAppConnectPrompt';
 
 export default function App() {
+  const isPublicImagesRoute =
+    window.location.pathname === '/images' ||
+    window.location.pathname.startsWith('/images/');
+
+  if (isPublicImagesRoute) {
+    return (
+      <ErrorBoundary>
+        <Router>
+          <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-background text-foreground selection:bg-primary/30">
+            <Routes>
+              <Route path="/images" element={<Images />} />
+              <Route path="*" element={<Navigate to="/images" replace />} />
+            </Routes>
+            <Toaster position="top-right" />
+          </div>
+        </Router>
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <AuthProvider>
