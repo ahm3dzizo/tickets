@@ -18,11 +18,13 @@ const gatewayBase = (
   process.env.CLAUDE_GATEWAY_URL || "http://127.0.0.1:8082"
 ).replace(/\/+$/, "");
 
-const model = process.env.CLAUDE_MEDIA_MODEL?.trim() || "";
+const model =
+  process.env.CLAUDE_MEDIA_MODEL?.trim() ||
+  "nvidia_nim/nvidia/nemotron-3-super-120b-a12b";
 const uiKey = process.env.CLAUDE_MEDIA_UI_KEY?.trim() || "";
-const gatewayApiKey = (
-  process.env.CLAUDE_GATEWAY_API_KEY ||
-  process.env.ANTHROPIC_API_KEY ||
+const gatewayAuthToken = (
+  process.env.CLAUDE_GATEWAY_AUTH_TOKEN ||
+  process.env.ANTHROPIC_AUTH_TOKEN ||
   ""
 ).trim();
 
@@ -58,16 +60,17 @@ function readTextBlocks(payload: any) {
 router.get("/status", (_req: Request, res: Response) => {
   res.setHeader("Cache-Control", "no-store");
   res.json({
-    enabled: Boolean(uiKey && model),
+    enabled: Boolean(uiKey && model && gatewayAuthToken),
     gateway: "local",
     modelConfigured: Boolean(model),
     accessKeyConfigured: Boolean(uiKey),
+    gatewayAuthConfigured: Boolean(gatewayAuthToken),
     model: model || null,
   });
 });
 
 router.post("/analyze", bridgeLimiter, async (req: Request, res: Response) => {
-  if (!uiKey || !model) {
+  if (!uiKey || !model || !gatewayAuthToken) {
     return res.status(503).json({
       error: "CLAUDE_BRIDGE_NOT_CONFIGURED",
       message: "ربط Claude غير مفعّل على السيرفر بعد.",
@@ -125,10 +128,7 @@ router.post("/analyze", bridgeLimiter, async (req: Request, res: Response) => {
         "anthropic-version": "2023-06-01",
       };
 
-      if (gatewayApiKey) {
-        headers["x-api-key"] = gatewayApiKey;
-        headers.authorization = `Bearer ${gatewayApiKey}`;
-      }
+      headers.authorization = `Bearer ${gatewayAuthToken}`;
 
       const response = await fetch(`${gatewayBase}/v1/messages`, {
         method: "POST",
