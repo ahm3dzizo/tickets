@@ -7,8 +7,8 @@ import { resolveMediaFile } from "../media-library.js";
 const router = Router();
 
 const bridgeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
+  windowMs: 60 * 60 * 1000,
+  max: 400,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "CLAUDE_RATE_LIMITED" },
@@ -20,7 +20,7 @@ const gatewayBase = (
 
 const model =
   process.env.CLAUDE_MEDIA_MODEL?.trim() ||
-  "nvidia_nim/nvidia/nemotron-3-super-120b-a12b";
+  "anthropic/nvidia_nim/meta/llama-3.2-90b-vision-instruct";
 const uiKey = process.env.CLAUDE_MEDIA_UI_KEY?.trim() || "";
 const gatewayAuthToken = (
   process.env.CLAUDE_GATEWAY_AUTH_TOKEN ||
@@ -113,11 +113,23 @@ router.post("/analyze", bridgeLimiter, async (req: Request, res: Response) => {
 
     const image = await fs.promises.readFile(resolved.realTarget);
     const prompt = [
-      "أنت مساعد بصري داخل واجهة إدارة صور Hedaya.",
-      "حلل الصورة فقط بناءً على ما يظهر فيها، ولا تفترض وجود ملفات أو بيانات أخرى.",
-      "اذكر وصفاً مختصراً، الاستخدام الأنسب في الواجهة، وأي ملاحظات واضحة على الجودة أو القص أو الخلفية.",
-      instruction || "حلل هذه الصورة وحدد أفضل استخدام لها في واجهة المتجر.",
-    ].join("\n");
+      "You are the visual product-classification engine for Hedaya, a handmade gifts and accessories brand.",
+      "Analyze ONLY what is visibly supported by this source image. Do not invent hidden product details.",
+      "Return STRICT JSON only, without markdown fences, commentary, or prose outside the JSON object.",
+      "Use this exact schema:",
+      '{"kind":"product|logo|banner|reference|other","productNameEn":"string","productNameAr":"string","category":"string","variantName":"string","productSignature":"stable lowercase signature","confidence":0.0,"tags":["string"],"visualSummary":"string","qualityNotes":"string","remasterNotes":"string"}',
+      "Classification rules:",
+      "- productSignature must describe the exact visible design identity, not merely a broad category.",
+      "- Different photos of the same exact product/design should aim for the same productSignature.",
+      "- Products that look similar but differ in shape, decoration, colorway, material arrangement, lettering, motif, or construction MUST receive different productSignature values.",
+      "- Never merge distinct variants just because they belong to the same category.",
+      "- confidence must be a number from 0 to 1.",
+      "- Keep names concise and suitable for an ecommerce catalog.",
+      "- tags should contain 3 to 8 useful lowercase English tags.",
+      "- qualityNotes should identify visible image issues such as lighting, crop, blur, background, perspective, or resolution.",
+      "- remasterNotes should describe what can safely be improved while preserving the exact product identity.",
+      instruction ? "Additional operator instruction: " + instruction : "",
+    ].filter(Boolean).join("\n");
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60_000);
@@ -136,7 +148,7 @@ router.post("/analyze", bridgeLimiter, async (req: Request, res: Response) => {
         signal: controller.signal,
         body: JSON.stringify({
           model,
-          max_tokens: 1200,
+          max_tokens: 1600,
           messages: [
             {
               role: "user",
