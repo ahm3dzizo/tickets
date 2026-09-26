@@ -191,8 +191,8 @@ jobs:
           echo "Repairing legacy Retal TLS alias..."
           bash scripts/ensure-retal-legacy-tls.sh retal-sub.nginx.conf
 
-          echo "Installing locked dependencies including peer dependencies..."
-          npm ci --no-audit --no-fund
+          echo "Installing locked dependencies including build/dev tooling..."
+          npm ci --include=dev --no-audit --no-fund
 
           echo "Generating Prisma client..."
           npx prisma generate
