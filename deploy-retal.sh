@@ -116,6 +116,10 @@ command -v pm2 >/dev/null 2>&1 && pm2 jlist > "$BACKUP_DIR/pm2-processes.json" 2
 
 echo "✅ Backup created: $BACKUP_DIR"
 
+banner "3B) DEPENDENCIES — SYNC"
+npm ci --include=dev --no-audit --no-fund
+echo "✅ Locked dependencies installed"
+
 if [ "$MODE" = "frontend" ] || [ "$MODE" = "all" ]; then
   banner "4) FRONTEND — VERIFY PWA CONFIG"
   [ -f vite.config.ts ] || fail "vite.config.ts not found"
