@@ -2,17 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  Bot,
   Check,
   Copy,
   Grid2X2,
   Grid3X3,
   Image as ImageIcon,
   ImageOff,
+  KeyRound,
   Loader2,
   Maximize2,
   Moon,
   RefreshCw,
   Search,
+  Sparkles,
   Sun,
   X,
 } from "lucide-react";
@@ -32,6 +35,14 @@ type MediaResponse = {
   items: MediaItem[];
   count: number;
   truncated: boolean;
+};
+
+type ClaudeStatus = {
+  enabled: boolean;
+  gateway: "local";
+  modelConfigured: boolean;
+  accessKeyConfigured: boolean;
+  model: string | null;
 };
 
 type SortMode = "newest" | "oldest" | "name" | "size";
@@ -82,6 +93,16 @@ export default function Images() {
     Record<string, { width: number; height: number }>
   >({});
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null);
+  const [claudeKey, setClaudeKey] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : sessionStorage.getItem("media-claude-key") || "",
+  );
+  const [claudeInstruction, setClaudeInstruction] = useState("");
+  const [claudeLoading, setClaudeLoading] = useState(false);
+  const [claudeAnalysis, setClaudeAnalysis] = useState("");
+  const [claudeError, setClaudeError] = useState("");
 
   const loadMedia = async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -112,7 +133,28 @@ export default function Images() {
 
   useEffect(() => {
     void loadMedia();
+
+    void fetch("/api/media/claude/status", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as ClaudeStatus;
+      })
+      .then((status) => {
+        if (status) setClaudeStatus(status);
+      })
+      .catch(() => setClaudeStatus(null));
   }, []);
+
+  useEffect(() => {
+    if (claudeKey) sessionStorage.setItem("media-claude-key", claudeKey);
+    else sessionStorage.removeItem("media-claude-key");
+  }, [claudeKey]);
+
+  useEffect(() => {
+    setClaudeAnalysis("");
+    setClaudeError("");
+    setClaudeInstruction("");
+  }, [selectedPath]);
 
   const extensions = useMemo(
     () => Array.from(new Set(items.map((item) => item.extension))).sort(),
@@ -183,6 +225,42 @@ export default function Images() {
     }, 1400);
   };
 
+  const analyzeWithClaude = async (item: MediaItem) => {
+    setClaudeLoading(true);
+    setClaudeError("");
+    setClaudeAnalysis("");
+
+    try {
+      const response = await fetch("/api/media/claude/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-media-claude-key": claudeKey,
+        },
+        body: JSON.stringify({
+          path: item.relativePath,
+          instruction: claudeInstruction,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          payload?.message ||
+            "تعذر إرسال الصورة إلى Claude. راجع إعدادات الربط.",
+        );
+      }
+
+      setClaudeAnalysis(payload?.analysis || "لم يرجع Claude تحليلاً.");
+    } catch (err) {
+      setClaudeError(
+        err instanceof Error ? err.message : "تعذر الاتصال بـ Claude.",
+      );
+    } finally {
+      setClaudeLoading(false);
+    }
+  };
+
   const recordDimensions = (
     item: MediaItem,
     image: HTMLImageElement,
@@ -226,6 +304,16 @@ export default function Images() {
                   </h1>
                   <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-bold text-muted-foreground">
                     Public Gallery
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${
+                      claudeStatus?.enabled
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : "border-border bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    <Bot className="size-3.5" />
+                    {claudeStatus?.enabled ? "Claude جاهز" : "Claude غير مفعّل"}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">
@@ -512,7 +600,7 @@ export default function Images() {
               </button>
             </div>
 
-            <aside className="w-full shrink-0 border-t border-border bg-card p-5 lg:w-[340px] lg:border-r lg:border-t-0">
+            <aside className="w-full shrink-0 overflow-y-auto border-t border-border bg-card p-5 lg:max-h-[90vh] lg:w-[420px] lg:border-r lg:border-t-0">
               <div className="mb-5">
                 <p className="mb-1 text-xs font-bold text-primary">
                   {selectedIndex + 1} / {visibleItems.length}
@@ -567,6 +655,112 @@ export default function Images() {
                   </>
                 )}
               </button>
+
+              <section className="mt-4 rounded-2xl border border-border bg-muted/25 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Sparkles className="size-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold">تحليل بواسطة Claude</h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        الصورة تُرسل للـgateway المحلي فقط، بدون فتح ملفات السيرفر لكلود.
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`size-2.5 rounded-full ${
+                      claudeStatus?.enabled ? "bg-emerald-500" : "bg-muted-foreground/40"
+                    }`}
+                    aria-hidden="true"
+                  />
+                </div>
+
+                {claudeStatus?.model ? (
+                  <p className="mb-3 rounded-xl bg-background px-3 py-2 text-[11px] text-muted-foreground">
+                    Model: <b className="text-foreground">{claudeStatus.model}</b>
+                  </p>
+                ) : null}
+
+                <label className="mb-3 block">
+                  <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold">
+                    <KeyRound className="size-3.5" />
+                    مفتاح الواجهة
+                  </span>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={claudeKey}
+                    onChange={(event) => setClaudeKey(event.target.value)}
+                    placeholder="CLAUDE_MEDIA_UI_KEY"
+                    className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                  />
+                  <span className="mt-1 block text-[10px] text-muted-foreground">
+                    يُحفظ داخل الـsession في هذا المتصفح فقط، وليس في قاعدة البيانات.
+                  </span>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-bold">طلب إضافي لكلود</span>
+                  <textarea
+                    value={claudeInstruction}
+                    onChange={(event) => setClaudeInstruction(event.target.value)}
+                    maxLength={800}
+                    rows={3}
+                    placeholder="مثال: هل الصورة مناسبة كبانر رئيسي؟"
+                    className="w-full resize-none rounded-xl border border-border bg-background p-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  disabled={
+                    claudeLoading ||
+                    !claudeStatus?.enabled ||
+                    !claudeKey ||
+                    selectedItem.mimeType === "image/svg+xml"
+                  }
+                  onClick={() => void analyzeWithClaude(selectedItem)}
+                  className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-foreground px-4 text-sm font-extrabold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {claudeLoading ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Claude بيحلل الصورة...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="size-4" />
+                      حلل الصورة بكلود
+                    </>
+                  )}
+                </button>
+
+                {selectedItem.mimeType === "image/svg+xml" ? (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    تحليل SVG بصرياً غير مفعّل في النسخة الحالية.
+                  </p>
+                ) : null}
+
+                {claudeError ? (
+                  <p className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs font-medium text-destructive">
+                    {claudeError}
+                  </p>
+                ) : null}
+
+                {claudeAnalysis ? (
+                  <div className="mt-3 rounded-xl border border-primary/15 bg-primary/5 p-3">
+                    <div className="mb-2 flex items-center gap-1.5 text-xs font-extrabold text-primary">
+                      <Bot className="size-3.5" />
+                      نتيجة Claude
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-foreground">
+                      {claudeAnalysis}
+                    </p>
+                  </div>
+                ) : null}
+              </section>
             </aside>
           </div>
         </div>
