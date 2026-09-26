@@ -44,6 +44,7 @@ import pushRoutes from "./routes/push.js";
 import notificationRoutes from "./routes/notifications.js";
 import warehouseRoutes from "./routes/warehouse.js";
 import mediaRoutes from "./routes/media.js";
+import mediaClaudeRoutes from "./routes/media-claude.js";
 import { initAllSessions } from "./baileys.js";
 import { requireAuth } from "./auth.js";
 import { requireTicketMutationAccess } from "./middleware/ticket-access.js";
@@ -107,6 +108,7 @@ async function startServer() {
 
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
   app.use("/api/media", mediaRoutes);
+  app.use("/api/media/claude", mediaClaudeRoutes);
 
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
