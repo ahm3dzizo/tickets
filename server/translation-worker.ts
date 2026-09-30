@@ -14,6 +14,11 @@ let nudged = false;
 let idleLevel = 0;
 let scanOffset = 0;
 
+function isProviderAvailabilityError(error: unknown): boolean {
+  const message = String((error as any)?.message || error || '');
+  return /(operation was aborted|timeout|network error|fetch failed|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|\b429\b|\b502\b|\b503\b|\b504\b)/i.test(message);
+}
+
 function collectTicketTexts(ticket: {
   description: string;
   closureNotes: string | null;
@@ -120,6 +125,9 @@ async function processTranslationPass(): Promise<TranslationPassResult> {
       console.log(`[TranslationWorker] cached ${missing.length} texts → ${targetLang}`);
     } catch (error: any) {
       console.warn(`[TranslationWorker] ${targetLang} pass failed; it will be retried later:`, error?.message || error);
+      // A provider/network outage is shared across languages; do not immediately
+      // repeat the same failing provider chain for hi/ur in the same pass.
+      if (isProviderAvailabilityError(error)) break;
     }
   }
 

@@ -217,7 +217,7 @@ export default function ProjectDetail() {
               onClear={() => setSelectedTicketIds([])}
               statusOptions={[
                 { key: 'open', label: 'مفتوحة' },
-                { key: 'in-progress', label: 'جاري العمل' },
+                { key: 'in_progress', label: 'جاري العمل' },
                 { key: 'waiting', label: 'بانتظار الموعد' },
                 { key: 'contractor', label: 'مقاول' },
               ]}

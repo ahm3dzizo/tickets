@@ -31,12 +31,19 @@ const logger = pino({ level: 'silent' }); // نخفّت اللوجز — rc13 ve
 // directly through console.info. Suppress only those exact dependency messages.
 const originalConsoleInfo = console.info.bind(console);
 const originalConsoleWarn = console.warn.bind(console);
+const SUPPRESSED_SIGNAL_LOGS = new Set([
+  'Closing session:',
+  'Removing old closed session:',
+  'Closing open session in favor of incoming prekey bundle',
+  'Session already closed',
+]);
+
 console.info = (...args: unknown[]) => {
-  if (args[0] === 'Closing session:') return;
+  if (typeof args[0] === 'string' && SUPPRESSED_SIGNAL_LOGS.has(args[0])) return;
   originalConsoleInfo(...args);
 };
 console.warn = (...args: unknown[]) => {
-  if (args[0] === 'Closing open session in favor of incoming prekey bundle' || args[0] === 'Session already closed') return;
+  if (typeof args[0] === 'string' && SUPPRESSED_SIGNAL_LOGS.has(args[0])) return;
   originalConsoleWarn(...args);
 };
 
@@ -604,6 +611,7 @@ async function getTemplate(key: string, defaultText: string): Promise<string> {
 function replaceVars(template: string, params: MsgParams): string {
   return template
     .replace(/{ticketId}/g, params.ticketId)
+    .replace(/{clientName}/g, params.clientName)
     .replace(/{description}/g, params.description)
     .replace(/{unitNumber}/g, params.unitNumber)
     .replace(/{date}/g, params.date || '')

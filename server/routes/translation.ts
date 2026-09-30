@@ -130,6 +130,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function isProviderAvailabilityError(error: unknown): boolean {
+  const message = String((error as any)?.message || error || '');
+  return /(operation was aborted|timeout|network error|fetch failed|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|\b429\b|\b502\b|\b503\b|\b504\b)/i.test(message);
+}
+
+function shouldRetryProviderOutput(error: unknown): boolean {
+  const message = String((error as any)?.message || error || '');
+  if (/AI returned (?:an empty response|invalid JSON|an incomplete translation list)/i.test(message)) return false;
+  if (/router selected a safety model/i.test(message)) return false;
+  return isProviderAvailabilityError(error);
+}
+
 async function translateWithProvider(
   provider: TranslationProvider,
   texts: string[],
@@ -189,13 +201,18 @@ async function translateWithProviderRetry(
   context?: string,
 ): Promise<string[]> {
   let lastError: any;
-  for (let attempt = 1; attempt <= TRANSLATION_RETRIES; attempt += 1) {
+  // Nara already has a shared network retry layer in nara-rate-limiter.ts.
+  // Retrying it again here multiplied one translation into up to six network attempts.
+  const maxAttempts = provider.label === 'NaraRouter' ? 1 : TRANSLATION_RETRIES;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       return await translateWithProvider(provider, texts, targetLang, context);
     } catch (error: any) {
       lastError = error;
-      console.warn(`[Translation] ${provider.label}/${provider.model} attempt ${attempt}/${TRANSLATION_RETRIES} failed:`, error?.message || error);
-      if (attempt < TRANSLATION_RETRIES) await sleep(RETRY_BASE_DELAY_MS * attempt);
+      console.warn(`[Translation] ${provider.label}/${provider.model} attempt ${attempt}/${maxAttempts} failed:`, error?.message || error);
+      if (attempt >= maxAttempts || !shouldRetryProviderOutput(error)) break;
+      await sleep(RETRY_BASE_DELAY_MS * attempt);
     }
   }
   throw lastError;
@@ -230,7 +247,7 @@ async function translateResilient(
   try {
     return await translateBatch(texts, targetLang, context);
   } catch (error: any) {
-    if (texts.length === 1) throw error;
+    if (texts.length === 1 || isProviderAvailabilityError(error)) throw error;
 
     const middle = Math.ceil(texts.length / 2);
     console.warn(`[Translation] batch of ${texts.length} failed; splitting into ${middle} + ${texts.length - middle}`);
