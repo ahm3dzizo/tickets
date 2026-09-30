@@ -127,7 +127,7 @@ for csv_path in [EXTRA_CSV, db_source]:
         extra = extra[extra["text"].str.len() >= 5]
         # DB tickets: deduplicate against Excel data by text
         if csv_path == db_source:
-            existing_texts = set(dataset["text"].tolist())
+            existing_texts = set(dataset["text"].tolist()) if "text" in dataset.columns else set()
             extra = extra[~extra["text"].isin(existing_texts)]
         dataset = pd.concat([dataset, extra], ignore_index=True)
         source_kind = "runtime" if csv_path == DB_CSV else "seed" if csv_path == SEED_DB_CSV else "extra"

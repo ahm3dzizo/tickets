@@ -110,6 +110,7 @@ jobs:
           ML_APP="retal-ml"
           PUBLIC_URL="https://tickets.knot-sys.com"
           ML_RUNTIME_DIR="${RETAL_ML_RUNTIME_DIR:-/var/lib/retal/ml}"
+          export RETAL_ML_RUNTIME_DIR="$ML_RUNTIME_DIR"
 
           command -v git >/dev/null
           command -v node >/dev/null
@@ -255,6 +256,22 @@ jobs:
             pm2 start ml/ecosystem.config.cjs
           fi
           pm2 save
+
+          echo "Checking local ML health..."
+          ml_healthy=0
+          for attempt in $(seq 1 15); do
+            if curl -fsS --max-time 5 http://127.0.0.1:5050/health | grep -q '"status":"ok"'; then
+              ml_healthy=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$ml_healthy" -ne 1 ]; then
+            echo "Local ML health check failed"
+            pm2 status "$ML_APP" || true
+            exit 1
+          fi
 
           echo "Checking local API health..."
           healthy=0

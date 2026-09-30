@@ -5,10 +5,12 @@ APP_DIR="/opt/retal-api"
 WEB_DIR="/var/www/retal"
 NGINX_SITE="/etc/nginx/sites-available/tickets-sub"
 PM2_APP="retal-api"
+ML_APP="retal-ml"
 MODE="all"
 RESTART_PM2="yes"
 BACKUP_DIR="$APP_DIR/backups/deploy-$(date +%Y%m%d-%H%M%S)"
 ML_RUNTIME_DIR="${RETAL_ML_RUNTIME_DIR:-/var/lib/retal/ml}"
+export RETAL_ML_RUNTIME_DIR="$ML_RUNTIME_DIR"
 
 banner() {
   echo
@@ -252,9 +254,23 @@ if [ "$MODE" = "backend" ] || [ "$MODE" = "all" ]; then
   if [ "$RESTART_PM2" = "yes" ]; then
     pm2 describe "$PM2_APP" >/dev/null 2>&1 || fail "PM2 process '$PM2_APP' was not found"
     pm2 restart "$PM2_APP" --update-env
+
+    if pm2 describe "$ML_APP" >/dev/null 2>&1; then
+      pm2 restart "$ML_APP" --update-env
+    else
+      pm2 start ml/ecosystem.config.cjs
+    fi
+
     sleep 3
     pm2 status "$PM2_APP"
-    echo "✅ PM2 restarted"
+    pm2 status "$ML_APP"
+
+    if ! curl -fsS --max-time 5 http://127.0.0.1:5050/health | grep -q '"status":"ok"'; then
+      fail "ML service health check failed after restart."
+    fi
+
+    pm2 save
+    echo "✅ API + ML restarted and ML health verified"
   else
     echo "⏭️ PM2 restart skipped"
   fi
