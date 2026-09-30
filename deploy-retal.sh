@@ -10,6 +10,7 @@ MODE="all"
 RESTART_PM2="yes"
 BACKUP_DIR="$APP_DIR/backups/deploy-$(date +%Y%m%d-%H%M%S)"
 ML_RUNTIME_DIR="${RETAL_ML_RUNTIME_DIR:-/var/lib/retal/ml}"
+DEPLOY_LOCK_FILE="${RETAL_DEPLOY_LOCK_FILE:-/tmp/retal-deploy.lock}"
 export RETAL_ML_RUNTIME_DIR="$ML_RUNTIME_DIR"
 
 banner() {
@@ -62,6 +63,15 @@ for ARG in "$@"; do
 done
 
 cd "$APP_DIR"
+
+command -v flock >/dev/null 2>&1 || fail "flock not found"
+echo "Waiting for exclusive deploy lock: $DEPLOY_LOCK_FILE"
+exec 9>"$DEPLOY_LOCK_FILE"
+if ! flock -w 1200 9; then
+  fail "Could not acquire deploy lock within 20 minutes."
+fi
+printf '%s\n' "$" 1>&9
+echo "✅ Exclusive deploy lock acquired"
 
 banner "RETAL DEPLOY"
 echo "Project:       $APP_DIR"
