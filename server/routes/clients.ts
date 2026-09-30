@@ -78,11 +78,14 @@ router.get("/by-project/:projectId", requireAuth, async (req, res) => {
   });
 
   const formatted = clients.map(c => {
-    const primaryUnit = c.units.find(u => u.isPrimary)?.unit || c.units[0]?.unit;
+    const projectLinks = c.units.filter(link => link.unit.projectId === req.params.projectId);
+    const primaryLink = projectLinks.find(link => link.isPrimary) || projectLinks[0];
+    const primaryUnit = primaryLink?.unit;
     return {
       ...c,
+      units: projectLinks,
       unitId:      primaryUnit?.id         || null,
-      projectId:   primaryUnit?.projectId  || null,
+      projectId:   primaryUnit?.projectId  || req.params.projectId,
       projectName: primaryUnit?.project?.name || null,
       projectCode: primaryUnit?.project?.abbreviation || null,
       unitNumber: primaryUnit?.unitNumber  || null,

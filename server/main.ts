@@ -197,16 +197,20 @@ async function startServer() {
         include: { units: { include: { unit: { include: { block: true } } } } }
       });
       const mapped = clients.map(c => {
-        const primaryUnit = c.units[0]?.unit;
+        const projectLinks = c.units.filter(link => link.unit.projectId === req.params.projectId);
+        const selectedLink = projectLinks.find(link => link.isPrimary) || projectLinks[0];
+        const selectedUnit = selectedLink?.unit;
         return {
           id: c.id,
-          projectId: primaryUnit?.projectId || req.params.projectId,
+          projectId: selectedUnit?.projectId || req.params.projectId,
           name: c.name,
           phone: c.phone,
-          unitNumber: primaryUnit?.unitNumber || '',
-          blockNumber: primaryUnit?.block?.blockNumber || '',
-          handoverDate: primaryUnit?.handoverDate || null,
-          warrantyExpiryDate: primaryUnit?.warrantyExpiryDate || null,
+          unitId: selectedUnit?.id || null,
+          unitNumber: selectedUnit?.unitNumber || '',
+          blockNumber: selectedUnit?.block?.blockNumber || '',
+          handoverDate: selectedUnit?.handoverDate || null,
+          warrantyExpiryDate: selectedUnit?.warrantyExpiryDate || null,
+          units: projectLinks,
           createdAt: c.createdAt
         };
       });
@@ -236,7 +240,7 @@ async function startServer() {
         create: { clientId: client.id, unitId: unit.id, isPrimary: true },
         update: {}
       });
-      res.status(201).json({ ...client, projectId, unitNumber: unit.unitNumber });
+      res.status(201).json({ ...client, projectId, unitId: unit.id, unitNumber: unit.unitNumber });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

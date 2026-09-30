@@ -21,6 +21,16 @@ import { classifyOnServer } from '@/services/classificationApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
+const NEW_TICKET_TABS = ['linked', 'contractors', 'unclassified'] as const;
+type NewTicketTab = typeof NEW_TICKET_TABS[number];
+type SeenTicketsByTab = Record<NewTicketTab, string[]>;
+
+const emptySeenTickets = (): SeenTicketsByTab => ({
+  linked: [],
+  contractors: [],
+  unclassified: [],
+});
+
 export default function TicketsList() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -41,6 +51,7 @@ export default function TicketsList() {
     return stored && stored !== 'all' ? stored : 'linked';
   });
   const [ticketSearch, setTicketSearch] = useState(() => sessionStorage.getItem('ticketsListSearch') || '');
+  const [seenTicketsByTab, setSeenTicketsByTab] = useState<SeenTicketsByTab>(emptySeenTickets);
   useEffect(() => { sessionStorage.setItem('ticketsListSearch', ticketSearch); }, [ticketSearch]);
 
   const loadData = async () => {
@@ -175,6 +186,63 @@ export default function TicketsList() {
     t.warrantyExpiryDate < todayStr
   );
 
+  const trackedTabTickets: Record<NewTicketTab, Ticket[]> = {
+    linked: linkedTickets,
+    contractors: contractorTickets,
+    unclassified: unclassifiedTickets,
+  };
+  const seenStorageKey = user?.uid ? `tickets:new-by-section:v1:${user.uid}` : '';
+
+  useEffect(() => {
+    if (!seenStorageKey || loading) return;
+
+    const currentIds = Object.fromEntries(
+      NEW_TICKET_TABS.map(tab => [tab, trackedTabTickets[tab].map(ticket => ticket.id)])
+    ) as SeenTicketsByTab;
+
+    let stored: SeenTicketsByTab | null = null;
+    try {
+      const raw = localStorage.getItem(seenStorageKey);
+      stored = raw ? { ...emptySeenTickets(), ...JSON.parse(raw) } : null;
+    } catch {
+      stored = null;
+    }
+
+    if (!stored) {
+      localStorage.setItem(seenStorageKey, JSON.stringify(currentIds));
+      setSeenTicketsByTab(currentIds);
+      return;
+    }
+
+    const next = emptySeenTickets();
+    for (const tab of NEW_TICKET_TABS) {
+      const current = new Set(currentIds[tab]);
+      next[tab] = (stored[tab] || []).filter(id => current.has(id));
+      if (activeTab === tab) next[tab] = currentIds[tab];
+    }
+
+    localStorage.setItem(seenStorageKey, JSON.stringify(next));
+    setSeenTicketsByTab(next);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seenStorageKey, loading, tickets, activeTab]);
+
+  const newTicketCounts: Record<NewTicketTab, number> = {
+    linked: linkedTickets.filter(ticket => !seenTicketsByTab.linked.includes(ticket.id)).length,
+    contractors: contractorTickets.filter(ticket => !seenTicketsByTab.contractors.includes(ticket.id)).length,
+    unclassified: unclassifiedTickets.filter(ticket => !seenTicketsByTab.unclassified.includes(ticket.id)).length,
+  };
+
+  const markTabSeen = (tab: string) => {
+    if (!seenStorageKey || !NEW_TICKET_TABS.includes(tab as NewTicketTab)) return;
+    const trackedTab = tab as NewTicketTab;
+    const next: SeenTicketsByTab = {
+      ...seenTicketsByTab,
+      [trackedTab]: trackedTabTickets[trackedTab].map(ticket => ticket.id),
+    };
+    setSeenTicketsByTab(next);
+    localStorage.setItem(seenStorageKey, JSON.stringify(next));
+  };
+
   useEffect(() => {
     const available = new Set(['linked', 'contractors']);
     if (unlinkedTickets.length > 0) available.add('unlinked');
@@ -231,6 +299,7 @@ export default function TicketsList() {
   const changeTab = (value: string) => {
     setActiveTab(value);
     sessionStorage.setItem('ticketsListTab', value);
+    markTabSeen(value);
   };
 
   return (
@@ -299,10 +368,10 @@ export default function TicketsList() {
                   className="w-full h-11 appearance-none bg-transparent px-4 pe-10 text-sm font-extrabold text-foreground outline-none cursor-pointer"
                   dir="rtl"
                 >
-                  <option value="linked">المربوطة ({linkedTickets.length})</option>
-                  <option value="contractors">المقاولين والملاحظات ({contractorTickets.length})</option>
+                  <option value="linked">المربوطة ({linkedTickets.length}){newTicketCounts.linked > 0 ? ` — جديد ${newTicketCounts.linked}` : ''}</option>
+                  <option value="contractors">المقاولين والملاحظات ({contractorTickets.length}){newTicketCounts.contractors > 0 ? ` — جديد ${newTicketCounts.contractors}` : ''}</option>
                   {unlinkedTickets.length > 0 && <option value="unlinked">غير مربوطة ({unlinkedTickets.length})</option>}
-                  {unclassifiedTickets.length > 0 && <option value="unclassified">غير مصنفة ({unclassifiedTickets.length})</option>}
+                  {unclassifiedTickets.length > 0 && <option value="unclassified">غير مصنفة ({unclassifiedTickets.length}){newTicketCounts.unclassified > 0 ? ` — جديد ${newTicketCounts.unclassified}` : ''}</option>}
                   {outOfWarrantyTickets.length > 0 && <option value="out-of-warranty">خارج الضمان ({outOfWarrantyTickets.length})</option>}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">⌄</div>
@@ -310,12 +379,14 @@ export default function TicketsList() {
             </div>
 
             <TabsList className="hidden sm:flex bg-transparent h-auto p-0 flex-wrap items-center gap-2 w-full">
-              <TabsTrigger value="linked" className="rounded-xl h-9 text-sm font-bold px-4 border border-border bg-card data-[state=active]:bg-primary data-[state=active]:border-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-                المربوطة ({linkedTickets.length})
+              <TabsTrigger value="linked" className="rounded-xl h-9 text-sm font-bold px-4 border border-border bg-card data-[state=active]:bg-primary data-[state=active]:border-primary data-[state=active]:text-white data-[state=active]:shadow-sm transition-all flex items-center gap-1.5">
+                <span>المربوطة ({linkedTickets.length})</span>
+                {newTicketCounts.linked > 0 && <Badge className="h-5 min-w-6 px-1.5 text-[9px] font-black bg-rose-500 text-white border-0">جديد {newTicketCounts.linked}</Badge>}
               </TabsTrigger>
               <TabsTrigger value="contractors" className="rounded-xl h-9 text-sm font-bold px-3 border border-border bg-card data-[state=active]:bg-blue-600 data-[state=active]:border-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-1.5 transition-all">
                 <HardHat className="w-3.5 h-3.5" /> المقاولين - ملاحظات
                 {contractorTickets.length > 0 && <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-blue-500 text-white border-0">{contractorTickets.length}</Badge>}
+                {newTicketCounts.contractors > 0 && <Badge className="h-5 min-w-6 px-1.5 text-[9px] font-black bg-rose-500 text-white border-0">جديد {newTicketCounts.contractors}</Badge>}
               </TabsTrigger>
               {unlinkedTickets.length > 0 && (
                 <TabsTrigger value="unlinked" className="rounded-xl h-9 text-sm font-bold px-4 border border-red-500/20 bg-red-500/5 text-red-500 data-[state=active]:bg-red-500 data-[state=active]:border-red-500 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-2 transition-all">
@@ -325,6 +396,7 @@ export default function TicketsList() {
               {unclassifiedTickets.length > 0 && (
                 <TabsTrigger value="unclassified" className="rounded-xl h-9 text-sm font-bold px-4 border border-orange-500/20 bg-orange-500/5 text-orange-500 data-[state=active]:bg-orange-500 data-[state=active]:border-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm flex items-center gap-2 transition-all">
                   غير مصنفة <Badge className="h-4.5 px-1.5 min-w-5 text-[9px] font-black bg-orange-500 text-white border-0">{unclassifiedTickets.length}</Badge>
+                  {newTicketCounts.unclassified > 0 && <Badge className="h-5 min-w-6 px-1.5 text-[9px] font-black bg-rose-500 text-white border-0">جديد {newTicketCounts.unclassified}</Badge>}
                 </TabsTrigger>
               )}
               {outOfWarrantyTickets.length > 0 && (

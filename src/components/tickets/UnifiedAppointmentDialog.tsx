@@ -848,10 +848,10 @@ export function UnifiedAppointmentDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="bg-card border-border text-foreground sm:max-w-[500px] rounded-3xl shadow-2xl shadow-black/20 dark:shadow-black/50 max-h-[90vh] overflow-y-auto overflow-x-hidden"
+        className="bg-card border-border text-foreground w-[calc(100vw-1rem)] sm:w-full sm:max-w-[520px] rounded-[26px] sm:rounded-3xl shadow-2xl shadow-black/20 dark:shadow-black/50 max-h-[96dvh] sm:max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6"
         dir="rtl"
       >
-        <DialogHeader>
+        <DialogHeader className="space-y-1">
           <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2 break-words">
             <TitleIcon className={cn('w-5 h-5 shrink-0', (isEditMode || hasExistingAppt) ? 'text-amber-400' : 'text-blue-400')} />
             {dialogTitle}
@@ -885,7 +885,7 @@ export function UnifiedAppointmentDialog({
           )}
         </DialogHeader>
 
-        <div className="space-y-5 py-1">
+        <div className="space-y-3 sm:space-y-5 py-0 sm:py-1">
 
           {/* ── CLIENT SEARCH (calendar mode) ───────────────────────────── */}
           {isCalendarMode && (
@@ -1209,7 +1209,7 @@ export function UnifiedAppointmentDialog({
                       setStartDate(val);
                     }
                   }}
-                  className="w-full bg-background border border-input rounded-xl h-11 px-3 text-foreground text-sm"
+                  className="w-full bg-background border border-input rounded-xl h-10 sm:h-11 px-3 text-foreground text-sm"
                 />
               </div>
 
@@ -1223,7 +1223,7 @@ export function UnifiedAppointmentDialog({
                       key={p.days}
                       onClick={() => setRangeDays(p.days)}
                       className={cn(
-                        'flex-1 h-10 rounded-xl text-xs font-bold border transition-all',
+                        'flex-1 h-9 sm:h-10 rounded-xl text-xs font-bold border transition-all',
                         rangeDays === p.days
                           ? 'bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-300'
                           : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
@@ -1233,7 +1233,7 @@ export function UnifiedAppointmentDialog({
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2.5 text-sm">
+                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 sm:px-4 py-2 text-xs sm:text-sm">
                   <CalendarDays className="w-4 h-4 text-amber-400 shrink-0" />
                   <span className="text-amber-700 dark:text-amber-300 font-bold">
                     {formatDateAr(startDate)} ← {formatDateAr(endDate)}
@@ -1252,7 +1252,7 @@ export function UnifiedAppointmentDialog({
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="w-full bg-background border border-input rounded-xl h-11 px-3 text-foreground text-sm"
+                className="w-full bg-background border border-input rounded-xl h-10 sm:h-11 px-3 text-foreground text-sm"
               />
             </div>
           )}
@@ -1273,7 +1273,7 @@ export function UnifiedAppointmentDialog({
                     type="button"
                     onClick={() => setTimeMode(opt.value)}
                     className={cn(
-                      'h-10 rounded-xl text-xs font-bold border transition-all px-2',
+                      'h-9 sm:h-10 rounded-xl text-xs font-bold border transition-all px-2',
                       timeMode === opt.value
                         ? 'bg-blue-500/20 border-blue-500/50 text-blue-700 dark:text-blue-300'
                         : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
@@ -1292,7 +1292,7 @@ export function UnifiedAppointmentDialog({
                 value={timeMode === 'custom' ? customTime : (finalTime || customTime)}
                 onChange={e => { setCustomTime(e.target.value); setTimeMode('custom'); }}
                 className={cn(
-                  "w-full bg-background border rounded-xl h-11 px-3 text-foreground text-sm transition-colors",
+                  "w-full bg-background border rounded-xl h-10 sm:h-11 px-3 text-foreground text-sm transition-colors",
                   workHours.enabled && !isInsideWorkHours
                     ? (suggestedCorrectionMins !== null ? "border-amber-500/60 focus:border-amber-500" : "border-red-500/60 focus:border-red-500")
                     : "border-input"
@@ -1353,7 +1353,7 @@ export function UnifiedAppointmentDialog({
             <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
               المشرفين
             </Label>
-            <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto no-scrollbar">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 max-h-20 sm:max-h-28 overflow-y-auto no-scrollbar">
               {availableSupervisors.map((s: any) => {
                 const sId = s.uid || s.id;
                 const sName = s.displayName || s.name;
@@ -1391,7 +1391,7 @@ export function UnifiedAppointmentDialog({
             <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block text-right">
               الفني المسؤول (اختياري)
             </Label>
-            <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto no-scrollbar">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 max-h-20 sm:max-h-28 overflow-y-auto no-scrollbar">
               <button
                 type="button"
                 onClick={() => setSelectedTechId(null)}
@@ -1441,7 +1441,7 @@ export function UnifiedAppointmentDialog({
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="أي تعليمات للفني أو العميل..."
-              className="w-full bg-background border border-input rounded-xl p-3 text-right text-foreground text-sm resize-none h-20 placeholder:text-muted-foreground"
+              className="w-full bg-background border border-input rounded-xl p-3 text-right text-foreground text-sm resize-none h-16 sm:h-20 placeholder:text-muted-foreground"
             />
           </div>
 
@@ -1468,13 +1468,16 @@ export function UnifiedAppointmentDialog({
           )}
 
           {/* ── ACTION BUTTONS ────────────────────────────────────────── */}
-          <div className="flex gap-2 pt-1">
+          <div className={cn(
+            'sticky bottom-0 z-20 -mx-4 -mb-4 mt-2 grid gap-2 border-t border-border/80 bg-card/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-card/90 sm:static sm:mx-0 sm:mb-0 sm:mt-0 sm:border-0 sm:bg-transparent sm:p-0',
+            canSendWhatsApp ? 'grid-cols-2' : 'grid-cols-1'
+          )}>
             <Button
               onClick={handleSave}
               disabled={!canSave}
               variant={canSendWhatsApp ? 'outline' : 'default'}
               className={cn(
-                'flex-1 rounded-xl h-12 font-bold text-sm',
+                'w-full rounded-2xl h-11 sm:h-12 font-bold text-sm',
                 canSendWhatsApp
                   ? 'border-input bg-background text-foreground hover:bg-muted'
                   : isEditMode
@@ -1493,7 +1496,7 @@ export function UnifiedAppointmentDialog({
               <Button
                 onClick={handleSendWhatsApp}
                 disabled={isBusy || !startDate || hasConflict}
-                className="flex-1 rounded-xl h-12 font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20"
+                className="w-full rounded-2xl h-11 sm:h-12 font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/10"
               >
                 {sending
                   ? <Loader2 className="w-4 h-4 animate-spin" />
