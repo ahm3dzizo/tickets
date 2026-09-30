@@ -126,7 +126,21 @@ export function TicketForm({
     if (!projectId) { setFormClients([]); return; }
     clientsApi.getByProject(projectId)
       .then(clients => {
-        const sorted = clients.sort((a, b) => {
+        const expanded = clients.flatMap((client: any) => {
+          const scopedLinks = Array.isArray(client.units)
+            ? client.units.filter((link: any) => link?.unit?.projectId === projectId)
+            : [];
+          if (scopedLinks.length === 0) return [client];
+          return scopedLinks.map((link: any) => ({
+            ...client,
+            unitId: link.unit.id,
+            unitNumber: link.unit.unitNumber,
+            blockNumber: link.unit.block?.blockNumber || '',
+            handoverDate: link.unit.handoverDate || null,
+            warrantyExpiryDate: link.unit.warrantyExpiryDate || null,
+          }));
+        });
+        const sorted = expanded.sort((a: any, b: any) => {
           const numA = parseInt(a.unitNumber, 10) || 0;
           const numB = parseInt(b.unitNumber, 10) || 0;
           return numA - numB;
@@ -265,7 +279,9 @@ export function TicketForm({
 
   /* ── Derived ──────────────────────────────────────────────── */
   const selectedProject = projects.find(p => p.id === projectId);
-  const selectedClient  = formClients.find(c => c.id === clientId);
+  const selectedClient  = formClients.find(c =>
+    c.id === clientId && (!unitId || String(c.unitId || '') === String(unitId))
+  ) || formClients.find(c => c.id === clientId);
 
   /* ── Render ───────────────────────────────────────────────── */
   return (
@@ -463,7 +479,7 @@ export function TicketForm({
                       .filter(c => { const s = clientSearch.toLowerCase(); return (c.name && String(c.name).toLowerCase().includes(s)) || (c.unitNumber != null && String(c.unitNumber).toLowerCase().includes(s)); })
                       .map(c => (
                       <DropdownMenuItem
-                        key={c.id}
+                        key={`${c.id}-${c.unitId || c.unitNumber || 'unit'}`}
                         className="hover:bg-white/5 cursor-pointer text-start justify-start"
                         onClick={() => {
                           setClientId(c.id);

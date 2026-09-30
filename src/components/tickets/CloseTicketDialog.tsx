@@ -29,7 +29,6 @@ Dialog,
 DialogContent,
 DialogHeader,
 DialogTitle,
-DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -129,6 +128,7 @@ const [closeType, setCloseType] = useState<CloseType>('normal');
 const [loading, setLoading] = useState(false);
 const [copying, setCopying] = useState(false);
 const [notes, setNotes] = useState('');
+const [showMessagePreview, setShowMessagePreview] = useState(false);
   const [maintItems, setMaintItems] = useState<{ description: string; status: string }[]>(
     selectedTickets.map(t => ({
       description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(),
@@ -402,15 +402,15 @@ setCopying(false);
 return (
 <>
 <Dialog open={open} onOpenChange={onOpenChange}>
-<DialogContent className="bg-card border-border text-slate-200 sm:max-w-[700px] rounded-3xl shadow-2xl shadow-black/40 max-h-[90vh] overflow-y-auto">
+<DialogContent className="bg-card border-border text-slate-200 w-[calc(100vw-1rem)] sm:w-full sm:max-w-[700px] rounded-[26px] sm:rounded-3xl shadow-2xl shadow-black/40 max-h-[96dvh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
 <DialogHeader>
-<div className="flex items-center gap-3 mb-2 justify-start">
-<div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-<CheckCircle2 className="w-6 h-6" />
+<div className="flex items-center gap-2.5 mb-1 justify-start">
+<div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+<CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
 </div>
-<DialogTitle className="text-xl font-bold text-white text-right">إقفال التذاكر المختارة</DialogTitle>
+<DialogTitle className="text-lg sm:text-xl font-bold text-white text-right">إقفال التذاكر المختارة</DialogTitle>
 </div>
-<div className="text-right p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1">
+<div className="text-right p-3 sm:p-4 bg-white/5 rounded-2xl border border-white/5 space-y-0.5 sm:space-y-1">
 <div className="text-xs text-slate-500 font-bold uppercase tracking-widest">
 فيلا رقم {selectedTickets[0]?.unitId ? (
   <Link to={`/units/${selectedTickets[0].unitId}`} className="hover:underline hover:text-blue-300 transition-colors">{currentVilla}</Link>
@@ -426,10 +426,12 @@ return (
 </div>
 </div>
 </DialogHeader>
-<div className="rounded-xl border border-border p-3 text-right space-y-2">
-<p className="text-sm">التقرير يُرسل فقط بعد انتهاء جميع المشرفين أو الإغلاق الكامل بواسطة الإدارة.</p>
-{supervisors.map(s => <div key={s.id} className="text-xs">{s.name} — قيد التنفيذ</div>)}
-{selectedTickets.flatMap(t => (t.supervisorClosures || []).filter(h => !t.assignedSupervisorIds?.includes(h.supervisorUid)).map(h => <div key={`${t.id}-${h.supervisorUid}`} className="text-xs text-emerald-400">#{t.ticketId} — {h.supervisorName || h.supervisorUid} — أنهى دوره</div>))}
+<div className="rounded-xl border border-border p-2.5 sm:p-3 text-right space-y-2">
+<p className="text-xs sm:text-sm">التقرير يُرسل فقط بعد انتهاء جميع المشرفين أو الإغلاق الكامل بواسطة الإدارة.</p>
+<div className="flex flex-wrap gap-1.5">
+{supervisors.map(s => <span key={s.id} className="rounded-lg border border-border bg-muted/30 px-2 py-1 text-[11px]">{s.name} — قيد التنفيذ</span>)}
+{selectedTickets.flatMap(t => (t.supervisorClosures || []).filter(h => !t.assignedSupervisorIds?.includes(h.supervisorUid)).map(h => <span key={`${t.id}-${h.supervisorUid}`} className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-400">#{t.ticketId} — {h.supervisorName || h.supervisorUid} — أنهى دوره</span>))}
+</div>
 {privileged && <>
 <Label>نطاق الإغلاق</Label>
 <select className="w-full bg-background border border-border rounded-lg p-2" value={closureScope} onChange={e => setClosureScope(e.target.value)}>
@@ -452,7 +454,7 @@ key={key}
 type="button"
 onClick={() => setCloseType(key)}
 className={cn(
-'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold border transition-all',
+'flex-1 min-h-9 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold border transition-all',
 closeType === key
 ? color === 'emerald' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
 : color === 'amber' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
@@ -466,7 +468,7 @@ closeType === key
 ))}
 </div>
 
-<div className="space-y-6 py-4">
+<div className="space-y-3 sm:space-y-6 py-2 sm:py-4">
 {/* Maintenance Items Section — يظهر فقط للإغلاق العادي */}
 {closeType !== 'normal' && (
 <div className={cn(
@@ -493,22 +495,22 @@ className="text-blue-400 hover:text-blue-300 gap-1 h-7"
 </Button>
 </div>
 
-<div className="space-y-3">
+<div className="space-y-2 sm:space-y-3">
 {maintItems.map((item, index) => (
-<div key={index} className="flex items-center gap-3 group animate-in slide-in-from-right-2">
+<div key={index} className="flex items-center gap-2 sm:gap-3 group animate-in slide-in-from-right-2">
 <Button
 variant="ghost"
 size="icon"
-className="h-9 w-9 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 text-slate-500 hover:text-red-400 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
 onClick={() => removeMaintItem(index)}
 >
 <Trash2 className="w-4 h-4" />
 </Button>
 
-<div className="flex-1 flex gap-2">
+<div className="flex-1 min-w-0 flex gap-2">
 <DropdownMenu>
 <DropdownMenuTrigger
-render={<Button variant="outline" className="w-32 justify-between border-border bg-white/5 text-white rounded-xl h-10 px-3 text-xs" />}
+render={<Button variant="outline" className="w-24 sm:w-32 shrink-0 justify-between border-border bg-white/5 text-white rounded-xl h-9 sm:h-10 px-2 sm:px-3 text-xs" />}
 >
 {item.status}
 <ChevronDown className="w-3 h-3 opacity-60" />
@@ -526,7 +528,7 @@ render={<Button variant="outline" className="w-32 justify-between border-border 
 
 <Input
 placeholder="وصف العمل المنجز"
-className="bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-10 text-right text-xs"
+className="min-w-0 bg-white/5 border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-xl h-9 sm:h-10 text-right text-xs"
 value={item.description}
 onChange={(e) => updateItem(index, 'description', e.target.value)}
 />
@@ -564,7 +566,7 @@ render={<Button variant="outline" className="w-full justify-between border-borde
 <div className="space-y-2">
 <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">ملاحظات إضافية</Label>
 <textarea
-className="w-full bg-white/5 border border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-2xl p-4 text-right text-sm min-h-[100px] outline-none transition-all"
+className="w-full bg-white/5 border border-border focus:ring-2 focus:ring-blue-500/20 text-white rounded-2xl p-3 sm:p-4 text-right text-sm min-h-[72px] sm:min-h-[100px] outline-none transition-all"
 placeholder="اكتب أي ملاحظات إضافية بخصوص العمل هنا..."
 value={notes}
 onChange={(e) => setNotes(e.target.value)}
@@ -572,14 +574,19 @@ onChange={(e) => setNotes(e.target.value)}
 </div>
 
 {/* WhatsApp Message Preview */}
-<div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col gap-2">
-<div className="flex items-center gap-2 justify-start text-[#25D366] mb-1">
-<span className="text-[10px] font-black uppercase tracking-widest">معاينة رسالة الإغلاق</span>
+<div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl overflow-hidden">
+<button type="button" onClick={() => setShowMessagePreview(v => !v)} className="w-full px-3 py-2.5 flex items-center justify-between gap-2 text-[#25D366]">
+<div className="flex items-center gap-2">
 <MessageCircle className="w-3.5 h-3.5" />
+<span className="text-[10px] font-black uppercase tracking-widest">معاينة رسالة الإغلاق</span>
 </div>
-<p className="text-right text-[11px] text-slate-400 leading-relaxed italic whitespace-pre-wrap">
+<ChevronDown className={cn("w-4 h-4 transition-transform", showMessagePreview && "rotate-180")} />
+</button>
+{showMessagePreview && (
+<p className="border-t border-emerald-500/15 px-3 py-2.5 text-right text-[11px] text-slate-400 leading-relaxed italic whitespace-pre-wrap">
 "{previewMessage || 'جاري التحميل...'}"
 </p>
+)}
 </div>
 </div>
 
@@ -595,39 +602,25 @@ onChange={(e) => setNotes(e.target.value)}
 </div>
 )}
 
-<DialogFooter className="gap-3 pt-4 border-t border-white/5 flex-col sm:flex-row">
+<div className={cn(
+"sticky bottom-0 z-20 -mx-4 -mb-4 mt-2 grid gap-2 border-t border-border/80 bg-card/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-card/90 sm:static sm:mx-0 sm:mb-0 sm:border-0 sm:bg-transparent sm:p-0",
+closeType === 'normal' ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-1"
+)}>
 {closeType === 'normal' && (
-<Button
-type="button"
-variant="outline"
-size="sm"
-onClick={() => setShowSaveModal(true)}
-className="border-slate-600 text-slate-300 hover:text-white rounded-xl gap-2 h-10 px-3 shrink-0"
->
+<Button type="button" variant="outline" size="sm" onClick={() => setShowSaveModal(true)} className="border-border bg-muted/30 text-slate-300 hover:text-white rounded-2xl gap-2 h-11 px-3 shrink-0">
 <Download className="w-4 h-4" />
-حفظ التقرير فقط
+التقرير فقط
 </Button>
 )}
-<Button
-onClick={handleSubmit}
-disabled={loading || waConnected === false || waConnected === null}
-className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 rounded-xl h-12 font-bold shadow-lg shadow-emerald-500/20 flex-1 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
->
+<Button onClick={handleSubmit} disabled={loading || waConnected === false || waConnected === null} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 rounded-2xl h-11 sm:h-12 font-bold shadow-md shadow-emerald-500/10 gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
 <>
 <Save className="w-4 h-4" />
-{privileged ? (closureScope === 'all' ? 'إغلاق التذكرة بالكامل' : 'إنهاء دور المشرف') : 'إنهاء دوري في التذكرة'}
+<span className="truncate">{privileged ? (closureScope === 'all' ? 'تأكيد الإغلاق' : 'إنهاء دور المشرف') : 'إنهاء دوري'}</span>
 </>
 )}
 </Button>
-<Button
-variant="ghost"
-onClick={() => onOpenChange(false)}
-className="text-slate-500 hover:text-white rounded-xl h-12"
->
-إلغاء
-</Button>
-</DialogFooter>
+</div>
 </DialogContent>
 </Dialog>
 
