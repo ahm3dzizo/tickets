@@ -20,6 +20,32 @@ function normalizeTicketId(raw: string): string {
   return trimmed;
 }
 
+const TICKET_STATUS_ALIASES: Record<string, string> = {
+  'in-progress': 'in_progress',
+  'out-of-scope': 'out_of_scope',
+};
+
+const CANONICAL_TICKET_STATUSES = new Set([
+  'open',
+  'in_progress',
+  'pending',
+  'completed',
+  'closed',
+  'waiting',
+  'out_of_scope',
+  'absent',
+  'contractor',
+  'note',
+]);
+
+function normalizeTicketStatus(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) return null;
+  const canonical = TICKET_STATUS_ALIASES[normalized] || normalized;
+  return CANONICAL_TICKET_STATUSES.has(canonical) ? canonical : null;
+}
+
 // ── Compute virtual fields and enrich supervisor names ───────────────────────
 async function enrichTickets<T extends {
   assignedSupervisorIds?: string[];
@@ -901,7 +927,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     // ── Build base update payload ──────────────────────────────────────────
     const updatePayload: Record<string, any> = {
-      status:                data.status               ?? undefined,
+      status:                data.status !== undefined ? (normalizeTicketStatus(data.status) ?? undefined) : undefined,
       priority:              data.priority !== undefined ? Number(data.priority) : undefined,
       assigneeName:          data.assigneeName         ?? undefined,
       assignedSupervisorIds: data.assignedSupervisorIds
@@ -1090,15 +1116,34 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 
 // PATCH /api/tickets/bulk-status
 router.patch("/bulk-status", requireAuth, async (req, res) => {
-  const { ids, status } = req.body as { ids: string[]; status: any };
-  const rows = await prisma.ticket.findMany({
-    where: { id: { in: ids } },
-    select: { appointmentId: true }
-  });
-  await prisma.ticket.updateMany({ where: { id: { in: ids } }, data: { status } });
-  const apptIds = Array.from(new Set(rows.map(r => r.appointmentId).filter(Boolean))) as string[];
-  for (const apptId of apptIds) await maybeAutoFinishAppointment(apptId);
-  res.json({ count: ids.length });
+  try {
+    const { ids, status } = req.body as { ids?: unknown; status?: unknown };
+    if (!Array.isArray(ids) || ids.length === 0 || !ids.every(id => typeof id === 'string' && id.trim())) {
+      res.status(400).json({ error: "ids must be a non-empty array of ticket ids" });
+      return;
+    }
+
+    const normalizedStatus = normalizeTicketStatus(status);
+    if (!normalizedStatus) {
+      res.status(400).json({ error: "Invalid ticket status" });
+      return;
+    }
+
+    const rows = await prisma.ticket.findMany({
+      where: { id: { in: ids } },
+      select: { appointmentId: true }
+    });
+    await prisma.ticket.updateMany({
+      where: { id: { in: ids } },
+      data: { status: normalizedStatus as any }
+    });
+    const apptIds = Array.from(new Set(rows.map(r => r.appointmentId).filter(Boolean))) as string[];
+    for (const apptId of apptIds) await maybeAutoFinishAppointment(apptId);
+    res.json({ count: ids.length });
+  } catch (err: any) {
+    console.error('[tickets/bulk-status] failed:', err);
+    res.status(400).json({ error: err?.message || 'Failed to update ticket statuses' });
+  }
 });
 
 // POST /api/tickets/bulk-update-imported
@@ -1112,11 +1157,15 @@ router.post("/bulk-update-imported", requireAuth, async (req, res) => {
     const allTypes = await prisma.ticketType.findMany({ select: { id: true, key: true } });
     const typeIdMap = new Map(allTypes.map(t => [t.key, t.id]));
 
-    const updatePromises = updates.map(u =>
-      prisma.ticket.update({
+    const updatePromises = updates.map(u => {
+      const normalizedStatus = normalizeTicketStatus(u.status);
+      if (!normalizedStatus) {
+        throw new Error(`Invalid ticket status for ${u.id}`);
+      }
+      return prisma.ticket.update({
         where: { id: u.id },
         data: {
-          status:        u.status,
+          status:        normalizedStatus as any,
           closedAt:      u.closedAt ? new Date(u.closedAt) : null,
           ...(u.type && u.type !== 'unclassified' ? {
             type:          u.type,
@@ -1124,8 +1173,8 @@ router.post("/bulk-update-imported", requireAuth, async (req, res) => {
             detectedTypes: u.detectedTypes ?? [u.type],
           } : {}),
         },
-      })
-    );
+      });
+    });
     await Promise.all(updatePromises);
     res.json({ count: updates.length });
   } catch (err: any) {
