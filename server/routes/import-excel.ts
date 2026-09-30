@@ -22,6 +22,40 @@ type ParsedSlashDate = {
   year: number;
 };
 
+function readWorkbookQuietly(buffer: Buffer): XLSX.WorkBook {
+  const previousWarn = console.warn;
+  const previousError = console.error;
+  let suppressedZipWarnings = 0;
+
+  const filter = (forward: typeof console.warn) => (...args: any[]) => {
+    const first = typeof args[0] === 'string' ? args[0] : '';
+    if (/^Bad uncompressed size:\s*\d+\s*!=\s*0$/.test(first)) {
+      suppressedZipWarnings += 1;
+      return;
+    }
+    forward(...args);
+  };
+
+  console.warn = filter(previousWarn);
+  console.error = filter(previousError);
+  try {
+    return XLSX.read(buffer, {
+      type: "buffer",
+      cellFormula: false,
+      cellHTML: false,
+      cellStyles: false,
+      cellNF: false,
+      sheetStubs: false,
+    });
+  } finally {
+    console.warn = previousWarn;
+    console.error = previousError;
+    if (suppressedZipWarnings > 0) {
+      previousWarn(`[ImportExcel] suppressed ${suppressedZipWarnings} non-fatal XLSX ZIP metadata warnings`);
+    }
+  }
+}
+
 function parseDelimitedDateParts(raw: unknown): ParsedSlashDate | null {
   if (typeof raw !== "string") return null;
 
@@ -158,7 +192,7 @@ function parseExcelAndDetectHeaders(
   fieldAliases: Record<string, string[]>,
   skipDateFilter: boolean = false
 ): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: ImportDateFormat } {
-  const wb = XLSX.read(buffer, { type: "buffer", cellFormula: false, cellHTML: false, cellStyles: false, cellNF: false, sheetStubs: false });
+  const wb = readWorkbookQuietly(buffer);
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
