@@ -35,6 +35,15 @@ async function acquireSlot(): Promise<void> {
   }
 }
 
+function isAbortLikeError(error: unknown): boolean {
+  if (error && typeof error === 'object' && 'name' in error) {
+    const name = String((error as { name?: unknown }).name || '');
+    if (name === 'AbortError' || name === 'TimeoutError') return true;
+  }
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /aborted|timeout/i.test(message);
+}
+
 function retryDelay(response?: Response, attempt = 0): number {
   const retryAfter = response?.headers.get('retry-after');
   if (retryAfter) {
@@ -66,7 +75,12 @@ export function installNaraRateLimiter(): void {
         await sleep(delay);
       } catch (error) {
         lastError = error;
-        if (attempt === MAX_RETRIES) throw error;
+
+        // An AbortSignal cannot be reused after it fires. Retrying the same
+        // fetch here would immediately fail again with the already-aborted
+        // signal. Let the caller create a fresh request/signal instead.
+        if (isAbortLikeError(error) || attempt === MAX_RETRIES) throw error;
+
         const delay = retryDelay(undefined, attempt);
         console.warn(`[NaraLimiter] network error — retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(delay / 1000)}s`);
         await sleep(delay);
