@@ -1,0 +1,10 @@
+import {readFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+const previous = process.argv[2];
+if (!previous) throw new Error('Previous deployment SHA required');
+const oldSchema = execFileSync('git', ['show', `${previous}:prisma/schema.prisma`], {encoding: 'utf8'});
+const current = readFileSync('prisma/schema.prisma', 'utf8');
+const withoutAdditions = current.replace(/^  supervisorClosures    Json         @default\("\[\]"\)\n/m, '').replace(/\nmodel TicketClosureReport \{[\s\S]*?\n\}\n/, '');
+if (oldSchema.trim() !== withoutAdditions.trim()) throw new Error('Unexpected schema changes: additive supervisor migration cannot be applied safely');
+if (process.argv.includes('--check')) process.exit(0);
+execFileSync('npx', ['prisma', 'db', 'execute', '--schema', 'prisma/schema.prisma', '--file', 'scripts/sql/supervisor-closures.sql'], {stdio: 'inherit'});

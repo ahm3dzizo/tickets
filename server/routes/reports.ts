@@ -1,3 +1,4 @@
+import { closures } from '../services/ticket-closure-plan.js';
 import { Router } from 'express';
 import { AuthRequest, requireAuth } from '../auth.js';
 import prisma from '../db.js';
@@ -50,12 +51,12 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
         return;
       }
       where.projectId = projectId;
-    } else if (user.role !== 'admin' && userProjectIds.length > 0) {
+    } else if (user.role !== 'admin') {
       where.projectId = { in: userProjectIds };
     }
 
     if (user.role === 'supervisor') {
-      where.assignedSupervisorIds = { has: user.uid };
+      where.OR = [{assignedSupervisorIds: {has: user.uid}}, {supervisorClosures: {array_contains: [{supervisorUid: user.uid}]}}];
     }
 
     // Date filter applies to issuedAt (string) handled in JS, use createdAt only as fallback for DB filter
@@ -67,7 +68,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
       select: {
         id: true, type: true, typeId: true, subTypeId: true,
         status: true, priority: true, projectId: true,
-        clientId: true, assignedSupervisorIds: true,
+        clientId: true, assignedSupervisorIds: true, supervisorClosures: true,
         issuedAt: true, createdAt: true, closedAt: true,
         unit:   { select: { unitNumber: true } },
         client: { select: { name: true } },
@@ -75,7 +76,10 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     });
 
     // Filter by date range using issuedAt
-    const filtered = allTickets.filter(t => {
+    const filtered = allTickets.map(t => {
+      const done = closures(t.supervisorClosures).find(h => h.supervisorUid === user.uid);
+      return user.role === 'supervisor' && done && !t.assignedSupervisorIds.includes(user.uid) ? {...t, status: 'closed' as const, closedAt: new Date(done.completedAt)} : t;
+    }).filter(t => {
       const d = parseIssued(t.issuedAt, t.createdAt);
       if (from && d < new Date(from)) return false;
       if (to   && d > new Date(new Date(to).setHours(23,59,59,999))) return false;
@@ -228,14 +232,16 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     // ── 12. Supervisor Performance ────────────────────────────────────────────
     const supMap: Record<string,{open:number;closed:number;days:number[];}> = {};
     for (const t of filtered) {
-      const supIds = ((t as any).assignedSupervisorIds as string[] | undefined) ?? [];
+      const supIds = [...new Set([...t.assignedSupervisorIds, ...closures(t.supervisorClosures).map(h => h.supervisorUid)])].filter(id => user.role !== 'supervisor' || id === user.uid);
       for (const supId of supIds) {
         if (!supId) continue;
         if (!supMap[supId]) supMap[supId] = { open:0, closed:0, days:[] };
-        if (isClosedLike(t.status)) {
+        const done = !t.assignedSupervisorIds.includes(supId) ? closures(t.supervisorClosures).find(h => h.supervisorUid === supId) : undefined;
+        if (done || isClosedLike(t.status)) {
           supMap[supId].closed++;
-          if (t.closedAt) {
-            const days = (t.closedAt.getTime() - parseIssued(t.issuedAt, t.createdAt).getTime()) / 86_400_000;
+          const completedAt = done ? new Date(done.completedAt) : t.closedAt;
+          if (completedAt) {
+            const days = (completedAt.getTime() - parseIssued(t.issuedAt, t.createdAt).getTime()) / 86_400_000;
             if (days >= 0 && days < 3650) supMap[supId].days.push(days);
           }
         } else {

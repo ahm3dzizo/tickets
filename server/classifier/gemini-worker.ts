@@ -1,3 +1,4 @@
+import { updateClassifiedTicket } from '../services/classified-ticket-update.js';
 /**
  * Background Classification Worker
  * ──────────────────────────────────
@@ -231,7 +232,7 @@ async function processBatch(): Promise<number> {
     }
 
     if (Object.keys(updateData).length > 0) {
-      await prisma.ticket.update({ where: { id: ticket.id }, data: updateData });
+      await updateClassifiedTicket(ticket.id, updateData);
       wroteTicket = true;
     }
   }

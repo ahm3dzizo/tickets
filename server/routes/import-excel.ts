@@ -1,3 +1,5 @@
+import {updateClassifiedTicket} from '../services/classified-ticket-update.js';
+import {closures} from '../services/ticket-closure-plan.js';
 /**
  * POST /api/import-excel
  * Server-side Excel import — zero client memory pressure.
@@ -628,7 +630,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const [existingRows, unitRows, ticketTypes, keywordsCache, typeToSpecialty, projectSups] = await Promise.all([
       prisma.ticket.findMany({
         where: { projectId },
-        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, clientId: true, unitId: true, description: true },
+        select: { id: true, ticketId: true, type: true, status: true, closedAt: true, clientId: true, unitId: true, description: true, assignedSupervisorIds: true, supervisorClosures: true },
       }),
       prisma.unit.findMany({
         where: { projectId },
@@ -880,10 +882,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       for (let i = 0; i < toUpdate.length; i += BATCH_UPD) {
         const batch = toUpdate.slice(i, i + BATCH_UPD);
         const updatePromises = batch.map((u) =>
-          prisma.ticket.update({
-            where: { id: u.id },
-            data: {
-              ...(u.status ? { status: u.status as any, closedAt: u.closedAt ? new Date(u.closedAt) : null } : {}),
+          updateClassifiedTicket(u.id, {
+              ...(u.status && !existingRows.some(t => t.id === u.id && (t.assignedSupervisorIds.length > 1 || closures(t.supervisorClosures).length)) ? { status: u.status as any, closedAt: u.closedAt ? new Date(u.closedAt) : null } : {}),
               ...(u.description ? { description: u.description } : {}),
               ...(u.type && u.type !== "unclassified"
                 ? {
@@ -894,7 +894,6 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
                     assignedSupervisorIds: u.assignedSupervisorIds,
                   }
                 : {}),
-            },
           }).catch((err) => {
             console.error(`[ImportUpdateError] ticket ${u.id}:`, err);
             return null;
@@ -917,7 +916,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         }).filter(Boolean)
       );
 
-      const missingToUpdate = existingRows.filter(t => t.status !== "closed" && !fileTicketIds.has(normalizeTicketId(String(t.ticketId).trim())));
+      const missingToUpdate = existingRows.filter(t => t.assignedSupervisorIds.length <= 1 && !closures(t.supervisorClosures).length && t.status !== "closed" && !fileTicketIds.has(normalizeTicketId(String(t.ticketId).trim())));
       missingCount = missingToUpdate.length;
 
       if (closeMissingTickets && missingToUpdate.length > 0) {
@@ -925,11 +924,14 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const BATCH_MIS = 200;
         for (let i = 0; i < missingIds.length; i += BATCH_MIS) {
           const batch = missingIds.slice(i, i + BATCH_MIS);
-          await prisma.ticket.updateMany({
-            where: { id: { in: batch } },
-            data: { status: "closed", closedAt: new Date() }
+          const changedIds = await prisma.$transaction(async tx => {
+            for (const id of [...batch].sort()) await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${id} FOR UPDATE`;
+            const current = await tx.ticket.findMany({where: {id: {in: batch}}});
+            const allowed = current.filter(t => t.assignedSupervisorIds.length <= 1 && !closures(t.supervisorClosures).length && t.status !== 'closed');
+            await tx.ticket.updateMany({where: {id: {in: allowed.map(t => t.id)}}, data: {status: 'closed', closedAt: new Date()}});
+            return allowed.map(t => t.id);
           });
-          const auditData = batch.map(id => {
+          const auditData = changedIds.map(id => {
             const oldStatus = missingToUpdate.find(t => t.id === id)?.status || "open";
             return {
               ticketId: id,

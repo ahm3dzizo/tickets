@@ -1,3 +1,4 @@
+import { updateClassifiedTicket } from '../services/classified-ticket-update.js';
 /**
  * Reclassify Worker
  * ─────────────────
@@ -198,7 +199,7 @@ async function reclassifyForKeyword(
       } catch { /* non-fatal — type still updated */ }
     }
 
-    await prisma.ticket.update({ where: { id: ticket.id }, data: updateData });
+    await updateClassifiedTicket(ticket.id, updateData);
 
     const statusLabel = ticket.closedAt ? "مغلقة" : "مفتوحة";
     console.log(

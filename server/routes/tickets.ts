@@ -10,7 +10,29 @@ import { createNotification } from "../notificationService.js";
 import { maybeAutoFinishAppointment } from "./attendance.js";
 import type { TicketStatus } from "@prisma/client";
 
+import { closeTickets, closures } from '../services/ticket-closure.js';
+import { deliverClosureReports } from '../services/closure-report-worker.js';
+
 const router = Router();
+router.post('/close', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    if (!Array.isArray(req.body.ticketIds)) { res.status(400).json({error: 'INVALID_TICKET_IDS'}); return; }
+    const result = await closeTickets(req.uid!, req.body);
+    for (const row of result.results.filter(r => r.final && r.changed)) {
+      const ticket = await prisma.ticket.findUnique({where: {id: row.id}, select: {appointmentId: true}});
+      const openSession = ticket?.appointmentId ? await prisma.appointmentWorkSession.findUnique({where: {appointmentId: ticket.appointmentId}, select: {status: true}}) : null;
+      if (openSession && ['claimed','en_route','arrived','in_progress','paused'].includes(openSession.status)) continue;
+      await maybeAutoFinishAppointment(ticket?.appointmentId).catch(e => console.error('[ClosureAppointment]', e.message));
+    }
+    getIO()?.emit('tickets:updated', {ids: result.results.map(r => r.id)});
+    deliverClosureReports().catch(e => console.error('[ClosureReport]', e.message));
+    if (result.image) { res.type('image/jpeg').send(result.image); return; }
+    res.json({results: result.results, message: 'تم إنهاء الدور؛ لا يرسل تقرير حتى الإغلاق النهائي'});
+  } catch (e) {
+    const error = e instanceof Error ? e.message : 'CLOSURE_FAILED';
+    res.status(error === 'FORBIDDEN' ? 403 : error === 'TICKET_NOT_FOUND' ? 404 : 400).json({error});
+  }
+});
 
 const TICKET_STATUS_VALUES = new Set<TicketStatus>([
   "open",
@@ -73,7 +95,7 @@ async function enrichTickets<T extends {
 })[]> {
   const allIds = new Set<string>();
   for (const t of tickets) {
-    for (const id of (t.assignedSupervisorIds || [])) {
+    for (const id of [...(t.assignedSupervisorIds || []), ...closures((t as any).supervisorClosures).map(h => h.supervisorUid)]) {
       if (id) allIds.add(id);
     }
   }
@@ -106,6 +128,7 @@ async function enrichTickets<T extends {
     return {
       ...t,
       assignedSupervisorIds: ids,
+      supervisorClosures: closures((t as any).supervisorClosures).map(h => ({...h, supervisorName: nameMap.get(h.supervisorUid)?.displayName || h.supervisorUid})),
       detectedTypes,
       detectedSubTypeIds,
       unitNumber,
@@ -250,7 +273,13 @@ async function classifyInBackground(
       updateData.assigneeName = supervisorList[0]?.name || null;
     }
 
-    await prisma.ticket.updateMany({ where: { id: ticketId }, data: updateData });
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${ticketId} FOR UPDATE`;
+      const current = await tx.ticket.findUnique({where: {id: ticketId}});
+      if (!current || current.status === 'closed' || current.status === 'completed') return;
+      if (updateData.assignedSupervisorIds) updateData.assignedSupervisorIds = updateData.assignedSupervisorIds.filter((id: string) => !closures(current.supervisorClosures).some(h => h.supervisorUid === id));
+      await tx.ticket.update({where: {id: ticketId}, data: updateData});
+    });
     invalidateReferenceCache();
     invalidateKeywordCache();
     return classification.source;
@@ -320,8 +349,10 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const where: any = {};
   if (projectId) where.projectId = projectId;
   if (projectIds) where.projectId = { in: projectIds.split(",") };
-  if (supervisorId) where.assignedSupervisorIds = { has: supervisorId };
-  if (status) where.status = status;
+  if (role === 'supervisor') {
+    where.OR = [{assignedSupervisorIds: {has: req.uid!}}, {supervisorClosures: {array_contains: [{supervisorUid: req.uid!}]}}];
+  } else if (supervisorId) where.assignedSupervisorIds = { has: supervisorId };
+  if (status && role !== 'supervisor') where.status = status;
   if (clientId) where.clientId = clientId;
   if (unitId) where.unitId = unitId;
   if (contractorId) where.contractorId = contractorId;
@@ -374,6 +405,8 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     const apptInFuture = appt?.date ? appt.date >= todayStr : false;
     return {
       ...t,
+      globalStatus: t.status,
+      ...(role === 'supervisor' && !t.assignedSupervisorIds.includes(req.uid!) && closures(t.supervisorClosures).some(h => h.supervisorUid === req.uid!) ? {status: 'closed', closedAt: closures(t.supervisorClosures).find(h => h.supervisorUid === req.uid!)?.completedAt} : {}),
       appointmentTime:  apptInFuture ? apptTime : null,
       appointmentNotes: appt?.notes ?? null,
       appointment:      appt ? { id: appt.id, date: appt.date, time: appt.time ?? null, status: appt.status } : null,
@@ -383,7 +416,16 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       warrantyExpiryDate:   (t as any).unit?.warrantyExpiryDate ?? null,
       ticketSubType:        undefined,
     };
-  }));
+  }).filter(t => !status || t.status === status));
+});
+
+router.get('/closure-reports', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({where: {uid: req.uid!}, include: {projects: {select: {id: true}}}});
+    if (!user || !['admin', 'engineer'].includes(user.role)) {res.status(403).json({error: 'Forbidden'}); return;}
+    const jobs = await prisma.ticketClosureReport.findMany({where: user.role === 'admin' ? {} : {senderUid: req.uid!}, orderBy: {createdAt: 'desc'}, take: 100, select: {id: true, ticketIds: true, state: true, error: true, createdAt: true, sentAt: true}});
+    res.json(jobs);
+  } catch {res.status(500).json({error: 'REPORT_STATUS_FAILED'});}
 });
 
 // GET /api/tickets/ticketids — للكشف عن المكررات في الاستيراد (خفيف)
@@ -449,6 +491,10 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
       res.status(404).json({ error: "التذكرة غير موجودة" }); return;
     }
 
+    const actor = await prisma.user.findUnique({where: {uid}, include: {projects: {select: {id: true}}}});
+    if (!actor || actor.disabled || (actor.role !== 'admin' && !actor.projects.some(p => p.id === ticketInfo.projectId)) || (actor.role === 'supervisor' && !ticketInfo.assignedSupervisorIds.includes(uid))) {res.status(403).json({error: 'Forbidden'}); return;}
+    if (ticketInfo.assignedSupervisorIds.length > 1 || closures(ticketInfo.supervisorClosures).length) {res.status(409).json({error: 'SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT'}); return;}
+
     // محاولة إرسال الرسالة أولاً إذا كانت الخدمة مفعلة
     if (await shouldAutoSendWA(uid)) {
       const phone = ticketInfo.client?.phone;
@@ -513,8 +559,9 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
+  if (role === 'supervisor' && !ticket.assignedSupervisorIds.includes(req.uid!) && !closures(ticket.supervisorClosures).some(h => h.supervisorUid === req.uid!)) {res.status(403).json({error: 'Forbidden'}); return;}
   const [enriched] = await enrichTickets([ticket]);
-  res.json({ ...enriched, subTypeName: (ticket as any).ticketSubType?.nameAr ?? null });
+  res.json({ ...enriched, globalStatus: ticket.status, ...(role === 'supervisor' && !ticket.assignedSupervisorIds.includes(req.uid!) && closures(ticket.supervisorClosures).some(h => h.supervisorUid === req.uid!) ? {status: 'closed'} : {}), subTypeName: (ticket as any).ticketSubType?.nameAr ?? null });
 });
 
 // POST /api/tickets
@@ -857,6 +904,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         projectId: true,
         unitId: true,
         clientId: true,
+        assignedSupervisorIds: true,
       },
     });
 
@@ -865,6 +913,19 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
+    const actor = await prisma.user.findUnique({where: {uid: req.uid!}, include: {projects: {select: {id: true}}}});
+    if (!actor || actor.disabled || (actor.role !== 'admin' && !actor.projects.some(p => p.id === existingForValidation.projectId))) {
+      res.status(403).json({error: 'Forbidden'}); return;
+    }
+    if (actor.role === 'supervisor' && (!existingForValidation.assignedSupervisorIds.includes(req.uid!) || data.assignedSupervisorIds !== undefined || data.closedAt !== undefined || data.closureNotes !== undefined || data.maintenanceItems !== undefined || data.unitId !== undefined || data.clientId !== undefined)) {
+      res.status(403).json({error: 'Forbidden'}); return;
+    }
+    if (data.status !== undefined && ['closed', 'completed'].includes(normalizeTicketStatus(data.status))) {
+      res.status(409).json({error: 'استخدم مسار الإغلاق لتسجيل دور المشرف والتقرير', code: 'USE_CLOSURE_ENDPOINT'}); return;
+    }
+    if (existingForValidation.assignedSupervisorIds.length > 1 && (data.closedAt || ['absent', 'out_of_scope'].includes(data.status))) {
+      res.status(409).json({error: 'SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT'}); return;
+    }
     const effectiveProjectId = existingForValidation.projectId;
     const effectiveUnitId =
       data.unitId !== undefined
@@ -994,9 +1055,18 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       select: { status: true, type: true, assignedSupervisorIds: true, priority: true },
     });
 
-    const ticket = await prisma.ticket.update({
-      where: { id: req.params.id },
-      data:  updatePayload,
+    const ticket = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${req.params.id} FOR UPDATE`;
+      const current = await tx.ticket.findUniqueOrThrow({where: {id: req.params.id}});
+      if (!supervisorExplicit && updatePayload.assignedSupervisorIds) updatePayload.assignedSupervisorIds = updatePayload.assignedSupervisorIds.filter((id: string) => !closures(current.supervisorClosures).some(h => h.supervisorUid === id));
+      if (current.status === 'closed' && updatePayload.assignedSupervisorIds && !normalizedStatus) throw new Error('REOPEN_STATUS_REQUIRED');
+      if (actor.role === 'supervisor' && !current.assignedSupervisorIds.includes(req.uid!)) throw new Error('SUPERVISOR_NOT_ACTIVE');
+      if (current.status === 'closed' && normalizedStatus && normalizedStatus !== 'closed' && actor.role !== 'admin' && actor.role !== 'engineer') throw new Error('FORBIDDEN');
+      if (current.status === 'closed' && normalizedStatus && normalizedStatus !== 'closed') {
+        updatePayload.closedAt = null;
+        updatePayload.supervisorClosures = [];
+      }
+      return tx.ticket.update({where: {id: req.params.id}, data: updatePayload});
     });
 
     // ── Log audit entries ────────────────────────────────────────────────────
@@ -1136,11 +1206,17 @@ router.patch("/bulk-status", requireAuth, async (req, res) => {
       return;
     }
 
+    const actor = await prisma.user.findUnique({where: {uid: (req as AuthRequest).uid!}, include: {projects: {select: {id: true}}}});
+    if (!actor || actor.disabled || !['admin', 'engineer'].includes(actor.role)) {res.status(403).json({error: 'Forbidden'}); return;}
     const normalizedStatus = normalizeTicketStatus(status);
+    if (['closed', 'completed', 'absent', 'out_of_scope'].includes(normalizedStatus)) {res.status(409).json({error: 'USE_CLOSURE_ENDPOINT'}); return;}
+    const allowed = await prisma.ticket.count({where: {id: {in: ids}, ...(actor.role === 'admin' ? {} : {projectId: {in: actor.projects.map(p => p.id)}})}});
+    if (allowed !== new Set(ids).size) {res.status(403).json({error: 'Forbidden'}); return;}
     const rows = await prisma.ticket.findMany({
       where: { id: { in: ids } },
-      select: { appointmentId: true },
+      select: { appointmentId: true, supervisorClosures: true },
     });
+    if (rows.some(t => closures(t.supervisorClosures).length)) {res.status(409).json({error: 'USE_INDIVIDUAL_UPDATE_FOR_REOPEN'}); return;}
 
     const updated = await prisma.ticket.updateMany({
       where: { id: { in: ids } },
@@ -1170,6 +1246,11 @@ router.post("/bulk-update-imported", requireAuth, async (req, res) => {
   };
   if (!Array.isArray(updates)) { res.status(400).json({ error: "updates must be array" }); return; }
   try {
+    const actor = await prisma.user.findUnique({where: {uid: (req as AuthRequest).uid!}, include: {projects: {select: {id: true}}}});
+    if (!actor || actor.disabled || !['admin', 'engineer'].includes(actor.role)) {res.status(403).json({error: 'Forbidden'}); return;}
+    const rows = await prisma.ticket.findMany({where: {id: {in: updates.map(u => u.id)}}, select: {projectId: true, assignedSupervisorIds: true, supervisorClosures: true}});
+    if (rows.length !== new Set(updates.map(u => u.id)).size || rows.some(t => (actor.role !== 'admin' && !actor.projects.some(p => p.id === t.projectId)) || t.assignedSupervisorIds.length > 1 || closures(t.supervisorClosures).length > 0)) {res.status(409).json({error: 'SHARED_TICKET_IMPORT_UPDATE_FORBIDDEN'}); return;}
+
     // جلب typeId map مرة واحدة
     const allTypes = await prisma.ticketType.findMany({ select: { id: true, key: true } });
     const typeIdMap = new Map(allTypes.map(t => [t.key, t.id]));

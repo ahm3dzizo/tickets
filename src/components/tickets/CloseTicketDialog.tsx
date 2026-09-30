@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import {
 CheckCircle2,
@@ -117,6 +118,12 @@ clients,
 projects,
 onSuccess
 }: CloseTicketDialogProps) {
+const { user } = useAuth();
+const privileged = user?.role === 'admin' || user?.role === 'engineer';
+const [closureScope, setClosureScope] = useState('all');
+const [targetSupervisor, setTargetSupervisor] = useState('');
+const supervisors = [...new Map(selectedTickets.flatMap(t => t.assignedSupervisors || []).map(s => [s.id, s])).values()];
+const shared = selectedTickets.some(t => (t.assignedSupervisorIds?.length || 0) > 1 || (t.supervisorClosures?.length || 0) > 0);
 type CloseType = 'normal' | 'absent' | 'out_of_scope';
 const [closeType, setCloseType] = useState<CloseType>('normal');
 const [loading, setLoading] = useState(false);
@@ -144,6 +151,8 @@ const [waConnected, setWaConnected] = useState<boolean | null>(null);
 React.useEffect(() => {
 if (open) {
 setCloseType('normal');
+setClosureScope('all');
+setTargetSupervisor('');
 setWaConnected(null);
 WhatsAppService.getTemplates().then(t => {
 setClosingMsgTemplate(t.closingMsg);
@@ -233,6 +242,7 @@ status: cardStatus,
 
 // ── حفظ التقرير فقط (بدون إغلاق تذاكر أو إرسال رسائل) ──────────────────
 const handleSaveReportOnly = async (format: 'image' | 'pdf') => {
+if (privileged && (!notes.trim() || (closureScope === 'supervisor' && !targetSupervisor))) {toast.error('اختر المشرف واكتب سبب الإغلاق في الملاحظات'); return;}
 if (maintItems.length === 0) {
 toast.error('يرجى إضافة بند صيانة واحد على الأقل');
 return;
@@ -287,6 +297,7 @@ setSavingReport(null);
 
 const handleSpecialClose = async () => {
 if (closeType === 'normal') return;
+if (shared) {toast.error('التذكرة مشتركة؛ استخدم إنهاء الدور أو الإغلاق الكامل'); return;}
 setLoading(true);
 try {
 const isWhatsAppSent = targetClient?.phone && previewMessage;
@@ -327,7 +338,7 @@ setLoading(false);
 };
 
 const handleSubmit = async () => {
-if (closeType !== 'normal') { handleSpecialClose(); return; }
+if (closeType !== 'normal') { if (shared) {toast.error('التذكرة مشتركة؛ استخدم إنهاء الدور أو الإغلاق الكامل'); return;} handleSpecialClose(); return; }
 
 if (maintItems.length === 0) {
 toast.error('يرجى إضافة بند صيانة واحد على الأقل');
@@ -338,60 +349,19 @@ setLoading(true);
 setCopying(true);
 
 try {
-// 1. Build report data and call Python backend
-
-// Resolve project name: use prop if available, otherwise fetch via API
-let projectName = staticProjectName;
-if (!projectName && mainTicket?.projectId) {
-try {
-const project = await projectsApi.get(mainTicket.projectId);
-if (project) projectName = (project as Project).name;
-} catch { /* silently ignore */ }
-}
-const priorityMap: Record<string, string> = {
-low: 'منخفضة', medium: 'متوسطة', high: 'عالية', urgent: 'عاجلة جداً',
-'3': 'منخفضة', '4': 'عادية', '6': 'متوسطة', '7': 'عالية', '9': 'عاجلة جداً',
-};
-const priorityLabel = mainTicket?.priority
-? (priorityMap[String(mainTicket.priority)] || String(mainTicket.priority))
-: 'الأولوية';
-
-const reportPayload = {
-ticket_num: selectedTickets.map(t => t.ticketId || t.refNumber).join('، '),
-villa: mainTicket?.unitNumber || '',
-customer_name: targetClient?.name || mainTicket?.clientName || '',
-phone: targetClient?.phone || '',
-maint_items: maintItems.map(item => [item.description, item.status]),
-notes,
-block: targetClient?.blockNumber || '',
-project: projectName || '',
-ticket_date: mainTicket?.issuedAt || '',
-priority: priorityLabel,
-nhc: mainTicket?.projectAbbr || mainTicket?.refNumber?.split('-')[0] || '',
-};
-
 const authToken = localStorage.getItem('retal_auth_token');
-const response = await fetch('/api/generate-report', {
-method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-},
-body: JSON.stringify({
-...reportPayload,
-// The backend owns the closing caption template; the browser sends only the
-// target phone and report data.
-whatsappPhone: targetClient?.phone || '',
-}),
+const response = await fetch('/api/tickets/close', {
+  method: 'POST', headers: {'Content-Type': 'application/json', ...(authToken ? {Authorization: `Bearer ${authToken}`} : {})},
+  body: JSON.stringify({ticketIds: selectedTickets.map(t => t.id), scope: privileged ? closureScope : 'self', supervisorUid: privileged && closureScope === 'supervisor' ? targetSupervisor : undefined, notes, items: maintItems}),
 });
-
 if (!response.ok) {
-const err = await response.json().catch(() => ({}));
-console.error('Report generation error:', err);
-toast.error('فشل إنشاء صورة التقرير — لم يتم إغلاق التذاكر');
-return;
+  const error = await response.json().catch(() => ({}));
+  toast.error(error.error || 'فشل إنهاء الدور'); return;
 }
-
+if (response.headers.get('content-type')?.includes('application/json')) {
+  toast.success('تم حفظ الحالة؛ التقرير يُرسل عند الإغلاق الكامل فقط');
+  onSuccess(); onOpenChange(false); return;
+}
 const blob = await response.blob();
 
 const firstTicketNo = selectedTickets[0]?.ticketId || selectedTickets[0]?.refNumber || 'ticket';
@@ -416,23 +386,8 @@ await clearDirHandle();
 }
 }
 
-// 2. Close tickets via API — only after successful save
-await Promise.all(selectedTickets.map(ticket =>
-ticketsApi.update(ticket.id, {
-status: 'closed',
-closedAt: new Date().toISOString(),
-closureNotes: notes,
-maintenanceItems: maintItems
-})
-));
-
-// 3. The Backend already sends the WhatsApp message + Image via Baileys API silently!
-// (We passed whatsappPhone in the /api/generate-report payload)
-
-// الـ backend يبعت التقرير + طلب الموافقة تلقائيًا بعد 3 ثوانٍ
-
 const isWhatsAppSent = targetClient?.phone && previewMessage;
-toast.success(`تم إغلاق التذاكر بنجاح${isWhatsAppSent ? ' — جارٍ إرسال التقرير وطلب الموافقة 💬' : ''}`);
+toast.success(`تم حفظ الأدوار وإغلاق التذاكر المكتملة${isWhatsAppSent ? ' — التقرير النهائي في طابور الإرسال 💬' : ''}`);
 onSuccess();
 onOpenChange(false);
 } catch (error) {
@@ -471,6 +426,19 @@ return (
 </div>
 </div>
 </DialogHeader>
+<div className="rounded-xl border border-border p-3 text-right space-y-2">
+<p className="text-sm">التقرير يُرسل فقط بعد انتهاء جميع المشرفين أو الإغلاق الكامل بواسطة الإدارة.</p>
+{supervisors.map(s => <div key={s.id} className="text-xs">{s.name} — قيد التنفيذ</div>)}
+{selectedTickets.flatMap(t => (t.supervisorClosures || []).filter(h => !t.assignedSupervisorIds?.includes(h.supervisorUid)).map(h => <div key={`${t.id}-${h.supervisorUid}`} className="text-xs text-emerald-400">#{t.ticketId} — {h.supervisorName || h.supervisorUid} — أنهى دوره</div>))}
+{privileged && <>
+<Label>نطاق الإغلاق</Label>
+<select className="w-full bg-background border border-border rounded-lg p-2" value={closureScope} onChange={e => setClosureScope(e.target.value)}>
+<option value="all">إغلاق التذكرة بالكامل</option><option value="supervisor">إنهاء دور مشرف معين</option>
+</select>
+{closureScope === 'supervisor' && <select className="w-full bg-background border border-border rounded-lg p-2" value={targetSupervisor} onChange={e => setTargetSupervisor(e.target.value)}><option value="">اختر المشرف</option>{supervisors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
+<p className="text-xs text-muted-foreground">سبب الإغلاق أو الإنهاء بالنيابة مطلوب في الملاحظات.</p>
+</>}
+</div>
 
 {/* ── نوع الإغلاق ── */}
 <div className="flex gap-2 mt-1">
@@ -478,7 +446,7 @@ return (
 { key: 'normal' as const, label: 'إغلاق عادي', icon: CheckCircle2, color: 'emerald' },
 { key: 'absent' as const, label: 'عدم التواجد', icon: UserX, color: 'amber' },
 { key: 'out_of_scope'as const, label: 'خارج الاختصاص', icon: Ban, color: 'red' },
- ].map(({ key, label, icon: Icon, color }) => (
+ ].filter(option => !shared || option.key === 'normal').map(({ key, label, icon: Icon, color }) => (
 <button
 key={key}
 type="button"
@@ -648,7 +616,7 @@ className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 rounded-xl h-12 f
 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
 <>
 <Save className="w-4 h-4" />
-قفل وحفظ التقرير
+{privileged ? (closureScope === 'all' ? 'إغلاق التذكرة بالكامل' : 'إنهاء دور المشرف') : 'إنهاء دوري في التذكرة'}
 </>
 )}
 </Button>

@@ -5,13 +5,14 @@ import path from "path";
 import { __dirname } from "../config.js";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth } from "../auth.js";
-import { buildClosingMsg, sendWAImage } from "../baileys.js";
 
 const router = Router();
 
 // POST /api/generate-report
 router.post("/", requireAuth, async (req: AuthRequest, res) => {
   const body = { ...req.body };
+  // Legacy report previews/downloads cannot send a customer closing report.
+  if (body.whatsappPhone) {res.status(409).json({error: 'USE_CLOSURE_ENDPOINT'}); return;}
 
   // If nhc is empty, try to resolve project abbreviation from the first ticket's project
   if (!body.nhc && body.ticket_num) {
@@ -44,8 +45,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }
 
   // Extract WhatsApp fields from body (not forwarded to Python)
-  const whatsappPhone: string | undefined = body.whatsappPhone;
-  const senderUid = req.uid;
   delete body.whatsappPhone;
   // Never trust a browser-generated closing caption. The server owns the
   // WhatsApp closing template and rebuilds it from report data below.
@@ -85,42 +84,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       res.setHeader("Content-Type", "image/jpeg");
       res.setHeader("Content-Disposition", `attachment; filename="report.jpg"`);
       res.send(jpgData);
-
-      // Fire-and-forget: send report image + approval request via WhatsApp
-      if (whatsappPhone && senderUid) {
-        const uid = senderUid;
-        const phone = whatsappPhone;
-        const customerName: string = body.customer_name || '';
-        const villa: string        = body.villa || '';
-        const notes: string        = body.notes || '';
-        const ticketNums: string   = String(body.ticket_num || '').trim();
-        const description = Array.isArray(body.maint_items)
-          ? body.maint_items
-              .map((item: unknown) => Array.isArray(item) ? String(item[0] ?? '').trim() : '')
-              .filter(Boolean)
-              .join('، ')
-          : '';
-
-        let caption = '📊 تقرير الصيانة — Tickets';
-        try {
-          const built = await buildClosingMsg({
-            ticketId: ticketNums,
-            clientName: customerName,
-            description,
-            unitNumber: villa,
-            closureNotes: notes || null,
-          });
-          if (built.trim()) caption = built.trim();
-        } catch (err) {
-          console.error('[WA] failed to build server closing caption:', err);
-        }
-
-        sendWAImage(uid, phone, jpgData, caption)
-          .then((r: any) => {
-            console.log('[WA] report image sent:', r);
-          })
-          .catch((err: any) => console.error('[WA] report image error:', err));
-      }
 
       try { unlinkSync(jpgPath); } catch { /* ignore */ }
     } catch {

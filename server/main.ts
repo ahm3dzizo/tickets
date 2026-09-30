@@ -1,3 +1,4 @@
+import { startClosureReportWorker } from './services/closure-report-worker.js';
 import './nara-rate-limiter.js';
 import express, { Request, Response, NextFunction } from "express";
 import { createServer } from "http";
@@ -273,6 +274,7 @@ async function startServer() {
 
   await initVapid();
   startCronJobs();
+  startClosureReportWorker();
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
