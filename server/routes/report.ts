@@ -5,7 +5,7 @@ import path from "path";
 import { __dirname } from "../config.js";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth } from "../auth.js";
-import { sendWAImage } from "../baileys.js";
+import { buildClosingMsg, sendWAImage } from "../baileys.js";
 
 const router = Router();
 
@@ -45,9 +45,10 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
 
   // Extract WhatsApp fields from body (not forwarded to Python)
   const whatsappPhone: string | undefined = body.whatsappPhone;
-  const whatsappMessage: string | undefined = body.whatsappMessage;
   const senderUid = req.uid;
   delete body.whatsappPhone;
+  // Never trust a browser-generated closing caption. The server owns the
+  // WhatsApp closing template and rebuilds it from report data below.
   delete body.whatsappMessage;
 
   const scriptPath = path.join(__dirname, "report_generator.py");
@@ -65,7 +66,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   python.stdout.on("data", (data) => { output += data.toString(); });
   python.stderr.on("data", (data) => { errorOutput += data.toString(); });
 
-  python.on("close", (code) => {
+  python.on("close", async (code) => {
     if (code !== 0) {
       console.error("Python report error:", errorOutput);
       return res.status(500).json({ error: "Report generation failed", details: errorOutput });
@@ -92,9 +93,29 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
         const customerName: string = body.customer_name || '';
         const villa: string        = body.villa || '';
         const notes: string        = body.notes || '';
-        const ticketNum: string    = (body.ticket_num || '').split('،')[0].trim();
+        const ticketNums: string   = String(body.ticket_num || '').trim();
+        const description = Array.isArray(body.maint_items)
+          ? body.maint_items
+              .map((item: unknown) => Array.isArray(item) ? String(item[0] ?? '').trim() : '')
+              .filter(Boolean)
+              .join('، ')
+          : '';
 
-        sendWAImage(uid, phone, jpgData, whatsappMessage || '📊 تقرير الصيانة — Tickets')
+        let caption = '📊 تقرير الصيانة — Tickets';
+        try {
+          const built = await buildClosingMsg({
+            ticketId: ticketNums,
+            clientName: customerName,
+            description,
+            unitNumber: villa,
+            closureNotes: notes || null,
+          });
+          if (built.trim()) caption = built.trim();
+        } catch (err) {
+          console.error('[WA] failed to build server closing caption:', err);
+        }
+
+        sendWAImage(uid, phone, jpgData, caption)
           .then((r: any) => {
             console.log('[WA] report image sent:', r);
           })
