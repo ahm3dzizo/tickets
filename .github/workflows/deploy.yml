@@ -110,6 +110,7 @@ jobs:
           ML_APP="retal-ml"
           PUBLIC_URL="https://tickets.knot-sys.com"
           ML_RUNTIME_DIR="${RETAL_ML_RUNTIME_DIR:-/var/lib/retal/ml}"
+          DEPLOY_LOCK_FILE="${RETAL_DEPLOY_LOCK_FILE:-/tmp/retal-deploy.lock}"
           export RETAL_ML_RUNTIME_DIR="$ML_RUNTIME_DIR"
 
           command -v git >/dev/null
@@ -118,9 +119,20 @@ jobs:
           command -v pm2 >/dev/null
           command -v curl >/dev/null
           command -v sudo >/dev/null
+          command -v flock >/dev/null
           sudo -n true
 
           cd "$APP_DIR"
+
+          echo "Waiting for exclusive deploy lock: $DEPLOY_LOCK_FILE"
+          exec 9>"$DEPLOY_LOCK_FILE"
+          if ! flock -w 1200 9; then
+            echo "Could not acquire deploy lock within 20 minutes."
+            exit 75
+          fi
+          printf '%s\n' "$" 1>&9
+          echo "Exclusive deploy lock acquired"
+
           PREVIOUS_SHA="$(git rev-parse HEAD)"
 
           echo "============================================================"
