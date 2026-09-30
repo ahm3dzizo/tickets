@@ -8,8 +8,42 @@ import { invalidateKeywordCache } from "../classifier/keywords.js";
 import { sendWAText, buildOpeningMsg, buildClosingMsg, buildAbsentMsg, buildOutOfScopeMsg } from "../baileys.js";
 import { createNotification } from "../notificationService.js";
 import { maybeAutoFinishAppointment } from "./attendance.js";
+import type { TicketStatus } from "@prisma/client";
 
 const router = Router();
+
+const TICKET_STATUS_VALUES = new Set<TicketStatus>([
+  "open",
+  "in_progress",
+  "pending",
+  "completed",
+  "closed",
+  "waiting",
+  "out_of_scope",
+  "absent",
+  "contractor",
+  "note",
+]);
+
+const TICKET_STATUS_ALIASES: Record<string, TicketStatus> = {
+  "in-progress": "in_progress",
+  "out-of-scope": "out_of_scope",
+};
+
+function normalizeTicketStatus(raw: unknown): TicketStatus {
+  if (typeof raw !== "string") {
+    throw new Error("INVALID_TICKET_STATUS");
+  }
+
+  const input = raw.trim().toLowerCase();
+  const normalized = TICKET_STATUS_ALIASES[input] ?? input;
+
+  if (!TICKET_STATUS_VALUES.has(normalized as TicketStatus)) {
+    throw new Error(`INVALID_TICKET_STATUS: ${raw}`);
+  }
+
+  return normalized as TicketStatus;
+}
 
 // إزالة الأصفار البادئة من رقم التذكرة (مثال: "0019350" → "19350")
 function normalizeTicketId(raw: string): string {
@@ -656,7 +690,7 @@ router.post("/bulk", requireAuth, async (req, res) => {
         description: t.description, type: t.type || "general",
         typeId:   (t.typeId   && typeof t.typeId   === 'string' && t.typeId.length > 0) ? t.typeId   : (typeIdMap.get(t.type) || null),
         subTypeId:(t.subTypeId && typeof t.subTypeId === 'string' && t.subTypeId.length > 0) ? t.subTypeId : null,
-        status: t.status || "open", priority,
+        status: normalizeTicketStatus(t.status || "open"), priority,
         assigneeName: t.assigneeName || null,
         assignedSupervisorIds,
         detectedTypes: uniqueStringList(t.detectedTypes),
@@ -900,8 +934,12 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     }
 
     // ── Build base update payload ──────────────────────────────────────────
+    const normalizedStatus = data.status !== undefined
+      ? normalizeTicketStatus(data.status)
+      : undefined;
+
     const updatePayload: Record<string, any> = {
-      status:                data.status               ?? undefined,
+      status:                normalizedStatus,
       priority:              data.priority !== undefined ? Number(data.priority) : undefined,
       assigneeName:          data.assigneeName         ?? undefined,
       assignedSupervisorIds: data.assignedSupervisorIds
@@ -994,12 +1032,12 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       }).catch(() => {});
     }
 
-    const closingStatuses = ['closed', 'completed'];
-    if (data.status && closingStatuses.includes(data.status) && req.uid) {
+    const closingStatuses: TicketStatus[] = ['closed', 'completed'];
+    if (normalizedStatus && closingStatuses.includes(normalizedStatus) && req.uid) {
       // autoSendClosing(req.uid, ticket).catch(() => {});
     }
 
-    if (data.status && data.status !== oldTicket?.status) {
+    if (normalizedStatus && normalizedStatus !== oldTicket?.status) {
       await maybeAutoFinishAppointment((ticket as any).appointmentId);
     }
 
@@ -1090,15 +1128,39 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 
 // PATCH /api/tickets/bulk-status
 router.patch("/bulk-status", requireAuth, async (req, res) => {
-  const { ids, status } = req.body as { ids: string[]; status: any };
-  const rows = await prisma.ticket.findMany({
-    where: { id: { in: ids } },
-    select: { appointmentId: true }
-  });
-  await prisma.ticket.updateMany({ where: { id: { in: ids } }, data: { status } });
-  const apptIds = Array.from(new Set(rows.map(r => r.appointmentId).filter(Boolean))) as string[];
-  for (const apptId of apptIds) await maybeAutoFinishAppointment(apptId);
-  res.json({ count: ids.length });
+  try {
+    const { ids, status } = req.body as { ids?: unknown; status?: unknown };
+
+    if (!Array.isArray(ids) || ids.length === 0 || ids.some(id => typeof id !== "string" || !id.trim())) {
+      res.status(400).json({ error: "ids must be a non-empty string array", code: "INVALID_TICKET_IDS" });
+      return;
+    }
+
+    const normalizedStatus = normalizeTicketStatus(status);
+    const rows = await prisma.ticket.findMany({
+      where: { id: { in: ids } },
+      select: { appointmentId: true },
+    });
+
+    const updated = await prisma.ticket.updateMany({
+      where: { id: { in: ids } },
+      data: { status: normalizedStatus },
+    });
+
+    const apptIds = Array.from(new Set(rows.map(r => r.appointmentId).filter(Boolean))) as string[];
+    for (const apptId of apptIds) {
+      await maybeAutoFinishAppointment(apptId);
+    }
+
+    res.json({ count: updated.count, status: normalizedStatus });
+  } catch (err: any) {
+    res.status(400).json({
+      error: err?.message || "Invalid ticket status",
+      code: String(err?.message || "").startsWith("INVALID_TICKET_STATUS")
+        ? "INVALID_TICKET_STATUS"
+        : "BULK_STATUS_UPDATE_FAILED",
+    });
+  }
 });
 
 // POST /api/tickets/bulk-update-imported
@@ -1116,7 +1178,7 @@ router.post("/bulk-update-imported", requireAuth, async (req, res) => {
       prisma.ticket.update({
         where: { id: u.id },
         data: {
-          status:        u.status,
+          status:        normalizeTicketStatus(u.status),
           closedAt:      u.closedAt ? new Date(u.closedAt) : null,
           ...(u.type && u.type !== 'unclassified' ? {
             type:          u.type,
