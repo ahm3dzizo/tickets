@@ -148,6 +148,47 @@ function detectRecentImportDateFormat(rows: any[], dateColumn: string): ImportDa
   return detected;
 }
 
+function readWorkbookForImport(buffer: Buffer): XLSX.WorkBook {
+  const originalError = console.error.bind(console);
+  const originalWarn = console.warn.bind(console);
+  let suppressedZipWarnings = 0;
+
+  const shouldSuppress = (args: unknown[]) =>
+    typeof args[0] === "string" && args[0].startsWith("Bad uncompressed size:");
+
+  console.error = (...args: unknown[]) => {
+    if (shouldSuppress(args)) {
+      suppressedZipWarnings++;
+      return;
+    }
+    originalError(...args);
+  };
+  console.warn = (...args: unknown[]) => {
+    if (shouldSuppress(args)) {
+      suppressedZipWarnings++;
+      return;
+    }
+    originalWarn(...args);
+  };
+
+  try {
+    return XLSX.read(buffer, {
+      type: "buffer",
+      cellFormula: false,
+      cellHTML: false,
+      cellStyles: false,
+      cellNF: false,
+      sheetStubs: false,
+    });
+  } finally {
+    console.error = originalError;
+    console.warn = originalWarn;
+    if (suppressedZipWarnings > 0) {
+      originalWarn(`[ImportExcel] ignored ${suppressedZipWarnings} non-fatal XLSX ZIP size warnings`);
+    }
+  }
+}
+
 // بيحلل ملف الإكسل ويكتشف صف العناوين، ويفلتر التذاكر المغلقة القديمة جداً.
 // (كان ده شغال في worker thread منفصل عبر ملف مؤقت، لكن نصوص القالب المتداخلة
 // جوه الكود كانت بتتفسر غلط، وملف الـ worker المؤقت في /tmp مكانش قادر يلاقي
@@ -158,7 +199,7 @@ function parseExcelAndDetectHeaders(
   fieldAliases: Record<string, string[]>,
   skipDateFilter: boolean = false
 ): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: ImportDateFormat } {
-  const wb = XLSX.read(buffer, { type: "buffer", cellFormula: false, cellHTML: false, cellStyles: false, cellNF: false, sheetStubs: false });
+  const wb = readWorkbookForImport(buffer);
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
