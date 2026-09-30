@@ -92,7 +92,7 @@ export default function TicketsList() {
   const handleReassignSupervisors = async () => {
     setReassigning(true);
     try {
-      const activeStatuses = new Set(['open', 'in-progress', 'pending', 'waiting']);
+      const activeStatuses = new Set(['open', 'in_progress', 'in-progress', 'pending', 'waiting']);
       const unassigned = tickets.filter(t =>
         activeStatuses.has(String(t.status || '').toLowerCase()) &&
         (!t.assignedSupervisorIds || t.assignedSupervisorIds.length === 0)
