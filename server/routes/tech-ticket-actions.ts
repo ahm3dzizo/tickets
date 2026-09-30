@@ -1,3 +1,4 @@
+import {closures} from '../services/ticket-closure-plan.js';
 import { Router } from 'express';
 import prisma from '../db.js';
 import { requireTechAuth, TechAuthRequest } from './tech-auth.js';
@@ -60,15 +61,20 @@ router.patch(
           throw new Error('No active technician session for this appointment');
         }
 
+        await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${ticketId} FOR UPDATE`;
         const ticket = await tx.ticket.findFirst({
           where: { id: ticketId, appointmentId },
           select: {
             id: true,
             status: true,
             closureNotes: true,
+            assignedSupervisorIds: true,
+            supervisorClosures: true,
           },
         });
         if (!ticket) throw new Error('Ticket not in this appointment');
+        if (['closed', 'completed'].includes(ticket.status) && closures(ticket.supervisorClosures).length) throw new Error('التذكرة مغلقة؛ إعادة الفتح من الإدارة فقط');
+        if (TERMINAL_TICKET_STATUSES.includes(status) && (ticket.assignedSupervisorIds.length > 1 || closures(ticket.supervisorClosures).length)) throw new Error('التذكرة مشتركة؛ يجب إنهاء أدوار المشرفين قبل الإغلاق النهائي');
 
         const now = new Date();
         const isTerminal = TERMINAL_TICKET_STATUSES.includes(status);

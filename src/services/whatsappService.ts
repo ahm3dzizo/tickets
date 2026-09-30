@@ -1,5 +1,12 @@
 const TOKEN_KEY = 'retal_auth_token';
 
+const DEFAULT_TEMPLATES = {
+  openingMsg: 'السلام عليكم، بخصوص بلاغ الصيانة رقم {ticketId} لوحدتكم {unitNumber}، نرجو إفادتنا بمواعيد تواجدكم في الفيلا لتنسيق موعد الصيانة. شكراً لتعاونكم.',
+  closingMsg: 'السلام عليكم، بخصوص بلاغ الصيانة رقم {ticketId} لوحدتكم رقم {unitNumber}، تم الانتهاء من الصيانة المطلوبة. نرجو التفضل بالتوقيع على نموذج الإغلاق المرفق.\nشكراً لتعاونكم.',
+  absentMsg: 'السلام عليكم،\nتم زيارة وحدتكم رقم {unitNumber} بخصوص بلاغ الصيانة #{ticketId}، ولم يتمكن الفريق من الدخول نظراً لعدم التواجد.\nيرجى رفع تذكرة جديدة عند تواجدكم لإعادة جدولة الزيارة.\nشكراً لتفهمكم.',
+  outOfScopeMsg: 'السلام عليكم،\nبخصوص بلاغ الصيانة #{ticketId} لوحدتكم رقم {unitNumber}، بعد المعاينة تبيّن أن المشكلة خارج نطاق الضمان.\nشكراً لتفهمكم.',
+};
+
 export class WhatsAppService {
   static async sendUpdate(phoneNumber: string, message: string): Promise<boolean> {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -40,8 +47,16 @@ export class WhatsAppService {
       const res = await fetch('/api/settings/whatsapp-templates', {
         headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` }
       });
-      if (res.ok) return await res.json();
+      if (res.ok) {
+        const data = await res.json() as Partial<typeof DEFAULT_TEMPLATES>;
+        return {
+          openingMsg: data.openingMsg || DEFAULT_TEMPLATES.openingMsg,
+          closingMsg: data.closingMsg || DEFAULT_TEMPLATES.closingMsg,
+          absentMsg: data.absentMsg || DEFAULT_TEMPLATES.absentMsg,
+          outOfScopeMsg: data.outOfScopeMsg || DEFAULT_TEMPLATES.outOfScopeMsg,
+        };
+      }
     } catch {}
-    return { openingMsg: '', closingMsg: '', absentMsg: '', outOfScopeMsg: '' };
+    return { ...DEFAULT_TEMPLATES };
   }
 }

@@ -67,8 +67,8 @@ export default function TeamMemberDetail() {
       (allProjects as any[]).forEach(p => { map[p.id] = p.name; });
       setProjects(map);
       setTickets((allTickets as any[]).filter(t =>
-        Array.isArray(t.assignedSupervisorIds) && t.assignedSupervisorIds.includes(id)
-      ));
+        (Array.isArray(t.assignedSupervisorIds) && t.assignedSupervisorIds.includes(id)) || t.supervisorClosures?.some((h: any) => h.supervisorUid === id)
+      ).map(t => ({...t, status: !t.assignedSupervisorIds?.includes(id) && t.supervisorClosures?.some((h: any) => h.supervisorUid === id) ? 'closed' : t.status})));
     } catch { setMember(null); }
     finally { setLoading(false); }
   };
@@ -101,7 +101,7 @@ export default function TeamMemberDetail() {
   // ── derived stats ──────────────────────────────────────────────────────────
   const totalTickets   = tickets.length;
   const openTickets    = tickets.filter(t => t.status === 'open').length;
-  const activeTickets  = tickets.filter(t => t.status === 'in-progress' || t.status === 'pending').length;
+  const activeTickets  = tickets.filter(t => t.status === 'in-progress' || t.status === 'in_progress' || t.status === 'pending').length;
   const closedTickets  = tickets.filter(t => t.status === 'closed' || t.status === 'completed').length;
 
   const memberProjects = member

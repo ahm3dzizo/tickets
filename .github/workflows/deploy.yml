@@ -216,9 +216,8 @@ jobs:
             if git diff --quiet "$PREVIOUS_SHA" "$DEPLOY_SHA" -- prisma/schema.prisma; then
               echo "Prisma schema is unchanged; skipping database mutation safely."
             else
-              echo "Prisma schema changed but no migration history exists."
-              echo "Deployment aborted: create and review a Prisma baseline/migration first."
-              exit 1
+              echo "Checking narrowly scoped additive supervisor closure update..."
+              node scripts/apply-supervisor-closures.js "$PREVIOUS_SHA"
             fi
           fi
 

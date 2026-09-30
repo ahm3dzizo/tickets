@@ -29,14 +29,28 @@ const logger = pino({ level: 'silent' }); // نخفّت اللوجز — rc13 ve
 
 // libsignal 6 logs the complete session object (including private/root keys)
 // directly through console.info. Suppress only those exact dependency messages.
+const originalConsoleLog = console.log.bind(console);
 const originalConsoleInfo = console.info.bind(console);
 const originalConsoleWarn = console.warn.bind(console);
+
+function isSensitiveLibsignalSessionLog(args: unknown[]): boolean {
+  return args[0] === 'Closing session:' || args[0] === 'Removing old closed session:';
+}
+
+console.log = (...args: unknown[]) => {
+  if (isSensitiveLibsignalSessionLog(args)) return;
+  originalConsoleLog(...args);
+};
 console.info = (...args: unknown[]) => {
-  if (args[0] === 'Closing session:') return;
+  if (isSensitiveLibsignalSessionLog(args)) return;
   originalConsoleInfo(...args);
 };
 console.warn = (...args: unknown[]) => {
-  if (args[0] === 'Closing open session in favor of incoming prekey bundle' || args[0] === 'Session already closed') return;
+  if (
+    isSensitiveLibsignalSessionLog(args) ||
+    args[0] === 'Closing open session in favor of incoming prekey bundle' ||
+    args[0] === 'Session already closed'
+  ) return;
   originalConsoleWarn(...args);
 };
 
@@ -604,10 +618,17 @@ async function getTemplate(key: string, defaultText: string): Promise<string> {
 function replaceVars(template: string, params: MsgParams): string {
   return template
     .replace(/{ticketId}/g, params.ticketId)
+    .replace(/{clientName}/g, params.clientName)
     .replace(/{description}/g, params.description)
     .replace(/{unitNumber}/g, params.unitNumber)
     .replace(/{date}/g, params.date || '')
     .replace(/{closureNotes}/g, params.closureNotes || '');
+}
+
+function pluralizeTicketTemplate(template: string, ticketId: string): string {
+  const isMultiple = ticketId.includes('،') || ticketId.includes(',');
+  if (!isMultiple) return template;
+  return template.replace(/بلاغ الصيانة رقم/g, 'بلاغات الصيانة أرقام');
 }
 
 export async function buildOpeningMsg(params: MsgParams): Promise<string> {
@@ -617,10 +638,9 @@ export async function buildOpeningMsg(params: MsgParams): Promise<string> {
 }
 
 export async function buildClosingMsg(params: MsgParams): Promise<string> {
-  const notesStr = params.closureNotes ? `\nملاحظات الإغلاق: {closureNotes}` : '';
-  const defaultMsg = `السلام عليكم،\nتمت معالجة تذكرة الصيانة بنجاح\n\nرقم التذكرة: #{ticketId}\nالوصف: {description}\nالفيلا: {unitNumber}${notesStr}\n\nشكراً لصبركم وتعاونكم.`;
+  const defaultMsg = `السلام عليكم، بخصوص بلاغ الصيانة رقم {ticketId} لوحدتكم رقم {unitNumber}، تم الانتهاء من الصيانة المطلوبة. نرجو التفضل بالتوقيع على نموذج الإغلاق المرفق.\nشكراً لتعاونكم.`;
   const template = await getTemplate('closingMsg', defaultMsg);
-  return replaceVars(template, params);
+  return replaceVars(pluralizeTicketTemplate(template, params.ticketId), params);
 }
 
 export async function buildAbsentMsg(params: MsgParams): Promise<string> {

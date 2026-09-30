@@ -1,0 +1,15 @@
+# Supervisor closure
+
+`POST /api/tickets/close` accepts ticketIds (database IDs), scope (`self`, `supervisor`, `all`), supervisorUid for the targeted scope, notes and items (`description`, `status`). Supervisors can use self only. Engineers and admins must provide a reason for completing someone else's role or the whole ticket. Engineers are restricted to their projects.
+
+Ticket.assignedSupervisorIds contains current responsibility. Ticket.supervisorClosures keeps each supervisor's latest completion, work items, notes, actor and timestamp. Reassignment makes that supervisor active again. Explicit reopening by management starts a fresh closure cycle; previous actions remain in TicketAudit. The supervisor APIs project a personal closed status while retaining globalStatus. Admin responsibility filters use only current assignments. Reports aggregate personal completion separately from global closure.
+
+Closure requests lock ticket rows in sorted order, then re-read assignments. All updates and the final report outbox are committed together. Python generation failure rolls back closure. Client identity, phone and report content come from persisted data. Requests containing different customers/units/projects are rejected. A repeat completion never creates another outbox entry. Preview generation cannot send WhatsApp closing reports.
+
+The outbox waits if the sender's WhatsApp session is disconnected. Sending is claimed with an atomic conditional update. Ambiguous failures are marked failed and are not automatically retried. A process interruption during delivery leaves sending for manual investigation, avoiding an automatic duplicate. GET /api/tickets/closure-reports exposes delivery states to admins and the sending engineer. There is no delivery retry UI in this change.
+
+Deployment: the repository has no Prisma migration baseline. scripts/sql/supervisor-closures.sql is an additive, idempotent update adding one JSONB column and the report outbox. The deployment workflow permits this only if the previous schema matches the current schema with exactly those additions removed. Other schema differences abort. No production database update is run during development.
+
+Validation: node --import tsx --test server/services/__tests__/ticket-closure-plan.test.ts; npm run lint; npm run build. Additive SQL, JSON containment, atomic outbox claims and rollback were also exercised on a local PostgreSQL engine (PGlite). Python rendered a report containing both supervisor contributions. Live simultaneous HTTP closure, Python rendering and real WhatsApp delivery need an environment with the application's database and WhatsApp session.
+
+Shared tickets are excluded from legacy technician/shift auto-completion and Excel status overwrites. Technician terminal actions on shared tickets require the supervisor closure flow. Completing a supervisor ticket does not auto-finish an open technician visit; the technician must finish it explicitly. Background classification never reactivates completed supervisors automatically.

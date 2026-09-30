@@ -169,7 +169,7 @@ const typeBgStatic: Record<string, string> = {
 // ─── BulkActionBar ────────────────────────────────────────────────────────────
 const DEFAULT_STATUS_OPTIONS = [
   { key: 'open',          label: 'مفتوحة' },
-  { key: 'in-progress',   label: 'قيد التنفيذ' },
+  { key: 'in_progress',   label: 'قيد التنفيذ' },
   { key: 'waiting',       label: 'بانتظار الموعد' },
   { key: 'pending',       label: 'معلقة' },
   { key: 'contractor',    label: 'مقاول / ملاحظة' },

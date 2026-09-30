@@ -1,3 +1,4 @@
+import {closures} from '../services/ticket-closure-plan.js';
 import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth } from "../auth.js";
@@ -31,7 +32,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     }
 
     if (user.role === 'supervisor') {
-      where.assignedSupervisorIds = { has: user.uid };
+      where.OR = [{assignedSupervisorIds: {has: user.uid}}, {supervisorClosures: {array_contains: [{supervisorUid: user.uid}]}}];
     }
 
     const ticketsWhere: any = {
@@ -39,6 +40,10 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       NOT: { description: { startsWith: 'موعد صيانة مجدول يدوياً للمشرف' } }
     };
 
+    const personalTickets = user.role === 'supervisor' ? (await prisma.ticket.findMany({where: ticketsWhere, select: {status: true, type: true, createdAt: true, closedAt: true, assignedSupervisorIds: true, supervisorClosures: true}})).map(t => {
+      const done = !t.assignedSupervisorIds.includes(user.uid) ? closures(t.supervisorClosures).find(h => h.supervisorUid === user.uid) : undefined;
+      return done ? {...t, status: 'closed' as const, closedAt: new Date(done.completedAt)} : t;
+    }) : null;
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
     const todayStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -80,6 +85,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     const todayStartMs = todayStart.getTime();
 
     for (const t of activeTickets) {
+      if (user.role === 'supervisor' && !t.assignedSupervisorIds.includes(user.uid)) continue;
       // Overdue logic
       let openDate = new Date(t.createdAt);
       if (t.issuedAt) {
@@ -142,21 +148,21 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       projectId: a.projectId,
     }));
 
-    const [total, openCount, closedCount, unclassified] = await Promise.all([
+    const [total, openCount, closedCount, unclassified] = personalTickets ? [personalTickets.length, personalTickets.filter(t=>t.status === 'open').length, personalTickets.filter(t=>t.status === 'closed').length, personalTickets.filter(t=>t.type === 'unclassified').length] : await Promise.all([
       prisma.ticket.count({ where: ticketsWhere }),
       prisma.ticket.count({ where: { ...ticketsWhere, status: "open" } }),
       prisma.ticket.count({ where: { ...ticketsWhere, status: "closed" } }),
       prisma.ticket.count({ where: { ...ticketsWhere, type: "unclassified" } }),
     ]);
 
-    const closedToday = await prisma.ticket.count({
+    const closedToday = personalTickets ? personalTickets.filter(t=>t.status === 'closed' && t.closedAt && t.closedAt >= todayStart && t.closedAt < todayEnd).length : await prisma.ticket.count({
       where: { ...ticketsWhere, status: "closed", closedAt: { gte: todayStart, lt: todayEnd } },
     });
 
     // Last 7 days trend — pure ORM to avoid raw SQL enum issues
     const days7ago = new Date(now.getTime() - 6 * 86_400_000);
     days7ago.setHours(0, 0, 0, 0);
-    const tickets7days = await prisma.ticket.findMany({
+    const tickets7days = personalTickets ? personalTickets.filter(t=>t.createdAt >= days7ago) : await prisma.ticket.findMany({
       where: { ...ticketsWhere, createdAt: { gte: days7ago } },
       select: { createdAt: true, status: true },
     });

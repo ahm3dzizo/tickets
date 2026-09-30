@@ -5,13 +5,14 @@ import path from "path";
 import { __dirname } from "../config.js";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth } from "../auth.js";
-import { sendWAImage } from "../baileys.js";
 
 const router = Router();
 
 // POST /api/generate-report
 router.post("/", requireAuth, async (req: AuthRequest, res) => {
   const body = { ...req.body };
+  // Legacy report previews/downloads cannot send a customer closing report.
+  if (body.whatsappPhone) {res.status(409).json({error: 'USE_CLOSURE_ENDPOINT'}); return;}
 
   // If nhc is empty, try to resolve project abbreviation from the first ticket's project
   if (!body.nhc && body.ticket_num) {
@@ -44,10 +45,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }
 
   // Extract WhatsApp fields from body (not forwarded to Python)
-  const whatsappPhone: string | undefined = body.whatsappPhone;
-  const whatsappMessage: string | undefined = body.whatsappMessage;
-  const senderUid = req.uid;
   delete body.whatsappPhone;
+  // Never trust a browser-generated closing caption. The server owns the
+  // WhatsApp closing template and rebuilds it from report data below.
   delete body.whatsappMessage;
 
   const scriptPath = path.join(__dirname, "report_generator.py");
@@ -65,7 +65,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   python.stdout.on("data", (data) => { output += data.toString(); });
   python.stderr.on("data", (data) => { errorOutput += data.toString(); });
 
-  python.on("close", (code) => {
+  python.on("close", async (code) => {
     if (code !== 0) {
       console.error("Python report error:", errorOutput);
       return res.status(500).json({ error: "Report generation failed", details: errorOutput });
@@ -84,22 +84,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       res.setHeader("Content-Type", "image/jpeg");
       res.setHeader("Content-Disposition", `attachment; filename="report.jpg"`);
       res.send(jpgData);
-
-      // Fire-and-forget: send report image + approval request via WhatsApp
-      if (whatsappPhone && senderUid) {
-        const uid = senderUid;
-        const phone = whatsappPhone;
-        const customerName: string = body.customer_name || '';
-        const villa: string        = body.villa || '';
-        const notes: string        = body.notes || '';
-        const ticketNum: string    = (body.ticket_num || '').split('،')[0].trim();
-
-        sendWAImage(uid, phone, jpgData, whatsappMessage || '📊 تقرير الصيانة — Tickets')
-          .then((r: any) => {
-            console.log('[WA] report image sent:', r);
-          })
-          .catch((err: any) => console.error('[WA] report image error:', err));
-      }
 
       try { unlinkSync(jpgPath); } catch { /* ignore */ }
     } catch {

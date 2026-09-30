@@ -152,6 +152,7 @@ model Ticket {
   priority              Int          @default(4)
   assigneeName          String?
   assignedSupervisorIds String[]     @default([])
+  supervisorClosures    Json         @default("[]")
   detectedTypes         String[]     @default([])
   detectedSubTypeIds    String[]     @default([])
   closureNotes          String?
@@ -179,6 +180,21 @@ model Ticket {
   @@index([unitId])
   @@index([clientId])
   @@index([appointmentId])
+}
+
+model TicketClosureReport {
+  id          String   @id @default(cuid())
+  ticketIds   String[]
+  senderUid   String
+  phone       String
+  caption     String
+  image       Bytes
+  state       String   @default("pending")
+  error       String?
+  createdAt   DateTime @default(now())
+  sentAt      DateTime?
+
+  @@index([state, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -633,4 +649,3 @@ enum ShiftStatus {
   AUTO_CLOSED
   FLAGGED
 }
-

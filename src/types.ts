@@ -87,6 +87,8 @@ export interface Ticket {
   status: 'open' | 'in-progress' | 'in_progress' | 'pending' | 'completed' | 'closed' | 'waiting' | 'out-of-scope' | 'out_of_scope' | 'absent' | 'contractor' | 'note';
   priority: 'low' | 'medium' | 'high' | 'urgent' | number;
   assigneeName?: string;
+  globalStatus?: Ticket['status'];
+  supervisorClosures?: {supervisorUid: string; supervisorName?: string; completedAt: string; completedByUid: string; notes: string; items: {description: string; status: string}[]}[];
   assignedSupervisorIds?: string[];
   // Virtual fields computed by the API from relations:
   refNumber?: string;

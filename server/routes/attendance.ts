@@ -1,3 +1,4 @@
+import { completeLegacyAppointmentTickets } from '../services/legacy-appointment-completion.js';
 import { Router } from 'express';
 import { requireTechAuth, TechAuthRequest } from './tech-auth.js';
 import { requireAuth, AuthRequest } from '../auth.js';
@@ -257,13 +258,7 @@ router.post('/shift/clock-out', requireTechAuth, async (req: TechAuthRequest, re
         }
       });
       // Auto-complete remaining active tickets in that appointment.
-      await prisma.ticket.updateMany({
-        where: {
-          appointmentId: openSession.appointmentId,
-          status: { in: ['in_progress', 'open', 'pending'] }
-        },
-        data: { status: 'completed', closedAt: now }
-      });
+      await prisma.$transaction(tx => completeLegacyAppointmentTickets(tx, openSession.appointmentId, now));
       await prisma.appointment.update({
         where: { id: openSession.appointmentId },
         data: { status: 'completed' }
@@ -671,13 +666,7 @@ router.post('/tech/appointments/:appointmentId/finish', requireTechAuth, async (
 
       // Auto-complete any ticket that is still in_progress / open / pending.
       // Tickets already set by the tech to out_of_scope / waiting / absent stay as-is.
-      const completed = await tx.ticket.updateMany({
-        where: {
-          appointmentId,
-          status: { in: ['in_progress', 'open', 'pending'] }
-        },
-        data: { status: 'completed', closedAt: now, closureNotes: notes || undefined }
-      });
+      const completed = await completeLegacyAppointmentTickets(tx, appointmentId, now, notes);
 
       // Mark the appointment itself as completed.
       await tx.appointment.update({

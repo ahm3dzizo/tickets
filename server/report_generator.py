@@ -17,6 +17,7 @@ from bidi.algorithm import get_display
 
 import fitz  # PyMuPDF for PDF→JPG
 import tempfile
+import uuid
 
 # ─── Constants ───────────────────────────────────────────────────
 OUTPUT_DIR = os.environ.get("REPORT_OUTPUT_DIR", tempfile.gettempdir())
@@ -217,8 +218,9 @@ def generate_close_report(ticket_num, villa, customer_name, phone,
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
 
-    pdf_path = os.path.join(OUTPUT_DIR, f"{villa}_temp.pdf")
-    jpg_path = os.path.join(OUTPUT_DIR, f"{villa}.jpg")
+    report_key = uuid.uuid4().hex
+    pdf_path = os.path.join(OUTPUT_DIR, f"{report_key}_temp.pdf")
+    jpg_path = os.path.join(OUTPUT_DIR, f"{report_key}.jpg")
 
     page_w, page_h = A4
     margin = 10 * mm          # narrow margins
