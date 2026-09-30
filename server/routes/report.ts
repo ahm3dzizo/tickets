@@ -5,7 +5,7 @@ import path from "path";
 import { __dirname } from "../config.js";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth } from "../auth.js";
-import { sendWAImage } from "../baileys.js";
+import { sendWAImage, buildClosingMsg } from "../baileys.js";
 
 const router = Router();
 
@@ -85,20 +85,54 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       res.setHeader("Content-Disposition", `attachment; filename="report.jpg"`);
       res.send(jpgData);
 
-      // Fire-and-forget: send report image + approval request via WhatsApp
+      // Fire-and-forget: build the closing message server-side, then send it with the report image.
+      // The browser preview is not authoritative because its template request may still be loading.
       if (whatsappPhone && senderUid) {
         const uid = senderUid;
         const phone = whatsappPhone;
         const customerName: string = body.customer_name || '';
         const villa: string        = body.villa || '';
         const notes: string        = body.notes || '';
-        const ticketNum: string    = (body.ticket_num || '').split('،')[0].trim();
+        const ticketIds: string[]  = String(body.ticket_num || '')
+          .split('،')
+          .map((value: string) => value.trim())
+          .filter(Boolean);
+        const ticketNum = ticketIds.join('، ');
 
-        sendWAImage(uid, phone, jpgData, whatsappMessage || '📊 تقرير الصيانة — Tickets')
-          .then((r: any) => {
-            console.log('[WA] report image sent:', r);
-          })
-          .catch((err: any) => console.error('[WA] report image error:', err));
+        void (async () => {
+          let description = '';
+          if (ticketIds[0]) {
+            try {
+              const firstTicket = await prisma.ticket.findFirst({
+                where: { ticketId: ticketIds[0] },
+                select: { description: true },
+              });
+              description = firstTicket?.description || '';
+            } catch (err) {
+              console.warn('[WA] could not resolve ticket description for closing caption:', err);
+            }
+          }
+
+          let caption = '';
+          try {
+            caption = await buildClosingMsg({
+              ticketId: ticketNum || ticketIds[0] || '',
+              clientName: customerName,
+              description,
+              unitNumber: villa,
+              closureNotes: notes || null,
+            });
+          } catch (err) {
+            console.error('[WA] failed to build closing caption:', err);
+          }
+
+          const safeCaption = caption.trim()
+            || whatsappMessage?.trim()
+            || `السلام عليكم، تم الانتهاء من الصيانة المطلوبة للوحدة ${villa || ''}. شكراً لتعاونكم.`;
+
+          const result = await sendWAImage(uid, phone, jpgData, safeCaption);
+          console.log('[WA] report image sent:', result);
+        })().catch((err: any) => console.error('[WA] report image error:', err));
       }
 
       try { unlinkSync(jpgPath); } catch { /* ignore */ }
