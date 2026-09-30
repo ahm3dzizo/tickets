@@ -2,14 +2,16 @@
 ml/train.py
 ───────────
 Trains TF-IDF + Logistic Regression on the Excel ground-truth tickets.
-Reports cross-validation accuracy and saves the model to ml/model.pkl.
+Reports cross-validation accuracy and saves the live model outside the Git checkout.
 
 Run:  python3 ml/train.py
 """
 
 import re
+import os
 import pickle
 import pathlib
+import tempfile
 import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
@@ -19,11 +21,17 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.metrics import classification_report
 
 # ── Config ─────────────────────────────────────────────────────────────────
-EXCEL_PATH  = pathlib.Path(__file__).parent.parent / "NTF1 Ticket (2).xlsm"
-EXTRA_CSV   = pathlib.Path(__file__).parent / "extra_training.csv"
-DB_CSV      = pathlib.Path(__file__).parent / "db_tickets.csv"
-MODEL_PATH  = pathlib.Path(__file__).parent / "model.pkl"
+BASE_DIR    = pathlib.Path(__file__).parent
+RUNTIME_DIR = pathlib.Path(os.environ.get("RETAL_ML_RUNTIME_DIR", "/var/lib/retal/ml"))
+SEED_DIR    = BASE_DIR / "seeds"
+EXCEL_PATH  = BASE_DIR.parent / "NTF1 Ticket (2).xlsm"
+EXTRA_CSV   = BASE_DIR / "extra_training.csv"
+DB_CSV      = RUNTIME_DIR / "db_tickets.csv"
+SEED_DB_CSV = SEED_DIR / "db_tickets.csv"
+MODEL_PATH  = RUNTIME_DIR / "model.pkl"
 MIN_SAMPLES = 10   # drop classes with fewer training samples
+
+RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Arabic category → system type key ──────────────────────────────────────
 CATEGORY_MAP = {
@@ -111,17 +119,19 @@ else:
 dataset = pd.DataFrame(records)
 
 # ── Load extra training data ─────────────────────────────────────────────────
-for csv_path in [EXTRA_CSV, DB_CSV]:
+db_source = DB_CSV if DB_CSV.exists() else SEED_DB_CSV
+for csv_path in [EXTRA_CSV, db_source]:
     if csv_path.exists():
         extra = pd.read_csv(csv_path)
         extra["text"] = extra["text"].apply(normalize)
         extra = extra[extra["text"].str.len() >= 5]
         # DB tickets: deduplicate against Excel data by text
-        if csv_path == DB_CSV:
+        if csv_path == db_source:
             existing_texts = set(dataset["text"].tolist())
             extra = extra[~extra["text"].isin(existing_texts)]
         dataset = pd.concat([dataset, extra], ignore_index=True)
-        print(f"✅ {csv_path.name}: +{len(extra)} rows")
+        source_kind = "runtime" if csv_path == DB_CSV else "seed" if csv_path == SEED_DB_CSV else "extra"
+        print(f"✅ {csv_path.name} ({source_kind}): +{len(extra)} rows")
 
 print(f"\n📊 Dataset: {len(dataset)} samples")
 print(dataset["label"].value_counts().to_string())
@@ -168,12 +178,28 @@ print("\n📋 Classification report (train set):")
 print(classification_report(dataset["label"], preds, digits=3))
 
 # ── Save model ──────────────────────────────────────────────────────────────
-MODEL_PATH.parent.mkdir(exist_ok=True)
-with open(MODEL_PATH, "wb") as f:
-    pickle.dump({
-        "pipeline": pipeline,
-        "classes":  list(pipeline.classes_),
-    }, f)
+RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+tmp_path: pathlib.Path | None = None
+try:
+    with tempfile.NamedTemporaryFile(
+        mode="wb",
+        dir=RUNTIME_DIR,
+        prefix="model.",
+        suffix=".tmp",
+        delete=False,
+    ) as tmp:
+        pickle.dump({
+            "pipeline": pipeline,
+            "classes":  list(pipeline.classes_),
+        }, tmp)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp_path = pathlib.Path(tmp.name)
 
-print(f"\n✅ Model saved → {MODEL_PATH}")
+    os.replace(tmp_path, MODEL_PATH)
+finally:
+    if tmp_path is not None and tmp_path.exists():
+        tmp_path.unlink(missing_ok=True)
+
+print(f"\n✅ Model saved atomically → {MODEL_PATH}")
 print(f"   Classes: {list(pipeline.classes_)}")

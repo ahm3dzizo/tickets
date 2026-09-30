@@ -13,14 +13,24 @@ Endpoints:
 """
 
 import re
+import os
 import pickle
 import pathlib
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
 
-BASE_DIR   = pathlib.Path(__file__).parent
-MODEL_PATH = BASE_DIR / "model.pkl"
+BASE_DIR          = pathlib.Path(__file__).parent
+RUNTIME_DIR        = pathlib.Path(os.environ.get("RETAL_ML_RUNTIME_DIR", "/var/lib/retal/ml"))
+SEED_DIR           = BASE_DIR / "seeds"
+RUNTIME_MODEL_PATH = RUNTIME_DIR / "model.pkl"
+SEED_MODEL_PATH    = SEED_DIR / "model.pkl"
+
+def resolve_main_model_path() -> pathlib.Path:
+    """Prefer the live runtime model; fall back to the immutable seed model."""
+    if RUNTIME_MODEL_PATH.exists():
+        return RUNTIME_MODEL_PATH
+    return SEED_MODEL_PATH
 
 # Sub-type model paths keyed by main type
 SUBTYPE_MODEL_PATHS: dict[str, pathlib.Path] = {
@@ -48,11 +58,15 @@ def load_models() -> None:
     """Load model files atomically so a failed reload keeps the current model alive."""
     global pipeline, classes, subtype_models
 
-    print("[ML] Loading main model ...")
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"{MODEL_PATH} not found. Please run ml/train.py first.")
+    model_path = resolve_main_model_path()
+    print(f"[ML] Loading main model from {model_path} ...")
+    if not model_path.exists():
+        raise FileNotFoundError(
+            f"No ML model found at {RUNTIME_MODEL_PATH} or {SEED_MODEL_PATH}. "
+            "Please run ml/train.py first."
+        )
 
-    with open(MODEL_PATH, "rb") as f:
+    with open(model_path, "rb") as f:
         bundle = pickle.load(f)
 
     new_pipeline = bundle["pipeline"]

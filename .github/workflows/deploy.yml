@@ -109,6 +109,7 @@ jobs:
           PM2_APP="retal-api"
           ML_APP="retal-ml"
           PUBLIC_URL="https://tickets.knot-sys.com"
+          ML_RUNTIME_DIR="${RETAL_ML_RUNTIME_DIR:-/var/lib/retal/ml}"
 
           command -v git >/dev/null
           command -v node >/dev/null
@@ -127,13 +128,10 @@ jobs:
           echo "Current server commit: ${PREVIOUS_SHA:0:12}"
           echo "Requested commit:      ${DEPLOY_SHA:0:12}"
 
-          # Preserve server-generated ML state. Any other tracked change aborts
-          # instead of being silently overwritten.
-          RUNTIME_BACKUP="$(mktemp -d /tmp/retal-runtime.XXXXXX)"
-          cleanup_runtime_backup() {
-            rm -rf "$RUNTIME_BACKUP"
-          }
-          trap cleanup_runtime_backup EXIT
+          # Migrate legacy ML state out of the Git checkout before resetting it.
+          # Any unrelated tracked change still aborts the deployment.
+          sudo -n mkdir -p "$ML_RUNTIME_DIR"
+          sudo -n chown "$(id -u):$(id -g)" "$ML_RUNTIME_DIR"
 
           unexpected_dirty=0
           while IFS= read -r line; do
@@ -141,9 +139,9 @@ jobs:
             changed_path="${line:3}"
             case "$changed_path" in
               ml/db_tickets.csv|ml/model.pkl)
-                echo "Preserving runtime-generated file: $changed_path"
-                mkdir -p "$RUNTIME_BACKUP/$(dirname "$changed_path")"
-                cp -a "$changed_path" "$RUNTIME_BACKUP/$changed_path"
+                runtime_target="$ML_RUNTIME_DIR/$(basename "$changed_path")"
+                echo "Migrating legacy runtime file: $changed_path → $runtime_target"
+                cp -a "$changed_path" "$runtime_target"
                 ;;
               *)
                 echo "Unexpected tracked server change: $line"
@@ -157,10 +155,11 @@ jobs:
             exit 1
           fi
 
-          for runtime_file in ml/db_tickets.csv ml/model.pkl; do
-            if [ -f "$runtime_file" ] && [ ! -f "$RUNTIME_BACKUP/$runtime_file" ]; then
-              mkdir -p "$RUNTIME_BACKUP/$(dirname "$runtime_file")"
-              cp -a "$runtime_file" "$RUNTIME_BACKUP/$runtime_file"
+          for legacy_file in ml/db_tickets.csv ml/model.pkl; do
+            runtime_target="$ML_RUNTIME_DIR/$(basename "$legacy_file")"
+            if [ -f "$legacy_file" ] && [ ! -f "$runtime_target" ]; then
+              cp -a "$legacy_file" "$runtime_target"
+              echo "Seeded runtime state from legacy file: $legacy_file"
             fi
           done
 
@@ -180,13 +179,17 @@ jobs:
           git checkout -f main
           git reset --hard "$DEPLOY_SHA"
 
-          for runtime_file in ml/db_tickets.csv ml/model.pkl; do
-            if [ -f "$RUNTIME_BACKUP/$runtime_file" ]; then
-              cp -a "$RUNTIME_BACKUP/$runtime_file" "$runtime_file"
+          for seed_file in db_tickets.csv model.pkl; do
+            runtime_target="$ML_RUNTIME_DIR/$seed_file"
+            seed_source="$APP_DIR/ml/seeds/$seed_file"
+            if [ ! -f "$runtime_target" ] && [ -f "$seed_source" ]; then
+              cp -a "$seed_source" "$runtime_target"
+              echo "Initialized ML runtime from immutable seed: $seed_file"
             fi
           done
 
           echo "Deploying $(git rev-parse --short=12 HEAD)"
+          echo "ML runtime: $ML_RUNTIME_DIR"
 
           echo "Repairing legacy Retal TLS alias..."
           bash scripts/ensure-retal-legacy-tls.sh retal-sub.nginx.conf

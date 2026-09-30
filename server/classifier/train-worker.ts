@@ -2,7 +2,7 @@
  * Daily ML Training Worker
  * ─────────────────────────
  * Every day at 03:00:
- * 1. Exports all classified tickets from DB → ml/db_tickets.csv
+ * 1. Exports all classified tickets from DB → persistent runtime storage
  * 2. Runs ml/train.py with the ML virtualenv Python
  * 3. Calls POST /reload on the ML service so it picks up the new model
  */
@@ -16,9 +16,10 @@ import prisma         from "../db.js";
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ML_DIR    = path.resolve(__dirname, "../../ml");
-const DB_CSV    = path.join(ML_DIR, "db_tickets.csv");
-const ML_URL    = process.env.ML_SERVICE_URL ?? "http://127.0.0.1:5050";
+const ML_DIR         = path.resolve(__dirname, "../../ml");
+const ML_RUNTIME_DIR = process.env.RETAL_ML_RUNTIME_DIR ?? "/var/lib/retal/ml";
+const DB_CSV         = path.join(ML_RUNTIME_DIR, "db_tickets.csv");
+const ML_URL         = process.env.ML_SERVICE_URL ?? "http://127.0.0.1:5050";
 const ML_PYTHON = process.env.ML_PYTHON ?? path.join(ML_DIR, ".venv/bin/python");
 
 let _timer: ReturnType<typeof setTimeout> | null = null;
@@ -68,7 +69,10 @@ async function exportTicketsToCSV(): Promise<number> {
     rows.push(`"${safe}",${t.type}`);
   }
 
-  await fs.writeFile(DB_CSV, rows.join("\n"), "utf-8");
+  await fs.mkdir(ML_RUNTIME_DIR, { recursive: true });
+  const tempPath = path.join(ML_RUNTIME_DIR, `.db_tickets.${process.pid}.${Date.now()}.tmp`);
+  await fs.writeFile(tempPath, rows.join("\n"), "utf-8");
+  await fs.rename(tempPath, DB_CSV);
   return rows.length - 1; // exclude header
 }
 
@@ -86,7 +90,7 @@ async function runTrain(): Promise<void> {
   console.log("[TrainWorker] Starting daily training...");
 
   const count = await exportTicketsToCSV();
-  console.log(`[TrainWorker] Exported ${count} tickets → db_tickets.csv`);
+  console.log(`[TrainWorker] Exported ${count} tickets → ${DB_CSV}`);
 
   const python = await resolveTrainingPython();
   const trainScript = path.join(ML_DIR, "train.py");
@@ -98,7 +102,11 @@ async function runTrain(): Promise<void> {
     const result = await execAsync(`"${python}" -u "${trainScript}"`, {
       cwd:     ML_DIR,
       timeout: 5 * 60_000,
-      env:     { ...process.env, PYTHONPATH: ML_DIR },
+      env:     {
+        ...process.env,
+        PYTHONPATH: ML_DIR,
+        RETAL_ML_RUNTIME_DIR: ML_RUNTIME_DIR,
+      },
       maxBuffer: 10 * 1024 * 1024,
     });
     stdout = result.stdout;
