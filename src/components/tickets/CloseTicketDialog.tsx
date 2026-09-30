@@ -379,9 +379,9 @@ headers: {
 },
 body: JSON.stringify({
 ...reportPayload,
-// Passed to backend for WhatsApp image sending (stripped before Python)
+// The backend owns the closing caption template; the browser sends only the
+// target phone and report data.
 whatsappPhone: targetClient?.phone || '',
-whatsappMessage: previewMessage,
 }),
 });
 
