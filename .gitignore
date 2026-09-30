@@ -111,3 +111,8 @@ Thumbs.db
 *.xlsx
 *.xlsm
 *.xls
+
+# ML runtime state (live copies are stored outside the Git checkout)
+ml/db_tickets.csv
+ml/model.pkl
+ml/.runtime/

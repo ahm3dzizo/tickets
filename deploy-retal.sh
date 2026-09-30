@@ -5,9 +5,12 @@ APP_DIR="/opt/retal-api"
 WEB_DIR="/var/www/retal"
 NGINX_SITE="/etc/nginx/sites-available/tickets-sub"
 PM2_APP="retal-api"
+ML_APP="retal-ml"
 MODE="all"
 RESTART_PM2="yes"
 BACKUP_DIR="$APP_DIR/backups/deploy-$(date +%Y%m%d-%H%M%S)"
+ML_RUNTIME_DIR="${RETAL_ML_RUNTIME_DIR:-/var/lib/retal/ml}"
+export RETAL_ML_RUNTIME_DIR="$ML_RUNTIME_DIR"
 
 banner() {
   echo
@@ -86,16 +89,60 @@ echo "NPM:  $(npm -v)"
 command -v pm2 >/dev/null 2>&1 && echo "PM2:  $(pm2 -v)"
 echo "✅ Basic checks passed"
 
-banner "2) GIT — PULL MAIN"
+banner "2) ML RUNTIME — MIGRATE LEGACY STATE"
+sudo mkdir -p "$ML_RUNTIME_DIR"
+sudo chown "$(id -u):$(id -g)" "$ML_RUNTIME_DIR"
+
+unexpected_dirty=0
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  changed_path="${line:3}"
+  case "$changed_path" in
+    ml/db_tickets.csv|ml/model.pkl)
+      runtime_target="$ML_RUNTIME_DIR/$(basename "$changed_path")"
+      echo "Migrating legacy runtime file: $changed_path → $runtime_target"
+      cp -a "$changed_path" "$runtime_target"
+      git restore -- "$changed_path"
+      ;;
+    *)
+      echo "Unexpected tracked server change: $line"
+      unexpected_dirty=1
+      ;;
+  esac
+done < <(git status --porcelain=v1 --untracked-files=no)
+
+if [ "$unexpected_dirty" -ne 0 ]; then
+  fail "Tracked files have local changes outside the managed ML runtime files."
+fi
+
+for legacy_file in ml/db_tickets.csv ml/model.pkl; do
+  runtime_target="$ML_RUNTIME_DIR/$(basename "$legacy_file")"
+  if [ -f "$legacy_file" ] && [ ! -f "$runtime_target" ]; then
+    cp -a "$legacy_file" "$runtime_target"
+    echo "Seeded runtime state from legacy file: $legacy_file"
+  fi
+done
+
+banner "2B) GIT — PULL MAIN"
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-  fail "Tracked files have local changes. Commit or stash them before deploy."
+  fail "Tracked files still have local changes after ML runtime migration."
 fi
 
 git fetch origin main
 git pull --ff-only origin main
 
+for seed_file in db_tickets.csv model.pkl; do
+  runtime_target="$ML_RUNTIME_DIR/$seed_file"
+  seed_source="$APP_DIR/ml/seeds/$seed_file"
+  if [ ! -f "$runtime_target" ] && [ -f "$seed_source" ]; then
+    cp -a "$seed_source" "$runtime_target"
+    echo "Initialized ML runtime from immutable seed: $seed_file"
+  fi
+done
+
 echo "✅ Repository updated from origin/main"
 echo "Commit: $(git rev-parse --short HEAD)"
+echo "ML runtime: $ML_RUNTIME_DIR"
 
 banner "3) BACKUP"
 mkdir -p "$BACKUP_DIR"
@@ -207,9 +254,23 @@ if [ "$MODE" = "backend" ] || [ "$MODE" = "all" ]; then
   if [ "$RESTART_PM2" = "yes" ]; then
     pm2 describe "$PM2_APP" >/dev/null 2>&1 || fail "PM2 process '$PM2_APP' was not found"
     pm2 restart "$PM2_APP" --update-env
+
+    if pm2 describe "$ML_APP" >/dev/null 2>&1; then
+      pm2 restart "$ML_APP" --update-env
+    else
+      pm2 start ml/ecosystem.config.cjs
+    fi
+
     sleep 3
     pm2 status "$PM2_APP"
-    echo "✅ PM2 restarted"
+    pm2 status "$ML_APP"
+
+    if ! curl -fsS --max-time 5 http://127.0.0.1:5050/health | grep -q '"status":"ok"'; then
+      fail "ML service health check failed after restart."
+    fi
+
+    pm2 save
+    echo "✅ API + ML restarted and ML health verified"
   else
     echo "⏭️ PM2 restart skipped"
   fi
