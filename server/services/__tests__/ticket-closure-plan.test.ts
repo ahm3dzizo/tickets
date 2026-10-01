@@ -24,11 +24,16 @@ for (const role of ['admin','engineer']) {
   const result = planClosure(['a','b'], [], {uid:'manager',role}, 'supervisor','a','تم التحقق',items);
   assert.equal(result.final,false); assert.equal(result.history[0].completedByUid,'manager'); assert.deepEqual(result.active,['b']);
  });
- test(`${role} can close entire ticket with an audit reason`, () => {
-  const result = planClosure(['a','b'], [], {uid:'manager',role}, 'all',undefined,'تم التحقق',items);
+ test(`${role} can close entire ticket without an extra reason`, () => {
+  const result = planClosure(['a','b'], [], {uid:'manager',role}, 'all',undefined,'',items);
   assert.equal(result.final,true); assert.equal(result.history.length,2);
  });
- test(`${role} must provide a reason`, () => assert.throws(() => planClosure(['a'],[],{uid:'manager',role},'all',undefined,' ',items),/REASON_REQUIRED/));
+ test(`${role} must provide a reason only for partial on-behalf closure`, () => {
+  assert.throws(
+    () => planClosure(['a','b'],[],{uid:'manager',role},'selected',['a'],' ',items),
+    /REASON_REQUIRED/,
+  );
+ });
 }
 test('newly assigned supervisor prevents final closure', () => {
  const first = planClosure(['a','b'],[],a,'self',undefined,'',items);
@@ -57,8 +62,8 @@ test('admin selected subset closes only those supervisors', () => {
  assert.deepEqual(result.active, ['c']);
  assert.deepEqual(result.history.map(h => h.supervisorUid), ['a','b']);
 });
-test('engineer selecting every active supervisor finalizes the ticket', () => {
- const result = planClosure(['a','b'], [], {uid:'manager',role:'engineer'}, 'selected', ['a','b'], 'تم التحقق', items);
+test('engineer selecting every active supervisor finalizes the ticket without notes', () => {
+ const result = planClosure(['a','b'], [], {uid:'manager',role:'engineer'}, 'selected', ['a','b'], '', items);
  assert.equal(result.final, true);
  assert.deepEqual(result.active, []);
 });
