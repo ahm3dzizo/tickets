@@ -136,6 +136,25 @@ export function VariantEditor({
 
           {attribute.values.length > 0 && (
             <div className="mt-3 space-y-2">
+              {attribute.values.some((item) => item.priceOverride !== null) && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateAttribute(attribute.id, {
+                        values: attribute.values.map((item) => ({
+                          ...item,
+                          priceOverride: null,
+                        })),
+                      })
+                    }
+                    className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-3 text-[10px] font-bold text-primary hover:bg-muted"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    كل القيم بالسعر الأساسي
+                  </button>
+                </div>
+              )}
               {attribute.values.map((item) => {
                 const effectivePrice = item.priceOverride ?? basePrice;
                 const inheritsBasePrice = item.priceOverride === null;
