@@ -17,8 +17,6 @@ export function planClosure(
     !privileged &&
     (scope !== 'self' || Array.isArray(target) || (typeof target === 'string' && target !== actor.uid))
   ) throw new Error('FORBIDDEN');
-  if (privileged && scope !== 'self' && !notes.trim()) throw new Error('REASON_REQUIRED');
-
   const requestedTargets =
     scope === 'all' ? active :
     scope === 'self' ? [actor.uid] :
@@ -41,6 +39,14 @@ export function planClosure(
   }
 
   const remaining = active.filter(uid => !targets.includes(uid));
+
+  // Management only needs to explain an on-behalf *partial* completion.
+  // A final closure (all active supervisor roles completed) is a normal
+  // terminal action and does not require an extra reason.
+  if (privileged && scope !== 'self' && remaining.length > 0 && !notes.trim()) {
+    throw new Error('REASON_REQUIRED');
+  }
+
   const next = [
     ...history.filter(h => !targets.includes(h.supervisorUid)),
     ...targets.map(supervisorUid => ({
