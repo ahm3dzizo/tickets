@@ -5,7 +5,6 @@ import {
   CheckCheck,
   ImagePlus,
   Loader2,
-  Save,
   Trash2,
   X,
 } from "lucide-react";
@@ -22,6 +21,17 @@ import {
 import { VariantEditor } from "./VariantEditor";
 import { MoveImagesModal } from "./MoveImagesModal";
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
+function editableSignature(product: CatalogProduct) {
+  return JSON.stringify({
+    name: product.name,
+    description: product.description,
+    variantAttributes: product.variantAttributes,
+    price: product.price,
+  });
+}
+
 export function ProductCard({
   product,
   onRefresh,
@@ -30,48 +40,112 @@ export function ProductCard({
   onRefresh: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState(product);
-  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [batchWorking, setBatchWorking] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showMoveModal, setShowMoveModal] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef(product);
+  const lastSavedRef = useRef(editableSignature(product));
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef(false);
+  const pendingSaveRef = useRef<CatalogProduct | null>(null);
+
+  draftRef.current = draft;
 
   useEffect(() => {
     setDraft(product);
+    draftRef.current = product;
+    lastSavedRef.current = editableSignature(product);
     setSelected(new Set());
     setSelectionMode(false);
-  }, [product]);
+    setSaveState("idle");
+  }, [product.id, product.updatedAt]);
 
-  const dirty =
-    draft.name !== product.name ||
-    draft.description !== product.description ||
-    JSON.stringify(draft.variantAttributes) !==
-      JSON.stringify(product.variantAttributes) ||
-    draft.price !== product.price;
+  const persistDraft = async (snapshot: CatalogProduct) => {
+    const signature = editableSignature(snapshot);
+    if (signature === lastSavedRef.current) return;
 
-  const save = async () => {
-    setSaving(true);
+    if (saveInFlightRef.current) {
+      pendingSaveRef.current = snapshot;
+      return;
+    }
+
+    saveInFlightRef.current = true;
+    setSaveState("saving");
+
     try {
       await updateProduct(product.id, {
-        name: draft.name,
-        description: draft.description,
-        variantAttributes: draft.variantAttributes,
-        price: draft.price,
+        name: snapshot.name,
+        description: snapshot.description,
+        variantAttributes: snapshot.variantAttributes,
+        price: snapshot.price,
       });
-      toast.success("تم حفظ بيانات المنتج");
-      await onRefresh();
+
+      lastSavedRef.current = signature;
+      setSaveState("saved");
     } catch (error: any) {
-      toast.error("فشل الحفظ: " + error.message);
+      setSaveState("error");
+      toast.error("تعذر الحفظ التلقائي: " + error.message);
     } finally {
-      setSaving(false);
+      saveInFlightRef.current = false;
+
+      const pending = pendingSaveRef.current;
+      pendingSaveRef.current = null;
+
+      if (
+        pending &&
+        editableSignature(pending) !== lastSavedRef.current
+      ) {
+        void persistDraft(pending);
+      }
     }
   };
 
+  useEffect(() => {
+    const signature = editableSignature(draft);
+    if (signature === lastSavedRef.current) return;
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = setTimeout(() => {
+      void persistDraft(draftRef.current);
+    }, 450);
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [
+    draft.name,
+    draft.description,
+    draft.price,
+    draft.variantAttributes,
+  ]);
+
+  const saveOnFieldExit = () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    setTimeout(() => {
+      void persistDraft(draftRef.current);
+    }, 0);
+  };
+
   const deleteProduct = async () => {
-    if (!window.confirm(`حذف المنتج "${product.name}" من الكتالوج؟`)) return;
+    if (!window.confirm(`حذف المنتج "${product.name}" من الكتالوج؟`)) {
+      return;
+    }
+
     setDeleting(true);
     try {
       await removeProduct(product.id);
@@ -86,13 +160,17 @@ export function ProductCard({
 
   const addImages = async (files: FileList | null) => {
     if (!files?.length) return;
+
     setUploading(true);
     try {
+      await persistDraft(draftRef.current);
+
       const uploaded = await uploadImages(Array.from(files));
       await updateProductImages(product.id, [
         ...product.images,
         ...uploaded.items.map((item) => item.relativePath),
       ]);
+
       toast.success("تمت إضافة الصور");
       await onRefresh();
     } catch (error: any) {
@@ -125,6 +203,7 @@ export function ProductCard({
   const removeSelected = async () => {
     const images = Array.from(selected);
     if (!images.length) return;
+
     if (
       !window.confirm(
         `إزالة ${images.length} صورة من المنتج؟ الملفات الأصلية ستظل موجودة على السيرفر.`,
@@ -135,6 +214,7 @@ export function ProductCard({
 
     setBatchWorking(true);
     try {
+      await persistDraft(draftRef.current);
       await batchRemoveImages(product.id, images);
       toast.success(`تمت إزالة ${images.length} صورة من المنتج`);
       clearSelection();
@@ -157,6 +237,7 @@ export function ProductCard({
 
     setBatchWorking(true);
     try {
+      await persistDraft(draftRef.current);
       await moveImagesToNewProduct(product.id, images, input);
       toast.success(`تم نقل ${images.length} صورة إلى المنتج الجديد`);
       setShowMoveModal(false);
@@ -174,7 +255,10 @@ export function ProductCard({
 
   return (
     <>
-      <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+      <section
+        className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm"
+        onBlurCapture={saveOnFieldExit}
+      >
         <div className="grid gap-0 lg:grid-cols-[370px_minmax(0,1fr)]" dir="rtl">
           <div className="border-b border-border bg-muted/20 p-4 lg:border-b-0 lg:border-l">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -219,6 +303,7 @@ export function ProductCard({
                   )}
                   إضافة صور
                 </button>
+
                 <input
                   ref={inputRef}
                   type="file"
@@ -383,12 +468,13 @@ export function ProductCard({
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-bold text-muted-foreground">
-                  المتغيرات والخصائص
+                  المتغيرات
                 </span>
                 <span className="text-[10px] text-muted-foreground">
-                  لون / مقاس / حجم / نوع / خاصية مخصصة
+                  السعر يبدأ تلقائيًا من سعر المنتج
                 </span>
               </div>
+
               <VariantEditor
                 value={draft.variantAttributes}
                 basePrice={draft.price}
@@ -403,39 +489,39 @@ export function ProductCard({
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-              <span className="text-[10px] text-muted-foreground">
-                {product.id}
-              </span>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void deleteProduct()}
-                  disabled={deleting}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-500/20 px-3 text-xs font-bold text-red-500 hover:bg-red-500/10 disabled:opacity-50"
-                >
-                  {deleting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                  حذف المنتج
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => void save()}
-                  disabled={!dirty || saving}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground disabled:opacity-40"
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  حفظ
-                </button>
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="text-muted-foreground">{product.id}</span>
+                {saveState === "saving" && (
+                  <span className="inline-flex items-center gap-1 font-bold text-primary">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    جاري الحفظ
+                  </span>
+                )}
+                {saveState === "saved" && (
+                  <span className="font-bold text-emerald-600">
+                    تم الحفظ تلقائيًا
+                  </span>
+                )}
+                {saveState === "error" && (
+                  <span className="font-bold text-red-500">
+                    تعذر الحفظ
+                  </span>
+                )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => void deleteProduct()}
+                disabled={deleting}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-500/20 px-3 text-xs font-bold text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+              >
+                {deleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                حذف المنتج
+              </button>
             </div>
           </div>
         </div>
