@@ -1,18 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import {
   Plus, ArrowUpRight, Clock, CheckCircle2, Briefcase, HardHat,
   UserPlus, UserCheck, Calendar, ChevronLeft, AlertTriangle,
   TrendingUp, RefreshCw, Users, CalendarCheck,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
-import { TicketForm } from '@/components/tickets/TicketForm';
 import { TicketTable, statusTranslations, typeTranslations, BulkActionBar } from '@/components/tickets/TicketTable';
-import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
-import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
 import { WhatsAppService } from '@/services/whatsappService';
-import { ProjectForm } from '@/components/projects/ProjectForm';
-import { ClientForm } from '@/components/clients/ClientForm';
-import { TechnicianForm } from '@/components/technicians/TechnicianForm';
 import { Button } from '@/components/ui/button';
 import { ticketsApi, projectsApi, clientsApi, techniciansApi, dashboardApi } from '@/lib/api';
 import { getCachedTickets, invalidateTicketCache } from '@/lib/ticketCache';
@@ -22,6 +16,25 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Project, Ticket, Client } from '@/types';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+
+const LazyProjectForm = lazy(() =>
+  import('@/components/projects/ProjectForm').then(module => ({ default: module.ProjectForm })),
+);
+const LazyClientForm = lazy(() =>
+  import('@/components/clients/ClientForm').then(module => ({ default: module.ClientForm })),
+);
+const LazyTicketForm = lazy(() =>
+  import('@/components/tickets/TicketForm').then(module => ({ default: module.TicketForm })),
+);
+const LazyTechnicianForm = lazy(() =>
+  import('@/components/technicians/TechnicianForm').then(module => ({ default: module.TechnicianForm })),
+);
+const LazyCloseTicketDialog = lazy(() =>
+  import('@/components/tickets/CloseTicketDialog').then(module => ({ default: module.CloseTicketDialog })),
+);
+const LazyAssignContractorDialog = lazy(() =>
+  import('@/components/tickets/AssignContractorDialog').then(module => ({ default: module.AssignContractorDialog })),
+);
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -34,6 +47,10 @@ export default function Dashboard() {
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [contractorDialogOpen, setContractorDialogOpen] = useState(false);
+  const [projectFormOpen, setProjectFormOpen] = useState(false);
+  const [clientFormOpen, setClientFormOpen] = useState(false);
+  const [ticketFormOpen, setTicketFormOpen] = useState(false);
+  const [technicianFormOpen, setTechnicianFormOpen] = useState(false);
   const [clients, setClients] = useState<Record<string, Client>>({});
 
   // ── Live KPI data ──
@@ -188,25 +205,25 @@ export default function Dashboard() {
 
     const actions: Record<string, React.ReactNode[]> = {
       admin: [
-        <ProjectForm key="project" trigger={
-          <Button className={btnBase}><Briefcase className="w-4.5 h-4.5 text-primary" />مشروع جديد</Button>
-        } />,
+        <Button key="project" className={btnBase} onClick={() => setProjectFormOpen(true)}>
+          <Briefcase className="w-4.5 h-4.5 text-primary" />مشروع جديد
+        </Button>,
         <Link key="team" to="/team" className="w-full">
           <Button className={btnBase}><UserPlus className="w-4.5 h-4.5 text-emerald-500" />إضافة مهندس</Button>
         </Link>,
       ],
       engineer: [
-        <ClientForm key="client" trigger={
-          <Button className={btnBase}><UserCheck className="w-4.5 h-4.5 text-primary" />عميل جديد</Button>
-        } onSuccess={loadDashboard} />,
-        <TicketForm key="ticket" trigger={
-          <Button className={btnBase}><Plus className="w-4.5 h-4.5 text-orange-500" />تذكرة جديدة</Button>
-        } onSuccess={loadDashboard} />,
+        <Button key="client" className={btnBase} onClick={() => setClientFormOpen(true)}>
+          <UserCheck className="w-4.5 h-4.5 text-primary" />عميل جديد
+        </Button>,
+        <Button key="ticket" className={btnBase} onClick={() => setTicketFormOpen(true)}>
+          <Plus className="w-4.5 h-4.5 text-orange-500" />تذكرة جديدة
+        </Button>,
       ],
       supervisor: [
-        <TechnicianForm key="tech" trigger={
-          <Button className={btnBase}><HardHat className="w-4.5 h-4.5 text-amber-500" />فني جديد</Button>
-        } />,
+        <Button key="tech" className={btnBase} onClick={() => setTechnicianFormOpen(true)}>
+          <HardHat className="w-4.5 h-4.5 text-amber-500" />فني جديد
+        </Button>,
         <Link key="appointments" to="/tickets" className="w-full">
           <Button className={btnBase}><Calendar className="w-4.5 h-4.5 text-purple-500" />جدولة موعد</Button>
         </Link>,
@@ -254,9 +271,15 @@ export default function Dashboard() {
               </select>
             )}
             <div className="hidden sm:flex items-center gap-3">
-              {user?.role === 'admin' && <ProjectForm />}
+              {user?.role === 'admin' && (
+                <Button onClick={() => setProjectFormOpen(true)} className="rounded-full px-5 h-11 gap-2">
+                  <Briefcase className="w-4 h-4" /> مشروع جديد
+                </Button>
+              )}
               {(user?.role === 'admin' || user?.role === 'engineer') && (
-                <TicketForm onSuccess={loadDashboard} />
+                <Button onClick={() => setTicketFormOpen(true)} className="rounded-full px-5 h-11 gap-2">
+                  <Plus className="w-4 h-4" /> تذكرة جديدة
+                </Button>
               )}
             </div>
           </div>
@@ -559,14 +582,16 @@ export default function Dashboard() {
                   </div>
                 ))}
                 {user?.role === 'admin' && (
-                  <ProjectForm trigger={
-                    <button className="w-full bg-card border-2 border-dashed border-border rounded-2xl p-5 flex flex-col items-center justify-center text-center gap-2 hover:border-primary/40 hover:bg-primary/2 transition-all cursor-pointer min-h-[130px]">
-                      <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
-                        <Plus className="w-5 h-5" />
-                      </div>
-                      <span className="text-muted-foreground font-semibold text-sm">إضافة مشروع</span>
-                    </button>
-                  } />
+                  <button
+                    type="button"
+                    onClick={() => setProjectFormOpen(true)}
+                    className="w-full bg-card border-2 border-dashed border-border rounded-2xl p-5 flex flex-col items-center justify-center text-center gap-2 hover:border-primary/40 hover:bg-primary/2 transition-all cursor-pointer min-h-[130px]"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
+                      <Plus className="w-5 h-5" />
+                    </div>
+                    <span className="text-muted-foreground font-semibold text-sm">إضافة مشروع</span>
+                  </button>
                 )}
               </div>
             )}
@@ -593,22 +618,64 @@ export default function Dashboard() {
         />
       )}
 
-      <CloseTicketDialog
-        open={closeDialogOpen}
-        onOpenChange={setCloseDialogOpen}
-        selectedTickets={allTickets.filter(t => selectedTicketIds.includes(t.id))}
-        clients={Object.values(clients)}
-        projects={Object.fromEntries(userProjects.map(p => [p.id, p]))}
-        onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadDashboard(); }}
-      />
+      <Suspense fallback={null}>
+        {projectFormOpen && (
+          <LazyProjectForm
+            open={projectFormOpen}
+            onOpenChange={setProjectFormOpen}
+            trigger={<span className="hidden" />}
+            onSuccess={() => { setProjectFormOpen(false); loadDashboard(); }}
+          />
+        )}
 
-      <AssignContractorDialog
-        open={contractorDialogOpen}
-        onOpenChange={setContractorDialogOpen}
-        tickets={allTickets.filter(t => selectedTicketIds.includes(t.id))}
-        projectId={allTickets.find(t => selectedTicketIds.includes(t.id))?.projectId || ''}
-        onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadDashboard(); }}
-      />
+        {clientFormOpen && (
+          <LazyClientForm
+            open={clientFormOpen}
+            onOpenChange={setClientFormOpen}
+            trigger={<span className="hidden" />}
+            onSuccess={() => { setClientFormOpen(false); loadDashboard(); }}
+          />
+        )}
+
+        {ticketFormOpen && (
+          <LazyTicketForm
+            open={ticketFormOpen}
+            onOpenChange={setTicketFormOpen}
+            trigger={<span className="hidden" />}
+            onSuccess={() => { setTicketFormOpen(false); loadDashboard(); }}
+          />
+        )}
+
+        {technicianFormOpen && (
+          <LazyTechnicianForm
+            open={technicianFormOpen}
+            onOpenChange={setTechnicianFormOpen}
+            trigger={<span className="hidden" />}
+            onSaved={() => { setTechnicianFormOpen(false); loadDashboard(); }}
+          />
+        )}
+
+        {closeDialogOpen && (
+          <LazyCloseTicketDialog
+            open={closeDialogOpen}
+            onOpenChange={setCloseDialogOpen}
+            selectedTickets={allTickets.filter(t => selectedTicketIds.includes(t.id))}
+            clients={Object.values(clients)}
+            projects={Object.fromEntries(userProjects.map(p => [p.id, p]))}
+            onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadDashboard(); }}
+          />
+        )}
+
+        {contractorDialogOpen && (
+          <LazyAssignContractorDialog
+            open={contractorDialogOpen}
+            onOpenChange={setContractorDialogOpen}
+            tickets={allTickets.filter(t => selectedTicketIds.includes(t.id))}
+            projectId={allTickets.find(t => selectedTicketIds.includes(t.id))?.projectId || ''}
+            onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadDashboard(); }}
+          />
+        )}
+      </Suspense>
     </Layout>
   );
 }
