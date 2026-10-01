@@ -50,7 +50,14 @@ export default defineConfig(({ mode }) => {
           globDirectory: 'dist',
           globIgnores: ['**/index.html'],
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
+          // Keep only the app shell and static assets in the install-time precache.
+          // Route chunks are cached on first use by the service worker instead of
+          // downloading the entire application after every deploy/cache reset.
+          globPatterns: [
+            'assets/index-*.js',
+            'assets/index-*.css',
+            '**/*.{ico,png,svg,woff,woff2,ttf,eot}',
+          ],
         },
       }),
     ],
