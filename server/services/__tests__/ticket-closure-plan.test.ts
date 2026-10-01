@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {planClosure} from '../ticket-closure-plan.js';
+import {planClosure, uniqueClosureItems} from '../ticket-closure-plan.js';
 const items = [{description: 'إصلاح تسريب', status: 'تم'}];
 const a = {uid: 'a', role: 'supervisor'}, b = {uid: 'b', role: 'supervisor'};
 test('first supervisor closes only their role; last supervisor finalizes with both contributions', () => {
@@ -69,4 +69,19 @@ test('engineer selecting every active supervisor finalizes the ticket without no
 });
 test('supervisor cannot use selected scope to close other roles', () => {
  assert.throws(() => planClosure(['a','b'], [], a, 'selected', ['a','b'], 'reason', items), /FORBIDDEN/);
+});
+
+
+test('deduplicates repeated report items while preserving distinct work', () => {
+ const result = uniqueClosureItems([
+   {description: 'تسريب في كرسي الحمام', status: 'تم'},
+   {description: '  تسريب   في كرسي الحمام  ', status: 'تم'},
+   {description: 'روائح كريهة تحتاج فحص البيارات', status: 'تم'},
+   {description: 'تسريب في كرسي الحمام', status: 'غير مكتمل'},
+ ]);
+ assert.deepEqual(result, [
+   {description: 'تسريب في كرسي الحمام', status: 'تم'},
+   {description: 'روائح كريهة تحتاج فحص البيارات', status: 'تم'},
+   {description: 'تسريب في كرسي الحمام', status: 'غير مكتمل'},
+ ]);
 });
