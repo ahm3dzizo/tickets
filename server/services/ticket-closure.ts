@@ -1,31 +1,7 @@
 import prisma from '../db.js';
-import { spawn } from 'node:child_process';
-import { readFile, unlink } from 'node:fs/promises';
-import path from 'node:path';
-import { __dirname } from '../config.js';
-import { buildClosingMsg } from '../baileys.js';
-
 import { closures, planClosure, uniqueClosureItems, type Closure } from './ticket-closure-plan.js';
 export { closures } from './ticket-closure-plan.js';
 
-async function renderReport(body: object): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.platform === 'win32' ? 'python' : 'python3', [path.join(__dirname, 'report_generator.py'), '--stdin'], {env: {...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1'}});
-    let output = '', errors = '';
-    const timer = setTimeout(() => { child.kill(); reject(new Error('REPORT_TIMEOUT')); }, 60000);
-    child.on('error', e => {clearTimeout(timer); reject(e);});
-    child.stdin.on('error', e => {clearTimeout(timer); reject(e);});
-    child.stdout.on('data', d => output += d.toString());
-    child.stderr.on('data', d => errors += d.toString());
-    child.on('close', async code => {
-      clearTimeout(timer);
-      if (code !== 0) {console.error('[ClosureReport] generation failed', errors); reject(new Error('REPORT_GENERATION_FAILED')); return;}
-      const filename = output.trim().split(/\r?\n/).pop() || '';
-      try { const bytes = await readFile(filename); await unlink(filename); resolve(bytes); } catch(e) {reject(e);}
-    });
-    child.stdin.end(JSON.stringify(body));
-  });
-}
 
 export async function closeTickets(uid: string, input: any) {
   const ids = [...new Set(input.ticketIds)] as string[];
@@ -97,21 +73,24 @@ export async function closeTickets(uid: string, input: any) {
       if (plan.final) finalRows.push(updated);
     }
     if (!finalRows.length) return {results, image: null};
+
     const first = finalRows[0];
-    const reportItems = uniqueClosureItems(
-      finalRows.flatMap(t =>
-        Array.isArray(t.maintenanceItems) ? t.maintenanceItems as Closure['items'] : []
-      ),
-    );
-    const reportNotes = [...new Set(
-      finalRows
-        .map(t => t.closureNotes?.trim())
-        .filter((note): note is string => Boolean(note))
-    )].join('\n');
-    const body = {ticket_num: finalRows.map(t => t.ticketId).join('، '), villa: first.unit?.unitNumber || '', customer_name: first.client?.name || '', phone: first.client?.phone || '', maint_items: reportItems.map(i => [i.description, i.status]), notes: reportNotes, block: first.unit?.block?.blockNumber || '', project: first.project.name, nhc: first.project.abbreviation, ticket_date: first.issuedAt || '', priority: String(first.priority), handover_date: first.unit?.handoverDate || '', warranty_expiry_date: first.unit?.warrantyExpiryDate || ''};
-    const image = await renderReport(body);
-    const caption = await buildClosingMsg({ticketId: body.ticket_num, clientName: body.customer_name, description: reportItems.map(i => i.description).join('، '), unitNumber: body.villa, closureNotes: reportNotes});
-    if (body.phone) await tx.ticketClosureReport.create({data: {ticketIds: finalRows.map(t => t.id), senderUid: uid, phone: body.phone, caption, image}});
-    return {results, image};
+    if (first.client?.phone) {
+      // Persist the report-generation job inside the same transaction, but do
+      // not block the ticket closure on Python/image rendering. The worker will
+      // render + send it after commit and can recover the job after a restart.
+      await tx.ticketClosureReport.create({
+        data: {
+          ticketIds: finalRows.map(t => t.id),
+          senderUid: uid,
+          phone: first.client.phone,
+          caption: '',
+          image: Buffer.alloc(0),
+          state: 'generating',
+        },
+      });
+    }
+
+    return {results, image: null};
   }, {timeout: 90000, maxWait: 10000});
 }
