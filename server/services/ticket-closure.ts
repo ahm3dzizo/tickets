@@ -31,6 +31,12 @@ export async function closeTickets(uid: string, input: any) {
   const ids = [...new Set(input.ticketIds)] as string[];
   if (!ids.length || ids.length > 100 || ids.some(id => typeof id !== 'string' || !id)) throw new Error('INVALID_TICKET_IDS');
   const notes = typeof input.notes === 'string' ? input.notes.trim() : '';
+  if (
+    input.supervisorUids !== undefined &&
+    (!Array.isArray(input.supervisorUids) ||
+      input.supervisorUids.length > 100 ||
+      input.supervisorUids.some((id: unknown) => typeof id !== 'string' || !id))
+  ) throw new Error('INVALID_SUPERVISOR_IDS');
   const items = input.items;
   if (!Array.isArray(items) || !items.length || items.length > 200 || items.some(i => !i || typeof i.description !== 'string' || !i.description.trim() || typeof i.status !== 'string')) throw new Error('INVALID_MAINTENANCE_ITEMS');
   return prisma.$transaction(async tx => {
@@ -49,18 +55,53 @@ export async function closeTickets(uid: string, input: any) {
         if (actor.role === 'supervisor' && !closures(ticket.supervisorClosures).some(h => h.supervisorUid === uid) && !ticket.assignedSupervisorIds.includes(uid)) throw new Error('FORBIDDEN');
         results.push({id: ticket.id, final: true, changed: false}); continue;
       }
-      const plan = planClosure(ticket.assignedSupervisorIds, closures(ticket.supervisorClosures), actor, input.scope || 'self', input.supervisorUid, notes, items);
+      const closureTarget =
+        input.scope === 'selected' ? input.supervisorUids :
+        input.scope === 'supervisor' ? input.supervisorUid :
+        undefined;
+      const plan = planClosure(
+        ticket.assignedSupervisorIds,
+        closures(ticket.supervisorClosures),
+        actor,
+        input.scope || 'self',
+        closureTarget,
+        notes,
+        items,
+      );
       results.push({id: ticket.id, final: plan.final, changed: plan.changed});
       if (!plan.changed) continue;
-      const allItems = plan.history.flatMap(h => h.items);
-      if (!ticket.assignedSupervisorIds.length) allItems.push(...items);
-      const allNotes = [...plan.history.map(h => h.notes), ...(input.scope === 'all' ? [notes] : [])].filter(Boolean).join('\n');
+      const itemMap = new Map<string, Closure['items'][number]>();
+      for (const item of plan.history.flatMap(h => h.items)) {
+        const key = `${item.description.trim()}::${item.status}`;
+        if (!itemMap.has(key)) itemMap.set(key, item);
+      }
+      if (!ticket.assignedSupervisorIds.length) {
+        for (const item of items) {
+          const key = `${item.description.trim()}::${item.status}`;
+          if (!itemMap.has(key)) itemMap.set(key, item);
+        }
+      }
+      const allItems = [...itemMap.values()];
+      const allNotes = [...new Set(plan.history.map(h => h.notes).filter(Boolean))].join('\n');
       const updated = await tx.ticket.update({where: {id: ticket.id}, data: {
         assignedSupervisorIds: plan.active, supervisorClosures: plan.history,
         status: plan.final ? 'closed' : 'in_progress', closedAt: plan.final ? new Date() : null,
         ...(plan.final ? {maintenanceItems: allItems.length ? allItems : items, closureNotes: allNotes || notes} : {}),
       }, include: {client: true, unit: {include: {block: true}}, project: true}});
-      await tx.ticketAudit.create({data: {ticketId: ticket.id, field: plan.final ? 'إغلاق كامل للتذكرة' : 'إنهاء دور مشرف', oldValue: JSON.stringify(ticket.assignedSupervisorIds), newValue: JSON.stringify({remaining: plan.active, scope: input.scope || 'self', supervisorUid: input.supervisorUid || uid, notes}), changedBy: uid}});
+      await tx.ticketAudit.create({data: {
+        ticketId: ticket.id,
+        field: plan.final ? 'إغلاق كامل للتذكرة' : 'إنهاء دور مشرف',
+        oldValue: JSON.stringify(ticket.assignedSupervisorIds),
+        newValue: JSON.stringify({
+          remaining: plan.active,
+          scope: input.scope || 'self',
+          supervisorUid: input.supervisorUid || undefined,
+          supervisorUids: input.supervisorUids || undefined,
+          completedBy: uid,
+          notes,
+        }),
+        changedBy: uid,
+      }});
       if (plan.final) finalRows.push(updated);
     }
     if (!finalRows.length) return {results, image: null};
