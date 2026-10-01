@@ -11,24 +11,28 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProductCard } from "./bibo-catalog/ProductCard";
+import { VariantEditor } from "./bibo-catalog/VariantEditor";
 import {
   createProduct,
   loadCatalog,
   uploadImages,
 } from "./bibo-catalog/api";
-import type { CatalogProduct } from "./bibo-catalog/types";
+import type {
+  CatalogProduct,
+  VariantAttribute,
+} from "./bibo-catalog/types";
 
 type NewProduct = {
   name: string;
   description: string;
-  variants: string;
+  variantAttributes: VariantAttribute[];
   price: string;
 };
 
 const EMPTY: NewProduct = {
   name: "",
   description: "",
-  variants: "",
+  variantAttributes: [],
   price: "",
 };
 
@@ -63,12 +67,22 @@ export default function BiboCatalog() {
     const value = query.trim().toLowerCase();
     if (!value) return products;
 
-    return products.filter((product) =>
-      [product.name, product.description, product.variants, product.id]
+    return products.filter((product) => {
+      const variantText = product.variantAttributes
+        .flatMap((attribute) => [attribute.name, ...attribute.values])
+        .join(" ");
+
+      return [
+        product.name,
+        product.description,
+        product.variants,
+        variantText,
+        product.id,
+      ]
         .join(" ")
         .toLowerCase()
-        .includes(value),
-    );
+        .includes(value);
+    });
   }, [products, query]);
 
   const addProduct = async () => {
@@ -86,7 +100,7 @@ export default function BiboCatalog() {
       await createProduct({
         name: draft.name,
         description: draft.description,
-        variants: draft.variants,
+        variantAttributes: draft.variantAttributes,
         price: draft.price === "" ? null : Number(draft.price),
         images,
       });
@@ -120,7 +134,7 @@ export default function BiboCatalog() {
               كتالوج منتجات Hedaya
             </h1>
             <p className="text-[10px] text-muted-foreground sm:text-xs">
-              الصور والبيانات قابلة للتعديل مباشرة — الحفظ في products.xlsx
+              الصور والبيانات والمتغيرات قابلة للتعديل — الحفظ في products.xlsx
             </p>
           </div>
 
@@ -168,7 +182,7 @@ export default function BiboCatalog() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="ابحث بالاسم أو الوصف أو المتغيرات..."
+              placeholder="ابحث بالاسم أو الوصف أو اللون أو المقاس أو النوع..."
               className="h-11 w-full rounded-2xl border border-border bg-card pr-11 pl-4 text-right text-sm outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
@@ -184,29 +198,20 @@ export default function BiboCatalog() {
             <div className="mb-4 text-right">
               <h2 className="font-extrabold">إضافة منتج جديد</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                الصور الجديدة تُحفظ داخل public/bibo/catalog ثم تُربط بالمنتج في Excel.
+                أضف بيانات المنتج وصوره وخصائصه المنظمة.
               </p>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-4">
+            <div className="grid gap-3 lg:grid-cols-[1fr_180px_1fr]">
               <input
                 value={draft.name}
                 onChange={(event) =>
-                  setDraft((current) => ({ ...current, name: event.target.value }))
-                }
-                placeholder="اسم المنتج"
-                className="h-11 rounded-xl border border-border bg-background px-3 text-right text-sm outline-none focus:ring-2 focus:ring-primary/20"
-              />
-
-              <input
-                value={draft.variants}
-                onChange={(event) =>
                   setDraft((current) => ({
                     ...current,
-                    variants: event.target.value,
+                    name: event.target.value,
                   }))
                 }
-                placeholder="المتغيرات"
+                placeholder="اسم المنتج"
                 className="h-11 rounded-xl border border-border bg-background px-3 text-right text-sm outline-none focus:ring-2 focus:ring-primary/20"
               />
 
@@ -227,7 +232,9 @@ export default function BiboCatalog() {
 
               <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background px-3 text-xs font-bold hover:bg-muted">
                 <Images className="h-4 w-4" />
-                {files.length ? `${files.length} صورة مختارة` : "اختيار الصور"}
+                {files.length
+                  ? `${files.length} صورة مختارة`
+                  : "اختيار الصور"}
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
@@ -252,6 +259,27 @@ export default function BiboCatalog() {
               placeholder="وصف المنتج"
               className="mt-3 w-full resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-right text-sm outline-none focus:ring-2 focus:ring-primary/20"
             />
+
+            <div className="mt-4 rounded-2xl border border-border bg-background p-3">
+              <div className="mb-2">
+                <h3 className="text-sm font-extrabold">
+                  المتغيرات والخصائص
+                </h3>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  اختر اسم الخاصية مثل اللون أو المقاس أو الحجم أو النوع، أو اكتب خاصية جديدة.
+                </p>
+              </div>
+
+              <VariantEditor
+                value={draft.variantAttributes}
+                onChange={(variantAttributes) =>
+                  setDraft((current) => ({
+                    ...current,
+                    variantAttributes,
+                  }))
+                }
+              />
+            </div>
 
             <div className="mt-3 flex justify-end">
               <button
