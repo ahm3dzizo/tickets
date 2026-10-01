@@ -36,6 +36,8 @@ interface ProjectFormProps {
   nativeButton?: boolean;
   project?: Project;
   onSuccess?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function ProjectForm({
@@ -43,8 +45,15 @@ export function ProjectForm({
   nativeButton,
   project,
   onSuccess,
+  open: openProp,
+  onOpenChange,
 }: ProjectFormProps) {
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openProp !== undefined ? openProp : openInternal;
+  const setOpen = (value: boolean) => {
+    if (onOpenChange) onOpenChange(value);
+    else setOpenInternal(value);
+  };
   const [loading, setLoading] = useState(false);
 
   const [name, setName] = useState('');
