@@ -1,5 +1,5 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { ThemeProvider } from '@/components/theme-provider';
 import './index.css';
@@ -35,8 +35,24 @@ window.addEventListener('beforeinstallprompt', (e) => {
   window.dispatchEvent(new Event('pwa-prompt-captured'));
 });
 
-// Register PWA service worker
-registerSW({ immediate: true });
+// Do not let service-worker installation/precache compete with the initial app
+// boot. Register after the first page load and when the main thread is idle.
+// Auto-update/offline behavior stays enabled; only startup contention is removed.
+function registerPwaWhenIdle() {
+  const register = () => registerSW({ immediate: true });
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(register, { timeout: 4000 });
+  } else {
+    window.setTimeout(register, 1500);
+  }
+}
+
+if (document.readyState === 'complete') {
+  registerPwaWhenIdle();
+} else {
+  window.addEventListener('load', registerPwaWhenIdle, { once: true });
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
