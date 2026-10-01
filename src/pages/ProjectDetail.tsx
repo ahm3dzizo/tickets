@@ -1,3 +1,4 @@
+import { requestWhatsAppOpen } from '@/lib/whatsappLauncher';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -131,8 +132,7 @@ export default function ProjectDetail() {
     const message = `السلام عليكم، بخصوص بلاغ الصيانة رقم ${ticketIdsList} لوحدتكم وحدة ${targetUnitNumber}، نرجو إفادتنا بمواعيد تواجدكم لتنسيق موعد الصيانة.`;
     
     const phone = targetClient.phone.replace(/[^0-9]/g, '');
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+    requestWhatsAppOpen(phone, message);
   };
 
   return (
