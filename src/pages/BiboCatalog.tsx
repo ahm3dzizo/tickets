@@ -69,7 +69,10 @@ export default function BiboCatalog() {
 
     return products.filter((product) => {
       const variantText = product.variantAttributes
-        .flatMap((attribute) => [attribute.name, ...attribute.values])
+        .flatMap((attribute) => [
+          attribute.name,
+          ...attribute.values.map((item) => item.label),
+        ])
         .join(" ");
 
       return [
@@ -272,6 +275,7 @@ export default function BiboCatalog() {
 
               <VariantEditor
                 value={draft.variantAttributes}
+                basePrice={draft.price === "" ? null : Number(draft.price)}
                 onChange={(variantAttributes) =>
                   setDraft((current) => ({
                     ...current,
