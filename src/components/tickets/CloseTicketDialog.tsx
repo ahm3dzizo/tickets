@@ -192,14 +192,24 @@ const effectiveSelectedSupervisorIds = privileged
   : user?.uid && activeSupervisorIds.includes(user.uid)
     ? [user.uid]
     : [];
-const isFullNormalClosure =
-  closeType === 'normal' &&
-  (activeSupervisorIds.length === 0
+const allActiveSupervisorRolesSelected =
+  activeSupervisorIds.length === 0
     ? privileged
-    : effectiveSelectedSupervisorIds.length === activeSupervisorIds.length);
-const closureModeText = isFullNormalClosure
-  ? 'إغلاق كامل — سيتم إنشاء التقرير وإرساله للعميل'
-  : `إغلاق جزئي — سيتم إنهاء ${effectiveSelectedSupervisorIds.length} من ${activeSupervisorIds.length} دور ولن يُرسل التقرير الآن`;
+    : effectiveSelectedSupervisorIds.length === activeSupervisorIds.length;
+const isFullClosure =
+  closeType === 'normal'
+    ? allActiveSupervisorRolesSelected
+    : !shared;
+const isPartialOnBehalf =
+  closeType === 'normal' && privileged && !isFullClosure;
+const closureModeText =
+  closeType === 'normal'
+    ? isFullClosure
+      ? 'إغلاق كامل — سيتم إنشاء التقرير وإرساله للعميل'
+      : `إغلاق جزئي — سيتم إنهاء ${effectiveSelectedSupervisorIds.length} من ${activeSupervisorIds.length} دور ولن يُرسل التقرير الآن`
+    : closeType === 'absent'
+      ? 'إغلاق كامل — سيتم تسجيل عدم التواجد وإرسال رسالة للعميل'
+      : 'إغلاق كامل — سيتم تسجيل خارج الاختصاص وإرسال رسالة للعميل';
 
 const toggleSupervisor = (id: string) => {
   if (!privileged) return;
@@ -374,7 +384,7 @@ if (privileged && effectiveSelectedSupervisorIds.length === 0 && activeSuperviso
 toast.error('حدد مشرفًا واحدًا على الأقل');
 return;
 }
-if (privileged && !isFullNormalClosure && !notes.trim()) {
+if (isPartialOnBehalf && !notes.trim()) {
 toast.error('اكتب سبب الإنهاء بالنيابة في الملاحظات');
 return;
 }
@@ -389,19 +399,23 @@ const response = await fetch('/api/tickets/close', {
   body: JSON.stringify({
     ticketIds: selectedTickets.map(t => t.id),
     scope: privileged
-      ? (isFullNormalClosure ? 'all' : 'selected')
+      ? (isFullClosure ? 'all' : 'selected')
       : 'self',
-    supervisorUids: privileged && !isFullNormalClosure ? effectiveSelectedSupervisorIds : undefined,
+    supervisorUids: privileged && !isFullClosure ? effectiveSelectedSupervisorIds : undefined,
     notes,
     items: maintItems,
   }),
 });
 if (!response.ok) {
   const error = await response.json().catch(() => ({}));
-  toast.error(error.error || 'فشل إنهاء الدور'); return;
+  toast.error(
+    error.error === 'REASON_REQUIRED'
+      ? 'سبب الإنهاء مطلوب فقط عند الإغلاق الجزئي بالنيابة عن مشرف'
+      : error.error || 'فشل إنهاء الدور'
+  ); return;
 }
 if (response.headers.get('content-type')?.includes('application/json')) {
-  toast.success(isFullNormalClosure
+  toast.success(isFullClosure
     ? 'تم الإغلاق الكامل ووضع التقرير في طابور الإرسال'
     : 'تم الإغلاق الجزئي؛ التقرير سيُرسل بعد إنهاء باقي المشرفين');
   onSuccess(); onOpenChange(false); return;
@@ -475,16 +489,18 @@ return (
 <div>
 <p className="text-xs font-black text-foreground">المشرفون الجاري إنهاء أدوارهم</p>
 <p className="mt-0.5 text-[11px] text-muted-foreground">
-{privileged ? 'حدد مباشرةً المشرفين المطلوب إنهاء أدوارهم' : 'يمكنك إنهاء دورك فقط'}
+{closeType === 'normal'
+  ? (privileged ? 'حدد مباشرةً المشرفين المطلوب إنهاء أدوارهم' : 'يمكنك إنهاء دورك فقط')
+  : 'هذا النوع يغلق التذكرة بالكامل'}
 </p>
 </div>
 <span className={cn(
   'shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black border',
-  isFullNormalClosure
+  isFullClosure
     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
     : 'border-amber-500/30 bg-amber-500/10 text-amber-500'
 )}>
-{isFullNormalClosure ? 'إغلاق كامل' : 'إغلاق جزئي'}
+{isFullClosure ? 'إغلاق كامل' : 'إغلاق جزئي'}
 </span>
 </div>
 
@@ -492,7 +508,7 @@ return (
 <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
 {supervisorOptions.map(s => {
   const checked = effectiveSelectedSupervisorIds.includes(s.id);
-  const canToggle = privileged;
+  const canToggle = privileged && closeType === 'normal';
   return (
     <button
       key={s.id}
@@ -538,13 +554,13 @@ return (
 
 <div className={cn(
   'rounded-xl border px-3 py-2.5 text-xs font-bold',
-  isFullNormalClosure
+  isFullClosure
     ? 'border-emerald-500/25 bg-emerald-500/8 text-emerald-500'
     : 'border-amber-500/25 bg-amber-500/8 text-amber-500'
 )}>
 {closureModeText}
 </div>
-{privileged && !isFullNormalClosure && (
+{isPartialOnBehalf && (
   <p className="text-[11px] text-muted-foreground">سبب الإنهاء بالنيابة مطلوب في الملاحظات.</p>
 )}
 </div>
@@ -723,7 +739,7 @@ closeType === 'normal' ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-1"
 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
 <>
 <Save className="w-4 h-4" />
-<span className="truncate">{isFullNormalClosure ? 'تأكيد الإغلاق الكامل' : privileged ? 'تأكيد الإغلاق الجزئي' : 'إنهاء دوري'}</span>
+<span className="truncate">{isFullClosure ? 'تأكيد الإغلاق الكامل' : privileged ? 'تأكيد الإغلاق الجزئي' : 'إنهاء دوري'}</span>
 </>
 )}
 </Button>
