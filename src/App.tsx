@@ -23,6 +23,7 @@ const DeferredProfileCompletionModal = lazy(() =>
 
 const TicketTypesAdminPage = lazy(() => import('./pages/TicketTypesAdminPage'));
 const Images = lazy(() => import('@/pages/Images'));
+const BiboCatalog = lazy(() => import('@/pages/BiboCatalog'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Login = lazy(() => import('@/pages/Login'));
 const TicketsList = lazy(() => import('@/pages/TicketsList'));
@@ -67,8 +68,11 @@ export default function App() {
   const isPublicImagesRoute =
     window.location.pathname === '/images' ||
     window.location.pathname.startsWith('/images/');
+  const isPublicBiboCatalogRoute =
+    window.location.pathname === '/bibo-catalog' ||
+    window.location.pathname.startsWith('/bibo-catalog/');
 
-  if (isPublicImagesRoute) {
+  if (isPublicImagesRoute || isPublicBiboCatalogRoute) {
     return (
       <ErrorBoundary>
         <Router>
@@ -76,7 +80,8 @@ export default function App() {
             <RouteSuspense>
               <Routes>
                 <Route path="/images" element={<Images />} />
-                <Route path="*" element={<Navigate to="/images" replace />} />
+                <Route path="/bibo-catalog" element={<BiboCatalog />} />
+                <Route path="*" element={<Navigate to={isPublicBiboCatalogRoute ? "/bibo-catalog" : "/images"} replace />} />
               </Routes>
             </RouteSuspense>
             <Toaster position="top-right" />
