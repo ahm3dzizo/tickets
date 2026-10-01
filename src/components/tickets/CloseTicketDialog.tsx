@@ -489,7 +489,9 @@ return (
 <div>
 <p className="text-xs font-black text-foreground">المشرفون الجاري إنهاء أدوارهم</p>
 <p className="mt-0.5 text-[11px] text-muted-foreground">
-{privileged ? 'حدد مباشرةً المشرفين المطلوب إنهاء أدوارهم' : 'يمكنك إنهاء دورك فقط'}
+{closeType === 'normal'
+  ? (privileged ? 'حدد مباشرةً المشرفين المطلوب إنهاء أدوارهم' : 'يمكنك إنهاء دورك فقط')
+  : 'هذا النوع يغلق التذكرة بالكامل'}
 </p>
 </div>
 <span className={cn(
@@ -506,7 +508,7 @@ return (
 <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
 {supervisorOptions.map(s => {
   const checked = effectiveSelectedSupervisorIds.includes(s.id);
-  const canToggle = privileged;
+  const canToggle = privileged && closeType === 'normal';
   return (
     <button
       key={s.id}
