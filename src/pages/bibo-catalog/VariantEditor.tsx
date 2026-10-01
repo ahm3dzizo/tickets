@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import type { VariantAttribute, VariantValue } from "./types";
 
 const SUGGESTED_NAMES = [
@@ -20,6 +20,10 @@ function newId() {
   );
 }
 
+function normalizePrice(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 export function VariantEditor({
   value,
   onChange,
@@ -32,6 +36,7 @@ export function VariantEditor({
   compact?: boolean;
 }) {
   const [draftValues, setDraftValues] = useState<Record<string, string>>({});
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
 
   const addAttribute = () => {
     onChange([...value, { id: newId(), name: "", values: [] }]);
@@ -101,6 +106,35 @@ export function VariantEditor({
     });
   };
 
+  const commitPrice = (
+    attribute: VariantAttribute,
+    item: VariantValue,
+  ) => {
+    const raw = priceDrafts[item.id];
+    if (raw === undefined) return;
+
+    const trimmed = raw.trim();
+    let priceOverride: number | null = null;
+
+    if (trimmed !== "") {
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        const normalized = normalizePrice(parsed);
+        priceOverride =
+          basePrice !== null && normalized === normalizePrice(basePrice)
+            ? null
+            : normalized;
+      }
+    }
+
+    updateValue(attribute, item.id, { priceOverride });
+    setPriceDrafts((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-3" dir="rtl">
       {value.map((attribute) => (
@@ -115,8 +149,8 @@ export function VariantEditor({
               onChange={(event) =>
                 updateAttribute(attribute.id, { name: event.target.value })
               }
-              placeholder="اسم الخاصية: اللون، المقاس..."
-              className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-right text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="النوع: لون، مقاس، حجم..."
+              className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
             />
             <button
               type="button"
@@ -135,131 +169,82 @@ export function VariantEditor({
           </datalist>
 
           {attribute.values.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {attribute.values.some((item) => item.priceOverride !== null) && (
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateAttribute(attribute.id, {
-                        values: attribute.values.map((item) => ({
-                          ...item,
-                          priceOverride: null,
-                        })),
-                      })
-                    }
-                    className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background px-3 text-[10px] font-bold text-primary hover:bg-muted"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    كل القيم بالسعر الأساسي
-                  </button>
-                </div>
-              )}
+            <div
+              className={
+                "mt-3 grid gap-2 " +
+                (compact
+                  ? "sm:grid-cols-2"
+                  : "sm:grid-cols-2 xl:grid-cols-3")
+              }
+            >
               {attribute.values.map((item) => {
-                const effectivePrice = item.priceOverride ?? basePrice;
-                const inheritsBasePrice = item.priceOverride === null;
+                const shownPrice =
+                  priceDrafts[item.id] ??
+                  String(item.priceOverride ?? basePrice ?? "");
 
                 return (
                   <div
                     key={item.id}
-                    className="grid gap-2 rounded-xl border border-border bg-background p-2 sm:grid-cols-[minmax(120px,1fr)_160px_150px_34px]"
+                    className="rounded-xl border border-border bg-background p-2.5"
                   >
-                    <input
-                      value={item.label}
-                      onChange={(event) =>
-                        updateValue(attribute, item.id, {
-                          label: event.target.value,
-                        })
-                      }
-                      className="h-9 min-w-0 rounded-lg border border-border bg-background px-2.5 text-right text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                      placeholder="قيمة المتغير"
-                    />
-
-                    <select
-                      value={inheritsBasePrice ? "base" : "custom"}
-                      onChange={(event) => {
-                        if (event.target.value === "base") {
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={item.label}
+                        onChange={(event) =>
                           updateValue(attribute, item.id, {
-                            priceOverride: null,
-                          });
-                        } else {
-                          updateValue(attribute, item.id, {
-                            priceOverride: basePrice ?? 0,
-                          });
+                            label: event.target.value,
+                          })
                         }
-                      }}
-                      className="h-9 rounded-lg border border-border bg-background px-2 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                    >
-                      <option value="base">السعر الأساسي</option>
-                      <option value="custom">سعر مخصص</option>
-                    </select>
+                        className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 text-right text-xs font-extrabold outline-none focus:ring-2 focus:ring-primary/20"
+                        placeholder="قيمة المتغير"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeValue(attribute, item.id)}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
+                        title="حذف القيمة"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
 
-                    {inheritsBasePrice ? (
-                      <div className="flex h-9 items-center justify-between gap-2 rounded-lg border border-dashed border-border px-2.5 text-[11px]">
-                        <span className="text-muted-foreground">السعر</span>
-                        <span className="font-extrabold">
-                          {basePrice === null ? "غير محدد" : `${basePrice} ر.س`}
-                        </span>
-                      </div>
-                    ) : (
+                    <label className="mt-2 block">
+                      <span className="mb-1 block text-[9px] font-bold text-muted-foreground">
+                        السعر
+                      </span>
                       <div className="relative">
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          value={item.priceOverride ?? ""}
-                          onChange={(event) =>
-                            updateValue(attribute, item.id, {
-                              priceOverride:
-                                event.target.value === ""
-                                  ? 0
-                                  : Number(event.target.value),
-                            })
+                          value={shownPrice}
+                          onFocus={() =>
+                            setPriceDrafts((current) => ({
+                              ...current,
+                              [item.id]: String(
+                                item.priceOverride ?? basePrice ?? "",
+                              ),
+                            }))
                           }
-                          className="h-9 w-full rounded-lg border border-border bg-background pr-2.5 pl-9 text-right text-xs font-extrabold outline-none focus:ring-2 focus:ring-primary/20"
-                          placeholder="0.00"
+                          onChange={(event) =>
+                            setPriceDrafts((current) => ({
+                              ...current,
+                              [item.id]: event.target.value,
+                            }))
+                          }
+                          onBlur={() => commitPrice(attribute, item)}
+                          className="h-9 w-full rounded-lg border border-border bg-background pr-2.5 pl-10 text-right text-xs font-extrabold outline-none focus:ring-2 focus:ring-primary/20"
+                          placeholder={
+                            basePrice === null
+                              ? "السعر"
+                              : String(basePrice)
+                          }
                         />
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground">
                           ر.س
                         </span>
                       </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => removeValue(attribute, item.id)}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
-                      title="حذف القيمة"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-
-                    {!compact && (
-                      <div className="sm:col-span-4 flex flex-wrap items-center gap-2 px-1 text-[10px] text-muted-foreground">
-                        <span>
-                          السعر النهائي:{" "}
-                          <strong className="text-foreground">
-                            {effectivePrice === null
-                              ? "غير محدد"
-                              : `${effectivePrice} ر.س`}
-                          </strong>
-                        </span>
-                        {!inheritsBasePrice && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateValue(attribute, item.id, {
-                                priceOverride: null,
-                              })
-                            }
-                            className="inline-flex items-center gap-1 font-bold text-primary hover:underline"
-                          >
-                            <RotateCcw className="h-3 w-3" />
-                            رجوع للسعر الأساسي
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    </label>
                   </div>
                 );
               })}
@@ -281,7 +266,7 @@ export function VariantEditor({
                   addValue(attribute);
                 }
               }}
-              placeholder="أضف قيمة مثل: أحمر أو XL ثم Enter"
+              placeholder="أضف قيمة: أحمر، XL، كبير..."
               className="h-9 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-right text-xs outline-none focus:ring-2 focus:ring-primary/20"
             />
             <button
@@ -290,7 +275,7 @@ export function VariantEditor({
               className="inline-flex h-9 items-center gap-1 rounded-xl border border-border bg-background px-3 text-[11px] font-bold hover:bg-muted"
             >
               <Plus className="h-3.5 w-3.5" />
-              قيمة
+              إضافة
             </button>
           </div>
         </div>
@@ -305,7 +290,7 @@ export function VariantEditor({
         }
       >
         <Plus className="h-4 w-4" />
-        إضافة خاصية
+        إضافة نوع
       </button>
     </div>
   );
