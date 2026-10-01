@@ -14,6 +14,7 @@ import { AttendanceReportView } from '@/components/attendance/AttendanceReportVi
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { requestWhatsAppOpen } from '@/lib/whatsappLauncher';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -87,7 +88,7 @@ export default function Technicians() {
   const handleWhatsApp = (phone: string, name: string) => {
     if (!phone) return;
     const cleanPhone = phone.replace(/[^0-9]/g, '');
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(`مرحباً ${name}، كيف تسير أعمال الصيانة اليوم؟`)}`, '_blank');
+    requestWhatsAppOpen(cleanPhone, `مرحباً ${name}، كيف تسير أعمال الصيانة اليوم؟`);
   };
 
   const handleToggleActive = async (t: any) => {
