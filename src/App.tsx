@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -6,42 +6,49 @@ import {
   Navigate
 } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
-import TicketTypesAdminPage from './pages/TicketTypesAdminPage';
-import Images from '@/pages/Images';
-import Dashboard from '@/pages/Dashboard';
-import Login from '@/pages/Login';
-import TicketsList from '@/pages/TicketsList';
-import TicketDetail from '@/pages/TicketDetailResponsive';
-import Team from '@/pages/Team';
-import Settings from '@/pages/Settings';
-import PushDiagnostics from '@/pages/PushDiagnostics';
-import Projects from '@/pages/Projects';
-import ProjectDetail from '@/pages/ProjectDetail';
-import Clients from '@/pages/Clients';
-import Technicians from '@/pages/Technicians';
-import TeamMemberDetail from '@/pages/TeamMemberDetail';
-import Reports from '@/pages/Reports';
-import AttendanceReport from '@/pages/AttendanceReport';
-import Appointments from '@/pages/Appointments';
-import Contractors from '@/pages/Contractors';
-import ClientDetail from '@/pages/ClientDetail';
-import ContractorDetail from '@/pages/ContractorDetail';
-import Warehouse from '@/pages/Warehouse';
-import WarehouseRequests from '@/pages/WarehouseRequests';
-import UnitDetail from '@/pages/UnitDetail';
-import Warranties from '@/pages/Warranties';
-import TechLogin from '@/pages/tech/TechLogin';
-import TechSetup from '@/pages/tech/TechSetup';
-import TechAppWithRecovery from '@/pages/tech/TechAppWithRecovery';
-import TechTicketDetail from '@/pages/tech/TechTicketDetail';
-import TechHistory from '@/pages/tech/TechHistory';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+const TicketTypesAdminPage = lazy(() => import('./pages/TicketTypesAdminPage'));
+const Images = lazy(() => import('@/pages/Images'));
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Login = lazy(() => import('@/pages/Login'));
+const TicketsList = lazy(() => import('@/pages/TicketsList'));
+const TicketDetail = lazy(() => import('@/pages/TicketDetailResponsive'));
+const Team = lazy(() => import('@/pages/Team'));
+const Settings = lazy(() => import('@/pages/Settings'));
+const PushDiagnostics = lazy(() => import('@/pages/PushDiagnostics'));
+const Projects = lazy(() => import('@/pages/Projects'));
+const ProjectDetail = lazy(() => import('@/pages/ProjectDetail'));
+const Clients = lazy(() => import('@/pages/Clients'));
+const Technicians = lazy(() => import('@/pages/Technicians'));
+const TeamMemberDetail = lazy(() => import('@/pages/TeamMemberDetail'));
+const Reports = lazy(() => import('@/pages/Reports'));
+const AttendanceReport = lazy(() => import('@/pages/AttendanceReport'));
+const Appointments = lazy(() => import('@/pages/Appointments'));
+const Contractors = lazy(() => import('@/pages/Contractors'));
+const ClientDetail = lazy(() => import('@/pages/ClientDetail'));
+const ContractorDetail = lazy(() => import('@/pages/ContractorDetail'));
+const Warehouse = lazy(() => import('@/pages/Warehouse'));
+const WarehouseRequests = lazy(() => import('@/pages/WarehouseRequests'));
+const UnitDetail = lazy(() => import('@/pages/UnitDetail'));
+const Warranties = lazy(() => import('@/pages/Warranties'));
+const TechLogin = lazy(() => import('@/pages/tech/TechLogin'));
+const TechSetup = lazy(() => import('@/pages/tech/TechSetup'));
+const TechAppWithRecovery = lazy(() => import('@/pages/tech/TechAppWithRecovery'));
+const TechTicketDetail = lazy(() => import('@/pages/tech/TechTicketDetail'));
+const TechHistory = lazy(() => import('@/pages/tech/TechHistory'));import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { ProfileCompletionModal } from '@/components/ProfileCompletionModal';
 import { WhatsAppConnectPrompt } from '@/components/whatsapp/WhatsAppConnectPrompt';
 import { WhatsAppAppPicker } from '@/components/whatsapp/WhatsAppAppPicker';
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[45vh] w-full items-center justify-center bg-background">
+      <img src="/logo.png" alt="Tickets" className="h-20 w-20 object-contain animate-pulse" />
+    </div>
+  );
+}
 
 export default function App() {
   const isPublicImagesRoute =
@@ -53,10 +60,12 @@ export default function App() {
       <ErrorBoundary>
         <Router>
           <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-background text-foreground selection:bg-primary/30">
-            <Routes>
-              <Route path="/images" element={<Images />} />
-              <Route path="*" element={<Navigate to="/images" replace />} />
-            </Routes>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/images" element={<Images />} />
+                <Route path="*" element={<Navigate to="/images" replace />} />
+              </Routes>
+            </Suspense>
             <Toaster position="top-right" />
           </div>
         </Router>
@@ -122,6 +131,7 @@ function AppContent() {
   return (
     <Router>
       <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-background text-foreground selection:bg-primary/30">
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/login" element={user && !requiresProfileCompletion ? <Navigate to="/" /> : <Login />} />
           <Route path="/" element={protectedElement(<Dashboard />)} />
@@ -155,6 +165,7 @@ function AppContent() {
           <Route path="/tech/appointment/:id" element={<TechAppWithRecovery />} />
           <Route path="/tech" element={<TechAppWithRecovery />} />
         </Routes>
+        </Suspense>
         <Toaster position="top-right" />
         <PWAInstallPrompt />
         <WhatsAppConnectPrompt />
