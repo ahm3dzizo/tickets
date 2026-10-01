@@ -195,6 +195,42 @@ export async function writeCatalogProducts(products: BiboCatalogProduct[]) {
   }
 
   sheet.autoFilter = { from: "A1", to: "K1" };
+
+  const variantsSheet = workbook.addWorksheet("Variants", {
+    views: [{ rightToLeft: true, state: "frozen", ySplit: 1 }],
+  });
+
+  variantsSheet.columns = [
+    { header: "Product ID", key: "productId", width: 20 },
+    { header: "اسم المنتج", key: "productName", width: 34 },
+    { header: "الخاصية", key: "attributeName", width: 24 },
+    { header: "القيمة", key: "value", width: 28 },
+    { header: "ترتيب الخاصية", key: "attributeOrder", width: 16 },
+    { header: "ترتيب القيمة", key: "valueOrder", width: 16 },
+  ];
+
+  const variantsHeader = variantsSheet.getRow(1);
+  variantsHeader.font = { bold: true };
+  variantsHeader.alignment = { horizontal: "center", vertical: "middle" };
+
+  for (const product of [...products].sort((a, b) => a.sortOrder - b.sortOrder)) {
+    const attributes = sanitizeVariantAttributes(product.variantAttributes);
+    attributes.forEach((attribute, attributeIndex) => {
+      attribute.values.forEach((value, valueIndex) => {
+        variantsSheet.addRow({
+          productId: product.id,
+          productName: product.name,
+          attributeName: attribute.name,
+          value,
+          attributeOrder: attributeIndex + 1,
+          valueOrder: valueIndex + 1,
+        });
+      });
+    });
+  }
+
+  variantsSheet.autoFilter = { from: "A1", to: "F1" };
+
   const temp = BIBO_CATALOG_FILE + ".tmp";
   await workbook.xlsx.writeFile(temp);
   await fs.promises.rename(temp, BIBO_CATALOG_FILE);
