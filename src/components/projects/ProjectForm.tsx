@@ -58,13 +58,14 @@ export function ProjectForm({
   const isEdit = !!project;
 
   useEffect(() => {
+    if (!open || engineers.length > 0) return;
     usersApi
       .getAll()
       .then(all =>
         setEngineers(all.filter((u: User) => u.role === 'engineer'))
       )
       .catch(() => {});
-  }, []);
+  }, [open, engineers.length]);
 
   useEffect(() => {
     if (open && project) {
