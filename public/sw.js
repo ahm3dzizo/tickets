@@ -2,12 +2,24 @@
 import { clientsClaim } from 'workbox-core';
 import { precacheAndRoute } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { NetworkFirst } from 'workbox-strategies';
+import { NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
 
 // ── Workbox precache (manifest injected by vite-plugin-pwa at build time) ─────
 self.skipWaiting();
 clientsClaim();
 precacheAndRoute(self.__WB_MANIFEST || []);
+
+// ── Lazy application assets ───────────────────────────────────────────────────
+// Route-level chunks are intentionally not installed up front. Cache them after
+// first use so navigation stays fast without making every client download every
+// screen and heavy export library on each release.
+const APP_ASSET_RUNTIME_CACHE = 'retal-app-assets-v1';
+registerRoute(
+  ({ url, request }) =>
+    url.origin === self.location.origin &&
+    (request.destination === 'script' || request.destination === 'style'),
+  new StaleWhileRevalidate({ cacheName: APP_ASSET_RUNTIME_CACHE }),
+);
 
 // ── Firestore runtime cache ───────────────────────────────────────────────────
 registerRoute(
