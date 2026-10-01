@@ -5,7 +5,7 @@ import path from 'node:path';
 import { __dirname } from '../config.js';
 import { buildClosingMsg } from '../baileys.js';
 
-import { closures, planClosure, type Closure } from './ticket-closure-plan.js';
+import { closures, planClosure, uniqueClosureItems, type Closure } from './ticket-closure-plan.js';
 export { closures } from './ticket-closure-plan.js';
 
 async function renderReport(body: object): Promise<Buffer> {
@@ -70,18 +70,10 @@ export async function closeTickets(uid: string, input: any) {
       );
       results.push({id: ticket.id, final: plan.final, changed: plan.changed});
       if (!plan.changed) continue;
-      const itemMap = new Map<string, Closure['items'][number]>();
-      for (const item of plan.history.flatMap(h => h.items)) {
-        const key = `${item.description.trim()}::${item.status}`;
-        if (!itemMap.has(key)) itemMap.set(key, item);
-      }
-      if (!ticket.assignedSupervisorIds.length) {
-        for (const item of items) {
-          const key = `${item.description.trim()}::${item.status}`;
-          if (!itemMap.has(key)) itemMap.set(key, item);
-        }
-      }
-      const allItems = [...itemMap.values()];
+      const allItems = uniqueClosureItems([
+        ...plan.history.flatMap(h => h.items),
+        ...(!ticket.assignedSupervisorIds.length ? items : []),
+      ]);
       const allNotes = [...new Set(plan.history.map(h => h.notes).filter(Boolean))].join('\n');
       const updated = await tx.ticket.update({where: {id: ticket.id}, data: {
         assignedSupervisorIds: plan.active, supervisorClosures: plan.history,
@@ -106,8 +98,16 @@ export async function closeTickets(uid: string, input: any) {
     }
     if (!finalRows.length) return {results, image: null};
     const first = finalRows[0];
-    const reportItems = finalRows.flatMap(t => Array.isArray(t.maintenanceItems) ? t.maintenanceItems as Closure['items'] : []);
-    const reportNotes = finalRows.map(t => t.closureNotes).filter(Boolean).join('\n');
+    const reportItems = uniqueClosureItems(
+      finalRows.flatMap(t =>
+        Array.isArray(t.maintenanceItems) ? t.maintenanceItems as Closure['items'] : []
+      ),
+    );
+    const reportNotes = [...new Set(
+      finalRows
+        .map(t => t.closureNotes?.trim())
+        .filter((note): note is string => Boolean(note))
+    )].join('\n');
     const body = {ticket_num: finalRows.map(t => t.ticketId).join('، '), villa: first.unit?.unitNumber || '', customer_name: first.client?.name || '', phone: first.client?.phone || '', maint_items: reportItems.map(i => [i.description, i.status]), notes: reportNotes, block: first.unit?.block?.blockNumber || '', project: first.project.name, nhc: first.project.abbreviation, ticket_date: first.issuedAt || '', priority: String(first.priority), handover_date: first.unit?.handoverDate || '', warranty_expiry_date: first.unit?.warrantyExpiryDate || ''};
     const image = await renderReport(body);
     const caption = await buildClosingMsg({ticketId: body.ticket_num, clientName: body.customer_name, description: reportItems.map(i => i.description).join('، '), unitNumber: body.villa, closureNotes: reportNotes});
