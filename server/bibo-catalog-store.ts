@@ -1,16 +1,24 @@
 import ExcelJS from "exceljs";
 import fs from "fs";
 import path from "path";
+import { randomUUID } from "crypto";
 import { MEDIA_ROOT, resolveMediaFile } from "./media-library.js";
 import { BIBO_CATALOG_SEEDS } from "./bibo-catalog-seed.js";
 
 export const BIBO_CATALOG_FILE = path.join(MEDIA_ROOT, "products.xlsx");
+
+export type BiboVariantAttribute = {
+  id: string;
+  name: string;
+  values: string[];
+};
 
 export type BiboCatalogProduct = {
   id: string;
   name: string;
   description: string;
   variants: string;
+  variantAttributes: BiboVariantAttribute[];
   price: number | null;
   currency: string;
   images: string[];
@@ -71,6 +79,79 @@ function imagesForSeed(files: string[], seed: (typeof BIBO_CATALOG_SEEDS)[number
   });
 }
 
+function legacyAttributes(variants: string): BiboVariantAttribute[] {
+  const raw = variants.trim();
+  if (!raw) return [];
+
+  const values = raw
+    .split(/[|،,]/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 40);
+
+  return values.length
+    ? [{ id: randomUUID(), name: "خيارات", values }]
+    : [];
+}
+
+export function summarizeVariantAttributes(attributes: BiboVariantAttribute[]) {
+  return attributes
+    .filter((attribute) => attribute.name && attribute.values.length)
+    .map((attribute) => `${attribute.name}: ${attribute.values.join("، ")}`)
+    .join(" | ");
+}
+
+export function sanitizeVariantAttributes(input: unknown): BiboVariantAttribute[] {
+  if (!Array.isArray(input)) return [];
+
+  const result: BiboVariantAttribute[] = [];
+  const usedNames = new Set<string>();
+
+  for (const raw of input.slice(0, 12)) {
+    if (!raw || typeof raw !== "object") continue;
+
+    const name =
+      typeof (raw as any).name === "string"
+        ? (raw as any).name.trim().slice(0, 80)
+        : "";
+    if (!name) continue;
+
+    const normalizedName = name.toLocaleLowerCase("ar");
+    if (usedNames.has(normalizedName)) continue;
+    usedNames.add(normalizedName);
+
+    const sourceValues = Array.isArray((raw as any).values)
+      ? (raw as any).values
+      : [];
+
+    const seenValues = new Set<string>();
+    const values: string[] = [];
+
+    for (const rawValue of sourceValues.slice(0, 60)) {
+      if (typeof rawValue !== "string") continue;
+      const value = rawValue.trim().slice(0, 120);
+      if (!value) continue;
+      const key = value.toLocaleLowerCase("ar");
+      if (seenValues.has(key)) continue;
+      seenValues.add(key);
+      values.push(value);
+    }
+
+    if (!values.length) continue;
+
+    result.push({
+      id:
+        typeof (raw as any).id === "string" && (raw as any).id.trim()
+          ? (raw as any).id.trim().slice(0, 80)
+          : randomUUID(),
+      name,
+      values,
+    });
+  }
+
+  return result;
+}
+
 export async function writeCatalogProducts(products: BiboCatalogProduct[]) {
   await fs.promises.mkdir(MEDIA_ROOT, { recursive: true });
   const workbook = new ExcelJS.Workbook();
@@ -85,13 +166,14 @@ export async function writeCatalogProducts(products: BiboCatalogProduct[]) {
     { header: "ID", key: "id", width: 18 },
     { header: "الاسم", key: "name", width: 34 },
     { header: "الوصف", key: "description", width: 56 },
-    { header: "المتغيرات", key: "variants", width: 34 },
+    { header: "ملخص المتغيرات", key: "variants", width: 46 },
     { header: "السعر", key: "price", width: 14 },
     { header: "العملة", key: "currency", width: 12 },
     { header: "الصور", key: "images", width: 80 },
     { header: "الترتيب", key: "sortOrder", width: 12 },
     { header: "تاريخ الإنشاء", key: "createdAt", width: 25 },
     { header: "آخر تعديل", key: "updatedAt", width: 25 },
+    { header: "المتغيرات المنظمة JSON", key: "variantAttributes", width: 80 },
   ];
 
   const header = sheet.getRow(1);
@@ -99,15 +181,20 @@ export async function writeCatalogProducts(products: BiboCatalogProduct[]) {
   header.alignment = { horizontal: "center", vertical: "middle" };
 
   for (const product of [...products].sort((a, b) => a.sortOrder - b.sortOrder)) {
+    const variantAttributes = sanitizeVariantAttributes(product.variantAttributes);
+    const variants = summarizeVariantAttributes(variantAttributes) || product.variants || "";
+
     const row = sheet.addRow({
       ...product,
+      variants,
+      variantAttributes: JSON.stringify(variantAttributes),
       price: product.price ?? "",
       images: JSON.stringify(product.images),
     });
     row.alignment = { vertical: "top", wrapText: true };
   }
 
-  sheet.autoFilter = { from: "A1", to: "J1" };
+  sheet.autoFilter = { from: "A1", to: "K1" };
   const temp = BIBO_CATALOG_FILE + ".tmp";
   await workbook.xlsx.writeFile(temp);
   await fs.promises.rename(temp, BIBO_CATALOG_FILE);
@@ -117,18 +204,24 @@ async function createSeedWorkbook() {
   const files = await availableSeedImages();
   const now = new Date().toISOString();
 
-  await writeCatalogProducts(BIBO_CATALOG_SEEDS.map((seed, index) => ({
-    id: seed.id,
-    name: seed.name,
-    description: seed.description,
-    variants: seed.variants ?? "",
-    price: null,
-    currency: "SAR",
-    images: imagesForSeed(files, seed),
-    sortOrder: index + 1,
-    createdAt: now,
-    updatedAt: now,
-  })));
+  await writeCatalogProducts(
+    BIBO_CATALOG_SEEDS.map((seed, index) => {
+      const variantAttributes = legacyAttributes(seed.variants ?? "");
+      return {
+        id: seed.id,
+        name: seed.name,
+        description: seed.description,
+        variants: summarizeVariantAttributes(variantAttributes),
+        variantAttributes,
+        price: null,
+        currency: "SAR",
+        images: imagesForSeed(files, seed),
+        sortOrder: index + 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+    }),
+  );
 }
 
 export async function ensureCatalogWorkbook() {
@@ -147,8 +240,10 @@ export async function readCatalogProductsUnlocked(): Promise<BiboCatalogProduct[
   if (!sheet) return [];
 
   const products: BiboCatalogProduct[] = [];
+
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
+
     const id = cellText(row.getCell(1).value).trim();
     if (!id) return;
 
@@ -165,11 +260,29 @@ export async function readCatalogProductsUnlocked(): Promise<BiboCatalogProduct[
       }
     }
 
+    const legacyVariants = cellText(row.getCell(4).value);
+    let variantAttributes: BiboVariantAttribute[] = [];
+
+    const rawStructured = cellText(row.getCell(11).value).trim();
+    if (rawStructured) {
+      try {
+        variantAttributes = sanitizeVariantAttributes(JSON.parse(rawStructured));
+      } catch {
+        variantAttributes = [];
+      }
+    }
+
+    if (!variantAttributes.length && legacyVariants.trim()) {
+      variantAttributes = legacyAttributes(legacyVariants);
+    }
+
     products.push({
       id,
       name: cellText(row.getCell(2).value),
       description: cellText(row.getCell(3).value),
-      variants: cellText(row.getCell(4).value),
+      variants:
+        summarizeVariantAttributes(variantAttributes) || legacyVariants,
+      variantAttributes,
       price: toPrice(row.getCell(5).value),
       currency: cellText(row.getCell(6).value).trim() || "SAR",
       images,
@@ -203,17 +316,24 @@ export function cleanCatalogText(value: unknown, maxLength: number) {
 export function parseCatalogPrice(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const price = Number(value);
-  return Number.isFinite(price) && price >= 0 ? Math.round(price * 100) / 100 : null;
+  return Number.isFinite(price) && price >= 0
+    ? Math.round(price * 100) / 100
+    : null;
 }
 
 export async function validateCatalogImagePaths(input: unknown) {
   if (!Array.isArray(input)) return [];
-  const unique = [...new Set(
-    input.filter((item): item is string => typeof item === "string")
-      .map((item) => item.trim())
-      .filter(Boolean)
-  )];
-  if (unique.length > 60) throw new Error("TOO_MANY_IMAGES");
+
+  const unique = [
+    ...new Set(
+      input
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  if (unique.length > 80) throw new Error("TOO_MANY_IMAGES");
 
   const valid: string[] = [];
   for (const relativePath of unique) {
@@ -222,5 +342,6 @@ export async function validateCatalogImagePaths(input: unknown) {
     if (!resolved.ok) throw new Error("INVALID_IMAGE_PATH");
     valid.push(resolved.relativePath);
   }
+
   return valid;
 }
