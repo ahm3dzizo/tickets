@@ -1,5 +1,5 @@
 // src/pages/TicketsList.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, ShieldAlert, Download, ShieldOff } from 'lucide-react';
@@ -172,19 +172,29 @@ export default function TicketsList() {
     finally { setAutoLinking(false); }
   };
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const closedStatuses = new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']);
+  const {
+    unlinkedTickets,
+    linkedTickets,
+    contractorTickets,
+    unclassifiedTickets,
+    outOfWarrantyTickets,
+  } = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const closedStatuses = new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']);
 
-  const unlinkedTickets      = tickets.filter(t => !t.clientId);
-  const linkedTickets        = tickets.filter(t => !!t.clientId && t.status !== 'contractor' && t.status !== 'note');
-  const contractorTickets    = tickets.filter(t => t.status === 'contractor' || t.status === 'note');
-  const unclassifiedTickets  = tickets.filter(t => !t.type || t.type === 'unclassified');
-  const outOfWarrantyTickets = tickets.filter(t =>
-    !!t.clientId &&
-    !closedStatuses.has(t.status) &&
-    t.warrantyExpiryDate &&
-    t.warrantyExpiryDate < todayStr
-  );
+    return {
+      unlinkedTickets: tickets.filter(t => !t.clientId),
+      linkedTickets: tickets.filter(t => !!t.clientId && t.status !== 'contractor' && t.status !== 'note'),
+      contractorTickets: tickets.filter(t => t.status === 'contractor' || t.status === 'note'),
+      unclassifiedTickets: tickets.filter(t => !t.type || t.type === 'unclassified'),
+      outOfWarrantyTickets: tickets.filter(t =>
+        !!t.clientId &&
+        !closedStatuses.has(t.status) &&
+        t.warrantyExpiryDate &&
+        t.warrantyExpiryDate < todayStr
+      ),
+    };
+  }, [tickets]);
 
   const trackedTabTickets: Record<NewTicketTab, Ticket[]> = {
     linked: linkedTickets,
@@ -226,11 +236,17 @@ export default function TicketsList() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seenStorageKey, loading, tickets, activeTab]);
 
-  const newTicketCounts: Record<NewTicketTab, number> = {
-    linked: linkedTickets.filter(ticket => !seenTicketsByTab.linked.includes(ticket.id)).length,
-    contractors: contractorTickets.filter(ticket => !seenTicketsByTab.contractors.includes(ticket.id)).length,
-    unclassified: unclassifiedTickets.filter(ticket => !seenTicketsByTab.unclassified.includes(ticket.id)).length,
-  };
+  const seenTicketSets = useMemo<Record<NewTicketTab, Set<string>>>(() => ({
+    linked: new Set(seenTicketsByTab.linked),
+    contractors: new Set(seenTicketsByTab.contractors),
+    unclassified: new Set(seenTicketsByTab.unclassified),
+  }), [seenTicketsByTab]);
+
+  const newTicketCounts = useMemo<Record<NewTicketTab, number>>(() => ({
+    linked: linkedTickets.reduce((count, ticket) => count + (seenTicketSets.linked.has(ticket.id) ? 0 : 1), 0),
+    contractors: contractorTickets.reduce((count, ticket) => count + (seenTicketSets.contractors.has(ticket.id) ? 0 : 1), 0),
+    unclassified: unclassifiedTickets.reduce((count, ticket) => count + (seenTicketSets.unclassified.has(ticket.id) ? 0 : 1), 0),
+  }), [linkedTickets, contractorTickets, unclassifiedTickets, seenTicketSets]);
   const totalNewTicketCount = NEW_TICKET_TABS.reduce(
     (total, tab) => total + newTicketCounts[tab],
     0,
