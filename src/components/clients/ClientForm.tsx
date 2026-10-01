@@ -3,7 +3,6 @@ import { Plus, User, Phone, Home, Calendar, Shield, Loader2, Briefcase, Hash } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DataImport } from '@/components/ui/DataImport';
 import {
   Dialog,
   DialogContent,
