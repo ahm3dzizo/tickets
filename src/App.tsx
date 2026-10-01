@@ -41,6 +41,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { ProfileCompletionModal } from '@/components/ProfileCompletionModal';
 import { WhatsAppConnectPrompt } from '@/components/whatsapp/WhatsAppConnectPrompt';
+import { WhatsAppAppPicker } from '@/components/whatsapp/WhatsAppAppPicker';
 
 export default function App() {
   const isPublicImagesRoute =
@@ -157,6 +158,7 @@ function AppContent() {
         <Toaster position="top-right" />
         <PWAInstallPrompt />
         <WhatsAppConnectPrompt />
+        <WhatsAppAppPicker />
 
         {showProfileModal && (
           <ProfileCompletionModal
