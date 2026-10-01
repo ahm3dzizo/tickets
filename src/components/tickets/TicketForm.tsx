@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import {
   Plus,
   AlertCircle,
@@ -31,8 +31,11 @@ import { classifyOnServer } from '@/services/classificationApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { UnifiedImportModal } from './UnifiedImportModal';
 
+
+const UnifiedImportModal = lazy(() =>
+  import('./UnifiedImportModal').then(module => ({ default: module.UnifiedImportModal })),
+);
 
 const PRIORITY_LABELS: Record<string, string> = {
   '3': '3 - منخفض',
@@ -98,6 +101,7 @@ export function TicketForm({
   const [projectSupervisors, setProjectSupervisors] = useState<{id: string, name: string}[]>([]);
   const [selectedSupervisors, setSelectedSupervisors] = useState<string[]>([]);
   const [allClients,  setAllClients]  = useState<Client[]>([]); // للـ UnifiedImportModal
+  const [importOpen, setImportOpen] = useState(false);
 
   /* ── Load projects ────────────────────────────────────────── */
   useEffect(() => {
@@ -162,10 +166,11 @@ export function TicketForm({
     }).catch(() => {});
   }, [projectId]);
 
-  /* ── Load all clients — للـ UnifiedImportModal فقط ────────── */
+  /* ── Load all clients only when import is actually opened ─── */
   useEffect(() => {
+    if (!importOpen || allClients.length > 0) return;
     clientsApi.getAll().then(setAllClients).catch(() => {});
-  }, []);
+  }, [importOpen, allClients.length]);
 
   /* ── Auto-classify description ────────────────────────────── */
   useEffect(() => {
@@ -309,21 +314,33 @@ export function TicketForm({
                 مش بنبعتله clients من هنا
                 هو بيعمل clientsApi.getAll() من جوّاه       */}
             {(user?.role === 'admin' || user?.role === 'engineer') && (
-              <UnifiedImportModal
-                trigger={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl border-border text-slate-300 hover:text-white"
-                  >
-                    استيراد
-                  </Button>
-                }
-                projects={projects}
-                clients={allClients}
-                onImportSuccess={() => onSuccess?.()}
-                currentUserId={user.uid}
-              />
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl border-border text-slate-300 hover:text-white"
+                  onClick={() => setImportOpen(true)}
+                >
+                  استيراد
+                </Button>
+                {importOpen && (
+                  <Suspense fallback={null}>
+                    <UnifiedImportModal
+                      open={importOpen}
+                      onOpenChange={setImportOpen}
+                      trigger={<span className="hidden" />}
+                      projects={projects}
+                      clients={allClients}
+                      onImportSuccess={() => {
+                        setImportOpen(false);
+                        onSuccess?.();
+                      }}
+                      currentUserId={user.uid}
+                    />
+                  </Suspense>
+                )}
+              </>
             )}
           </div>
           <DialogDescription className="text-slate-500 text-right">
