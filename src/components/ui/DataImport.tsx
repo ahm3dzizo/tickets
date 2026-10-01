@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { FileUp, Loader2, Check, FileSpreadsheet, ChevronLeft, FileText, AlertTriangle } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { parsePdfTickets, type PdfParseProgress } from '@/services/pdfParser';
 import { Button } from '@/components/ui/button';
 import {
@@ -209,7 +208,8 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
     }
   };
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const sample = fieldDefs.reduce((acc, f) => {
       acc[f.label] = templateSample?.[f.label] ?? templateSample?.[f.key] ?? '';
       return acc;
