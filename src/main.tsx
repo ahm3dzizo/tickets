@@ -41,10 +41,14 @@ window.addEventListener('beforeinstallprompt', (e) => {
 function registerPwaWhenIdle() {
   const register = () => registerSW({ immediate: true });
 
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(register, { timeout: 4000 });
+  const requestIdle = (window as any).requestIdleCallback as
+    | ((callback: () => void, options?: { timeout: number }) => number)
+    | undefined;
+
+  if (typeof requestIdle === 'function') {
+    requestIdle(register, { timeout: 4000 });
   } else {
-    window.setTimeout(register, 1500);
+    globalThis.setTimeout(register, 1500);
   }
 }
 
