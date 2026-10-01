@@ -22,7 +22,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Project, Ticket, Client } from '@/types';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -361,17 +360,47 @@ export default function Dashboard() {
                 <h3 className="font-bold text-sm flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-primary" /> آخر 7 أيام</h3>
               </div>
               <div className="p-3">
-                <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={kpi.trend7Days} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="day" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false}
-                      tickFormatter={v => v.slice(5)} />
-                    <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                    <Tooltip formatter={(v: any, n: any) => [v, n]} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11, direction: 'rtl' }} />
-                    <Bar dataKey="opened" name="مفتوحة" fill="#f97316" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="closed"  name="مغلقة"  fill="#22c55e" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {(() => {
+                  const trend = Array.isArray(kpi.trend7Days) ? kpi.trend7Days : [];
+                  const maxValue = Math.max(
+                    1,
+                    ...trend.flatMap((item: any) => [Number(item.opened) || 0, Number(item.closed) || 0]),
+                  );
+
+                  return (
+                    <>
+                      <div className="flex h-40 items-end justify-between gap-2 border-b border-border/60 px-1 pb-1" dir="ltr">
+                        {trend.map((item: any) => {
+                          const opened = Number(item.opened) || 0;
+                          const closed = Number(item.closed) || 0;
+                          return (
+                            <div key={item.day} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-1">
+                              <div className="flex min-h-0 flex-1 items-end justify-center gap-1">
+                                <div
+                                  className="w-2.5 max-w-[10px] rounded-t bg-orange-500/80 transition-[height]"
+                                  style={{ height: `${Math.max(opened > 0 ? 6 : 0, (opened / maxValue) * 100)}%` }}
+                                  title={`مفتوحة: ${opened}`}
+                                />
+                                <div
+                                  className="w-2.5 max-w-[10px] rounded-t bg-emerald-500/80 transition-[height]"
+                                  style={{ height: `${Math.max(closed > 0 ? 6 : 0, (closed / maxValue) * 100)}%` }}
+                                  title={`مغلقة: ${closed}`}
+                                />
+                              </div>
+                              <span className="truncate text-center text-[9px] text-muted-foreground">
+                                {String(item.day || '').slice(5)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-2 flex items-center justify-center gap-4 text-[9px] text-muted-foreground">
+                        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-orange-500/80" /> مفتوحة</span>
+                        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-emerald-500/80" /> مغلقة</span>
+                      </div>
+                    </>
+                  );
+                })()}
                 <p className="text-[9px] text-muted-foreground text-center mt-1">
                   آخر تحديث: {lastRefresh.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                 </p>
