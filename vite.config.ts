@@ -48,18 +48,13 @@ export default defineConfig(({ mode }) => {
         },
         injectManifest: {
           globDirectory: 'dist',
-          globIgnores: [
-            '**/index.html',
-            'assets/index.es-*.js',
-          ],
+          globIgnores: ['**/index.html'],
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-          // Install only the app shell. Route chunks and export/import engines
-          // are cached after first use by the service worker instead of being
-          // downloaded on every deploy or cache reset.
+          // Install only the boot shell. Fonts, route chunks, workers and
+          // export/import engines stay out of install-time precache.
           globPatterns: [
-            'assets/index-*.js',
+            'assets/app-*.js',
             'assets/index-*.css',
-            '**/*.{ico,png,svg,woff2}',
           ],
         },
       }),
@@ -67,6 +62,13 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+      },
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          entryFileNames: 'assets/app-[hash].js',
+        },
       },
     },
     server: {
