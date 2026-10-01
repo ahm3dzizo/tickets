@@ -1,5 +1,5 @@
 // src/pages/TicketsList.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, ShieldAlert, Download, ShieldOff } from 'lucide-react';
@@ -7,19 +7,33 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { TicketForm } from '@/components/tickets/TicketForm';
-import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { TicketTable, BulkActionBar } from '@/components/tickets/TicketTable';
-import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
-import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
-import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
-import { ClientForm } from '@/components/clients/ClientForm';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
 import { getCachedTickets, invalidateTicketCache } from '@/lib/ticketCache';
 import { Ticket, Project, Client } from '@/types';
 import { classifyOnServer } from '@/services/classificationApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+
+
+const TicketForm = lazy(() =>
+  import('@/components/tickets/TicketForm').then(module => ({ default: module.TicketForm })),
+);
+const CloseTicketDialog = lazy(() =>
+  import('@/components/tickets/CloseTicketDialog').then(module => ({ default: module.CloseTicketDialog })),
+);
+const UnifiedImportModal = lazy(() =>
+  import('@/components/tickets/UnifiedImportModal').then(module => ({ default: module.UnifiedImportModal })),
+);
+const UnifiedAppointmentDialog = lazy(() =>
+  import('@/components/tickets/UnifiedAppointmentDialog').then(module => ({ default: module.UnifiedAppointmentDialog })),
+);
+const AssignContractorDialog = lazy(() =>
+  import('@/components/tickets/AssignContractorDialog').then(module => ({ default: module.AssignContractorDialog })),
+);
+const ClientForm = lazy(() =>
+  import('@/components/clients/ClientForm').then(module => ({ default: module.ClientForm })),
+);
 
 const NEW_TICKET_TABS = ['linked', 'contractors', 'unclassified'] as const;
 type NewTicketTab = typeof NEW_TICKET_TABS[number];
@@ -57,22 +71,27 @@ export default function TicketsList() {
   const loadData = async () => {
     if (!user) return;
     try {
-      const [allClients, allProjects] = await Promise.all([clientsApi.getAll(), projectsApi.getAll()]);
-      const clientMap: Record<string, Client> = {};
-      allClients.forEach((c: any) => { clientMap[c.id] = c as Client; });
-      setClients(clientMap);
-      const projectMap: Record<string, Project> = {};
-      allProjects.forEach((p: any) => { projectMap[p.id] = p as Project; });
-      setProjects(projectMap);
-
       const params: Parameters<typeof ticketsApi.getAll>[0] = {};
       if (user.role === 'supervisor') params.supervisorId = user.uid;
       else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
-      const allTickets = await getCachedTickets(
-        () => ticketsApi.getAll(params) as Promise<any[]>,
-        params as any,
-        (fresh) => setTickets(fresh as Ticket[]),
-      );
+
+      const [allClients, allProjects, allTickets] = await Promise.all([
+        clientsApi.getAll(),
+        projectsApi.getAll(),
+        getCachedTickets(
+          () => ticketsApi.getAll(params) as Promise<any[]>,
+          params as any,
+          (fresh) => setTickets(fresh as Ticket[]),
+        ),
+      ]);
+
+      const clientMap: Record<string, Client> = {};
+      allClients.forEach((client: any) => { clientMap[client.id] = client as Client; });
+      setClients(clientMap);
+
+      const projectMap: Record<string, Project> = {};
+      allProjects.forEach((project: any) => { projectMap[project.id] = project as Project; });
+      setProjects(projectMap);
       setTickets(allTickets as Ticket[]);
     } catch (err) { console.error(err); }
     finally {
@@ -222,15 +241,17 @@ export default function TicketsList() {
     ) as SeenTicketsByTab;
 
     let stored: SeenTicketsByTab | null = null;
+    let raw: string | null = null;
     try {
-      const raw = localStorage.getItem(seenStorageKey);
+      raw = localStorage.getItem(seenStorageKey);
       stored = raw ? { ...emptySeenTickets(), ...JSON.parse(raw) } : null;
     } catch {
       stored = null;
     }
 
     if (!stored) {
-      localStorage.setItem(seenStorageKey, JSON.stringify(currentIds));
+      const serialized = JSON.stringify(currentIds);
+      if (raw !== serialized) localStorage.setItem(seenStorageKey, serialized);
       setSeenTicketsByTab(currentIds);
       return;
     }
@@ -242,7 +263,8 @@ export default function TicketsList() {
       if (activeTab === tab) next[tab] = currentIds[tab];
     }
 
-    localStorage.setItem(seenStorageKey, JSON.stringify(next));
+    const serialized = JSON.stringify(next);
+    if (raw !== serialized) localStorage.setItem(seenStorageKey, serialized);
     setSeenTicketsByTab(next);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seenStorageKey, loading, tickets, activeTab]);
@@ -458,11 +480,13 @@ export default function TicketsList() {
                   {autoLinking ? 'جارٍ الربط...' : '⚡ ربط تلقائي'}
                 </Button>
                 <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
-                <ClientForm trigger={
-                  <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all gap-2">
-                    <UserPlus className="w-4 h-4 text-primary" /> إضافة عميل جديد
-                  </Button>
-                } onSuccess={loadData} />
+                <Suspense fallback={null}>
+                  <ClientForm trigger={
+                    <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all gap-2">
+                      <UserPlus className="w-4 h-4 text-primary" /> إضافة عميل جديد
+                    </Button>
+                  } onSuccess={loadData} />
+                </Suspense>
                 <Link to="/clients">
                   <Button variant="outline" className="h-10 rounded-2xl font-bold border-border bg-card hover:bg-muted transition-all gap-2">
                     <User className="w-4 h-4 text-slate-400" /> صفحة العملاء
@@ -525,23 +549,33 @@ export default function TicketsList() {
           <BulkActionBar count={selectedTicketIds.length} isMultiClient={uniqueClientIds.size > 1} onStatusChange={handleBulkStatusChange} onAppointment={handleAppointment} onContractor={() => setContractorDialogOpen(true)} onClose={() => setCloseDialogOpen(true)} onClear={() => setSelectedTicketIds([])} hidden={closeDialogOpen} />
         )}
 
-        <CloseTicketDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))} clients={Object.values(clients)} projects={projects} onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }} />
+        <Suspense fallback={null}>
+          {closeDialogOpen && (
+            <CloseTicketDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))} clients={Object.values(clients)} projects={projects} onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }} />
+          )}
 
-        <TicketForm open={ticketFormOpen} onOpenChange={setTicketFormOpen} trigger={<span className="hidden" />} onSuccess={() => { loadData(); setTicketFormOpen(false); }} />
+          {ticketFormOpen && (
+            <TicketForm open={ticketFormOpen} onOpenChange={setTicketFormOpen} trigger={<span className="hidden" />} onSuccess={() => { loadData(); setTicketFormOpen(false); }} />
+          )}
 
-        <UnifiedImportModal open={importOpen} onOpenChange={setImportOpen} trigger={<span className="hidden" />} projects={Object.values(projects)} clients={Object.values(clients)} onImportSuccess={() => { loadData(); setImportOpen(false); }} currentUserId={user?.uid} />
+          {importOpen && (
+            <UnifiedImportModal open={importOpen} onOpenChange={setImportOpen} trigger={<span className="hidden" />} projects={Object.values(projects)} clients={Object.values(clients)} onImportSuccess={() => { loadData(); setImportOpen(false); }} currentUserId={user?.uid} />
+          )}
 
-        {apptTicket && apptTicket.length > 0 && (
-          <UnifiedAppointmentDialog
-            open={apptOpen}
-            onOpenChange={setApptOpen}
-            tickets={apptTicket.map(t => ({ id: t.id, ticketId: t.ticketId, clientName: t.clientName, unitNumber: t.unitNumber, unitId: t.unitId ?? undefined, projectId: t.projectId, clientId: t.clientId, appointmentId: (t as any).appointmentId, appointmentTime: t.appointmentTime, type: t.type as string, detectedTypes: t.detectedTypes, assignedSupervisorIds: t.assignedSupervisorIds as string[] | undefined, status: t.status }))}
-            clientPhone={clients[apptTicket[0].clientId || '']?.phone || Object.values(clients).find(c => String(c.unitId) === String(apptTicket[0].unitId))?.phone}
-            onSuccess={() => { setApptOpen(false); setSelectedTicketIds([]); loadData(); }}
-          />
-        )}
+          {apptOpen && apptTicket && apptTicket.length > 0 && (
+            <UnifiedAppointmentDialog
+              open={apptOpen}
+              onOpenChange={setApptOpen}
+              tickets={apptTicket.map(t => ({ id: t.id, ticketId: t.ticketId, clientName: t.clientName, unitNumber: t.unitNumber, unitId: t.unitId ?? undefined, projectId: t.projectId, clientId: t.clientId, appointmentId: (t as any).appointmentId, appointmentTime: t.appointmentTime, type: t.type as string, detectedTypes: t.detectedTypes, assignedSupervisorIds: t.assignedSupervisorIds as string[] | undefined, status: t.status }))}
+              clientPhone={clients[apptTicket[0].clientId || '']?.phone || Object.values(clients).find(c => String(c.unitId) === String(apptTicket[0].unitId))?.phone}
+              onSuccess={() => { setApptOpen(false); setSelectedTicketIds([]); loadData(); }}
+            />
+          )}
 
-        <AssignContractorDialog open={contractorDialogOpen} onOpenChange={setContractorDialogOpen} tickets={selectedTickets} projectId={selectedTickets[0]?.projectId || ''} onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadData(); }} />
+          {contractorDialogOpen && (
+            <AssignContractorDialog open={contractorDialogOpen} onOpenChange={setContractorDialogOpen} tickets={selectedTickets} projectId={selectedTickets[0]?.projectId || ''} onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadData(); }} />
+          )}
+        </Suspense>
       </div>
     </Layout>
   );
