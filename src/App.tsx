@@ -9,10 +9,17 @@ import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
-import { ProfileCompletionModal } from '@/components/ProfileCompletionModal';
-import { WhatsAppConnectPrompt } from '@/components/whatsapp/WhatsAppConnectPrompt';
 import { WhatsAppAppPicker } from '@/components/whatsapp/WhatsAppAppPicker';
+
+const DeferredPWAInstallPrompt = lazy(() =>
+  import('@/components/PWAInstallPrompt').then(module => ({ default: module.PWAInstallPrompt })),
+);
+const DeferredWhatsAppConnectPrompt = lazy(() =>
+  import('@/components/whatsapp/WhatsAppConnectPrompt').then(module => ({ default: module.WhatsAppConnectPrompt })),
+);
+const DeferredProfileCompletionModal = lazy(() =>
+  import('@/components/ProfileCompletionModal').then(module => ({ default: module.ProfileCompletionModal })),
+);
 
 const TicketTypesAdminPage = lazy(() => import('./pages/TicketTypesAdminPage'));
 const Images = lazy(() => import('@/pages/Images'));
@@ -99,10 +106,17 @@ function AppContent() {
     completeProfile,
   } = useAuth();
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [deferredUiReady, setDeferredUiReady] = useState(false);
 
   useEffect(() => {
     setShowProfileModal(requiresProfileCompletion);
   }, [requiresProfileCompletion]);
+
+  useEffect(() => {
+    if (loading) return;
+    const timer = globalThis.setTimeout(() => setDeferredUiReady(true), 600);
+    return () => globalThis.clearTimeout(timer);
+  }, [loading]);
 
   if (loading) {
     return (
@@ -174,12 +188,17 @@ function AppContent() {
         </RouteSuspense>
 
         <Toaster position="top-right" />
-        <PWAInstallPrompt />
-        <WhatsAppConnectPrompt />
+        {deferredUiReady && (
+          <Suspense fallback={null}>
+            <DeferredPWAInstallPrompt />
+            <DeferredWhatsAppConnectPrompt />
+          </Suspense>
+        )}
         <WhatsAppAppPicker />
 
         {showProfileModal && (
-          <ProfileCompletionModal
+          <Suspense fallback={null}>
+          <DeferredProfileCompletionModal
             open={showProfileModal}
             isFirstLogin={isFirstLogin}
             pendingUser={user ? {
@@ -195,6 +214,7 @@ function AppContent() {
             } : null}
             onComplete={handleProfileComplete}
           />
+          </Suspense>
         )}
       </div>
     </Router>

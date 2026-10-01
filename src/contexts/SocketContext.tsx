@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useRef, ReactNode } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { useAppointmentNotifications } from '@/hooks/useAppointmentNotifications';
 
@@ -7,33 +7,45 @@ const SocketContext = createContext<Socket | null>(null);
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const socket = io(window.location.origin, {
-      transports: ['polling', 'websocket'],
-      autoConnect: true,
-    });
-    socketRef.current = socket;
+    let disposed = false;
+    let currentSocket: Socket | null = null;
+
+    setSocket(null);
+    if (!user?.uid) return;
+
+    void import('socket.io-client')
+      .then(({ io }) => {
+        if (disposed) return;
+        currentSocket = io(window.location.origin, {
+          transports: ['polling', 'websocket'],
+          autoConnect: true,
+        });
+        setSocket(currentSocket);
+      })
+      .catch((error) => {
+        console.warn('[socket] failed to load realtime client', error);
+      });
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      disposed = true;
+      currentSocket?.disconnect();
     };
-  }, []);
+  }, [user?.uid]);
 
   useEffect(() => {
-    const socket = socketRef.current;
     if (!socket || !user?.uid) return;
     const joinRoom = () => socket.emit('join:user', user.uid);
     if (socket.connected) joinRoom();
     socket.on('connect', joinRoom);
     return () => { socket.off('connect', joinRoom); };
-  }, [user?.uid]);
+  }, [socket, user?.uid]);
 
   return (
-    <SocketContext.Provider value={socketRef.current}>
-      <AppointmentNotificationListener socket={socketRef.current} />
+    <SocketContext.Provider value={socket}>
+      <AppointmentNotificationListener socket={socket} />
       {children}
     </SocketContext.Provider>
   );
