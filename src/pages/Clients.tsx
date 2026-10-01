@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import { requestWhatsAppOpen } from '@/lib/whatsappLauncher';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -191,7 +192,7 @@ export default function Clients() {
     e?.stopPropagation();
     const num = String(c.phone || '').replace(/\D/g, '');
     const intl = num.startsWith('966') ? num : num.startsWith('0') ? '966' + num.slice(1) : '966' + num;
-    window.open(`https://wa.me/${intl}`, '_blank');
+    requestWhatsAppOpen(intl);
   };
 
   const handleImportClients = async (data: any[]) => {

@@ -1,3 +1,5 @@
+import { requestWhatsAppOpen } from '@/lib/whatsappLauncher';
+
 const TOKEN_KEY = 'retal_auth_token';
 
 const DEFAULT_TEMPLATES = {
@@ -28,8 +30,7 @@ export class WhatsAppService {
     }
     // Fallback: open wa.me link
     const cleanNumber = phoneNumber.replace(/\D/g, '');
-    const encodedMessage = encodeURIComponent(message);
-    window.open(`https://wa.me/${cleanNumber}?text=${encodedMessage}`, '_blank');
+    requestWhatsAppOpen(cleanNumber, message);
     return false;
   }
 

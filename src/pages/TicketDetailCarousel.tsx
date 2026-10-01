@@ -30,6 +30,7 @@ import { TicketMediaCarousel } from '@/components/tickets/TicketMediaCarousel';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
 import { ticketsApi, projectsApi, clientsApi, auditApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { requestWhatsAppOpen } from '@/lib/whatsappLauncher';
 import { formatTicketDate, formatTicketDateTime } from '@/lib/ticketDate';
 import { extractTicketMedia } from '@/lib/ticketMedia';
 import { ticketDetailText } from '@/i18n/ticketDetail';
@@ -169,7 +170,7 @@ export default function TicketDetailCarousel() {
 
     // Open the client's WhatsApp conversation only. No message is composed or
     // sent through the server, so the user remains in control of what is sent.
-    window.open(`https://wa.me/${encodeURIComponent(phone)}`, '_blank', 'noopener,noreferrer');
+    requestWhatsAppOpen(phone);
   };
 
   if (loading) {

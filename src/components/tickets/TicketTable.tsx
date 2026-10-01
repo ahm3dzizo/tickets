@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { ExportTicketsModal } from './ExportTicketsModal';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { requestWhatsAppOpen } from '@/lib/whatsappLauncher';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -891,7 +892,7 @@ export function TicketTable({
   const handleWhatsApp = (ticket: Ticket) => {
     const phone   = '966500000000';
     const message = `السلام عليكم، بخصوص بلاغ الصيانة رقم ${ticket.ticketId || ticket.id} للفيلا رقم ${ticket.unitNumber}. نرجو إفادتنا بمواعيد تواجدكم في الفيلا لتنسيق موعد الصيانة. شكراً لتعاونكم.`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+    requestWhatsAppOpen(phone, message);
   };
 
   const inSelectionMode = hasSelection && !!selectedIds && selectedIds.length > 0;

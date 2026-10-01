@@ -24,6 +24,7 @@ import { typeTranslations } from '@/components/tickets/TicketTable';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { requestWhatsAppOpen } from '@/lib/whatsappLauncher';
 
 const SPECIALTY_TO_GROUP: Record<string, string> = {
   electricity: 'electricity',
@@ -181,11 +182,10 @@ export function TechnicianForm({ trigger, nativeButton, technician, onSaved, ope
           const cleanPhone = phone.replace(/[^0-9]/g, '');
           const origin = window.location.origin;
           const msg = `Hello ${name.trim()} 👋,\nWelcome to Retal Maintenance Team!\n\nYour Technician Portal Login:\n🔗 ${origin}/tech/login\n👤 Username: ${phone.trim()}\n🔑 Temporary PIN: ${data.tempPassword}\n\nLogin once, complete your profile, and choose a new 6-digit PIN.`;
-          const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
-          const opened = window.open(waUrl, '_blank');
+          requestWhatsAppOpen(cleanPhone, msg);
           toast.info('لم يتم إرسال الدعوة تلقائياً', {
-            description: !opened || opened.closed ? 'اضغط لفتح واتساب وإرسال الدعوة يدوياً' : 'تم فتح واتساب — تأكد من الإرسال',
-            action: { label: 'فتح واتساب', onClick: () => window.open(waUrl, '_blank') },
+            description: 'اختر واتساب العادي أو واتساب الأعمال ثم أرسل الدعوة يدوياً',
+            action: { label: 'فتح واتساب', onClick: () => requestWhatsAppOpen(cleanPhone, msg) },
             duration: 20000,
           });
         }
