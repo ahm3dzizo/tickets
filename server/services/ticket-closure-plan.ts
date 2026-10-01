@@ -1,6 +1,18 @@
 export type Closure = { supervisorUid: string; completedAt: string; completedByUid: string; notes: string; items: {description: string; status: string}[] };
 export function closures(value: unknown): Closure[] { return Array.isArray(value) ? value as Closure[] : []; }
 
+export function uniqueClosureItems(items: Closure['items']): Closure['items'] {
+  const unique = new Map<string, Closure['items'][number]>();
+  for (const item of items) {
+    const description = item.description.trim().replace(/\s+/g, ' ');
+    const status = item.status.trim().replace(/\s+/g, ' ');
+    if (!description) continue;
+    const key = `${description}::${status}`;
+    if (!unique.has(key)) unique.set(key, { ...item, description, status });
+  }
+  return [...unique.values()];
+}
+
 export function planClosure(
   active: string[],
   history: Closure[],
