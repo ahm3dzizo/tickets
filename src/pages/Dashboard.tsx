@@ -107,36 +107,40 @@ export default function Dashboard() {
   const loadDashboard = async () => {
     if (!user) return;
     try {
-      const allProjects: Project[] = (await projectsApi.getAll()) as Project[];
-      const filtered = user.role === 'admin' ? allProjects : allProjects.filter(p => user.projectIds?.includes(p.id));
-      setUserProjects(filtered);
-      setStats(prev => ({ ...prev, activeProjects: filtered.length }));
-
       const params: Parameters<typeof ticketsApi.getAll>[0] = {};
       if (user.role === 'supervisor') params.supervisorId = user.uid;
       else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
 
-      const tickets: Ticket[] = (await getCachedTickets(
-        () => ticketsApi.getAll(params) as Promise<any[]>,
-        params as any,
-        (fresh) => {
-          setAllTickets(fresh as Ticket[]);
-          setStats(prev => ({
-            ...prev,
-            totalTickets: fresh.length,
-            openTickets: fresh.filter((t: any) => t.status === 'open').length,
-          }));
-        },
-      )) as Ticket[];
+      const [allProjects, tickets, techs] = await Promise.all([
+        projectsApi.getAll() as Promise<Project[]>,
+        getCachedTickets(
+          () => ticketsApi.getAll(params) as Promise<any[]>,
+          params as any,
+          (fresh) => {
+            setAllTickets(fresh as Ticket[]);
+            setStats(prev => ({
+              ...prev,
+              totalTickets: fresh.length,
+              openTickets: fresh.filter((t: any) => t.status === 'open').length,
+            }));
+          },
+        ) as Promise<Ticket[]>,
+        techniciansApi.getAll(),
+      ]);
+
+      const filtered = user.role === 'admin'
+        ? allProjects
+        : allProjects.filter(project => user.projectIds?.includes(project.id));
+
+      setUserProjects(filtered);
       setAllTickets(tickets);
       setStats(prev => ({
         ...prev,
+        activeProjects: filtered.length,
         totalTickets: tickets.length,
-        openTickets: tickets.filter(t => t.status === 'open').length,
+        openTickets: tickets.filter(ticket => ticket.status === 'open').length,
+        totalTechnicians: techs.length,
       }));
-
-      const techs = await techniciansApi.getAll();
-      setStats(prev => ({ ...prev, totalTechnicians: techs.length }));
     } catch (err) {
       console.error('[Dashboard] load error:', err);
     } finally {
