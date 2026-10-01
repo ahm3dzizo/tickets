@@ -374,8 +374,8 @@ if (privileged && effectiveSelectedSupervisorIds.length === 0 && activeSuperviso
 toast.error('حدد مشرفًا واحدًا على الأقل');
 return;
 }
-if (privileged && !notes.trim()) {
-toast.error('اكتب سبب الإغلاق أو الإنهاء بالنيابة في الملاحظات');
+if (privileged && !isFullNormalClosure && !notes.trim()) {
+toast.error('اكتب سبب الإنهاء بالنيابة في الملاحظات');
 return;
 }
 
@@ -544,7 +544,9 @@ return (
 )}>
 {closureModeText}
 </div>
-{privileged && <p className="text-[11px] text-muted-foreground">سبب الإغلاق أو الإنهاء بالنيابة مطلوب في الملاحظات.</p>}
+{privileged && !isFullNormalClosure && (
+  <p className="text-[11px] text-muted-foreground">سبب الإنهاء بالنيابة مطلوب في الملاحظات.</p>
+)}
 </div>
 
 {/* ── نوع الإغلاق ── */}
