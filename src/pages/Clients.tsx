@@ -6,7 +6,6 @@ import {
   TicketCheck, ExternalLink, Pencil, Phone, MessageCircle,
   Download, FileSpreadsheet, Contact, Plus, Hash, Briefcase,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -90,7 +89,8 @@ export default function Clients() {
     return `عملاء ${abbr}`;
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
+    const XLSX = await import('xlsx');
     const rows = clientsForExport.map(c => ({
       'المشروع':        projects.find(p => p.id === c.projectId)?.name || '',
       'رقم الفيلا':    c.unitNumber || '',
