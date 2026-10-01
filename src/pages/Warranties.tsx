@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Project } from '@/types';
-import * as XLSX from 'xlsx';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,7 +87,8 @@ export default function Warranties() {
     );
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
+    const XLSX = await import('xlsx');
     if (filtered.length === 0) {
       toast.error('لا توجد بيانات للتصدير');
       return;

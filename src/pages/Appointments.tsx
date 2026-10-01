@@ -19,8 +19,6 @@ import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmen
 import { ClientTicketsModal } from '@/components/tickets/ClientTicketsModal';
 import { TranslatedText } from '@/components/ui/TranslatedText';
 import { Languages } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import * as htmlToImage from 'html-to-image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 function dateStr(d: Date): string {
@@ -456,6 +454,11 @@ export default function Appointments() {
     setIsExporting(true);
     toast.info('جاري تحضير ملفات PDF، يرجى الانتظار...');
     await new Promise(r => setTimeout(r, 4000));
+
+    const [{ jsPDF }, htmlToImage] = await Promise.all([
+      import('jspdf'),
+      import('html-to-image'),
+    ]);
 
     const langs = ['ar', 'ur', 'hi'].filter(l => exportLangs[l]);
     for (const l of langs) {

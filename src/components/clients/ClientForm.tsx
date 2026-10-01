@@ -3,7 +3,6 @@ import { Plus, User, Phone, Home, Calendar, Shield, Loader2, Briefcase, Hash } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DataImport } from '@/components/ui/DataImport';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +51,7 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton,
   const isCustomTrigger = !!trigger;
 
   useEffect(() => {
+    if (!open || projects.length > 0) return;
     projectsApi.getAll().then((all: Project[]) => {
       const scoped = (!user || user.role === 'admin')
         ? all
@@ -62,8 +62,7 @@ export function ClientForm({ trigger, projectId: initialProjectId, nativeButton,
         setProjectId(scoped[0].id);
       }
     }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [open, projects.length, user, initialProjectId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

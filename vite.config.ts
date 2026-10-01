@@ -48,9 +48,19 @@ export default defineConfig(({ mode }) => {
         },
         injectManifest: {
           globDirectory: 'dist',
-          globIgnores: ['**/index.html'],
+          globIgnores: [
+            '**/index.html',
+            'assets/index.es-*.js',
+          ],
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
+          // Install only the app shell. Route chunks and export/import engines
+          // are cached after first use by the service worker instead of being
+          // downloaded on every deploy or cache reset.
+          globPatterns: [
+            'assets/index-*.js',
+            'assets/index-*.css',
+            '**/*.{ico,png,svg,woff2}',
+          ],
         },
       }),
     ],
