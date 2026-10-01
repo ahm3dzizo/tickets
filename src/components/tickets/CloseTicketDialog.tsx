@@ -92,6 +92,8 @@ tx.onerror = () => resolve();
 }
 
 
+type CloseType = 'normal' | 'absent' | 'out_of_scope';
+
 export interface CloseTicketSuccess {
   ticketIds: string[];
   final: boolean;
@@ -131,7 +133,6 @@ const activeSupervisorIds = [...new Set(selectedTickets.flatMap(t => t.assignedS
 const supervisorOptions = activeSupervisorIds.map(id => supervisors.find(s => s.id === id) || ({ id, name: id } as any));
 const [selectedSupervisorIds, setSelectedSupervisorIds] = useState<string[]>([]);
 const shared = selectedTickets.some(t => (t.assignedSupervisorIds?.length || 0) > 1 || (t.supervisorClosures?.length || 0) > 0);
-type CloseType = 'normal' | 'absent' | 'out_of_scope';
 const [closeType, setCloseType] = useState<CloseType>('normal');
 const [loading, setLoading] = useState(false);
 const [copying, setCopying] = useState(false);
