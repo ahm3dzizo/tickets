@@ -12,6 +12,7 @@ import type { TicketStatus } from "@prisma/client";
 
 import { closeTickets, closures } from '../services/ticket-closure.js';
 import { deliverClosureReports } from '../services/closure-report-worker.js';
+import { invalidateTicketListResponseCache } from '../middleware/ticket-list-cache.js';
 
 const router = Router();
 router.post('/close', requireAuth, async (req: AuthRequest, res) => {
@@ -24,6 +25,9 @@ router.post('/close', requireAuth, async (req: AuthRequest, res) => {
       if (openSession && ['claimed','en_route','arrived','in_progress','paused'].includes(openSession.status)) continue;
       await maybeAutoFinishAppointment(ticket?.appointmentId).catch(e => console.error('[ClosureAppointment]', e.message));
     }
+    // Clear the GET /api/tickets response cache before notifying clients, so a
+    // socket-triggered refresh cannot race and receive the pre-closure list.
+    invalidateTicketListResponseCache();
     getIO()?.emit('tickets:updated', {ids: result.results.map(r => r.id)});
     deliverClosureReports().catch(e => console.error('[ClosureReport]', e.message));
     if (result.image) { res.type('image/jpeg').send(result.image); return; }
