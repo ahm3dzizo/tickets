@@ -1,5 +1,5 @@
 import prisma from '../db.js';
-import { closures, planClosure, uniqueClosureItems, type Closure } from './ticket-closure-plan.js';
+import { closures, planClosure, uniqueClosureItems } from './ticket-closure-plan.js';
 export { closures } from './ticket-closure-plan.js';
 
 
