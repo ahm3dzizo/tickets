@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { FileUp, Loader2, Check, FileSpreadsheet, ChevronLeft, FileText, AlertTriangle } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import { parsePdfTickets, type PdfParseProgress } from '@/services/pdfParser';
+import type { PdfParseProgress } from '@/services/pdfParser';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -79,7 +78,7 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
     if (!v) reset();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
@@ -90,31 +89,36 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
       setLoading(true);
       setPdfProgress(null);
       const onProgress: PdfParseProgress = (done, total) => setPdfProgress({ done, total });
-      parsePdfTickets(file, onProgress)
-        .then(rows => {
-          if (rows.length === 0) { toast.error('لم يتم العثور على تذاكر في الـ PDF'); setLoading(false); return; }
-          // Map parsed rows into the standard field keys
-          const mapped = rows.map(r => ({
-            ticketId:     r.ticketId,
-            refNumber:    r.refNumber,
-            clientName:   r.clientName,
-            issuedAt:     r.date,
-            daysOpen:     r.daysOpen,
-            description:  r.description,
-            priority:     r.priority,
-            assigneeName: r.assigneeName,
-            projectName:  '',
-          }));
-          setRawData(mapped);
-          // Build synthetic columns from keys (for confirm preview)
-          setColumns(Object.keys(mapped[0]));
-          setStep('confirm');
-        })
-        .catch(err => {
-          console.error(err);
-          toast.error('فشل في قراءة ملف PDF.');
-        })
-        .finally(() => setLoading(false));
+      try {
+        const { parsePdfTickets } = await import('@/services/pdfParser');
+        const rows = await parsePdfTickets(file, onProgress);
+        if (rows.length === 0) {
+          toast.error('لم يتم العثور على تذاكر في الـ PDF');
+          return;
+        }
+
+        // Map parsed rows into the standard field keys
+        const mapped = rows.map(r => ({
+          ticketId:     r.ticketId,
+          refNumber:    r.refNumber,
+          clientName:   r.clientName,
+          issuedAt:     r.date,
+          daysOpen:     r.daysOpen,
+          description:  r.description,
+          priority:     r.priority,
+          assigneeName: r.assigneeName,
+          projectName:  '',
+        }));
+        setRawData(mapped);
+        // Build synthetic columns from keys (for confirm preview)
+        setColumns(Object.keys(mapped[0]));
+        setStep('confirm');
+      } catch (err) {
+        console.error(err);
+        toast.error('فشل في قراءة ملف PDF.');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -209,7 +213,8 @@ export function DataImport<T>({ onImport, fieldDefs, templateSample, title, desc
     }
   };
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const sample = fieldDefs.reduce((acc, f) => {
       acc[f.label] = templateSample?.[f.label] ?? templateSample?.[f.key] ?? '';
       return acc;
