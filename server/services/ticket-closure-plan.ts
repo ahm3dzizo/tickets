@@ -13,7 +13,10 @@ export function planClosure(
   const privileged = actor.role === 'admin' || actor.role === 'engineer';
   if (!privileged && actor.role !== 'supervisor') throw new Error('FORBIDDEN');
   if (!['self', 'supervisor', 'selected', 'all'].includes(scope)) throw new Error('INVALID_SCOPE');
-  if (!privileged && (scope !== 'self' || (target && target !== actor.uid))) throw new Error('FORBIDDEN');
+  if (
+    !privileged &&
+    (scope !== 'self' || Array.isArray(target) || (typeof target === 'string' && target !== actor.uid))
+  ) throw new Error('FORBIDDEN');
   if (privileged && scope !== 'self' && !notes.trim()) throw new Error('REASON_REQUIRED');
 
   const requestedTargets =

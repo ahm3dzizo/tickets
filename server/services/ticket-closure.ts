@@ -70,9 +70,19 @@ export async function closeTickets(uid: string, input: any) {
       );
       results.push({id: ticket.id, final: plan.final, changed: plan.changed});
       if (!plan.changed) continue;
-      const allItems = plan.history.flatMap(h => h.items);
-      if (!ticket.assignedSupervisorIds.length) allItems.push(...items);
-      const allNotes = [...plan.history.map(h => h.notes), ...(input.scope === 'all' ? [notes] : [])].filter(Boolean).join('\n');
+      const itemMap = new Map<string, Closure['items'][number]>();
+      for (const item of plan.history.flatMap(h => h.items)) {
+        const key = `${item.description.trim()}::${item.status}`;
+        if (!itemMap.has(key)) itemMap.set(key, item);
+      }
+      if (!ticket.assignedSupervisorIds.length) {
+        for (const item of items) {
+          const key = `${item.description.trim()}::${item.status}`;
+          if (!itemMap.has(key)) itemMap.set(key, item);
+        }
+      }
+      const allItems = [...itemMap.values()];
+      const allNotes = [...new Set(plan.history.map(h => h.notes).filter(Boolean))].join('\n');
       const updated = await tx.ticket.update({where: {id: ticket.id}, data: {
         assignedSupervisorIds: plan.active, supervisorClosures: plan.history,
         status: plan.final ? 'closed' : 'in_progress', closedAt: plan.final ? new Date() : null,

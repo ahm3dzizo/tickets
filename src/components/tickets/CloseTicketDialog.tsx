@@ -717,7 +717,7 @@ closeType === 'normal' ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-1"
 التقرير فقط
 </Button>
 )}
-<Button onClick={handleSubmit} disabled={loading || waConnected === false || waConnected === null} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 rounded-2xl h-11 sm:h-12 font-bold shadow-md shadow-emerald-500/10 gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+<Button onClick={handleSubmit} disabled={loading || (closeType !== 'normal' && waConnected !== true)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 rounded-2xl h-11 sm:h-12 font-bold shadow-md shadow-emerald-500/10 gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
 <>
 <Save className="w-4 h-4" />
