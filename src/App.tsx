@@ -3,9 +3,17 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
-  Navigate
+  Navigate,
 } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { SocketProvider } from '@/contexts/SocketContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
+import { ProfileCompletionModal } from '@/components/ProfileCompletionModal';
+import { WhatsAppConnectPrompt } from '@/components/whatsapp/WhatsAppConnectPrompt';
+import { WhatsAppAppPicker } from '@/components/whatsapp/WhatsAppAppPicker';
+
 const TicketTypesAdminPage = lazy(() => import('./pages/TicketTypesAdminPage'));
 const Images = lazy(() => import('@/pages/Images'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
@@ -34,13 +42,7 @@ const TechLogin = lazy(() => import('@/pages/tech/TechLogin'));
 const TechSetup = lazy(() => import('@/pages/tech/TechSetup'));
 const TechAppWithRecovery = lazy(() => import('@/pages/tech/TechAppWithRecovery'));
 const TechTicketDetail = lazy(() => import('@/pages/tech/TechTicketDetail'));
-const TechHistory = lazy(() => import('@/pages/tech/TechHistory'));import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { SocketProvider } from '@/contexts/SocketContext';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
-import { ProfileCompletionModal } from '@/components/ProfileCompletionModal';
-import { WhatsAppConnectPrompt } from '@/components/whatsapp/WhatsAppConnectPrompt';
-import { WhatsAppAppPicker } from '@/components/whatsapp/WhatsAppAppPicker';
+const TechHistory = lazy(() => import('@/pages/tech/TechHistory'));
 
 function RouteFallback() {
   return (
