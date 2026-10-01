@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BriefcaseBusiness, MessageCircle, X } from 'lucide-react';
+import { Briefcase, MessageCircle, X } from 'lucide-react';
 import {
   launchWhatsAppApp,
   parseWhatsAppLink,
@@ -91,7 +91,7 @@ export function WhatsAppAppPicker() {
           <button
             type="button"
             onClick={() => open('whatsapp')}
-            className="flex min-h-14 items-center gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3 text-right transition active:scale-[0.99] hover:bg-emerald-500/12"
+            className="flex min-h-14 items-center gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-right transition active:scale-[0.99] hover:bg-emerald-500/20"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white">
               <MessageCircle className="h-5 w-5" />
@@ -105,10 +105,10 @@ export function WhatsAppAppPicker() {
           <button
             type="button"
             onClick={() => open('business')}
-            className="flex min-h-14 items-center gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3 text-right transition active:scale-[0.99] hover:bg-emerald-500/12"
+            className="flex min-h-14 items-center gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-right transition active:scale-[0.99] hover:bg-emerald-500/20"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
-              <BriefcaseBusiness className="h-5 w-5" />
+              <Briefcase className="h-5 w-5" />
             </span>
             <span className="min-w-0">
               <span className="block font-black text-foreground">WhatsApp Business</span>
