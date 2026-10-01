@@ -98,6 +98,7 @@ export function MoveImagesModal({
             <span className="block text-[11px] font-bold text-muted-foreground">المتغيرات</span>
             <VariantEditor
               value={variantAttributes}
+              basePrice={price === "" ? null : Number(price)}
               onChange={setVariantAttributes}
               compact
             />
