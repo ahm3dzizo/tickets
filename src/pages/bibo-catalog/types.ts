@@ -1,7 +1,13 @@
+export type VariantValue = {
+  id: string;
+  label: string;
+  priceOverride: number | null;
+};
+
 export type VariantAttribute = {
   id: string;
   name: string;
-  values: string[];
+  values: VariantValue[];
 };
 
 export type CatalogProduct = {
