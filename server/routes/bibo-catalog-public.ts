@@ -10,6 +10,8 @@ import {
   queueCatalogWrite,
   readCatalogProducts,
   readCatalogProductsUnlocked,
+  sanitizeVariantAttributes,
+  summarizeVariantAttributes,
   validateCatalogImagePaths,
   waitForCatalogWrites,
   writeCatalogProducts,
@@ -24,6 +26,25 @@ const writeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+function createProductPayload(input: any, images: string[], sortOrder: number): BiboCatalogProduct {
+  const now = new Date().toISOString();
+  const variantAttributes = sanitizeVariantAttributes(input?.variantAttributes);
+
+  return {
+    id: `product-${randomUUID().slice(0, 8)}`,
+    name: cleanCatalogText(input?.name, 200) || "منتج جديد",
+    description: cleanCatalogText(input?.description, 4000),
+    variants: summarizeVariantAttributes(variantAttributes),
+    variantAttributes,
+    price: parseCatalogPrice(input?.price),
+    currency: "SAR",
+    images,
+    sortOrder,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 router.get("/", async (_req, res) => {
   try {
@@ -55,22 +76,14 @@ router.get("/excel", async (_req, res) => {
 router.post("/products", writeLimiter, async (req, res) => {
   try {
     const images = await validateCatalogImagePaths(req.body.images);
+
     const result = await queueCatalogWrite(async () => {
       const products = await readCatalogProductsUnlocked();
-      const now = new Date().toISOString();
-
-      const product: BiboCatalogProduct = {
-        id: `product-${randomUUID().slice(0, 8)}`,
-        name: cleanCatalogText(req.body.name, 200) || "منتج جديد",
-        description: cleanCatalogText(req.body.description, 4000),
-        variants: cleanCatalogText(req.body.variants, 2000),
-        price: parseCatalogPrice(req.body.price),
-        currency: "SAR",
+      const product = createProductPayload(
+        req.body,
         images,
-        sortOrder: products.reduce((max, item) => Math.max(max, item.sortOrder), 0) + 1,
-        createdAt: now,
-        updatedAt: now,
-      };
+        products.reduce((max, item) => Math.max(max, item.sortOrder), 0) + 1,
+      );
 
       products.push(product);
       await writeCatalogProducts(products);
@@ -91,12 +104,27 @@ router.put("/products/:id", writeLimiter, async (req, res) => {
       if (index < 0) throw new Error("PRODUCT_NOT_FOUND");
 
       const current = products[index];
+      const variantAttributes =
+        req.body.variantAttributes !== undefined
+          ? sanitizeVariantAttributes(req.body.variantAttributes)
+          : current.variantAttributes;
+
       const updated: BiboCatalogProduct = {
         ...current,
-        name: req.body.name !== undefined ? cleanCatalogText(req.body.name, 200) : current.name,
-        description: req.body.description !== undefined ? cleanCatalogText(req.body.description, 4000) : current.description,
-        variants: req.body.variants !== undefined ? cleanCatalogText(req.body.variants, 2000) : current.variants,
-        price: req.body.price !== undefined ? parseCatalogPrice(req.body.price) : current.price,
+        name:
+          req.body.name !== undefined
+            ? cleanCatalogText(req.body.name, 200)
+            : current.name,
+        description:
+          req.body.description !== undefined
+            ? cleanCatalogText(req.body.description, 4000)
+            : current.description,
+        variantAttributes,
+        variants: summarizeVariantAttributes(variantAttributes),
+        price:
+          req.body.price !== undefined
+            ? parseCatalogPrice(req.body.price)
+            : current.price,
         updatedAt: new Date().toISOString(),
       };
 
@@ -116,6 +144,7 @@ router.put("/products/:id", writeLimiter, async (req, res) => {
 router.put("/products/:id/images", writeLimiter, async (req, res) => {
   try {
     const images = await validateCatalogImagePaths(req.body.images);
+
     const result = await queueCatalogWrite(async () => {
       const products = await readCatalogProductsUnlocked();
       const index = products.findIndex((item) => item.id === req.params.id);
@@ -135,6 +164,82 @@ router.put("/products/:id/images", writeLimiter, async (req, res) => {
   } catch (error: any) {
     res.status(error?.message === "PRODUCT_NOT_FOUND" ? 404 : 400).json({
       error: error?.message || "IMAGE_MAPPING_FAILED",
+    });
+  }
+});
+
+router.post("/products/:id/images/batch-remove", writeLimiter, async (req, res) => {
+  try {
+    const selected = await validateCatalogImagePaths(req.body.images);
+
+    const result = await queueCatalogWrite(async () => {
+      const products = await readCatalogProductsUnlocked();
+      const index = products.findIndex((item) => item.id === req.params.id);
+      if (index < 0) throw new Error("PRODUCT_NOT_FOUND");
+
+      const current = products[index];
+      const selectedSet = new Set(selected.filter((image) => current.images.includes(image)));
+      if (!selectedSet.size) throw new Error("NO_MATCHING_IMAGES");
+
+      products[index] = {
+        ...current,
+        images: current.images.filter((image) => !selectedSet.has(image)),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await writeCatalogProducts(products);
+      return products[index];
+    });
+
+    res.json(publicCatalogProduct(result));
+  } catch (error: any) {
+    res.status(error?.message === "PRODUCT_NOT_FOUND" ? 404 : 400).json({
+      error: error?.message || "BATCH_REMOVE_FAILED",
+    });
+  }
+});
+
+router.post("/products/:id/images/move-to-new", writeLimiter, async (req, res) => {
+  try {
+    const selected = await validateCatalogImagePaths(req.body.images);
+
+    const result = await queueCatalogWrite(async () => {
+      const products = await readCatalogProductsUnlocked();
+      const sourceIndex = products.findIndex((item) => item.id === req.params.id);
+      if (sourceIndex < 0) throw new Error("PRODUCT_NOT_FOUND");
+
+      const source = products[sourceIndex];
+      const selectedSet = new Set(selected.filter((image) => source.images.includes(image)));
+      if (!selectedSet.size) throw new Error("NO_MATCHING_IMAGES");
+
+      const movedImages = source.images.filter((image) => selectedSet.has(image));
+      const newProduct = createProductPayload(
+        req.body.newProduct,
+        movedImages,
+        products.reduce((max, item) => Math.max(max, item.sortOrder), 0) + 1,
+      );
+
+      products[sourceIndex] = {
+        ...source,
+        images: source.images.filter((image) => !selectedSet.has(image)),
+        updatedAt: new Date().toISOString(),
+      };
+      products.push(newProduct);
+
+      await writeCatalogProducts(products);
+      return {
+        source: products[sourceIndex],
+        created: newProduct,
+      };
+    });
+
+    res.status(201).json({
+      source: publicCatalogProduct(result.source),
+      created: publicCatalogProduct(result.created),
+    });
+  } catch (error: any) {
+    res.status(error?.message === "PRODUCT_NOT_FOUND" ? 404 : 400).json({
+      error: error?.message || "MOVE_IMAGES_FAILED",
     });
   }
 });
