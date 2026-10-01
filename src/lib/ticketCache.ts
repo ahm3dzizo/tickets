@@ -204,6 +204,25 @@ export function invalidateTicketCache(keyPrefix?: string) {
   void markPersistedStale(keyPrefix);
 }
 
+
+/**
+ * Force a fresh ticket request after a mutation, bypassing the normal
+ * stale-while-revalidate freshness window and replacing both memory + IndexedDB.
+ */
+export async function refreshCachedTickets(
+  fetchFn: () => Promise<any[]>,
+  params?: Record<string, string | string[] | boolean | undefined>,
+  onUpdate?: (data: any[]) => void,
+): Promise<any[]> {
+  const key = buildKey(params);
+  const fresh = await fetchFn();
+  const fetchedAt = Date.now();
+  store.set(key, { data: fresh, fetchedAt });
+  await writePersisted(key, fresh, fetchedAt);
+  onUpdate?.(fresh);
+  return fresh;
+}
+
 /**
  * Memory cache is immediate. IndexedDB survives refresh/app restart.
  * Cached values up to 24h old are rendered first, then refreshed in background.
