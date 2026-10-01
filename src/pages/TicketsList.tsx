@@ -231,6 +231,10 @@ export default function TicketsList() {
     contractors: contractorTickets.filter(ticket => !seenTicketsByTab.contractors.includes(ticket.id)).length,
     unclassified: unclassifiedTickets.filter(ticket => !seenTicketsByTab.unclassified.includes(ticket.id)).length,
   };
+  const totalNewTicketCount = NEW_TICKET_TABS.reduce(
+    (total, tab) => total + newTicketCounts[tab],
+    0,
+  );
 
   const markTabSeen = (tab: string) => {
     if (!seenStorageKey || !NEW_TICKET_TABS.includes(tab as NewTicketTab)) return;
@@ -365,7 +369,7 @@ export default function TicketsList() {
                   value={activeTab}
                   onChange={(e) => changeTab(e.target.value)}
                   aria-label="قسم التذاكر"
-                  className="w-full h-11 appearance-none bg-transparent px-4 pe-10 text-sm font-extrabold text-foreground outline-none cursor-pointer"
+                  className="w-full h-11 appearance-none bg-transparent ps-4 pe-28 text-sm font-extrabold text-foreground outline-none cursor-pointer"
                   dir="rtl"
                 >
                   <option value="linked">المربوطة ({linkedTickets.length}){newTicketCounts.linked > 0 ? ` — جديد ${newTicketCounts.linked}` : ''}</option>
@@ -374,6 +378,18 @@ export default function TicketsList() {
                   {unclassifiedTickets.length > 0 && <option value="unclassified">غير مصنفة ({unclassifiedTickets.length}){newTicketCounts.unclassified > 0 ? ` — جديد ${newTicketCounts.unclassified}` : ''}</option>}
                   {outOfWarrantyTickets.length > 0 && <option value="out-of-warranty">خارج الضمان ({outOfWarrantyTickets.length})</option>}
                 </select>
+                {totalNewTicketCount > 0 && (
+                  <div
+                    className="pointer-events-none absolute inset-y-0 left-8 flex items-center"
+                    aria-live="polite"
+                    aria-label={`${totalNewTicketCount} تذاكر جديدة في الأقسام`}
+                  >
+                    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-rose-500/25 bg-rose-500/10 px-2 text-[10px] font-black text-rose-600 dark:text-rose-300 shadow-sm">
+                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
+                      جديد {totalNewTicketCount}
+                    </span>
+                  </div>
+                )}
                 <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">⌄</div>
               </div>
             </div>
