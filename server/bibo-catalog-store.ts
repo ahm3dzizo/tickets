@@ -7,10 +7,16 @@ import { BIBO_CATALOG_SEEDS } from "./bibo-catalog-seed.js";
 
 export const BIBO_CATALOG_FILE = path.join(MEDIA_ROOT, "products.xlsx");
 
+export type BiboVariantValue = {
+  id: string;
+  label: string;
+  priceOverride: number | null;
+};
+
 export type BiboVariantAttribute = {
   id: string;
   name: string;
-  values: string[];
+  values: BiboVariantValue[];
 };
 
 export type BiboCatalogProduct = {
@@ -83,11 +89,16 @@ function legacyAttributes(variants: string): BiboVariantAttribute[] {
   const raw = variants.trim();
   if (!raw) return [];
 
-  const values = raw
+  const values: BiboVariantValue[] = raw
     .split(/[|،,]/)
     .map((value) => value.trim())
     .filter(Boolean)
-    .slice(0, 40);
+    .slice(0, 40)
+    .map((label) => ({
+      id: randomUUID(),
+      label,
+      priceOverride: null,
+    }));
 
   return values.length
     ? [{ id: randomUUID(), name: "خيارات", values }]
@@ -97,7 +108,9 @@ function legacyAttributes(variants: string): BiboVariantAttribute[] {
 export function summarizeVariantAttributes(attributes: BiboVariantAttribute[]) {
   return attributes
     .filter((attribute) => attribute.name && attribute.values.length)
-    .map((attribute) => `${attribute.name}: ${attribute.values.join("، ")}`)
+    .map((attribute) =>
+      `${attribute.name}: ${attribute.values.map((value) => value.label).join("، ")}`,
+    )
     .join(" | ");
 }
 
@@ -125,16 +138,48 @@ export function sanitizeVariantAttributes(input: unknown): BiboVariantAttribute[
       : [];
 
     const seenValues = new Set<string>();
-    const values: string[] = [];
+    const values: BiboVariantValue[] = [];
 
     for (const rawValue of sourceValues.slice(0, 60)) {
-      if (typeof rawValue !== "string") continue;
-      const value = rawValue.trim().slice(0, 120);
-      if (!value) continue;
-      const key = value.toLocaleLowerCase("ar");
+      const legacyLabel =
+        typeof rawValue === "string" ? rawValue.trim().slice(0, 120) : "";
+
+      const objectLabel =
+        rawValue && typeof rawValue === "object" && typeof (rawValue as any).label === "string"
+          ? (rawValue as any).label.trim().slice(0, 120)
+          : "";
+
+      const label = objectLabel || legacyLabel;
+      if (!label) continue;
+
+      const key = label.toLocaleLowerCase("ar");
       if (seenValues.has(key)) continue;
       seenValues.add(key);
-      values.push(value);
+
+      const rawOverride =
+        rawValue && typeof rawValue === "object"
+          ? (rawValue as any).priceOverride
+          : null;
+
+      let priceOverride: number | null = null;
+      if (rawOverride !== null && rawOverride !== undefined && rawOverride !== "") {
+        const parsed = Number(rawOverride);
+        if (Number.isFinite(parsed) && parsed >= 0) {
+          priceOverride = Math.round(parsed * 100) / 100;
+        }
+      }
+
+      values.push({
+        id:
+          rawValue &&
+          typeof rawValue === "object" &&
+          typeof (rawValue as any).id === "string" &&
+          (rawValue as any).id.trim()
+            ? (rawValue as any).id.trim().slice(0, 80)
+            : randomUUID(),
+        label,
+        priceOverride,
+      });
     }
 
     if (!values.length) continue;
@@ -205,6 +250,10 @@ export async function writeCatalogProducts(products: BiboCatalogProduct[]) {
     { header: "اسم المنتج", key: "productName", width: 34 },
     { header: "الخاصية", key: "attributeName", width: 24 },
     { header: "القيمة", key: "value", width: 28 },
+    { header: "السعر الأساسي", key: "basePrice", width: 16 },
+    { header: "سعر مخصص", key: "priceOverride", width: 16 },
+    { header: "السعر النهائي", key: "effectivePrice", width: 16 },
+    { header: "نظام السعر", key: "priceMode", width: 18 },
     { header: "ترتيب الخاصية", key: "attributeOrder", width: 16 },
     { header: "ترتيب القيمة", key: "valueOrder", width: 16 },
   ];
@@ -217,11 +266,16 @@ export async function writeCatalogProducts(products: BiboCatalogProduct[]) {
     const attributes = sanitizeVariantAttributes(product.variantAttributes);
     attributes.forEach((attribute, attributeIndex) => {
       attribute.values.forEach((value, valueIndex) => {
+        const effectivePrice = value.priceOverride ?? product.price;
         variantsSheet.addRow({
           productId: product.id,
           productName: product.name,
           attributeName: attribute.name,
-          value,
+          value: value.label,
+          basePrice: product.price ?? "",
+          priceOverride: value.priceOverride ?? "",
+          effectivePrice: effectivePrice ?? "",
+          priceMode: value.priceOverride === null ? "السعر الأساسي" : "سعر مخصص",
           attributeOrder: attributeIndex + 1,
           valueOrder: valueIndex + 1,
         });
@@ -229,7 +283,7 @@ export async function writeCatalogProducts(products: BiboCatalogProduct[]) {
     });
   }
 
-  variantsSheet.autoFilter = { from: "A1", to: "F1" };
+  variantsSheet.autoFilter = { from: "A1", to: "J1" };
 
   const temp = BIBO_CATALOG_FILE + ".tmp";
   await workbook.xlsx.writeFile(temp);
