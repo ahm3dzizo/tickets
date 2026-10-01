@@ -57,22 +57,27 @@ export default function TicketsList() {
   const loadData = async () => {
     if (!user) return;
     try {
-      const [allClients, allProjects] = await Promise.all([clientsApi.getAll(), projectsApi.getAll()]);
-      const clientMap: Record<string, Client> = {};
-      allClients.forEach((c: any) => { clientMap[c.id] = c as Client; });
-      setClients(clientMap);
-      const projectMap: Record<string, Project> = {};
-      allProjects.forEach((p: any) => { projectMap[p.id] = p as Project; });
-      setProjects(projectMap);
-
       const params: Parameters<typeof ticketsApi.getAll>[0] = {};
       if (user.role === 'supervisor') params.supervisorId = user.uid;
       else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
-      const allTickets = await getCachedTickets(
-        () => ticketsApi.getAll(params) as Promise<any[]>,
-        params as any,
-        (fresh) => setTickets(fresh as Ticket[]),
-      );
+
+      const [allClients, allProjects, allTickets] = await Promise.all([
+        clientsApi.getAll(),
+        projectsApi.getAll(),
+        getCachedTickets(
+          () => ticketsApi.getAll(params) as Promise<any[]>,
+          params as any,
+          (fresh) => setTickets(fresh as Ticket[]),
+        ),
+      ]);
+
+      const clientMap: Record<string, Client> = {};
+      allClients.forEach((client: any) => { clientMap[client.id] = client as Client; });
+      setClients(clientMap);
+
+      const projectMap: Record<string, Project> = {};
+      allProjects.forEach((project: any) => { projectMap[project.id] = project as Project; });
+      setProjects(projectMap);
       setTickets(allTickets as Ticket[]);
     } catch (err) { console.error(err); }
     finally {
@@ -211,15 +216,17 @@ export default function TicketsList() {
     ) as SeenTicketsByTab;
 
     let stored: SeenTicketsByTab | null = null;
+    let raw: string | null = null;
     try {
-      const raw = localStorage.getItem(seenStorageKey);
+      raw = localStorage.getItem(seenStorageKey);
       stored = raw ? { ...emptySeenTickets(), ...JSON.parse(raw) } : null;
     } catch {
       stored = null;
     }
 
     if (!stored) {
-      localStorage.setItem(seenStorageKey, JSON.stringify(currentIds));
+      const serialized = JSON.stringify(currentIds);
+      if (raw !== serialized) localStorage.setItem(seenStorageKey, serialized);
       setSeenTicketsByTab(currentIds);
       return;
     }
@@ -231,7 +238,8 @@ export default function TicketsList() {
       if (activeTab === tab) next[tab] = currentIds[tab];
     }
 
-    localStorage.setItem(seenStorageKey, JSON.stringify(next));
+    const serialized = JSON.stringify(next);
+    if (raw !== serialized) localStorage.setItem(seenStorageKey, serialized);
     setSeenTicketsByTab(next);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seenStorageKey, loading, tickets, activeTab]);
