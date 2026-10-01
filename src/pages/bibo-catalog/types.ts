@@ -1,8 +1,15 @@
+export type VariantAttribute = {
+  id: string;
+  name: string;
+  values: string[];
+};
+
 export type CatalogProduct = {
   id: string;
   name: string;
   description: string;
   variants: string;
+  variantAttributes: VariantAttribute[];
   price: number | null;
   currency: string;
   images: string[];
