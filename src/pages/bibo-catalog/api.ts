@@ -1,4 +1,9 @@
-import type { CatalogProduct, CatalogResponse, UploadedImage } from "./types";
+import type {
+  CatalogProduct,
+  CatalogResponse,
+  UploadedImage,
+  VariantAttribute,
+} from "./types";
 
 async function parse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -17,7 +22,7 @@ export async function loadCatalog() {
 export async function createProduct(input: {
   name: string;
   description: string;
-  variants: string;
+  variantAttributes: VariantAttribute[];
   price: number | null;
   images: string[];
 }) {
@@ -32,7 +37,7 @@ export async function createProduct(input: {
 
 export async function updateProduct(
   id: string,
-  input: Pick<CatalogProduct, "name" | "description" | "variants" | "price">,
+  input: Pick<CatalogProduct, "name" | "description" | "variantAttributes" | "price">,
 ) {
   return parse<CatalogProduct>(
     await fetch(`/api/bibo-catalog/products/${encodeURIComponent(id)}`, {
@@ -50,6 +55,41 @@ export async function updateProductImages(id: string, images: string[]) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ images }),
     }),
+  );
+}
+
+export async function batchRemoveImages(id: string, images: string[]) {
+  return parse<CatalogProduct>(
+    await fetch(
+      `/api/bibo-catalog/products/${encodeURIComponent(id)}/images/batch-remove`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images }),
+      },
+    ),
+  );
+}
+
+export async function moveImagesToNewProduct(
+  id: string,
+  images: string[],
+  newProduct: {
+    name: string;
+    description: string;
+    variantAttributes: VariantAttribute[];
+    price: number | null;
+  },
+) {
+  return parse<{ source: CatalogProduct; created: CatalogProduct }>(
+    await fetch(
+      `/api/bibo-catalog/products/${encodeURIComponent(id)}/images/move-to-new`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images, newProduct }),
+      },
+    ),
   );
 }
 
