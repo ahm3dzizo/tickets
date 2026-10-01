@@ -50,3 +50,18 @@ test('unassigned actors and unknown scopes are rejected', () => {
  assert.throws(() => planClosure(['a'],[],a,'unknown',undefined,'',items), /INVALID_SCOPE/);
  assert.throws(() => planClosure(['a'],[],{uid:'a',role:'technician'},'self',undefined,'',items), /FORBIDDEN/);
 });
+
+test('admin selected subset closes only those supervisors', () => {
+ const result = planClosure(['a','b','c'], [], {uid:'manager',role:'admin'}, 'selected', ['a','b'], 'تم التحقق', items);
+ assert.equal(result.final, false);
+ assert.deepEqual(result.active, ['c']);
+ assert.deepEqual(result.history.map(h => h.supervisorUid), ['a','b']);
+});
+test('engineer selecting every active supervisor finalizes the ticket', () => {
+ const result = planClosure(['a','b'], [], {uid:'manager',role:'engineer'}, 'selected', ['a','b'], 'تم التحقق', items);
+ assert.equal(result.final, true);
+ assert.deepEqual(result.active, []);
+});
+test('supervisor cannot use selected scope to close other roles', () => {
+ assert.throws(() => planClosure(['a','b'], [], a, 'selected', ['a','b'], 'reason', items), /FORBIDDEN/);
+});

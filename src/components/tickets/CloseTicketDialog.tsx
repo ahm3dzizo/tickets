@@ -119,9 +119,10 @@ onSuccess
 }: CloseTicketDialogProps) {
 const { user } = useAuth();
 const privileged = user?.role === 'admin' || user?.role === 'engineer';
-const [closureScope, setClosureScope] = useState('all');
-const [targetSupervisor, setTargetSupervisor] = useState('');
 const supervisors = [...new Map(selectedTickets.flatMap(t => t.assignedSupervisors || []).map(s => [s.id, s])).values()];
+const activeSupervisorIds = [...new Set(selectedTickets.flatMap(t => t.assignedSupervisorIds || []))];
+const supervisorOptions = activeSupervisorIds.map(id => supervisors.find(s => s.id === id) || ({ id, name: id } as any));
+const [selectedSupervisorIds, setSelectedSupervisorIds] = useState<string[]>([]);
 const shared = selectedTickets.some(t => (t.assignedSupervisorIds?.length || 0) > 1 || (t.supervisorClosures?.length || 0) > 0);
 type CloseType = 'normal' | 'absent' | 'out_of_scope';
 const [closeType, setCloseType] = useState<CloseType>('normal');
@@ -151,8 +152,13 @@ const [waConnected, setWaConnected] = useState<boolean | null>(null);
 React.useEffect(() => {
 if (open) {
 setCloseType('normal');
-setClosureScope('all');
-setTargetSupervisor('');
+setSelectedSupervisorIds(
+  privileged
+    ? activeSupervisorIds
+    : user?.uid && activeSupervisorIds.includes(user.uid)
+      ? [user.uid]
+      : []
+);
 setWaConnected(null);
 WhatsAppService.getTemplates().then(t => {
 setClosingMsgTemplate(t.closingMsg);
@@ -161,7 +167,7 @@ setOutOfScopeMsgTemplate(t.outOfScopeMsg || '');
 });
 whatsappApi.getStatus().then(s => setWaConnected(s.connected)).catch(() => setWaConnected(false));
 }
-}, [open]);
+}, [open, privileged, user?.uid, selectedTickets]);
 
 const currentUnitId = selectedTickets[0]?.unitId;
 const targetClient = clients.find(c => String(c.unitId) === String(currentUnitId));
@@ -180,6 +186,27 @@ const previewMessage =
 closeType === 'absent' ? WhatsAppService.processTemplate(absentMsgTemplate, msgParams) :
 closeType === 'out_of_scope' ? WhatsAppService.processTemplate(outOfScopeMsgTemplate, msgParams) :
 WhatsAppService.processTemplate(closingMsgTemplate, msgParams);
+
+const effectiveSelectedSupervisorIds = privileged
+  ? selectedSupervisorIds.filter(id => activeSupervisorIds.includes(id))
+  : user?.uid && activeSupervisorIds.includes(user.uid)
+    ? [user.uid]
+    : [];
+const isFullNormalClosure =
+  closeType === 'normal' &&
+  (activeSupervisorIds.length === 0
+    ? privileged
+    : effectiveSelectedSupervisorIds.length === activeSupervisorIds.length);
+const closureModeText = isFullNormalClosure
+  ? 'إغلاق كامل — سيتم إنشاء التقرير وإرساله للعميل'
+  : `إغلاق جزئي — سيتم إنهاء ${effectiveSelectedSupervisorIds.length} من ${activeSupervisorIds.length} دور ولن يُرسل التقرير الآن`;
+
+const toggleSupervisor = (id: string) => {
+  if (!privileged) return;
+  setSelectedSupervisorIds(current =>
+    current.includes(id) ? current.filter(uid => uid !== id) : [...current, id]
+  );
+};
 
 // Sync items if selectedTickets changes
 React.useEffect(() => {
@@ -242,7 +269,6 @@ status: cardStatus,
 
 // ── حفظ التقرير فقط (بدون إغلاق تذاكر أو إرسال رسائل) ──────────────────
 const handleSaveReportOnly = async (format: 'image' | 'pdf') => {
-if (privileged && (!notes.trim() || (closureScope === 'supervisor' && !targetSupervisor))) {toast.error('اختر المشرف واكتب سبب الإغلاق في الملاحظات'); return;}
 if (maintItems.length === 0) {
 toast.error('يرجى إضافة بند صيانة واحد على الأقل');
 return;
@@ -344,6 +370,14 @@ if (maintItems.length === 0) {
 toast.error('يرجى إضافة بند صيانة واحد على الأقل');
 return;
 }
+if (privileged && effectiveSelectedSupervisorIds.length === 0 && activeSupervisorIds.length > 0) {
+toast.error('حدد مشرفًا واحدًا على الأقل');
+return;
+}
+if (privileged && !notes.trim()) {
+toast.error('اكتب سبب الإغلاق أو الإنهاء بالنيابة في الملاحظات');
+return;
+}
 
 setLoading(true);
 setCopying(true);
@@ -352,14 +386,24 @@ try {
 const authToken = localStorage.getItem('retal_auth_token');
 const response = await fetch('/api/tickets/close', {
   method: 'POST', headers: {'Content-Type': 'application/json', ...(authToken ? {Authorization: `Bearer ${authToken}`} : {})},
-  body: JSON.stringify({ticketIds: selectedTickets.map(t => t.id), scope: privileged ? closureScope : 'self', supervisorUid: privileged && closureScope === 'supervisor' ? targetSupervisor : undefined, notes, items: maintItems}),
+  body: JSON.stringify({
+    ticketIds: selectedTickets.map(t => t.id),
+    scope: privileged
+      ? (isFullNormalClosure ? 'all' : 'selected')
+      : 'self',
+    supervisorUids: privileged && !isFullNormalClosure ? effectiveSelectedSupervisorIds : undefined,
+    notes,
+    items: maintItems,
+  }),
 });
 if (!response.ok) {
   const error = await response.json().catch(() => ({}));
   toast.error(error.error || 'فشل إنهاء الدور'); return;
 }
 if (response.headers.get('content-type')?.includes('application/json')) {
-  toast.success('تم حفظ الحالة؛ التقرير يُرسل عند الإغلاق الكامل فقط');
+  toast.success(isFullNormalClosure
+    ? 'تم الإغلاق الكامل ووضع التقرير في طابور الإرسال'
+    : 'تم الإغلاق الجزئي؛ التقرير سيُرسل بعد إنهاء باقي المشرفين');
   onSuccess(); onOpenChange(false); return;
 }
 const blob = await response.blob();
@@ -426,20 +470,81 @@ return (
 </div>
 </div>
 </DialogHeader>
-<div className="rounded-xl border border-border p-2.5 sm:p-3 text-right space-y-2">
-<p className="text-xs sm:text-sm">التقرير يُرسل فقط بعد انتهاء جميع المشرفين أو الإغلاق الكامل بواسطة الإدارة.</p>
-<div className="flex flex-wrap gap-1.5">
-{supervisors.map(s => <span key={s.id} className="rounded-lg border border-border bg-muted/30 px-2 py-1 text-[11px]">{s.name} — قيد التنفيذ</span>)}
-{selectedTickets.flatMap(t => (t.supervisorClosures || []).filter(h => !t.assignedSupervisorIds?.includes(h.supervisorUid)).map(h => <span key={`${t.id}-${h.supervisorUid}`} className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-400">#{t.ticketId} — {h.supervisorName || h.supervisorUid} — أنهى دوره</span>))}
+<div className="rounded-2xl border border-border bg-muted/10 p-3 text-right space-y-3">
+<div className="flex items-center justify-between gap-3">
+<div>
+<p className="text-xs font-black text-foreground">المشرفون الجاري إنهاء أدوارهم</p>
+<p className="mt-0.5 text-[11px] text-muted-foreground">
+{privileged ? 'حدد مباشرةً المشرفين المطلوب إنهاء أدوارهم' : 'يمكنك إنهاء دورك فقط'}
+</p>
 </div>
-{privileged && <>
-<Label>نطاق الإغلاق</Label>
-<select className="w-full bg-background border border-border rounded-lg p-2" value={closureScope} onChange={e => setClosureScope(e.target.value)}>
-<option value="all">إغلاق التذكرة بالكامل</option><option value="supervisor">إنهاء دور مشرف معين</option>
-</select>
-{closureScope === 'supervisor' && <select className="w-full bg-background border border-border rounded-lg p-2" value={targetSupervisor} onChange={e => setTargetSupervisor(e.target.value)}><option value="">اختر المشرف</option>{supervisors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
-<p className="text-xs text-muted-foreground">سبب الإغلاق أو الإنهاء بالنيابة مطلوب في الملاحظات.</p>
-</>}
+<span className={cn(
+  'shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black border',
+  isFullNormalClosure
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
+    : 'border-amber-500/30 bg-amber-500/10 text-amber-500'
+)}>
+{isFullNormalClosure ? 'إغلاق كامل' : 'إغلاق جزئي'}
+</span>
+</div>
+
+{supervisorOptions.length > 0 ? (
+<div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+{supervisorOptions.map(s => {
+  const checked = effectiveSelectedSupervisorIds.includes(s.id);
+  const canToggle = privileged;
+  return (
+    <button
+      key={s.id}
+      type="button"
+      disabled={!canToggle}
+      onClick={() => toggleSupervisor(s.id)}
+      className={cn(
+        'flex min-h-11 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-right transition-all',
+        checked
+          ? 'border-emerald-500/40 bg-emerald-500/10 text-foreground'
+          : 'border-border bg-background/50 text-muted-foreground',
+        canToggle && 'active:scale-[0.99]'
+      )}
+    >
+      <span className="min-w-0 truncate text-sm font-bold">{s.name}</span>
+      <span className={cn(
+        'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-black',
+        checked
+          ? 'border-emerald-500 bg-emerald-500 text-white'
+          : 'border-border bg-background text-transparent'
+      )}>✓</span>
+    </button>
+  );
+})}
+</div>
+) : (
+<div className="rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+لا يوجد مشرف نشط على التذكرة — سيتم الإغلاق بواسطة الإدارة.
+</div>
+)}
+
+{selectedTickets.some(t => (t.supervisorClosures || []).some(h => !t.assignedSupervisorIds?.includes(h.supervisorUid))) && (
+<div className="flex flex-wrap gap-1.5">
+{selectedTickets.flatMap(t => (t.supervisorClosures || [])
+  .filter(h => !t.assignedSupervisorIds?.includes(h.supervisorUid))
+  .map(h => (
+    <span key={`${t.id}-${h.supervisorUid}`} className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-500">
+      {h.supervisorName || h.supervisorUid} — تم
+    </span>
+  )))}
+</div>
+)}
+
+<div className={cn(
+  'rounded-xl border px-3 py-2.5 text-xs font-bold',
+  isFullNormalClosure
+    ? 'border-emerald-500/25 bg-emerald-500/8 text-emerald-500'
+    : 'border-amber-500/25 bg-amber-500/8 text-amber-500'
+)}>
+{closureModeText}
+</div>
+{privileged && <p className="text-[11px] text-muted-foreground">سبب الإغلاق أو الإنهاء بالنيابة مطلوب في الملاحظات.</p>}
 </div>
 
 {/* ── نوع الإغلاق ── */}
@@ -616,7 +721,7 @@ closeType === 'normal' ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-1"
 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
 <>
 <Save className="w-4 h-4" />
-<span className="truncate">{privileged ? (closureScope === 'all' ? 'تأكيد الإغلاق' : 'إنهاء دور المشرف') : 'إنهاء دوري'}</span>
+<span className="truncate">{isFullNormalClosure ? 'تأكيد الإغلاق الكامل' : privileged ? 'تأكيد الإغلاق الجزئي' : 'إنهاء دوري'}</span>
 </>
 )}
 </Button>
