@@ -12,22 +12,54 @@ import type { TicketStatus } from "@prisma/client";
 
 import { closeTickets, closures } from '../services/ticket-closure.js';
 import { deliverClosureReports } from '../services/closure-report-worker.js';
+import { invalidateTicketListResponseCache } from '../middleware/ticket-list-cache.js';
 
 const router = Router();
 router.post('/close', requireAuth, async (req: AuthRequest, res) => {
   try {
     if (!Array.isArray(req.body.ticketIds)) { res.status(400).json({error: 'INVALID_TICKET_IDS'}); return; }
     const result = await closeTickets(req.uid!, req.body);
-    for (const row of result.results.filter(r => r.final && r.changed)) {
-      const ticket = await prisma.ticket.findUnique({where: {id: row.id}, select: {appointmentId: true}});
-      const openSession = ticket?.appointmentId ? await prisma.appointmentWorkSession.findUnique({where: {appointmentId: ticket.appointmentId}, select: {status: true}}) : null;
-      if (openSession && ['claimed','en_route','arrived','in_progress','paused'].includes(openSession.status)) continue;
-      await maybeAutoFinishAppointment(ticket?.appointmentId).catch(e => console.error('[ClosureAppointment]', e.message));
-    }
+
+    // The ticket transaction is the critical path. Everything below is
+    // follow-up work and must not keep the close dialog/list waiting.
+    invalidateTicketListResponseCache();
     getIO()?.emit('tickets:updated', {ids: result.results.map(r => r.id)});
+
+    const finalizedIds = result.results
+      .filter(row => row.final && row.changed)
+      .map(row => row.id);
+
+    void Promise.allSettled(
+      finalizedIds.map(async id => {
+        const ticket = await prisma.ticket.findUnique({
+          where: { id },
+          select: { appointmentId: true },
+        });
+        const openSession = ticket?.appointmentId
+          ? await prisma.appointmentWorkSession.findUnique({
+              where: { appointmentId: ticket.appointmentId },
+              select: { status: true },
+            })
+          : null;
+
+        if (openSession && ['claimed','en_route','arrived','in_progress','paused'].includes(openSession.status)) return;
+        await maybeAutoFinishAppointment(ticket?.appointmentId);
+      }),
+    ).then(results => {
+      for (const outcome of results) {
+        if (outcome.status === 'rejected') {
+          console.error('[ClosureAppointment]', outcome.reason);
+        }
+      }
+    });
+
     deliverClosureReports().catch(e => console.error('[ClosureReport]', e.message));
-    if (result.image) { res.type('image/jpeg').send(result.image); return; }
-    res.json({results: result.results, message: 'تم إنهاء الدور؛ لا يرسل تقرير حتى الإغلاق النهائي'});
+    res.json({
+      results: result.results,
+      message: result.results.some(row => row.final)
+        ? 'تم الإغلاق؛ التقرير قيد التجهيز والإرسال'
+        : 'تم إنهاء الدور؛ لا يرسل تقرير حتى الإغلاق النهائي',
+    });
   } catch (e) {
     const error = e instanceof Error ? e.message : 'CLOSURE_FAILED';
     res.status(error === 'FORBIDDEN' ? 403 : error === 'TICKET_NOT_FOUND' ? 404 : 400).json({error});

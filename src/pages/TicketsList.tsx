@@ -1,5 +1,5 @@
 // src/pages/TicketsList.tsx
-import React, { lazy, Suspense, useState, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, ShieldAlert, Download, ShieldOff } from 'lucide-react';
@@ -9,10 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { TicketTable, BulkActionBar } from '@/components/tickets/TicketTable';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
-import { getCachedTickets, invalidateTicketCache } from '@/lib/ticketCache';
+import { getCachedTickets, invalidateTicketCache, refreshCachedTickets } from '@/lib/ticketCache';
 import { Ticket, Project, Client } from '@/types';
 import { classifyOnServer } from '@/services/classificationApi';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { toast } from 'sonner';
 
 
@@ -48,6 +49,7 @@ const emptySeenTickets = (): SeenTicketsByTab => ({
 export default function TicketsList() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const socket = useSocket();
   const [tickets, setTickets]       = useState<Ticket[]>([]);
   const [projects, setProjects]     = useState<Record<string, Project>>({});
   const [clients, setClients]       = useState<Record<string, Client>>({});
@@ -68,19 +70,36 @@ export default function TicketsList() {
   const [seenTicketsByTab, setSeenTicketsByTab] = useState<SeenTicketsByTab>(emptySeenTickets);
   useEffect(() => { sessionStorage.setItem('ticketsListSearch', ticketSearch); }, [ticketSearch]);
 
+  const ticketQueryParams = useMemo<Parameters<typeof ticketsApi.getAll>[0]>(() => {
+    const params: Parameters<typeof ticketsApi.getAll>[0] = {};
+    if (!user) return params;
+    if (user.role === 'supervisor') params.supervisorId = user.uid;
+    else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
+    return params;
+  }, [user?.uid, user?.role, user?.projectIds]);
+
+  const refreshTicketsNow = useCallback(async () => {
+    if (!user) return;
+    try {
+      await refreshCachedTickets(
+        () => ticketsApi.getAll(ticketQueryParams) as Promise<any[]>,
+        ticketQueryParams as any,
+        (fresh) => setTickets(fresh as Ticket[]),
+      );
+    } catch (err) {
+      console.error('[TicketsList] forced refresh failed', err);
+    }
+  }, [user?.uid, ticketQueryParams]);
+
   const loadData = async () => {
     if (!user) return;
     try {
-      const params: Parameters<typeof ticketsApi.getAll>[0] = {};
-      if (user.role === 'supervisor') params.supervisorId = user.uid;
-      else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
-
       const [allClients, allProjects, allTickets] = await Promise.all([
         clientsApi.getAll(),
         projectsApi.getAll(),
         getCachedTickets(
-          () => ticketsApi.getAll(params) as Promise<any[]>,
-          params as any,
+          () => ticketsApi.getAll(ticketQueryParams) as Promise<any[]>,
+          ticketQueryParams as any,
           (fresh) => setTickets(fresh as Ticket[]),
         ),
       ]);
@@ -106,7 +125,40 @@ export default function TicketsList() {
     }
   };
 
-  useEffect(() => { loadData(); }, [user]);
+  useEffect(() => { loadData(); }, [user?.uid, user?.role, ticketQueryParams]);
+
+  useEffect(() => {
+    if (!socket) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleTicketsUpdated = () => {
+      invalidateTicketCache();
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        void refreshTicketsNow();
+      }, 120);
+    };
+
+    socket.on('tickets:updated', handleTicketsUpdated);
+    return () => {
+      if (timer) clearTimeout(timer);
+      socket.off('tickets:updated', handleTicketsUpdated);
+    };
+  }, [socket, refreshTicketsNow]);
+
+  const handleCloseSuccess = useCallback((result?: { ticketIds: string[]; final: boolean }) => {
+    const ids = new Set(result?.ticketIds ?? selectedTicketIds);
+
+    invalidateTicketCache();
+    setSelectedTicketIds([]);
+    setCloseDialogOpen(false);
+
+    if (result?.final || user?.role === 'supervisor') {
+      setTickets(current => current.filter(ticket => !ids.has(ticket.id)));
+    }
+
+    void refreshTicketsNow();
+  }, [selectedTicketIds, user?.role, refreshTicketsNow]);
 
   const handleDeleteAll = async () => {
     if (!deleteConfirm) { setDeleteConfirm(true); return; }
@@ -551,7 +603,7 @@ export default function TicketsList() {
 
         <Suspense fallback={null}>
           {closeDialogOpen && (
-            <CloseTicketDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))} clients={Object.values(clients)} projects={projects} onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadData(); }} />
+            <CloseTicketDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))} clients={Object.values(clients)} projects={projects} onSuccess={handleCloseSuccess} />
           )}
 
           {ticketFormOpen && (

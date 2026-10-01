@@ -9,7 +9,7 @@ import { TicketTable, statusTranslations, typeTranslations, BulkActionBar } from
 import { WhatsAppService } from '@/services/whatsappService';
 import { Button } from '@/components/ui/button';
 import { ticketsApi, projectsApi, clientsApi, techniciansApi, dashboardApi } from '@/lib/api';
-import { getCachedTickets, invalidateTicketCache } from '@/lib/ticketCache';
+import { getCachedTickets, invalidateTicketCache, refreshCachedTickets } from '@/lib/ticketCache';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
@@ -146,6 +146,42 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const refreshDashboardTickets = async () => {
+    if (!user) return;
+    try {
+      const params: Parameters<typeof ticketsApi.getAll>[0] = {};
+      if (user.role === 'supervisor') params.supervisorId = user.uid;
+      else if (user.role !== 'admin' && user.projectIds?.length) params.projectIds = user.projectIds;
+
+      const fresh = await refreshCachedTickets(
+        () => ticketsApi.getAll(params) as Promise<any[]>,
+        params as any,
+      ) as Ticket[];
+
+      setAllTickets(fresh);
+      setStats(prev => ({
+        ...prev,
+        totalTickets: fresh.length,
+        openTickets: fresh.filter(ticket => ticket.status === 'open').length,
+      }));
+    } catch (error) {
+      console.error('[Dashboard] forced ticket refresh failed', error);
+    }
+  };
+
+  const handleDashboardCloseSuccess = (result?: { ticketIds: string[]; final: boolean }) => {
+    const ids = new Set(result?.ticketIds ?? selectedTicketIds);
+    invalidateTicketCache();
+    setSelectedTicketIds([]);
+    setCloseDialogOpen(false);
+
+    if (result?.final || user?.role === 'supervisor') {
+      setAllTickets(current => current.filter(ticket => !ids.has(ticket.id)));
+    }
+
+    void refreshDashboardTickets();
   };
 
   const loadKpi = async () => {
@@ -666,7 +702,7 @@ export default function Dashboard() {
             selectedTickets={allTickets.filter(t => selectedTicketIds.includes(t.id))}
             clients={Object.values(clients)}
             projects={Object.fromEntries(userProjects.map(p => [p.id, p]))}
-            onSuccess={() => { setSelectedTicketIds([]); setCloseDialogOpen(false); loadDashboard(); }}
+            onSuccess={handleDashboardCloseSuccess}
           />
         )}
 

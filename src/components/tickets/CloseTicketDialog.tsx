@@ -91,13 +91,22 @@ tx.onerror = () => resolve();
 } catch { /* ignore */ }
 }
 
+
+type CloseType = 'normal' | 'absent' | 'out_of_scope';
+
+export interface CloseTicketSuccess {
+  ticketIds: string[];
+  final: boolean;
+  closeType: CloseType;
+}
+
 interface CloseTicketDialogProps {
 open: boolean;
 onOpenChange: (open: boolean) => void;
 selectedTickets: Ticket[];
 clients: Client[];
 projects?: Record<string, Project>;
-onSuccess: () => void;
+onSuccess: (result?: CloseTicketSuccess) => void;
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -124,7 +133,6 @@ const activeSupervisorIds = [...new Set(selectedTickets.flatMap(t => t.assignedS
 const supervisorOptions = activeSupervisorIds.map(id => supervisors.find(s => s.id === id) || ({ id, name: id } as any));
 const [selectedSupervisorIds, setSelectedSupervisorIds] = useState<string[]>([]);
 const shared = selectedTickets.some(t => (t.assignedSupervisorIds?.length || 0) > 1 || (t.supervisorClosures?.length || 0) > 0);
-type CloseType = 'normal' | 'absent' | 'out_of_scope';
 const [closeType, setCloseType] = useState<CloseType>('normal');
 const [loading, setLoading] = useState(false);
 const [copying, setCopying] = useState(false);
@@ -364,7 +372,11 @@ closureNotes: notes || (closeType === 'absent' ? 'إغلاق لعدم تواجد
 
 const label = closeType === 'absent' ? 'عدم التواجد' : 'خارج الاختصاص';
 toast.success(`تم إغلاق التذاكر (${label})${isWhatsAppSent ? ' وإرسال الرسالة 💬' : ''}`);
-onSuccess();
+onSuccess({
+  ticketIds: selectedTickets.map(ticket => ticket.id),
+  final: true,
+  closeType,
+});
 onOpenChange(false);
 } catch {
 toast.error('فشل إغلاق التذاكر');
@@ -418,7 +430,11 @@ if (response.headers.get('content-type')?.includes('application/json')) {
   toast.success(isFullClosure
     ? 'تم الإغلاق الكامل ووضع التقرير في طابور الإرسال'
     : 'تم الإغلاق الجزئي؛ التقرير سيُرسل بعد إنهاء باقي المشرفين');
-  onSuccess(); onOpenChange(false); return;
+  onSuccess({
+    ticketIds: selectedTickets.map(ticket => ticket.id),
+    final: isFullClosure,
+    closeType,
+  }); onOpenChange(false); return;
 }
 const blob = await response.blob();
 
@@ -446,7 +462,11 @@ await clearDirHandle();
 
 const isWhatsAppSent = targetClient?.phone && previewMessage;
 toast.success(`تم حفظ الأدوار وإغلاق التذاكر المكتملة${isWhatsAppSent ? ' — التقرير النهائي في طابور الإرسال 💬' : ''}`);
-onSuccess();
+onSuccess({
+  ticketIds: selectedTickets.map(ticket => ticket.id),
+  final: isFullClosure,
+  closeType,
+});
 onOpenChange(false);
 } catch (error) {
 console.error('Error closing tickets:', error);
