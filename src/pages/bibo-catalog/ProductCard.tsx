@@ -391,6 +391,7 @@ export function ProductCard({
               </div>
               <VariantEditor
                 value={draft.variantAttributes}
+                basePrice={draft.price}
                 onChange={(variantAttributes) =>
                   setDraft((current) => ({
                     ...current,
