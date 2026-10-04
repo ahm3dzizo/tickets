@@ -1,3 +1,4 @@
+import {AssignContractorDialog, type ContractorSelection} from './AssignContractorDialog';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Link2, Paperclip, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -74,6 +75,9 @@ function isSafeMediaLink(url: string): boolean {
 export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: TicketEditDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState('open');
+  const [contractorOpen, setContractorOpen] = useState(false);
+  const [contractorMode, setContractorMode] = useState<'contractor' | 'note'>('contractor');
+  const [contractorSelection, setContractorSelection] = useState<ContractorSelection | null>(null);
   const [priority, setPriority] = useState('3');
   const [description, setDescription] = useState('');
   const [types, setTypes] = useState<TicketType[]>([]);
@@ -104,6 +108,8 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
     );
 
     setStatus(normalizeStatus(ticket.status));
+    setContractorSelection(null);
+    setContractorOpen(false);
     setPriority(String(ticket.priority));
     setDescription(parsed.cleanText);
     setTypes(initialTypes);
@@ -183,6 +189,16 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
     setSupervisorIds(current => current.includes(uid) ? current.filter(id => id !== uid) : [...current, uid]);
   };
 
+  const selectStatus = (value: string) => {
+    if (value === 'contractor' || value === 'note') {
+      setContractorMode(value);
+      setContractorOpen(true);
+      return;
+    }
+    setStatus(value);
+    setContractorSelection(null);
+  };
+
   const save = async () => {
     if (!types.length) return;
     setSaving(true);
@@ -219,14 +235,15 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
           assignedSupervisorIds: supervisorIds,
           assigneeName: primarySupervisor?.displayName ?? null,
         } : {}),
+        ...(contractorSelection && contractorSelection.status === status ? contractorSelection : {}),
       });
 
       invalidateTicketCache();
       toast.success(t.saved);
       onOpenChange(false);
       await onSaved();
-    } catch {
-      toast.error(t.saveFailed);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t.saveFailed);
     } finally {
       setSaving(false);
       setUploading(false);
@@ -234,7 +251,8 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
   };
 
   return (
-    <Dialog open={open} onOpenChange={nextOpen => { if (!saving) onOpenChange(nextOpen); }}>
+    <>
+    <Dialog open={open && !contractorOpen} onOpenChange={nextOpen => { if (!saving) onOpenChange(nextOpen); }}>
       <DialogContent
         className="max-h-[92dvh] w-[calc(100vw-1.25rem)] max-w-[calc(100vw-1.25rem)] overflow-x-hidden overflow-y-auto rounded-3xl p-0 sm:max-w-2xl"
         dir="rtl"
@@ -247,12 +265,22 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
           <div className="grid min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="min-w-0 max-w-full space-y-1.5">
               <label className="text-xs font-bold text-muted-foreground">{t.status}</label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select value={status} onValueChange={selectStatus}>
                 <SelectTrigger className="w-full min-w-0 max-w-full rounded-xl"><SelectValue placeholder={t.selectStatus} /></SelectTrigger>
                 <SelectContent>
                   {STATUS_OPTIONS.map(value => <SelectItem key={value} value={value}>{detailText.statuses[value]}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {(status === 'contractor' || status === 'note') && (
+                <>
+                  <Button type="button" variant="outline" size="sm" className="w-full rounded-xl" onClick={() => selectStatus(status)}>
+                    {status === 'contractor' ? 'اختيار / تغيير المقاول' : 'تعديل الملاحظة'}
+                  </Button>
+                  <p className="break-words text-xs text-muted-foreground">
+                    {contractorSelection ? (status === 'note' ? contractorSelection.contractorNote : contractorSelection.assigneeName) : (status === 'note' ? ticket.contractorNote : ticket.contractorName)}
+                  </p>
+                </>
+              )}
             </div>
             <div className="min-w-0 max-w-full space-y-1.5">
               <label className="text-xs font-bold text-muted-foreground">{t.priority}</label>
@@ -424,5 +452,18 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <AssignContractorDialog
+      open={open && contractorOpen}
+      onOpenChange={setContractorOpen}
+      tickets={[ticket]}
+      projectId={ticket.projectId}
+      initialMode={contractorMode}
+      onSuccess={() => {}}
+      onSelection={selection => {
+        setContractorSelection(selection);
+        setStatus(selection.status);
+      }}
+    />
+    </>
   );
 }

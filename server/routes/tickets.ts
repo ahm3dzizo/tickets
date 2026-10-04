@@ -1077,7 +1077,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
           const supervisors     = await findSupervisorsDB(existing.projectId, specialties);
 
           updatePayload.assignedSupervisorIds = supervisors.map((s) => s.id);
-          updatePayload.assigneeName = supervisors[0]?.name || null;
+          if (data.contractorId === undefined && data.contractorNote === undefined) updatePayload.assigneeName = supervisors[0]?.name || null;
         } catch { /* non-fatal */ }
       }
     }

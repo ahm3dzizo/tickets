@@ -13,12 +13,21 @@ import { cn } from '@/lib/utils';
 import { UnifiedAppointmentDialog } from './UnifiedAppointmentDialog';
 import { invalidateTicketCache } from '@/lib/ticketCache';
 
+export interface ContractorSelection {
+  status: 'contractor' | 'note';
+  contractorId: string | null;
+  contractorNote: string | null;
+  assigneeName: string;
+}
+
 interface AssignContractorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tickets: Ticket[];
   projectId: string;
   onSuccess: () => void;
+  initialMode?: 'contractor' | 'note';
+  onSelection?: (selection: ContractorSelection) => void;
 }
 
 export function AssignContractorDialog({
@@ -27,6 +36,8 @@ export function AssignContractorDialog({
   tickets,
   projectId,
   onSuccess,
+  initialMode = 'contractor',
+  onSelection,
 }: AssignContractorDialogProps) {
   const [mode, setMode] = useState<'contractor' | 'note'>('contractor');
   const [noteText, setNoteText] = useState('');
@@ -48,7 +59,9 @@ export function AssignContractorDialog({
   useEffect(() => {
     if (!open || !projectId) return;
 
-    setMode('contractor');
+    setMode(initialMode);
+    setShowAppointment(false);
+    setShowAppointmentDialog(false);
     setNoteText('');
     setLoadingContractors(true);
     setSelectedContractor(null);
@@ -66,7 +79,7 @@ export function AssignContractorDialog({
       })
       .catch(() => toast.error('فشل تحميل المقاولين'))
       .finally(() => setLoadingContractors(false));
-  }, [open, projectId, unitNumber]);
+  }, [open, projectId, unitNumber, initialMode]);
 
   const availableSpecialties = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -99,6 +112,11 @@ export function AssignContractorDialog({
     if (mode === 'contractor') {
       if (!selectedContractor) {
         toast.error('الرجاء اختيار مقاول');
+        return;
+      }
+      if (onSelection) {
+        onSelection({status: 'contractor', contractorId: selectedContractor.id, contractorNote: null, assigneeName: selectedContractor.name});
+        onOpenChange(false);
         return;
       }
       setLoading(true);
@@ -135,6 +153,11 @@ export function AssignContractorDialog({
       // note mode
       if (!noteText.trim()) {
         toast.error('الرجاء كتابة الملاحظة');
+        return;
+      }
+      if (onSelection) {
+        onSelection({status: 'note', contractorId: null, contractorNote: noteText.trim(), assigneeName: 'ملاحظة'});
+        onOpenChange(false);
         return;
       }
       setLoading(true);
