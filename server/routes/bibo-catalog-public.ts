@@ -4,7 +4,6 @@ import { randomUUID } from "crypto";
 import {
   BIBO_CATALOG_FILE,
   cleanCatalogText,
-  ensureCatalogWorkbook,
   parseCatalogPrice,
   publicCatalogProduct,
   queueCatalogWrite,
@@ -13,7 +12,6 @@ import {
   sanitizeVariantAttributes,
   summarizeVariantAttributes,
   validateCatalogImagePaths,
-  waitForCatalogWrites,
   writeCatalogProducts,
   type BiboCatalogProduct,
 } from "../bibo-catalog-store.js";
@@ -63,8 +61,12 @@ router.get("/", async (_req, res) => {
 
 router.get("/excel", async (_req, res) => {
   try {
-    await waitForCatalogWrites();
-    await ensureCatalogWorkbook();
+    const products = await readCatalogProducts();
+
+    await queueCatalogWrite(async () => {
+      await writeCatalogProducts(products);
+    });
+
     res.setHeader("Cache-Control", "no-store");
     res.download(BIBO_CATALOG_FILE, "Hedaya-products.xlsx");
   } catch (error) {
