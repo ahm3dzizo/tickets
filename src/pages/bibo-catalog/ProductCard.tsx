@@ -250,6 +250,10 @@ export function ProductCard({
     }
   };
 
+  const hasPricedVariants = draft.variantAttributes.some((attribute) =>
+    attribute.values.some((item) => item.priceOverride !== null),
+  );
+
   const field =
     "w-full rounded-xl border border-border bg-background px-3 text-right text-sm outline-none focus:ring-2 focus:ring-primary/20";
 
@@ -442,7 +446,7 @@ export function ProductCard({
 
               <label className="space-y-1.5">
                 <span className="block text-[11px] font-bold text-muted-foreground">
-                  السعر
+                  {hasPricedVariants ? "السعر الأساسي (اختياري)" : "السعر"}
                 </span>
                 <input
                   type="number"
@@ -459,9 +463,13 @@ export function ProductCard({
                     }))
                   }
                   className={"h-11 " + field}
-                  placeholder="0.00"
+                  placeholder={hasPricedVariants ? "حسب المتغير" : "0.00"}
                 />
-                <p className="text-[10px] text-muted-foreground">ر.س</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {hasPricedVariants
+                    ? "سعر المتغير له الأولوية، والأساسي يستخدم فقط عند عدم وجود سعر للمتغير"
+                    : "ر.س"}
+                </p>
               </label>
             </div>
 
@@ -471,7 +479,7 @@ export function ProductCard({
                   المتغيرات
                 </span>
                 <span className="text-[10px] text-muted-foreground">
-                  السعر يبدأ تلقائيًا من سعر المنتج
+                  سعر المتغير يتقدم على السعر الأساسي
                 </span>
               </div>
 
