@@ -226,13 +226,7 @@ export function BulkActionBar({
             <DropdownMenuItem
               key={opt.key}
               className={cn('text-start justify-start hover:bg-white/5', opt.danger && 'hover:bg-rose-500/10 text-rose-400')}
-              onClick={() => {
-                if ((opt.key === 'contractor' || opt.key === 'note') && onContractor) {
-                  onContractor();
-                } else {
-                  onStatusChange(opt.key);
-                }
-              }}
+              onClick={() => onStatusChange(opt.key)}
             >
               {opt.label}
             </DropdownMenuItem>

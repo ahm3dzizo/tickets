@@ -1,3 +1,4 @@
+import {BulkStatusError, checkBulkStatusAccess, planBulkStatus} from '../services/bulk-ticket-status-policy.js';
 import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, requireAdmin, getRequesterRole, asTrimmedString } from "../auth.js";
@@ -1229,45 +1230,40 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // PATCH /api/tickets/bulk-status
-router.patch("/bulk-status", requireAuth, async (req, res) => {
+router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
+  const rawStatus = req.body?.status;
+  const count = Array.isArray(req.body?.ids) ? req.body.ids.length : 0;
   try {
-    const { ids, status } = req.body as { ids?: unknown; status?: unknown };
-
-    if (!Array.isArray(ids) || ids.length === 0 || ids.some(id => typeof id !== "string" || !id.trim())) {
-      res.status(400).json({ error: "ids must be a non-empty string array", code: "INVALID_TICKET_IDS" });
-      return;
+    const {ids, status} = req.body as {ids?: unknown; status?: unknown};
+    if (!Array.isArray(ids) || !ids.length || ids.length > 200 || ids.some(id => typeof id !== 'string' || !id.trim())) {
+      throw new BulkStatusError('INVALID_TICKET_IDS',400,'اختر من 1 إلى 200 تذكرة لتحديث الحالة.');
     }
-
-    const actor = await prisma.user.findUnique({where: {uid: (req as AuthRequest).uid!}, include: {projects: {select: {id: true}}}});
-    if (!actor || actor.disabled || !['admin', 'engineer'].includes(actor.role)) {res.status(403).json({error: 'Forbidden'}); return;}
+    const uniqueIds = [...new Set(ids.map(id => id.trim()))];
     const normalizedStatus = normalizeTicketStatus(status);
-    if (['closed', 'completed', 'absent', 'out_of_scope'].includes(normalizedStatus)) {res.status(409).json({error: 'USE_CLOSURE_ENDPOINT'}); return;}
-    const allowed = await prisma.ticket.count({where: {id: {in: ids}, ...(actor.role === 'admin' ? {} : {projectId: {in: actor.projects.map(p => p.id)}})}});
-    if (allowed !== new Set(ids).size) {res.status(403).json({error: 'Forbidden'}); return;}
-    const rows = await prisma.ticket.findMany({
-      where: { id: { in: ids } },
-      select: { appointmentId: true, supervisorClosures: true },
-    });
-    if (rows.some(t => closures(t.supervisorClosures).length)) {res.status(409).json({error: 'USE_INDIVIDUAL_UPDATE_FOR_REOPEN'}); return;}
-
-    const updated = await prisma.ticket.updateMany({
-      where: { id: { in: ids } },
-      data: { status: normalizedStatus },
-    });
-
-    const apptIds = Array.from(new Set(rows.map(r => r.appointmentId).filter(Boolean))) as string[];
-    for (const apptId of apptIds) {
-      await maybeAutoFinishAppointment(apptId);
-    }
-
-    res.json({ count: updated.count, status: normalizedStatus });
-  } catch (err: any) {
-    res.status(400).json({
-      error: err?.message || "Invalid ticket status",
-      code: String(err?.message || "").startsWith("INVALID_TICKET_STATUS")
-        ? "INVALID_TICKET_STATUS"
-        : "BULK_STATUS_UPDATE_FAILED",
-    });
+    const actor = await prisma.user.findUnique({where: {uid: req.uid!}, include: {projects: {select: {id: true}}}});
+    const updated = await prisma.$transaction(async tx => {
+      for (const id of [...uniqueIds].sort()) await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${id} FOR UPDATE`;
+      const rows = await tx.ticket.findMany({where: {id: {in: uniqueIds}}, select: {id: true, projectId: true, status: true, assignedSupervisorIds: true, supervisorClosures: true}});
+      checkBulkStatusAccess(actor, rows, uniqueIds.length);
+      for (const row of rows) {
+        const data = planBulkStatus(actor!, row, normalizedStatus);
+        await tx.ticket.update({where: {id: row.id}, data});
+        if (row.status !== data.status || JSON.stringify(row.assignedSupervisorIds) !== JSON.stringify(data.assignedSupervisorIds)) {
+          await tx.ticketAudit.create({data: {ticketId: row.id, field: 'تغيير الحالة من القائمة', changedBy: req.uid!, oldValue: JSON.stringify({status: row.status, assignedSupervisorIds: row.assignedSupervisorIds, supervisorClosures: row.supervisorClosures}), newValue: JSON.stringify({requestedStatus: normalizedStatus, status: data.status, assignedSupervisorIds: data.assignedSupervisorIds})}});
+        }
+      }
+      return {count: rows.length};
+    }, {timeout: 30000});
+    console.info('[TicketsBulkStatus] updated', {uid: req.uid, role: actor?.role, count: updated.count, status: normalizedStatus});
+    try {getIO()?.emit('tickets:updated', {ids: uniqueIds});}
+    catch (error) {console.error('[TicketsBulkStatus] refresh notification failed', error);}
+    res.json({count: updated.count, status: normalizedStatus});
+  } catch (err) {
+    const invalid = err instanceof Error && err.message.startsWith('INVALID_TICKET_STATUS');
+    const error = err instanceof BulkStatusError ? err : new BulkStatusError(invalid ? 'INVALID_TICKET_STATUS' : 'BULK_STATUS_UPDATE_FAILED', invalid ? 400 : 500, invalid ? 'الحالة المختارة غير صالحة.' : 'تعذر تحديث الحالة؛ حاول مرة أخرى.');
+    console.warn('[TicketsBulkStatus] rejected', {uid: req.uid, count, status: typeof rawStatus === 'string' ? rawStatus.slice(0,40) : undefined, code: error.code, httpStatus: error.httpStatus});
+    if (error.httpStatus === 500) console.error('[TicketsBulkStatus] failed', err);
+    res.status(error.httpStatus).json({error: error.message, code: error.code});
   }
 });
 
