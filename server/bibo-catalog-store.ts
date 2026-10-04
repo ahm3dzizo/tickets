@@ -230,11 +230,17 @@ export async function writeCatalogProducts(products: BiboCatalogProduct[]) {
     const variants = summarizeVariantAttributes(variantAttributes) || product.variants || "";
 
     const row = sheet.addRow({
-      ...product,
-      variants,
-      variantAttributes: JSON.stringify(variantAttributes),
-      price: product.price ?? "",
+      id: product.id,
+      name: product.name,
+      description: product.description.trim() || null,
+      variants: variants.trim() || null,
+      price: product.price,
+      currency: product.currency,
       images: JSON.stringify(product.images),
+      sortOrder: product.sortOrder,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      variantAttributes: JSON.stringify(variantAttributes),
     });
     row.alignment = { vertical: "top", wrapText: true };
   }
@@ -272,10 +278,15 @@ export async function writeCatalogProducts(products: BiboCatalogProduct[]) {
           productName: product.name,
           attributeName: attribute.name,
           value: value.label,
-          basePrice: product.price ?? "",
-          priceOverride: value.priceOverride ?? "",
-          effectivePrice: effectivePrice ?? "",
-          priceMode: value.priceOverride === null ? "السعر الأساسي" : "سعر مخصص",
+          basePrice: product.price,
+          priceOverride: value.priceOverride,
+          effectivePrice,
+          priceMode:
+            value.priceOverride !== null
+              ? "سعر المتغير"
+              : product.price !== null
+                ? "السعر الأساسي"
+                : "غير محدد",
           attributeOrder: attributeIndex + 1,
           valueOrder: valueIndex + 1,
         });
