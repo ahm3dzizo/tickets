@@ -69,7 +69,10 @@ export default function Dashboard() {
       toast.success(`تم تحديث ${selectedTicketIds.length} تذكرة`);
       setSelectedTicketIds([]);
       loadDashboard();
-    } catch { toast.error('فشل تحديث الحالة'); }
+    } catch (error) {
+      console.error('[TicketsBulkStatus] update failed', error);
+      toast.error(error instanceof Error ? error.message : 'فشل تحديث الحالة');
+    }
   };
 
   const handleSendAppointment = () => {

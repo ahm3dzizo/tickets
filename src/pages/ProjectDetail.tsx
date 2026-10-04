@@ -88,7 +88,7 @@ export default function ProjectDetail() {
       loadData();
     } catch (error) {
       console.error('Error updating tickets:', error);
-      toast.error('فشل تحديث حالة التذاكر');
+      toast.error(error instanceof Error ? error.message : 'فشل تحديث حالة التذاكر');
     }
   };
 
