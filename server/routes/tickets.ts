@@ -309,7 +309,7 @@ async function classifyInBackground(
     await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${ticketId} FOR UPDATE`;
       const current = await tx.ticket.findUnique({where: {id: ticketId}});
-      if (!current || current.status === 'closed' || current.status === 'completed') return;
+      if (!current || ['closed', 'completed', 'absent', 'out_of_scope'].includes(current.status)) return;
       if (updateData.assignedSupervisorIds) updateData.assignedSupervisorIds = updateData.assignedSupervisorIds.filter((id: string) => !closures(current.supervisorClosures).some(h => h.supervisorUid === id));
       await tx.ticket.update({where: {id: ticketId}, data: updateData});
     });
@@ -956,7 +956,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     if (data.status !== undefined && ['closed', 'completed'].includes(normalizeTicketStatus(data.status))) {
       res.status(409).json({error: 'استخدم مسار الإغلاق لتسجيل دور المشرف والتقرير', code: 'USE_CLOSURE_ENDPOINT'}); return;
     }
-    if (existingForValidation.assignedSupervisorIds.length > 1 && (data.closedAt || ['absent', 'out_of_scope'].includes(data.status))) {
+    if (existingForValidation.assignedSupervisorIds.length > 1 && data.closedAt) {
       res.status(409).json({error: 'SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT'}); return;
     }
     const effectiveProjectId = existingForValidation.projectId;
@@ -1092,12 +1092,17 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${req.params.id} FOR UPDATE`;
       const current = await tx.ticket.findUniqueOrThrow({where: {id: req.params.id}});
       if (!supervisorExplicit && updatePayload.assignedSupervisorIds) updatePayload.assignedSupervisorIds = updatePayload.assignedSupervisorIds.filter((id: string) => !closures(current.supervisorClosures).some(h => h.supervisorUid === id));
-      if (current.status === 'closed' && updatePayload.assignedSupervisorIds && !normalizedStatus) throw new Error('REOPEN_STATUS_REQUIRED');
+      if (['closed', 'completed', 'absent', 'out_of_scope'].includes(current.status) && updatePayload.assignedSupervisorIds && !normalizedStatus) throw new Error('REOPEN_STATUS_REQUIRED');
       if (actor.role === 'supervisor' && !current.assignedSupervisorIds.includes(req.uid!)) throw new Error('SUPERVISOR_NOT_ACTIVE');
-      if (current.status === 'closed' && normalizedStatus && normalizedStatus !== 'closed' && actor.role !== 'admin' && actor.role !== 'engineer') throw new Error('FORBIDDEN');
-      if (current.status === 'closed' && normalizedStatus && normalizedStatus !== 'closed') {
+      if (['closed', 'completed', 'absent', 'out_of_scope'].includes(current.status) && normalizedStatus && !['closed', 'completed', 'absent', 'out_of_scope'].includes(normalizedStatus) && actor.role !== 'admin' && actor.role !== 'engineer') throw new Error('FORBIDDEN');
+      if (['closed', 'completed', 'absent', 'out_of_scope'].includes(current.status) && normalizedStatus && !['closed', 'completed', 'absent', 'out_of_scope'].includes(normalizedStatus)) {
         updatePayload.closedAt = null;
         updatePayload.supervisorClosures = [];
+        if (!supervisorExplicit) updatePayload.assignedSupervisorIds = [...new Set([...current.assignedSupervisorIds, ...closures(current.supervisorClosures).map(h => h.supervisorUid)])];
+      }
+      if (normalizedStatus && ['absent', 'out_of_scope'].includes(normalizedStatus)) {
+        checkBulkStatusAccess(actor, [current], 1);
+        Object.assign(updatePayload, planBulkStatus(actor, current, normalizedStatus));
       }
       return tx.ticket.update({where: {id: req.params.id}, data: updatePayload});
     });

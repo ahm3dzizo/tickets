@@ -623,7 +623,7 @@ export function TicketTable({
     }
   };
 
-  const closedStatuses = useMemo(() => new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']), []);
+  const closedStatuses = useMemo(() => new Set(['closed', 'completed', 'out-of-scope', 'out_of_scope', 'absent']), []);
 
   // ── Excel-style filter option lists — dynamic / cross-filtered ───────────
   // Each list only shows values reachable given every OTHER active filter
