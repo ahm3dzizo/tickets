@@ -39,6 +39,21 @@ import { toast } from 'sonner';
 
 const t = ticketDetailText.ar;
 
+// Older bulk-status audit entries contain JSON snapshots. Keep them readable
+// without displaying internal supervisor IDs and closure metadata.
+function auditValue(field: string, value: string): string {
+  if (field === 'تغيير الحالة من القائمة') {
+    try {
+      const snapshot = JSON.parse(value);
+      const status = snapshot.status ?? snapshot.requestedStatus;
+      if (typeof status === 'string') return t.statuses[status] ?? status;
+    } catch { /* Plain values from newer entries are supported too. */ }
+  }
+  if (field === 'الحالة' || field === 'تغيير الحالة من القائمة') return t.statuses[value] ?? value;
+  return value;
+}
+
+
 function normalizeStatus(status: string): string {
   if (status === 'in-progress') return 'in_progress';
   if (status === 'out-of-scope') return 'out_of_scope';
@@ -443,8 +458,8 @@ export default function TicketDetailCarousel() {
                       </div>
                       {(entry.oldValue || entry.newValue) && (
                         <div className="mt-1.5 flex min-w-0 flex-wrap gap-2 text-xs">
-                          {entry.oldValue && <span className="break-all text-rose-500 line-through">{entry.oldValue}</span>}
-                          {entry.newValue && <span className="break-all font-medium text-emerald-600 dark:text-emerald-400">{entry.newValue}</span>}
+                          {entry.oldValue && <span className="break-all text-rose-500 line-through">{auditValue(entry.field, entry.oldValue)}</span>}
+                          {entry.newValue && <span className="break-all font-medium text-emerald-600 dark:text-emerald-400">{auditValue(entry.field, entry.newValue)}</span>}
                         </div>
                       )}
                     </div>
@@ -457,7 +472,7 @@ export default function TicketDetailCarousel() {
           </CardContent>
         </Card>
 
-        {ticket.status !== 'closed' && (
+        {!['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(ticket.status) && (
           <div className="flex justify-end">
             <Button variant="outline" className="rounded-xl border-emerald-500/30 text-emerald-700 dark:text-emerald-300" onClick={() => setCloseOpen(true)}>
               <CheckCircle2 className="me-2 h-4 w-4" />

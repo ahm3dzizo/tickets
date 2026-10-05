@@ -248,7 +248,7 @@ export default function TicketsList() {
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const closedStatuses = useMemo(
-    () => new Set(['closed', 'out-of-scope', 'out_of_scope', 'absent']),
+    () => new Set(['closed', 'completed', 'out-of-scope', 'out_of_scope', 'absent']),
     [],
   );
 
