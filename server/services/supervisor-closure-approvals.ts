@@ -287,6 +287,53 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
   return { status: result.status, changed: result.changed };
 }
 
+// A pending request must be cancellable if someone is unavailable.
+// Cancellation does not silently reopen the initiator's completed work;
+// it releases everyone else's role and queues a truthful partial report.
+export async function cancelSupervisorClosure(uid: string, id: string, reason: unknown) {
+  const notes = typeof reason === 'string' ? reason.trim().slice(0, 4000) : '';
+  if (!notes) throw new Error('CANCELLATION_REASON_REQUIRED');
+
+  const result = await prisma.$transaction(async tx => {
+    const actor = await actorFor(tx, uid);
+    const request = await tx.ticketClosureApproval.findUnique({where:{id}});
+    if (!request || !mayAccessProject(actor, request.projectId) ||
+        !(request.requesterUid === uid || actor.role === 'admin' || actor.role === 'engineer')) {
+      throw new Error('FORBIDDEN');
+    }
+    for (const ticketId of [...request.ticketIds].sort()) {
+      await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${ticketId} FOR UPDATE`;
+    }
+    await tx.$queryRaw`SELECT id FROM "TicketClosureApproval" WHERE id = ${id} FOR UPDATE`;
+    const current = await tx.ticketClosureApproval.findUniqueOrThrow({where:{id}});
+    if (current.status !== 'pending') return {status:current.status, changed:false, request:current};
+    const rows = await tx.ticket.findMany({where:{id:{in:current.ticketIds}}, include:{client:true}});
+    await reportFrom(tx, {
+      ticketIds:current.ticketIds, senderUid:current.requesterUid, phone:rows[0]?.client?.phone,
+      approvalRequestId:id, items:Array.isArray(current.items) ? current.items as Item[] : [],
+      notes:current.notes, partial:true,
+    });
+    for (const ticket of rows) {
+      await audit(tx, ticket.id, 'إلغاء طلب الإغلاق بالنيابة مع إرسال تقرير جزئي', uid, {
+        approvalId:id, reason:notes, initiator:current.requesterUid,
+      });
+    }
+    const updated = await tx.ticketClosureApproval.update({
+      where:{id},data:{status:'canceled',resolvedAt:new Date()},
+    });
+    return {status:'canceled',changed:true,request:updated};
+  }, {timeout:90000,maxWait:10000});
+  if (result.changed) {
+    const request = result.request;
+    for (const receiver of [...new Set([request.requesterUid,...request.approverUids])]) {
+      void sendApprovalNotification(receiver, 'تم إلغاء طلب إغلاق مشترك',
+        'تم إلغاء طلب الموافقات. سيُرسل تقرير جزئي بأعمال مقدم الطلب فقط، وتظل الأدوار الأخرى مفتوحة.',
+        request.ticketIds[0], 'closure_approval_cancelled');
+    }
+  }
+  return {status:result.status,changed:result.changed};
+}
+
 export async function listSupervisorClosureApprovals(uid: string, ticketId?: string) {
   const actor = await prisma.user.findUnique({ where: {uid}, select: {
     uid: true, role: true, disabled: true, projects: {select: {id: true}},
