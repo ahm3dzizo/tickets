@@ -18,13 +18,34 @@ import { invalidateTicketListResponseCache } from '../middleware/ticket-list-cac
 
 const router = Router();
 
-function closureApprovalHttpError(e: unknown): {status: number; code: string} {
+function closureApprovalHttpError(e: unknown): {status: number; code: string; message: string} {
   const code = e instanceof Error ? e.message : 'CLOSURE_APPROVAL_FAILED';
   const forbidden = new Set(['FORBIDDEN', 'SUPERVISOR_NOT_ASSIGNED', 'SUPERVISOR_REQUIRED']);
   const conflicted = new Set(['CLOSURE_APPROVAL_PENDING', 'DECISION_ALREADY_RECORDED',
     'APPROVAL_ROLES_CHANGED', 'TICKET_ALREADY_CLOSED']);
+  const messages: Record<string,string> = {
+    FORBIDDEN: 'لا تملك صلاحية التصويت أو إدارة هذا الطلب.',
+    SUPERVISOR_NOT_ASSIGNED: 'التذكرة لم تُسند إليك ولا يوجد سجل لإنهاء دورك عليها.',
+    SUPERVISOR_REQUIRED: 'طلب إغلاق الجميع متاح للمشرف المسؤول فقط.',
+    CLOSURE_APPROVAL_PENDING: 'هناك طلب موافقة قيد الانتظار لهذه التذكرة. راجع صفحة الموافقات أولاً.',
+    APPROVAL_ROLES_CHANGED: 'تغيّر توزيع المشرفين بعد إرسال الطلب. يجب إلغاء الطلب القديم وإعادة إرساله.',
+    DECISION_ALREADY_RECORDED: 'تم تسجيل قرارك بالفعل ولا يمكن تغييره بعد الإرسال.',
+    TICKET_ALREADY_CLOSED: 'هذه التذكرة مغلقة بالفعل.',
+    TICKET_NOT_FOUND: 'إحدى التذاكر لم تعد موجودة.',
+    CLIENT_PHONE_REQUIRED: 'أضف رقم هاتف العميل قبل طلب إرسال تقرير الإغلاق.',
+    MULTI_CUSTOMER_ITEMS_REQUIRED: 'إغلاق تذاكر عملاء مختلفين يتطلب تحديد بنود كل تذكرة على حدة.',
+    MULTI_CUSTOMER_NOTES_REQUIRE_SEPARATE_REQUESTS:
+      'لمنع تسريب ملاحظات عميل لعميل آخر، أرسل كل مجموعة وحدها أو امسح الملاحظة المشتركة.',
+    MAINTENANCE_ITEMS_REQUIRED_FOR_EACH_TICKET: 'أضف بنود أعمال الصيانة لكل تذكرة من التذاكر المختارة.',
+    REJECTION_REASON_REQUIRED: 'سبب الرفض إلزامي.',
+    CANCELLATION_REASON_REQUIRED: 'سبب إلغاء طلب الموافقات إلزامي.',
+    INVALID_DECISION: 'قرار الموافقة أو الرفض غير صحيح.',
+    INVALID_MAINTENANCE_ITEMS: 'اكتب بند صيانة صحيحاً قبل إغلاق أعمالك.',
+    CLOSURE_APPROVAL_FAILED: 'تعذر تنفيذ العملية؛ حاول من جديد.',
+  };
   return {status: forbidden.has(code) ? 403 : conflicted.has(code) ? 409 :
-    code === 'TICKET_NOT_FOUND' ? 404 : 400, code};
+    code === 'TICKET_NOT_FOUND' ? 404 : 400,
+    code, message: messages[code] || code};
 }
 
 router.get('/closure-approvals', requireAuth, async (req: AuthRequest, res) => {
@@ -32,8 +53,8 @@ router.get('/closure-approvals', requireAuth, async (req: AuthRequest, res) => {
     const ticketId = typeof req.query.ticketId === 'string' ? req.query.ticketId : undefined;
     res.json(await listSupervisorClosureApprovals(req.uid!, ticketId));
   } catch (e) {
-    const {status,code} = closureApprovalHttpError(e);
-    res.status(status).json({error:code});
+    const {status,code,message} = closureApprovalHttpError(e);
+    res.status(status).json({error:message,code});
   }
 });
 
@@ -47,8 +68,8 @@ router.post('/closure-approvals', requireAuth, async (req: AuthRequest, res) => 
     void deliverClosureReports().catch(e => console.error('[ClosureApprovalReport]', e));
     res.status(201).json(result);
   } catch (e) {
-    const {status,code} = closureApprovalHttpError(e);
-    res.status(status).json({error:code});
+    const {status,code,message} = closureApprovalHttpError(e);
+    res.status(status).json({error:message,code});
   }
 });
 
@@ -62,8 +83,8 @@ router.post('/closure-approvals/:id/decision', requireAuth, async (req: AuthRequ
     }
     res.json(result);
   } catch (e) {
-    const {status,code} = closureApprovalHttpError(e);
-    res.status(status).json({error:code});
+    const {status,code,message} = closureApprovalHttpError(e);
+    res.status(status).json({error:message,code});
   }
 });
 
@@ -75,8 +96,8 @@ router.post('/closure-approvals/:id/cancel', requireAuth, async (req: AuthReques
     if (result.changed) void deliverClosureReports().catch(e => console.error('[ClosureApprovalReport]', e));
     res.json(result);
   } catch (e) {
-    const {status,code} = closureApprovalHttpError(e);
-    res.status(status).json({error:code});
+    const {status,code,message} = closureApprovalHttpError(e);
+    res.status(status).json({error:message,code});
   }
 });
 
