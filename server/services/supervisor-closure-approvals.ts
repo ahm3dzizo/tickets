@@ -249,7 +249,13 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
             approverVote.notes || 'وافق على إغلاق الأعمال بطلب من مشرف آخر',
             [{description: ticket.description || 'اعتماد انتهاء أعمال التذكرة', status: 'تم اعتماد الإغلاق'}]);
           active = plan.active;
-          history = plan.history;
+          // The initiator performs the delegated closure; the approver's
+          // signed vote remains a separate immutable audit entry.
+          history = plan.history.map(closure =>
+            closure.supervisorUid === approverUid
+              ? {...closure, completedByUid: current.requesterUid}
+              : closure
+          );
           await audit(tx, ticket.id, 'تم الإغلاق النهائي بموافقة المشرف وبالنيابة عنه',
             current.requesterUid, {
               approvalId: id, approverUid, confirmedByUid: approverUid,
