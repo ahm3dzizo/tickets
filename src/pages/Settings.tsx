@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { authApi, usersApi, whatsappApi, whatsappBotApi, settingsApi, projectsApi, authStorage } from '@/lib/api';
 import { registerPush, isPushSupported, getPushPermission } from '@/lib/pushNotifications';
 import type { WorkHoursConfig, WorkHoursSettings } from '@/lib/api';
+import { DEFAULT_WORKING_DAYS, WEEKDAYS_AR } from '@/lib/workDays';
 import type { Project } from '@/types';
 import { toast } from 'sonner';
 import { io } from 'socket.io-client';
@@ -35,6 +36,7 @@ const specialtyLabels: Record<string, string> = {
 
 const DEFAULT_WH_CONFIG: WorkHoursConfig = {
   enabled:      true,
+  workingDays:  [...DEFAULT_WORKING_DAYS],
   hasMorning:   true,
   morning:      { start: '08:00', end: '12:00' },
   hasBreak:     true,
@@ -507,6 +509,7 @@ export default function Settings() {
   const [whProjectId,     setWhProjectId]     = useState<string | null>(null);
   const [loadingWorkHours, setLoadingWorkHours] = useState(false);
   const [savingWorkHours,  setSavingWorkHours]  = useState(false);
+  const [editingDay, setEditingDay] = useState<number | null>(null);
 
   const currentWH: WorkHoursConfig = whProjectId
     ? (whSettings.byProject[whProjectId] ?? whSettings.default ?? DEFAULT_WH_CONFIG)
@@ -516,6 +519,32 @@ export default function Settings() {
   const setCurrentWH = (cfg: WorkHoursConfig) => {
     if (whProjectId) setWhSettings(prev => ({ ...prev, byProject: { ...prev.byProject, [whProjectId]: cfg } }));
     else             setWhSettings(prev => ({ ...prev, default: cfg }));
+  };
+
+  const editingDayHours = editingDay === null ? undefined : currentWH.dayOverrides?.[String(editingDay)];
+  const displayWH: WorkHoursConfig = editingDayHours ? { ...currentWH, ...editingDayHours } : currentWH;
+  const setEditingWH = (next: WorkHoursConfig) => {
+    if (editingDay === null) { setCurrentWH(next); return; }
+    const { hasMorning, morning, hasBreak, break: breakPeriod, hasAfternoon, afternoon } = next;
+    setCurrentWH({
+      ...currentWH,
+      dayOverrides: {
+        ...(currentWH.dayOverrides || {}),
+        [String(editingDay)]: {
+          hasMorning, morning, hasBreak, break: breakPeriod, hasAfternoon, afternoon,
+        },
+      },
+    });
+  };
+  const toggleDayHours = (on: boolean) => {
+    if (editingDay === null) return;
+    if (on) {
+      setEditingWH(currentWH);
+    } else {
+      const rest = { ...(currentWH.dayOverrides || {}) };
+      delete rest[String(editingDay)];
+      setCurrentWH({ ...currentWH, dayOverrides: rest });
+    }
   };
 
   const removeCustomOverride = () => {
@@ -547,8 +576,9 @@ export default function Settings() {
   const saveWorkHours = async () => {
     setSavingWorkHours(true);
     try {
-      await settingsApi.updateWorkHours(whSettings);
-      toast.success('تم حفظ أوقات الدوام بنجاح');
+      const updated = await settingsApi.updateWorkHours(whSettings);
+      setWhSettings(updated);
+      toast.success('تم حفظ أيام وأوقات الدوام بنجاح');
     } catch { toast.error('تعذر حفظ أوقات الدوام'); }
     finally { setSavingWorkHours(false); }
   };
@@ -1340,17 +1370,70 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className={cn('space-y-4 transition-opacity', !currentWH.enabled && 'opacity-40 pointer-events-none')}>
+                <div className={cn('space-y-3 rounded-2xl border border-border/60 bg-card p-4', !currentWH.enabled && 'opacity-40 pointer-events-none')}>
+                  <div className="text-right">
+                    <p className="text-sm font-bold">أيام العمل الأسبوعية</p>
+                    <p className="text-xs text-muted-foreground">اختر الأيام المسموح فيها بحجز مواعيد. الجمعة إجازة افتراضياً ويمكن تفعيلها.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" dir="rtl">
+                    {WEEKDAYS_AR.map(day => {
+                      const checked = (currentWH.workingDays ?? DEFAULT_WORKING_DAYS).includes(day.id);
+                      return (
+                        <label key={day.id} className={cn(
+                          'flex cursor-pointer items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold',
+                          checked ? 'border-emerald-500/40 bg-emerald-500/10 text-foreground' : 'border-border bg-muted/30 text-muted-foreground',
+                        )}>
+                          <span>{day.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={event => {
+                              const active = currentWH.workingDays ?? DEFAULT_WORKING_DAYS;
+                              setCurrentWH({
+                                ...currentWH,
+                                workingDays: event.target.checked
+                                  ? [...active, day.id].sort((a, b) => a - b)
+                                  : active.filter(id => id !== day.id),
+                              });
+                            }}
+                            className="h-4 w-4 accent-emerald-600"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {(currentWH.workingDays ?? DEFAULT_WORKING_DAYS).length === 0 && (
+                    <p className="text-xs font-bold text-red-500">لا يوجد أي يوم عمل؛ سيتم منع حجز جميع المواعيد حتى تختار يوماً.</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 p-3" dir="rtl">
+                  <label className="text-xs font-bold">الساعات المعروضة</label>
+                  <select value={editingDay === null ? 'default' : String(editingDay)}
+                    onChange={e => setEditingDay(e.target.value === 'default' ? null : Number(e.target.value))}
+                    className="rounded-lg border border-input bg-background px-3 py-2 text-xs">
+                    <option value="default">الساعات الأساسية لكل أيام العمل</option>
+                    {WEEKDAYS_AR.map(day => <option key={day.id} value={day.id}>{day.label}</option>)}
+                  </select>
+                  {editingDay !== null && (
+                    <label className="flex items-center gap-2 text-xs">
+                      <input type="checkbox" checked={!!editingDayHours}
+                        onChange={e => toggleDayHours(e.target.checked)} className="h-4 w-4 accent-amber-600" />
+                      <span>تخصيص ساعات {WEEKDAYS_AR.find(d => d.id === editingDay)?.label}</span>
+                    </label>
+                  )}
+                </div>
+                <div className={cn('space-y-4 transition-opacity',
+                  (!currentWH.enabled || (editingDay !== null && !editingDayHours)) && 'opacity-40 pointer-events-none')}>
                   <div className="relative h-10 rounded-xl bg-muted/50 overflow-hidden border border-border/40 flex items-center" dir="ltr">
                     {(() => {
                       const total = 24 * 60;
                       const p = (t: string) => t ? t.split(':').map(Number).reduce((h,m)=>h*60+m,0) : 0;
-                      const hasM = currentWH.hasMorning !== false;
-                      const hasB = currentWH.hasBreak !== false;
-                      const hasA = currentWH.hasAfternoon !== false;
-                      const ms = p(currentWH.morning?.start || '08:00'), me = p(currentWH.morning?.end || '12:00');
-                      const bs = p(currentWH.break?.start || '12:00'),   be = p(currentWH.break?.end || '13:00');
-                      const as2 = p(currentWH.afternoon?.start || '13:00'), ae = p(currentWH.afternoon?.end || '16:00');
+                      const hasM = displayWH.hasMorning !== false;
+                      const hasB = displayWH.hasBreak !== false;
+                      const hasA = displayWH.hasAfternoon !== false;
+                      const ms = p(displayWH.morning?.start || '08:00'), me = p(displayWH.morning?.end || '12:00');
+                      const bs = p(displayWH.break?.start || '12:00'),   be = p(displayWH.break?.end || '13:00');
+                      const as2 = p(displayWH.afternoon?.start || '13:00'), ae = p(displayWH.afternoon?.end || '16:00');
                       return (<>
                         {hasM && <div className="absolute inset-y-0 bg-amber-500/30 border-r border-amber-500/50" style={{ left: `${ms/total*100}%`, width: `${(me-ms)/total*100}%` }} />}
                         {hasB && <div className="absolute inset-y-0 bg-red-500/20 border-x border-red-500/30" style={{ left: `${bs/total*100}%`, width: `${(be-bs)/total*100}%` }} />}
@@ -1363,15 +1446,15 @@ export default function Settings() {
                   </div>
 
                   {[
-                    { label: 'الفترة الصباحية', field: 'morning' as const, toggleField: 'hasMorning' as const, enabled: currentWH.hasMorning !== false, color: 'amber' },
-                    { label: 'فترة الراحة (البريك)', field: 'break' as const, toggleField: 'hasBreak' as const, enabled: currentWH.hasBreak !== false, color: 'red' },
-                    { label: 'الفترة المسائية', field: 'afternoon' as const, toggleField: 'hasAfternoon' as const, enabled: currentWH.hasAfternoon !== false, color: 'amber' },
+                    { label: 'الفترة الصباحية', field: 'morning' as const, toggleField: 'hasMorning' as const, enabled: displayWH.hasMorning !== false, color: 'amber' },
+                    { label: 'فترة الراحة (البريك)', field: 'break' as const, toggleField: 'hasBreak' as const, enabled: displayWH.hasBreak !== false, color: 'red' },
+                    { label: 'الفترة المسائية', field: 'afternoon' as const, toggleField: 'hasAfternoon' as const, enabled: displayWH.hasAfternoon !== false, color: 'amber' },
                   ].map(({ label, field, toggleField, enabled, color }) => (
                     <div key={field} className={cn("bg-card border rounded-2xl p-4 space-y-3 transition-all", enabled ? "border-border/60" : "border-border/30 opacity-60")}>
                       <div className="flex items-center justify-between">
                         <Toggle
                           checked={enabled}
-                          onChange={v => setCurrentWH({ ...currentWH, [toggleField]: v })}
+                          onChange={v => setEditingWH({ ...displayWH, [toggleField]: v })}
                         />
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold text-foreground">{label}</p>
@@ -1387,7 +1470,7 @@ export default function Settings() {
                             <div key={side} className="space-y-1">
                               <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">{side === 'end' ? 'إلى' : 'من'}</label>
                               <input type="time" value={currentWH[field]?.[side] || ''}
-                                onChange={e => setCurrentWH({ ...currentWH, [field]: { ...(currentWH[field] || {}), [side]: e.target.value } })}
+                                onChange={e => setEditingWH({ ...displayWH, [field]: { ...(displayWH[field] || {}), [side]: e.target.value } })}
                                 className={`w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-${color}-500/50 font-mono text-sm`} />
                             </div>
                           ))}
@@ -1401,10 +1484,10 @@ export default function Settings() {
                       <p className="text-amber-400 text-xs font-bold">ملخص أوقات الدوام</p>
                       <Clock className="w-3.5 h-3.5 text-amber-400" />
                     </div>
-                    {currentWH.hasMorning !== false && <p className="text-foreground text-sm">🌅 الصباح: {fmtTime(currentWH.morning?.start || '08:00')} — {fmtTime(currentWH.morning?.end || '12:00')}</p>}
-                    {currentWH.hasBreak !== false && <p className="text-muted-foreground text-xs">☕ الراحة: {fmtTime(currentWH.break?.start || '12:00')} — {fmtTime(currentWH.break?.end || '13:00')}</p>}
-                    {currentWH.hasAfternoon !== false && <p className="text-foreground text-sm">🌆 المساء: {fmtTime(currentWH.afternoon?.start || '13:00')} — {fmtTime(currentWH.afternoon?.end || '16:00')}</p>}
-                    {currentWH.hasMorning === false && currentWH.hasAfternoon === false && (
+                    {displayWH.hasMorning !== false && <p className="text-foreground text-sm">🌅 الصباح: {fmtTime(displayWH.morning?.start || '08:00')} — {fmtTime(displayWH.morning?.end || '12:00')}</p>}
+                    {displayWH.hasBreak !== false && <p className="text-muted-foreground text-xs">☕ الراحة: {fmtTime(displayWH.break?.start || '12:00')} — {fmtTime(displayWH.break?.end || '13:00')}</p>}
+                    {displayWH.hasAfternoon !== false && <p className="text-foreground text-sm">🌆 المساء: {fmtTime(displayWH.afternoon?.start || '13:00')} — {fmtTime(displayWH.afternoon?.end || '16:00')}</p>}
+                    {displayWH.hasMorning === false && displayWH.hasAfternoon === false && (
                       <p className="text-muted-foreground text-xs">لا توجد فترات عمل محددة (متاح وقت مخصص فقط)</p>
                     )}
                   </div>
