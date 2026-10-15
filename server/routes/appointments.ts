@@ -779,16 +779,23 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       res.status(404).json({ error: 'الموعد غير موجود' });
       return;
     }
-    const timeCheck = await validateAndCorrectAppointmentTime(
-      existing.projectId,
-      date || existing.date,
-      time === undefined ? existing.time : time
-    );
-    if (timeCheck.error) {
-      res.status(400).json({ error: timeCheck.error });
-      return;
+    // Other edits (notes/status/assignment) must not invalidate an existing
+    // appointment just because the weekly schedule was changed afterwards.
+    const scheduleChanged = (date !== undefined && date !== existing.date) ||
+      (time !== undefined && time !== existing.time);
+    let finalTime: string | null | undefined = undefined;
+    if (scheduleChanged) {
+      const timeCheck = await validateAndCorrectAppointmentTime(
+        existing.projectId,
+        date || existing.date,
+        time === undefined ? existing.time : time
+      );
+      if (timeCheck.error) {
+        res.status(400).json({ error: timeCheck.error });
+        return;
+      }
+      finalTime = time === undefined ? undefined : timeCheck.time;
     }
-    const finalTime = time === undefined ? undefined : timeCheck.time;
 
     const appointment = await prisma.appointment.update({
       where: { id },
