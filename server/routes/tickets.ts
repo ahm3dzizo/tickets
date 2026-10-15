@@ -1,4 +1,4 @@
-import {BulkStatusError, checkBulkStatusAccess, planBulkStatus} from '../services/bulk-ticket-status-policy.js';
+import {BulkStatusError, checkBulkStatusAccess, planBulkStatus, assertBulkStatusUsesClosureFlow} from '../services/bulk-ticket-status-policy.js';
 import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, requireAdmin, getRequesterRole, asTrimmedString } from "../auth.js";
@@ -1091,6 +1091,12 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     const ticket = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${req.params.id} FOR UPDATE`;
       const current = await tx.ticket.findUniqueOrThrow({where: {id: req.params.id}});
+      // Special terminal status updates are only valid for non-shared tickets.
+      // Shared responsibility must go through the per-supervisor closure workflow.
+      if (normalizedStatus && ['absent', 'out_of_scope'].includes(normalizedStatus) &&
+          (current.assignedSupervisorIds.length > 1 || closures(current.supervisorClosures).length > 0)) {
+        throw new Error('SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT');
+      }
       if (!supervisorExplicit && updatePayload.assignedSupervisorIds) updatePayload.assignedSupervisorIds = updatePayload.assignedSupervisorIds.filter((id: string) => !closures(current.supervisorClosures).some(h => h.supervisorUid === id));
       if (['closed', 'completed', 'absent', 'out_of_scope'].includes(current.status) && updatePayload.assignedSupervisorIds && !normalizedStatus) throw new Error('REOPEN_STATUS_REQUIRED');
       if (actor.role === 'supervisor' && !current.assignedSupervisorIds.includes(req.uid!)) throw new Error('SUPERVISOR_NOT_ACTIVE');
@@ -1245,6 +1251,7 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
     }
     const uniqueIds = [...new Set(ids.map(id => id.trim()))];
     const normalizedStatus = normalizeTicketStatus(status);
+    assertBulkStatusUsesClosureFlow(normalizedStatus);
     const actor = await prisma.user.findUnique({where: {uid: req.uid!}, include: {projects: {select: {id: true}}}});
     const updated = await prisma.$transaction(async tx => {
       for (const id of [...uniqueIds].sort()) await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${id} FOR UPDATE`;
