@@ -11,7 +11,7 @@
     "start": "NODE_ENV=production tsx server/main.ts",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test:workdays": "node --experimental-strip-types --test src/lib/workDays.test.ts",
+    "test:workdays": "node --experimental-strip-types --test src/lib/workDays.test.ts src/lib/appointmentTimeAvailability.test.ts",
     "phones:audit": "tsx scripts/audit-phone-duplicates.ts",
     "supervisors:reconcile": "tsx scripts/reconcile-ticket-supervisors.ts",
     "delete-tickets": "npx tsx scripts/delete-tickets.ts",
