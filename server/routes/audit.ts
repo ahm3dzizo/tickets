@@ -1,12 +1,32 @@
 import { Router } from "express";
 import prisma from "../db.js";
-import { requireAuth } from "../auth.js";
+import { requireAuth, type AuthRequest } from "../auth.js";
+import { closures } from '../services/ticket-closure-plan.js';
 
 const router = Router();
 
 // GET /api/audit/ticket/:id — last 50 changes for a ticket
-router.get("/ticket/:id", requireAuth, async (req, res) => {
+router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
+    const [user, ticket] = await Promise.all([
+      prisma.user.findUnique({
+        where:{uid:req.uid!},
+        include:{projects:{select:{id:true}}},
+      }),
+      prisma.ticket.findUnique({
+        where:{id:req.params.id},
+        select:{projectId:true,assignedSupervisorIds:true,supervisorClosures:true},
+      }),
+    ]);
+    const projectAccess = !!user && !!ticket && !user.disabled &&
+      (user.role === 'admin' || user.projects.some(project => project.id === ticket.projectId));
+    const supervisorAccess = !!user && !!ticket && (user.role !== 'supervisor' ||
+      ticket.assignedSupervisorIds.includes(user.uid) ||
+      closures(ticket.supervisorClosures).some(h => h.supervisorUid === user.uid));
+    if (!projectAccess || !supervisorAccess) {
+      res.status(404).json({error:'TICKET_NOT_FOUND'});
+      return;
+    }
     const audits = await prisma.ticketAudit.findMany({
       where: { ticketId: req.params.id },
       orderBy: { changedAt: "desc" },
