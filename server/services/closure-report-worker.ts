@@ -91,6 +91,12 @@ async function generatePendingClosureReports() {
         ? job.snapshot as {partial?: boolean; notes?: string; items?: Closure['items']}
         : null;
       const isPartial = snapshot?.partial === true;
+      const sender = isPartial
+        ? await prisma.user.findUnique({
+            where:{uid:job.senderUid},select:{displayName:true},
+          })
+        : null;
+      const senderName = sender?.displayName || 'مقدم التقرير';
       const reportItems = uniqueClosureItems(
         isPartial
           ? (Array.isArray(snapshot?.items) ? snapshot.items : [])
@@ -114,7 +120,7 @@ async function generatePendingClosureReports() {
         phone: job.phone,
         maint_items: reportItems.map(item => [item.description, item.status]),
         notes: isPartial
-          ? `تقرير جزئي لأعمال مشرف واحد فقط؛ أعمال باقي المشرفين لا تزال مفتوحة.\n${reportNotes}`
+          ? `تقرير جزئي لأعمال المشرف ${senderName} فقط؛ أعمال باقي المشرفين لا تزال مفتوحة.\n${reportNotes}`
           : reportNotes,
         block: first.unit?.block?.blockNumber || '',
         project: first.project.name,
@@ -127,8 +133,8 @@ async function generatePendingClosureReports() {
 
       const image = await renderReport(body);
       const caption = isPartial
-        ? `تقرير أعمال جزئي للتذاكر ${body.ticket_num}.\n` +
-          'تم إنهاء أعمال المشرف المُرسل فقط. بقية المشرفين لم يعتمدوا الإغلاق النهائي، وتبقى أعمالهم قيد المتابعة.'
+        ? `تقرير أعمال جزئي للتذاكر ${body.ticket_num} من المشرف ${senderName}.\n` +
+          'التقرير يشمل أعمال هذا المشرف فقط. بقية المشرفين لم يعتمدوا الإغلاق النهائي، وتبقى أعمالهم قيد المتابعة.'
         : await buildClosingMsg({
           ticketId: body.ticket_num,
           clientName: body.customer_name,
