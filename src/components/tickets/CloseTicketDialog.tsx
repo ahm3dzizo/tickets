@@ -145,10 +145,11 @@ const [loading, setLoading] = useState(false);
 const [copying, setCopying] = useState(false);
 const [notes, setNotes] = useState('');
 const [showMessagePreview, setShowMessagePreview] = useState(false);
-  const [maintItems, setMaintItems] = useState<{ description: string; status: string }[]>(
+  const [maintItems, setMaintItems] = useState<{ ticketId: string; description: string; status: string }[]>(
     selectedTickets.map(t => ({
+      ticketId: t.id,
       description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(),
-      status: 'تم'
+      status: 'تم',
     }))
   );
 
@@ -238,20 +239,22 @@ const toggleSupervisor = (id: string) => {
 
 // Sync items if selectedTickets changes
 React.useEffect(() => {
-setMaintItems(selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم' })));
+setMaintItems(selectedTickets.map(t => ({
+  ticketId: t.id, description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم',
+})));
 }, [selectedTickets]);
 
 
 
 const addMaintItem = () => {
-setMaintItems([...maintItems, { description: '', status: 'تم' }]);
+setMaintItems([...maintItems, { ticketId: selectedTickets[0]?.id || '', description: '', status: 'تم' }]);
 };
 
 const removeMaintItem = (index: number) => {
 setMaintItems(maintItems.filter((_, i) => i !== index));
 };
 
-const updateItem = (index: number, field: 'description' | 'status', value: string) => {
+const updateItem = (index: number, field: 'description' | 'status' | 'ticketId', value: string) => {
 const newItems = [...maintItems];
 newItems[index] = { ...newItems[index], [field]: value };
 setMaintItems(newItems);
@@ -446,17 +449,27 @@ const batches = askingForAllApprovals
   ? [selectedTickets.map(t => t.id)]
   : groups;
 for (const ticketIds of batches) {
+  const batchItems = maintItems.filter(item => ticketIds.includes(item.ticketId))
+    .map(({description,status}) => ({description,status}));
+  if (!batchItems.some(item => item.description.trim())) {
+    toast.error('اختر بنود الصيانة الخاصة بالتذاكر المختارة قبل الإغلاق.');
+    return;
+  }
+  const itemsByTicket = Object.fromEntries(selectedTickets.map(ticket => [
+    ticket.id, maintItems.filter(item => item.ticketId === ticket.id)
+      .map(({description,status}) => ({description,status})),
+  ]));
   const response = await fetch(
     askingForAllApprovals ? '/api/tickets/closure-approvals' : '/api/tickets/close', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', ...(authToken ? {Authorization: `Bearer ${authToken}`} : {})},
       body: JSON.stringify(askingForAllApprovals ? {
-        ticketIds, notes, items: maintItems,
+        ticketIds, notes, items: batchItems, itemsByTicket,
       } : {
         ticketIds,
         scope: privileged ? (isFullClosure ? 'all' : 'selected') : 'self',
         supervisorUids: privileged && !isFullClosure ? effectiveSelectedSupervisorIds : undefined,
-        notes, items: maintItems,
+        notes, items: batchItems,
       }),
     }
   );
@@ -696,6 +709,18 @@ className="text-blue-400 hover:text-blue-300 gap-1 h-7"
 <div className="space-y-2 sm:space-y-3">
 {maintItems.map((item, index) => (
 <div key={index} className="flex items-center gap-2 sm:gap-3 group animate-in slide-in-from-right-2">
+{selectedTickets.length > 1 && (
+  <select
+    aria-label="التذكرة الخاصة ببند الصيانة"
+    value={item.ticketId}
+    onChange={e => updateItem(index, 'ticketId', e.target.value)}
+    className="max-w-[105px] shrink-0 rounded-lg border border-border bg-background px-1 py-2 text-[11px] text-foreground"
+  >
+    {selectedTickets.map(ticket => <option key={ticket.id} value={ticket.id}>
+      #{ticket.ticketId || ticket.refNumber}
+    </option>)}
+  </select>
+)}
 <Button
 variant="ghost"
 size="icon"
