@@ -1,12 +1,13 @@
 import {AssignContractorDialog, type ContractorSelection} from './AssignContractorDialog';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Link2, Paperclip, Upload, X } from 'lucide-react';
+import { CalendarClock, Check, Link2, Paperclip, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { TypesSelector } from '@/components/tickets/TypesSelector';
+import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
 import { ticketEditApi, ProjectSupervisorOption } from '@/lib/ticketEditApi';
 import { classifyTicketMedia, extractTicketMedia, isDisplayableTicketMedia } from '@/lib/ticketMedia';
 import { ticketsApi } from '@/lib/api';
@@ -76,6 +77,7 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState('open');
   const [contractorOpen, setContractorOpen] = useState(false);
+  const [appointmentOpen, setAppointmentOpen] = useState(false);
   const [contractorMode, setContractorMode] = useState<'contractor' | 'note'>('contractor');
   const [contractorSelection, setContractorSelection] = useState<ContractorSelection | null>(null);
   const [priority, setPriority] = useState('3');
@@ -110,6 +112,7 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
     setStatus(normalizeStatus(ticket.status));
     setContractorSelection(null);
     setContractorOpen(false);
+    setAppointmentOpen(false);
     setPriority(String(ticket.priority));
     setDescription(parsed.cleanText);
     setTypes(initialTypes);
@@ -252,7 +255,7 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
 
   return (
     <>
-    <Dialog open={open && !contractorOpen} onOpenChange={nextOpen => { if (!saving) onOpenChange(nextOpen); }}>
+    <Dialog open={open && !contractorOpen && !appointmentOpen} onOpenChange={nextOpen => { if (!saving && !appointmentOpen) onOpenChange(nextOpen); }}>
       <DialogContent
         className="max-h-[92dvh] w-[calc(100vw-1.25rem)] max-w-[calc(100vw-1.25rem)] overflow-x-hidden overflow-y-auto rounded-3xl p-0 sm:max-w-2xl"
         dir="rtl"
@@ -291,6 +294,24 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 sm:p-4">
+            <div className="flex min-w-0 items-center gap-2 text-right">
+              <CalendarClock className="h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="text-sm font-bold">موعد الصيانة</p>
+                <p className="text-xs text-muted-foreground">
+                  {ticket.appointmentTime || (ticket.appointment?.date
+                    ? [ticket.appointment.date, ticket.appointment.time].filter(Boolean).join(' ')
+                    : 'لا يوجد موعد مرتبط بالتذكرة')}
+                </p>
+              </div>
+            </div>
+            <Button type="button" variant="outline" className="rounded-xl"
+              disabled={saving || uploading} onClick={() => setAppointmentOpen(true)}>
+              {ticket.appointmentId ? 'تعديل الموعد' : 'حجز موعد'}
+            </Button>
           </div>
 
           <div className="min-w-0 max-w-full space-y-1.5 overflow-hidden">
@@ -452,6 +473,30 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <UnifiedAppointmentDialog
+      open={open && appointmentOpen}
+      onOpenChange={setAppointmentOpen}
+      tickets={[{
+        id: ticket.id,
+        ticketId: ticket.ticketId,
+        projectId: ticket.projectId,
+        clientId: ticket.clientId || undefined,
+        clientName: ticket.clientName,
+        unitId: ticket.unitId,
+        unitNumber: ticket.unitNumber,
+        appointmentId: ticket.appointmentId,
+        appointmentTime: ticket.appointmentTime || undefined,
+        assignedSupervisorIds: ticket.assignedSupervisorIds,
+        type: ticket.type,
+        detectedTypes: ticket.detectedTypes,
+        status: ticket.status,
+      }]}
+      onSuccess={() => {
+        invalidateTicketCache();
+        setAppointmentOpen(false);
+        void onSaved();
+      }}
+    />
     <AssignContractorDialog
       open={open && contractorOpen}
       onOpenChange={setContractorOpen}
