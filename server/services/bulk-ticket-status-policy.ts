@@ -11,6 +11,19 @@ export function checkBulkStatusAccess(actor: Actor | null, rows: Row[], expected
   if (actor.role === 'supervisor' && rows.some(t => !t.assignedSupervisorIds.includes(actor.uid) && !closures(t.supervisorClosures).some(h => h.supervisorUid === actor.uid))) throw new BulkStatusError('SUPERVISOR_NOT_ASSIGNED',403,'يمكنك تحديث حالة دورك في التذاكر المسندة إليك فقط.');
 }
 const terminal = new Set(['closed','completed','absent','out_of_scope']);
+
+// A status-only update has no supervisor work entries and cannot enqueue the
+// customer's final closure report. Closure must go through POST /tickets/close
+// (or the special closure dialog for absent/out-of-scope single-owner tickets).
+export function assertBulkStatusUsesClosureFlow(status: TicketStatus) {
+  if (terminal.has(status)) {
+    throw new BulkStatusError(
+      'USE_CLOSURE_ENDPOINT',
+      409,
+      'إغلاق التذاكر يتم من نافذة الإغلاق لتسجيل أدوار المشرفين وتجهيز التقرير النهائي.',
+    );
+  }
+}
 export function planBulkStatus(actor: Actor, ticket: Row, status: TicketStatus) {
   const history = closures(ticket.supervisorClosures);
   if (terminal.has(status)) {
