@@ -83,6 +83,7 @@ export interface SupervisorClosureRequest {
   people: Record<string, string>;
   requesterUid: string;
   approverUids: string[];
+  expectedRoles: Record<string, string[]>;
   votes: Record<string, { decision: 'approve' | 'reject'; notes: string; at: string }>;
   status: 'pending' | 'approved' | 'rejected' | 'canceled';
   notes: string;
