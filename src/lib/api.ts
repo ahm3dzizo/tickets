@@ -75,6 +75,36 @@ export const authApi = {
     request<{ success: boolean; message: string }>('POST', '/auth/reset-password', { identifier, code, newPassword }, { auth: false }),
 };
 
+// ── Supervisor shared-closure approvals ─────────────────────────────────────
+export interface SupervisorClosureRequest {
+  id: string;
+  ticketIds: string[];
+  ticketNames: Record<string, string>;
+  people: Record<string, string>;
+  requesterUid: string;
+  approverUids: string[];
+  votes: Record<string, { decision: 'approve' | 'reject'; notes: string; at: string }>;
+  status: 'pending' | 'approved' | 'rejected';
+  notes: string;
+  createdAt: string;
+  resolvedAt?: string | null;
+}
+
+export const supervisorClosureApi = {
+  list: (ticketId?: string) => get<SupervisorClosureRequest[]>(
+    `/tickets/closure-approvals${ticketId ? `?ticketId=${encodeURIComponent(ticketId)}` : ''}`,
+  ),
+  request: (ticketIds: string[], notes: string, items: Array<{description: string; status: string}>) =>
+    post<{requests: Array<{id:string; status:string; approverUids:string[]}>}>(
+      '/tickets/closure-approvals', {ticketIds, notes, items},
+    ),
+  decide: (id: string, decision: 'approve' | 'reject', notes: string) =>
+    post<{status: string; changed: boolean}>(
+      `/tickets/closure-approvals/${encodeURIComponent(id)}/decision`,
+      {decision, notes},
+    ),
+};
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const usersApi = {
   getAll: ()                         => get<any[]>('/users'),
