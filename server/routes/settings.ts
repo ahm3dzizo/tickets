@@ -9,8 +9,7 @@ export interface TimePeriod {
   end: string;   // "HH:MM"
 }
 
-export interface WorkHoursConfig {
-  enabled:       boolean;
+export interface DailyWorkHours {
   hasMorning?:   boolean;
   morning:       TimePeriod;
   hasBreak?:     boolean;
@@ -19,6 +18,16 @@ export interface WorkHoursConfig {
   afternoon:     TimePeriod;
 }
 
+export interface WorkHoursConfig extends DailyWorkHours {
+  enabled: boolean;
+  // 0 = Sunday, 5 = Friday, 6 = Saturday. Missing means legacy default.
+  workingDays?: number[];
+  // Optional per-day hours, inherited from the main hours when absent.
+  dayOverrides?: Record<string, DailyWorkHours>;
+}
+
+export const DEFAULT_WORKING_DAYS = [0, 1, 2, 3, 4, 6];
+
 export interface WorkHoursSettings {
   default:   WorkHoursConfig;
   byProject: Record<string, WorkHoursConfig>;
@@ -26,6 +35,7 @@ export interface WorkHoursSettings {
 
 const DEFAULT_WH_CONFIG: WorkHoursConfig = {
   enabled:      true,
+  workingDays:  [...DEFAULT_WORKING_DAYS],
   hasMorning:   true,
   morning:      { start: '08:00', end: '12:00' },
   hasBreak:     true,
@@ -67,6 +77,26 @@ export function inWorkHours(mins: number, cfg: WorkHoursConfig): boolean {
   if (hasMorning && cfg.morning && inPeriod(mins, cfg.morning)) return true;
   if (hasAfternoon && cfg.afternoon && inPeriod(mins, cfg.afternoon)) return true;
   return false;
+}
+
+// UTC weekday prevents date-only appointments from changing day with the server timezone.
+export function weekdayOf(dateStr: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return -1;
+  const parsed = new Date(dateStr + 'T12:00:00Z');
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== dateStr) return -1;
+  return parsed.getUTCDay();
+}
+
+export function isWorkingDay(dateStr: string, cfg: WorkHoursConfig): boolean {
+  const day = weekdayOf(dateStr);
+  if (day === -1) return false;
+  return !cfg.enabled || (cfg.workingDays ?? DEFAULT_WORKING_DAYS).includes(day);
+}
+
+export function getDateWorkHours(dateStr: string, cfg: WorkHoursConfig): WorkHoursConfig {
+  const day = weekdayOf(dateStr);
+  const override = day < 0 ? undefined : cfg.dayOverrides?.[String(day)];
+  return override ? { ...cfg, ...override } : cfg;
 }
 
 export function autoCorrectMins(mins: number, cfg: WorkHoursConfig): number | null {
@@ -145,8 +175,22 @@ router.put('/work-hours', requireAuth, async (req: AuthRequest, res) => {
   try {
     const role = await getRequesterRole(req.uid!);
     const body = req.body as WorkHoursSettings;
-    if (!body?.default) {
+    if (!body?.default || typeof body.byProject !== 'object' || body.byProject === null) {
       res.status(400).json({ error: 'بيانات أوقات الدوام غير صحيحة' });
+      return;
+    }
+    const configs = [body.default, ...Object.values(body.byProject)];
+    const validDays = (days?: number[]) => days === undefined || (
+      Array.isArray(days) && days.every(d => Number.isInteger(d) && d >= 0 && d <= 6) &&
+      new Set(days).size === days.length
+    );
+    const validOverrides = (days?: Record<string, DailyWorkHours>) => days === undefined || (
+      !!days && !Array.isArray(days) && Object.entries(days).every(([key, val]) =>
+        /^[0-6]$/.test(key) && !!val && typeof val === 'object'
+      )
+    );
+    if (!configs.every(cfg => !!cfg && validDays(cfg.workingDays) && validOverrides(cfg.dayOverrides))) {
+      res.status(400).json({ error: 'أيام العمل يجب أن تكون بين الأحد والسبت دون تكرار' });
       return;
     }
 
