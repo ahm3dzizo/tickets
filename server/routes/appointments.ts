@@ -3,7 +3,7 @@ import { AppointmentStatus } from "@prisma/client";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, getRequesterRole } from "../auth.js";
 import { getIO } from "../socket.js";
-import { DEFAULT_WORK_HOURS, autoCorrectMins, isWorkingDay, getDateWorkHours, weekdayOf, type WorkHoursSettings } from "./settings.js";
+import { DEFAULT_WORK_HOURS, autoCorrectMins, isWorkingDay, getDateWorkHours, weekdayOf, toMins, type WorkHoursSettings } from "./settings.js";
 
 const router = Router();
 
