@@ -292,7 +292,7 @@ export async function listSupervisorClosureApprovals(uid: string, ticketId?: str
   } });
   if (!actor || actor.disabled) throw new Error('FORBIDDEN');
   if (!['supervisor', 'engineer', 'admin'].includes(actor.role)) throw new Error('FORBIDDEN');
-  return prisma.ticketClosureApproval.findMany({
+  const requests = await prisma.ticketClosureApproval.findMany({
     where: {
       ...(ticketId ? {ticketIds: {has: ticketId}} : {}),
       ...(actor.role === 'admin' ? {} : {
@@ -307,4 +307,16 @@ export async function listSupervisorClosureApprovals(uid: string, ticketId?: str
       notes: true, createdAt: true, resolvedAt: true,
     },
   });
+  if (!requests.length) return [];
+  const ticketIds = [...new Set(requests.flatMap(row => row.ticketIds))];
+  const supervisorUids = [...new Set(requests.flatMap(row =>
+    [row.requesterUid, ...row.approverUids]
+  ))];
+  const [tickets, users] = await Promise.all([
+    prisma.ticket.findMany({where: {id: {in: ticketIds}}, select: {id: true, ticketId: true}}),
+    prisma.user.findMany({where: {uid: {in: supervisorUids}}, select: {uid: true, displayName: true}}),
+  ]);
+  const ticketNames = Object.fromEntries(tickets.map(ticket => [ticket.id, ticket.ticketId]));
+  const people = Object.fromEntries(users.map(user => [user.uid, user.displayName]));
+  return requests.map(request => ({...request, ticketNames, people}));
 }
