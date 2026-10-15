@@ -864,7 +864,7 @@ export function UnifiedAppointmentDialog({
           {/* Calendar add mode: show date */}
           {isCalendarMode && dateStr && (
             <p className="text-sm text-muted-foreground text-right mt-1">
-              {new Date(dateStr).toLocaleDateString('ar-EG', {
+              {new Date(date).toLocaleDateString('ar-EG', 
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
               })}
             </p>
