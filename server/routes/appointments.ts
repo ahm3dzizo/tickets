@@ -3,7 +3,7 @@ import { AppointmentStatus } from "@prisma/client";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, getRequesterRole } from "../auth.js";
 import { getIO } from "../socket.js";
-import { DEFAULT_WORK_HOURS, autoCorrectMins, isWorkingDay, getDateWorkHours, weekdayOf, type WorkHoursSettings } from "./settings.js";
+import { DEFAULT_WORK_HOURS, autoCorrectMins, isWorkingDay, getDateWorkHours, weekdayOf, toMins, type WorkHoursSettings } from "./settings.js";
 
 const router = Router();
 
@@ -50,6 +50,14 @@ async function validateAndCorrectAppointmentTime(
   const correctedMins = autoCorrectMins(rawMins, cfg);
 
   if (correctedMins === null) {
+    const inBreak = cfg.hasBreak !== false && cfg.break &&
+      rawMins >= toMins(cfg.break.start) && rawMins < toMins(cfg.break.end);
+    if (inBreak) {
+      return {
+        time: timeClean,
+        error: `الساعة ${timeClean} تقع داخل فترة الراحة (${cfg.break.start}–${cfg.break.end}) لهذا المشروع. عدّل فترة الراحة في الإعدادات أو اختَر وقتاً خارجها`,
+      };
+    }
     const periods: Array<{ start: string; end: string }> = [];
     if (cfg.hasMorning !== false && cfg.morning) periods.push(cfg.morning);
     if (cfg.hasAfternoon !== false && cfg.afternoon) periods.push(cfg.afternoon);

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { appointmentsApi, whatsappApi, usersApi, ticketsApi, clientsApi, projectsApi, settingsApi, techniciansApi } from '@/lib/api';
 import type { WorkHoursConfig } from '@/lib/api';
 import { DEFAULT_WORKING_DAYS, addWorkingDays, dateWorkHours, isWorkingDate, nextWorkingDate } from '@/lib/workDays';
+import { availableTimes, firstAvailableTimeInPeriod, isWithinBreak, isWithinWorkHours } from '@/lib/appointmentTimeAvailability';
 import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { TypesSelector } from './TypesSelector';
@@ -107,37 +108,15 @@ function minsToHhmm(mins: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function inPeriod(mins: number, p: { start: string; end: string }): boolean {
-  if (!p || !p.start || !p.end) return false;
-  return mins >= toMins(p.start) && mins <= toMins(p.end);
-}
-
-function inWorkHours(mins: number, cfg: WorkHoursConfig): boolean {
-  if (!cfg.enabled) return true;
-  const hasMorning = cfg.hasMorning !== false;
-  const hasBreak = cfg.hasBreak !== false;
-  const hasAfternoon = cfg.hasAfternoon !== false;
-
-  if (hasBreak && cfg.break && cfg.break.start && cfg.break.end) {
-    const bs = toMins(cfg.break.start);
-    const be = toMins(cfg.break.end);
-    if (mins >= bs && mins < be) return false;
-  }
-
-  if (hasMorning && cfg.morning && inPeriod(mins, cfg.morning)) return true;
-  if (hasAfternoon && cfg.afternoon && inPeriod(mins, cfg.afternoon)) return true;
-  return false;
-}
-
 function autoCorrectMins(mins: number, cfg: WorkHoursConfig): number | null {
-  if (inWorkHours(mins, cfg)) return mins;
+  if (isWithinWorkHours(mins, cfg)) return mins;
   const hour = Math.floor(mins / 60);
   if (hour >= 1 && hour <= 11) {
     const pm = mins + 12 * 60;
-    if (inWorkHours(pm, cfg)) return pm;
+    if (isWithinWorkHours(pm, cfg)) return pm;
   } else if (hour >= 13 && hour <= 23) {
     const am = mins - 12 * 60;
-    if (inWorkHours(am, cfg)) return am;
+    if (isWithinWorkHours(am, cfg)) return am;
   }
   return null;
 }
@@ -151,23 +130,29 @@ function getWorkHoursSummary(cfg: WorkHoursConfig): string {
   if (cfg.hasAfternoon !== false && cfg.afternoon) {
     parts.push(`مساءً (${fmtTime(cfg.afternoon.start)} - ${fmtTime(cfg.afternoon.end)})`);
   }
-  return parts.join(' و ') || 'غير محددة';
+  const breakLabel = cfg.hasBreak !== false && cfg.break?.start && cfg.break?.end
+    ? `الراحة (${fmtTime(cfg.break.start)} - ${fmtTime(cfg.break.end)})`
+    : null;
+  const workLabel = parts.join(' و ') || 'غير محددة';
+  return breakLabel ? `${workLabel}؛ ${breakLabel} مستثناة من الدوام` : workLabel;
 }
 
 function buildTimeOptions(wh: WorkHoursConfig): TimeOption[] {
   const opts: TimeOption[] = [];
   if (wh.hasMorning !== false && wh.morning) {
-    opts.push({
+    const available = firstAvailableTimeInPeriod(wh.morning, wh);
+    if (available) opts.push({
       label: `الصباح (${fmtTime(wh.morning.start)} - ${fmtTime(wh.morning.end)})`,
       value: 'morning',
-      startTime: wh.morning.start,
+      startTime: available,
     });
   }
   if (wh.hasAfternoon !== false && wh.afternoon) {
-    opts.push({
+    const available = firstAvailableTimeInPeriod(wh.afternoon, wh);
+    if (available) opts.push({
       label: `بعد الظهر (${fmtTime(wh.afternoon.start)} - ${fmtTime(wh.afternoon.end)})`,
       value: 'afternoon',
-      startTime: wh.afternoon.start,
+      startTime: available,
     });
   }
   opts.push({ label: 'وقت محدد', value: 'custom', startTime: null });
@@ -296,6 +281,7 @@ export function UnifiedAppointmentDialog({
   const dayHours = useMemo(() => dateWorkHours(selectedDate, workHours), [selectedDate, workHours]);
   const isDateDisallowed = !isWorkingDate(selectedDate, workHours);
   const timeOptions = useMemo(() => buildTimeOptions(dayHours), [dayHours]);
+  const selectableTimes = useMemo(() => availableTimes(dayHours), [dayHours]);
   const endDate = addWorkingDays(startDate, rangeDays - 1, workHours);
 
   const preferredTimeLabel = useMemo(() => {
@@ -309,7 +295,12 @@ export function UnifiedAppointmentDialog({
 
   const effectiveTime = timeMode === 'custom' ? customTime : (finalTime || customTime);
   const effectiveMins = useMemo(() => toMins(effectiveTime), [effectiveTime]);
-  const isInsideWorkHours = useMemo(() => inWorkHours(effectiveMins, dayHours), [effectiveMins, dayHours]);
+  const isInsideWorkHours = useMemo(() => isWithinWorkHours(effectiveMins, dayHours), [effectiveMins, dayHours]);
+  const isInsideBreak = useMemo(() => isWithinBreak(effectiveMins, dayHours), [effectiveMins, dayHours]);
+  const suggestedTimes = useMemo(() => {
+    const future = selectableTimes.filter(hhmm => toMins(hhmm) > effectiveMins);
+    return (future.length ? future : selectableTimes).slice(0, 4);
+  }, [effectiveMins, selectableTimes]);
   const suggestedCorrectionMins = useMemo(() => {
     if (isInsideWorkHours || !dayHours.enabled) return null;
     return autoCorrectMins(effectiveMins, dayHours);
@@ -501,15 +492,15 @@ export function UnifiedAppointmentDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Adjust timeMode if morning is disabled
+  // Use an actually available period: a configured break may occupy its first hours.
   useEffect(() => {
-    if (!open || isEditMode || primaryTicket?.appointmentTime) return;
-    if (workHours.hasMorning === false && workHours.hasAfternoon !== false) {
-      setTimeMode('afternoon');
-    } else if (workHours.hasMorning === false && workHours.hasAfternoon === false) {
-      setTimeMode('custom');
+    if (!open || isEditMode || primaryTicket?.appointmentTime || timeMode === 'custom') return;
+    if (!timeOptions.some(opt => opt.value === timeMode && opt.startTime)) {
+      const first = timeOptions.find(opt => opt.startTime);
+      if (first) setTimeMode(first.value);
+      else setTimeMode('custom');
     }
-  }, [open, isEditMode, primaryTicket?.appointmentTime, workHours]);
+  }, [open, isEditMode, primaryTicket?.appointmentTime, timeOptions, timeMode]);
 
   // Keep startDate in sync with date when WhatsApp mode is off
   useEffect(() => {
@@ -624,7 +615,7 @@ export function UnifiedAppointmentDialog({
       let saveTime = timeMode === 'custom' ? customTime : (finalTime || undefined);
       if (saveTime && dayHours.enabled) {
         const mins = toMins(saveTime);
-        if (!inWorkHours(mins, dayHours)) {
+        if (!isWithinWorkHours(mins, dayHours)) {
           const corrected = autoCorrectMins(mins, dayHours);
           if (corrected !== null) {
             saveTime = minsToHhmm(corrected);
@@ -1303,6 +1294,28 @@ export function UnifiedAppointmentDialog({
                 )}
               />
             </div>
+            {dayHours.enabled && selectableTimes.length > 0 && (
+              <div className="space-y-1.5" dir="rtl">
+                <p className="text-[11px] font-bold text-muted-foreground">
+                  {isInsideWorkHours ? 'أوقات أخرى متاحة' : 'اختار وقتاً متاحاً بدلاً من الوقت المرفوض'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(isInsideWorkHours ? selectableTimes.slice(0, 4) : suggestedTimes).map(hhmm => (
+                    <button key={hhmm} type="button" onClick={() => {
+                      setCustomTime(hhmm);
+                      setTimeMode('custom');
+                    }} className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                      {fmtTime(hhmm)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {dayHours.enabled && selectableTimes.length === 0 && (
+              <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400" dir="rtl">
+                لا توجد أوقات حجز متاحة في هذا اليوم. راجع إعدادات الفترة الصباحية والمسائية وفترة الراحة للمشروع.
+              </p>
+            )}
 
             {/* تنبيه وقيود أوقات الدوام */}
             {dayHours.enabled && !isInsideWorkHours && (
@@ -1328,7 +1341,11 @@ export function UnifiedAppointmentDialog({
                   <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300">
                     <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
                     <div>
-                      <p className="font-bold">الوقت المحدد ({fmtTime(effectiveTime)}) خارج أوقات الدوام المعتمدة</p>
+                      <p className="font-bold">
+                        {isInsideBreak
+                          ? `الوقت المحدد (${fmtTime(effectiveTime)}) يقع داخل فترة الراحة`
+                          : `الوقت المحدد (${fmtTime(effectiveTime)}) خارج أوقات الدوام المعتمدة`}
+                      </p>
                       <p className="text-[11px] text-red-600/80 dark:text-red-400/80 mt-0.5 leading-normal">
                         أوقات العمل المتاحة: {getWorkHoursSummary(dayHours)}
                       </p>
