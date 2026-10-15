@@ -196,12 +196,12 @@ export async function requestSupervisorClosure(uid: string, input: {
         uid: approverUid, ticketId: first.id, numbers,
       });
     }
-    return {requests: created, notifications};
+    return {requests: created, notifications, requesterName: actor.displayName || uid};
   }, {timeout: 90000, maxWait: 10000});
 
   for (const n of result.notifications) {
     void sendApprovalNotification(n.uid, 'موافقة مطلوبة لإغلاق تذاكر مشتركة',
-      `مشرف أنهى أعماله ويطلب موافقتك على إغلاق ${n.numbers}. افتح التذكرة للموافقة أو الرفض.`,
+      `المشرف ${result.requesterName} أنهى أعماله ويطلب موافقتك على إغلاق ${n.numbers}. افتح التذكرة للموافقة أو الرفض.`,
       n.ticketId, 'closure_approval_requested');
   }
   return { requests: result.requests };
