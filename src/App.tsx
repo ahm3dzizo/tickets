@@ -28,6 +28,8 @@ const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Login = lazy(() => import('@/pages/Login'));
 const TicketsList = lazy(() => import('@/pages/TicketsList'));
 const TicketDetail = lazy(() => import('@/pages/TicketDetailResponsive'));
+const ClosureApprovals = lazy(() => import('@/components/tickets/SupervisorClosureApprovals')
+  .then(module => ({default: () => <div className="mx-auto max-w-4xl px-3 py-6"><module.SupervisorClosureApprovals /></div>})));
 const Team = lazy(() => import('@/pages/Team'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const PushDiagnostics = lazy(() => import('@/pages/PushDiagnostics'));
@@ -166,6 +168,7 @@ function AppContent() {
             <Route path="/clients" element={protectedElement(<Clients />)} />
             <Route path="/technicians" element={protectedElement(<Technicians />)} />
             <Route path="/tickets/:id" element={protectedElement(<TicketDetail />)} />
+            <Route path="/closure-approvals" element={protectedElement(<ClosureApprovals />)} />
             <Route path="/team" element={protectedElement(<Team />)} />
             <Route path="/team/:id" element={protectedElement(<TeamMemberDetail />)} />
             <Route path="/settings" element={protectedElement(<Settings />)} />
