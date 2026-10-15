@@ -478,38 +478,6 @@ onSuccess({
   final: isFullClosure && !askingForAllApprovals,
   closeType,
 }); onOpenChange(false); return;
-const blob = await response.blob();
-
-const firstTicketNo = selectedTickets[0]?.ticketId || selectedTickets[0]?.refNumber || 'ticket';
-const fileName = `${mainTicket?.unitNumber || 'villa'}-${firstTicketNo}.jpg`;
-let saved = false;
-
-// We no longer automatically download the blob to avoid cluttering the user's PC.
-// If the user picked a folder via directory picker, we still save it there silently.
-const dirHandle = await getSavedDirHandle();
-if (dirHandle) {
-try {
-const perm = await (dirHandle as any).requestPermission({ mode: 'readwrite' });
-if (perm === 'granted') {
-const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-const writable = await fileHandle.createWritable();
-await writable.write(blob);
-await writable.close();
-toast.success(`تم حفظ التقرير في ${dirHandle.name}/${fileName}`);
-}
-} catch {
-await clearDirHandle();
-}
-}
-
-const isWhatsAppSent = targetClient?.phone && previewMessage;
-toast.success(`تم حفظ الأدوار وإغلاق التذاكر المكتملة${isWhatsAppSent ? ' — التقرير النهائي في طابور الإرسال 💬' : ''}`);
-onSuccess({
-  ticketIds: selectedTickets.map(ticket => ticket.id),
-  final: isFullClosure,
-  closeType,
-});
-onOpenChange(false);
 } catch (error) {
 console.error('Error closing tickets:', error);
 toast.error('فشل إغلاق التذاكر');
