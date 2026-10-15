@@ -3,7 +3,7 @@ import { AppointmentStatus } from "@prisma/client";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, getRequesterRole } from "../auth.js";
 import { getIO } from "../socket.js";
-import { DEFAULT_WORK_HOURS, autoCorrectMins, type WorkHoursSettings } from "./settings.js";
+import { DEFAULT_WORK_HOURS, autoCorrectMins, isWorkingDay, getDateWorkHours, weekdayOf, type WorkHoursSettings } from "./settings.js";
 
 const router = Router();
 
@@ -27,21 +27,24 @@ function appointmentToResponse(a: {
 
 async function validateAndCorrectAppointmentTime(
   projectId: string | null | undefined,
+  dateStr: string,
   timeStr: string | null | undefined
 ): Promise<{ time: string | null; error?: string }> {
-  if (!timeStr) return { time: null };
-
-  const timeClean = timeStr.trim();
-  const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timeClean);
-  if (!timeMatch) return { time: timeClean };
+  if (weekdayOf(dateStr) === -1) return { time: timeStr || null, error: 'تاريخ الموعد غير صحيح' };
 
   const whSetting = await prisma.systemSetting.findUnique({ where: { key: "work_hours" } });
   const whAll = (whSetting?.value as unknown as WorkHoursSettings) || DEFAULT_WORK_HOURS;
-  const cfg = (projectId && whAll.byProject?.[projectId]) || whAll.default || DEFAULT_WORK_HOURS.default;
-
-  if (!cfg?.enabled) {
-    return { time: timeClean };
+  const baseCfg = (projectId && whAll.byProject?.[projectId]) || whAll.default || DEFAULT_WORK_HOURS.default;
+  if (!isWorkingDay(dateStr, baseCfg)) {
+    return { time: timeStr || null, error: 'هذا اليوم إجازة طبقاً لأيام العمل في إعدادات المشروع' };
   }
+
+  const timeClean = timeStr?.trim() || null;
+  if (!timeClean) return { time: null };
+  const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timeClean);
+  if (!timeMatch) return { time: timeClean };
+  const cfg = getDateWorkHours(dateStr, baseCfg);
+  if (!cfg.enabled) return { time: timeClean };
 
   const rawMins = parseInt(timeMatch[1], 10) * 60 + parseInt(timeMatch[2], 10);
   const correctedMins = autoCorrectMins(rawMins, cfg);
@@ -575,15 +578,12 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       }
     }
 
-    let finalTime = time || null;
-    if (finalTime) {
-      const check = await validateAndCorrectAppointmentTime(projectId, finalTime);
-      if (check.error) {
-        res.status(400).json({ error: check.error });
-        return;
-      }
-      finalTime = check.time || finalTime;
+    const timeCheck = await validateAndCorrectAppointmentTime(projectId, date, time);
+    if (timeCheck.error) {
+      res.status(400).json({ error: timeCheck.error });
+      return;
     }
+    const finalTime = timeCheck.time;
 
     const apptInclude = {
       technician: { select: { id: true, name: true, employeeId: true, specialty: true, phoneNumber: true } },
@@ -771,19 +771,24 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   };
 
   try {
-    let finalTime = time;
-    if (finalTime) {
-      const existing = await prisma.appointment.findUnique({
-        where: { id },
-        select: { projectId: true }
-      });
-      const check = await validateAndCorrectAppointmentTime(existing?.projectId, finalTime);
-      if (check.error) {
-        res.status(400).json({ error: check.error });
-        return;
-      }
-      finalTime = check.time || finalTime;
+    const existing = await prisma.appointment.findUnique({
+      where: { id },
+      select: { projectId: true, date: true, time: true }
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'الموعد غير موجود' });
+      return;
     }
+    const timeCheck = await validateAndCorrectAppointmentTime(
+      existing.projectId,
+      date || existing.date,
+      time === undefined ? existing.time : time
+    );
+    if (timeCheck.error) {
+      res.status(400).json({ error: timeCheck.error });
+      return;
+    }
+    const finalTime = time === undefined ? undefined : timeCheck.time;
 
     const appointment = await prisma.appointment.update({
       where: { id },
