@@ -1142,6 +1142,10 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     const ticket = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${req.params.id} FOR UPDATE`;
       const current = await tx.ticket.findUniqueOrThrow({where: {id: req.params.id}});
+      if ((normalizedStatus !== undefined || updatePayload.assignedSupervisorIds !== undefined) &&
+          await tx.ticketClosureApproval.findFirst({
+            where: { status: 'pending', ticketIds: { has: current.id } }, select: {id: true},
+          })) throw new Error('CLOSURE_APPROVAL_PENDING');
       // Special terminal status updates are only valid for non-shared tickets.
       // Shared responsibility must go through the per-supervisor closure workflow.
       if (normalizedStatus && ['absent', 'out_of_scope'].includes(normalizedStatus) &&
