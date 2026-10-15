@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import type { WorkHoursConfig } from './api';
 import {
   addWorkingDays, dateWorkHours, isWorkingDate, nextWorkingDate, weekdayOf,
-} from './workDays';
+} from './workDays.ts';
 
 const base: WorkHoursConfig = {
   enabled: true,
