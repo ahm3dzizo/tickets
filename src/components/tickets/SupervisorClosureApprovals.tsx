@@ -85,6 +85,7 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
         const mayVote = askedMe && !myVote && request.status === 'pending';
         const waiting = request.approverUids.filter(uid => !request.votes?.[uid]);
         const ticketLabels = request.ticketIds.map(id => request.ticketNames?.[id] || id);
+        const myTickets = request.ticketIds.filter(id => (request.expectedRoles?.[id] || []).includes(user.uid));
         return (
           <div key={request.id} className="space-y-3 rounded-xl border border-border bg-muted/20 p-3 text-right">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -99,6 +100,11 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
             <p className="text-xs text-muted-foreground">
               مقدّم الطلب: <b>{request.people?.[request.requesterUid] || request.requesterUid}</b>
             </p>
+            {askedMe && myTickets.length > 0 && (
+              <p className="rounded-lg bg-blue-500/10 px-2 py-1.5 text-xs text-blue-700 dark:text-blue-300">
+                موافقتك مطلوبة عن تذاكرك: {myTickets.map(id => '#' + (request.ticketNames?.[id] || id)).join('، ')}
+              </p>
+            )}
             <p className="text-xs text-foreground">
               أعمال مقدّم الطلب: {Array.isArray(request.items)
                 ? request.items.map(item => `${item.description} (${item.status})`).join('، ') : 'غير محددة'}
@@ -109,7 +115,12 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
                 const vote = request.votes?.[uid];
                 return (
                   <span key={uid} className="rounded-lg border border-border px-2 py-1 text-[11px]">
-                    {request.people?.[uid] || uid} — {vote?.decision === 'approve' ? 'وافق' : vote?.decision === 'reject' ? 'رفض' : 'بانتظار الرد'}
+                    {request.people?.[uid] || uid}
+                    {' — '}
+                    {(request.ticketIds.filter(id => (request.expectedRoles?.[id] || []).includes(uid))
+                      .map(id => '#' + (request.ticketNames?.[id] || id)).join('، '))}
+                    {' — '}
+                    {vote?.decision === 'approve' ? 'وافق' : vote?.decision === 'reject' ? 'رفض' : 'بانتظار الرد'}
                   </span>
                 );
               })}
