@@ -221,13 +221,20 @@ export default function TicketsList() {
     const selected = tickets.filter(ticket => selectedTicketIds.includes(ticket.id));
     if (!selected.length) return;
     const first = selected[0];
-    if (selected.some(ticket =>
+    if (user?.role !== 'supervisor' && selected.some(ticket =>
       ticket.projectId !== first.projectId ||
       ticket.unitId !== first.unitId ||
       ticket.clientId !== first.clientId
     )) {
-      toast.error('إغلاق عدة تذاكر معًا يتطلب اختيار تذاكر نفس العميل والوحدة والمشروع.');
+      toast.error('اختر تذاكر نفس العميل والوحدة والمشروع للإغلاق.');
       return;
+    }
+    if (user?.role === 'supervisor' && selected.some(ticket =>
+      ticket.projectId !== first.projectId ||
+      ticket.unitId !== first.unitId ||
+      ticket.clientId !== first.clientId
+    )) {
+      toast.info('سيتم تقسيم طلبات الموافقة والتقارير حسب كل عميل ووحدة، دون دمج بيانات عملاء مختلفين.');
     }
     const requestedType = requestedStatus === 'absent'
       ? 'absent'
