@@ -140,6 +140,7 @@ const shared = selectedTickets.some(t => (t.assignedSupervisorIds?.length || 0) 
 const needsOtherApproval = isSupervisor && selectedTickets.some(t =>
   (t.assignedSupervisorIds || []).some(id => id !== user?.uid)
 );
+const selectionKey = selectedTickets.map(t => t.id).join('|');
 const [closeType, setCloseType] = useState<CloseType>('normal');
 const [loading, setLoading] = useState(false);
 const [copying, setCopying] = useState(false);
@@ -184,7 +185,7 @@ setOutOfScopeMsgTemplate(t.outOfScopeMsg || '');
 });
 whatsappApi.getStatus().then(s => setWaConnected(s.connected)).catch(() => setWaConnected(false));
 }
-}, [open, privileged, user?.uid, selectedTickets, initialCloseType]);
+}, [open, privileged, user?.uid, selectionKey, initialCloseType]);
 
 const currentUnitId = selectedTickets[0]?.unitId;
 const targetClient = clients.find(c => String(c.unitId) === String(currentUnitId));
@@ -242,7 +243,7 @@ React.useEffect(() => {
 setMaintItems(selectedTickets.map(t => ({
   ticketId: t.id, description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم',
 })));
-}, [selectedTickets]);
+}, [selectionKey]);
 
 
 
