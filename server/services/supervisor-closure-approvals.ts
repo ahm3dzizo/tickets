@@ -84,10 +84,14 @@ async function sendApprovalNotification(uid: string, title: string, body: string
 
 export async function requestSupervisorClosure(uid: string, input: {
   ticketIds: unknown; notes?: unknown; items?: unknown;
+  itemsByTicket?: unknown;
 }) {
   const ticketIds = uniqueIds(input.ticketIds);
   if (!validItems(input.items)) throw new Error('INVALID_MAINTENANCE_ITEMS');
   const items = uniqueClosureItems(input.items);
+  const mapped = input.itemsByTicket && typeof input.itemsByTicket === 'object' &&
+    !Array.isArray(input.itemsByTicket)
+      ? input.itemsByTicket as Record<string, unknown> : null;
   const notes = typeof input.notes === 'string' ? input.notes.trim().slice(0, 4000) : '';
 
   const result = await prisma.$transaction(async tx => {
@@ -114,17 +118,26 @@ export async function requestSupervisorClosure(uid: string, input: {
       groups.set(key, [...(groups.get(key) || []), ticket]);
     }
 
+    // Different clients must never receive each other's maintenance details.
+    if (groups.size > 1 && !mapped) throw new Error('MULTI_CUSTOMER_ITEMS_REQUIRED');
+    if (groups.size > 1 && notes) throw new Error('MULTI_CUSTOMER_NOTES_REQUIRE_SEPARATE_REQUESTS');
     const created: Array<{id: string; ticketIds: string[]; approverUids: string[]; status: string}> = [];
     const notifications: Array<{ uid: string; ticketId: string; numbers: string }> = [];
     for (const group of groups.values()) {
       const first = group[0];
+      const ownItems = (id: string) => {
+        const source = mapped ? mapped[id] : items;
+        if (!validItems(source)) throw new Error('MAINTENANCE_ITEMS_REQUIRED_FOR_EACH_TICKET');
+        return uniqueClosureItems(source);
+      };
+      const groupItems = uniqueClosureItems(group.flatMap(ticket => ownItems(ticket.id)));
       const approvers = [...new Set(group.flatMap(t => t.assignedSupervisorIds.filter(s => s !== uid)))];
       const expectedRoles: Record<string, string[]> = {};
       for (const ticket of group) {
         let active = ticket.assignedSupervisorIds;
         let history = closures(ticket.supervisorClosures);
         if (active.includes(uid)) {
-          const plan = planClosure(active, history, actor, 'self', undefined, notes, items);
+          const plan = planClosure(active, history, actor, 'self', undefined, notes, ownItems(ticket.id));
           active = plan.active;
           history = plan.history;
           await tx.ticket.update({
@@ -134,11 +147,11 @@ export async function requestSupervisorClosure(uid: string, input: {
               supervisorClosures: history as unknown as Prisma.InputJsonValue,
               status: plan.final ? 'closed' : 'in_progress',
               closedAt: plan.final ? new Date() : null,
-              ...(plan.final ? { maintenanceItems: items as unknown as Prisma.InputJsonValue, closureNotes: notes } : {}),
+              ...(plan.final ? { maintenanceItems: ownItems(ticket.id) as unknown as Prisma.InputJsonValue, closureNotes: notes } : {}),
             },
           });
           await audit(tx, ticket.id, 'المشرف أنهى أعماله وطلب الموافقة على الإغلاق', uid, {
-            supervisorUid: uid, remaining: active, workItems: items, notes,
+            supervisorUid: uid, remaining: active, workItems: ownItems(ticket.id), notes,
           });
         }
         expectedRoles[ticket.id] = [...active];
@@ -164,7 +177,7 @@ export async function requestSupervisorClosure(uid: string, input: {
           clientId: first.clientId,
           requesterUid: uid, approverUids: approvers,
           expectedRoles: expectedRoles as Prisma.InputJsonValue,
-          votes: {}, notes, items: items as unknown as Prisma.InputJsonValue,
+          votes: {}, notes, items: groupItems as unknown as Prisma.InputJsonValue,
         },
       });
       // Durable report queue record starts on the first request, but the
