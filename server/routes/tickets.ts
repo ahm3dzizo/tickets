@@ -12,7 +12,7 @@ import { maybeAutoFinishAppointment } from "./attendance.js";
 import type { TicketStatus } from "@prisma/client";
 
 import { closeTickets, closures } from '../services/ticket-closure.js';
-import { requestSupervisorClosure, voteSupervisorClosure, listSupervisorClosureApprovals } from '../services/supervisor-closure-approvals.js';
+import { requestSupervisorClosure, voteSupervisorClosure, cancelSupervisorClosure, listSupervisorClosureApprovals } from '../services/supervisor-closure-approvals.js';
 import { deliverClosureReports } from '../services/closure-report-worker.js';
 import { invalidateTicketListResponseCache } from '../middleware/ticket-list-cache.js';
 
@@ -60,6 +60,19 @@ router.post('/closure-approvals/:id/decision', requireAuth, async (req: AuthRequ
     if (result.status !== 'pending') {
       void deliverClosureReports().catch(e => console.error('[ClosureApprovalReport]', e));
     }
+    res.json(result);
+  } catch (e) {
+    const {status,code} = closureApprovalHttpError(e);
+    res.status(status).json({error:code});
+  }
+});
+
+router.post('/closure-approvals/:id/cancel', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const result = await cancelSupervisorClosure(req.uid!, req.params.id, req.body.reason);
+    invalidateTicketListResponseCache();
+    getIO()?.emit('tickets:updated', {approvalId:req.params.id});
+    if (result.changed) void deliverClosureReports().catch(e => console.error('[ClosureApprovalReport]', e));
     res.json(result);
   } catch (e) {
     const {status,code} = closureApprovalHttpError(e);
