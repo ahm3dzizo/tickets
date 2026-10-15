@@ -130,7 +130,8 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
                 <Clock3 className="h-3.5 w-3.5" /> في انتظار {waiting.map(uid => request.people?.[uid] || uid).join('، ')}
               </p>
             )}
-            {request.status === 'pending' && user.uid === request.requesterUid && (
+            {request.status === 'pending' &&
+              (user.uid === request.requesterUid || user.role === 'admin' || user.role === 'engineer') && (
               <div className="space-y-2 rounded-xl border border-amber-500/30 p-2">
                 <textarea value={notes[request.id] || ''} onChange={e =>
                   setNotes(previous => ({...previous, [request.id]:e.target.value}))}
@@ -139,7 +140,9 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
                 <Button type="button" variant="outline" disabled={busy === request.id}
                   className="border-amber-500/50 text-amber-700 dark:text-amber-400"
                   onClick={() => void cancel(request)}>
-                  إلغاء طلب الموافقة وإرسال تقرير أعمالي فقط
+                  {request.requesterUid === user.uid
+                    ? 'إلغاء الطلب وإرسال تقرير أعمالي فقط'
+                    : 'إلغاء الطلب نيابة عن مقدم الطلب (مع تسجيل السبب)'}
                 </Button>
               </div>
             )}
