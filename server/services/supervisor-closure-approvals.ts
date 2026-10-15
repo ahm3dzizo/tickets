@@ -171,6 +171,7 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
 }) {
   if (!['approve', 'reject'].includes(input.decision)) throw new Error('INVALID_DECISION');
   const notes = typeof input.notes === 'string' ? input.notes.trim().slice(0, 4000) : '';
+  if (input.decision === 'reject' && !notes) throw new Error('REJECTION_REASON_REQUIRED');
 
   const result = await prisma.$transaction(async tx => {
     const actor = await actorFor(tx, uid);
