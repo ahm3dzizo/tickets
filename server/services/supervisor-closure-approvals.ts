@@ -392,7 +392,7 @@ export async function listSupervisorClosureApprovals(uid: string, ticketId?: str
     orderBy: {createdAt: 'desc'}, take: ticketId ? 20 : 100,
     select: {
       id: true, ticketIds: true, projectId: true, unitId: true,
-      requesterUid: true, approverUids: true, votes: true, status: true,
+      requesterUid: true, approverUids: true, expectedRoles: true, votes: true, status: true,
       notes: true, items: true, createdAt: true, resolvedAt: true,
     },
   });
