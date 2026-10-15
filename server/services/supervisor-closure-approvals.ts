@@ -59,7 +59,7 @@ async function releaseHeldReport(tx: TX, data: {
     where: {approvalRequestId:data.approvalId, state:'awaiting_approval'},
     select: {id:true},
   });
-  if (!row) return; // customer may have no phone number; approval still resolves.
+  if (!row) throw new Error('APPROVAL_REPORT_NOT_FOUND'); // fail closed; never resolve without durable report
   await tx.ticketClosureReport.update({
     where: {id:row.id},
     data: {
