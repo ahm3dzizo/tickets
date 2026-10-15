@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {checkBulkStatusAccess, planBulkStatus} from '../bulk-ticket-status-policy.js';
+import {assertBulkStatusUsesClosureFlow, checkBulkStatusAccess, planBulkStatus} from '../bulk-ticket-status-policy.js';
 const supervisor = {uid:'a',role:'supervisor',disabled:false,projects:[{id:'p'}]};
 const manager = {...supervisor,uid:'m',role:'engineer'};
 const ticket = {projectId:'p',status:'open' as const,assignedSupervisorIds:['a','b'],supervisorClosures:[]};
@@ -29,4 +29,16 @@ test('supervisor reopens their own role only',()=>{
 });
 test('management reopening final ticket restores completed responsibilities',()=>{
  const done=planBulkStatus(manager,ticket,'closed');const reopened=planBulkStatus(manager,{...ticket,...done},'open');assert.deepEqual(reopened.assignedSupervisorIds,['a','b']);assert.equal(reopened.supervisorClosures.length,0);assert.equal(reopened.closedAt,null);
+});
+
+for (const status of ['closed', 'completed', 'absent', 'out_of_scope'] as const) {
+  test(`${status} must use the supervised closure workflow instead of bulk status`, () => {
+    assert.throws(
+      () => assertBulkStatusUsesClosureFlow(status),
+      (error: any) => error?.code === 'USE_CLOSURE_ENDPOINT' && error?.httpStatus === 409,
+    );
+  });
+}
+test('non-terminal bulk status changes still work', () => {
+  assert.doesNotThrow(() => assertBulkStatusUsesClosureFlow('pending'));
 });

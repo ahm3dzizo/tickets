@@ -106,6 +106,7 @@ onOpenChange: (open: boolean) => void;
 selectedTickets: Ticket[];
 clients: Client[];
 projects?: Record<string, Project>;
+initialCloseType?: CloseType;
 onSuccess: (result?: CloseTicketSuccess) => void;
 }
 
@@ -124,6 +125,7 @@ onOpenChange,
 selectedTickets,
 clients,
 projects,
+initialCloseType = 'normal',
 onSuccess
 }: CloseTicketDialogProps) {
 const { user } = useAuth();
@@ -159,7 +161,7 @@ const [waConnected, setWaConnected] = useState<boolean | null>(null);
 
 React.useEffect(() => {
 if (open) {
-setCloseType('normal');
+setCloseType(shared ? 'normal' : initialCloseType);
 setSelectedSupervisorIds(
   privileged
     ? activeSupervisorIds
@@ -175,7 +177,7 @@ setOutOfScopeMsgTemplate(t.outOfScopeMsg || '');
 });
 whatsappApi.getStatus().then(s => setWaConnected(s.connected)).catch(() => setWaConnected(false));
 }
-}, [open, privileged, user?.uid, selectedTickets]);
+}, [open, privileged, user?.uid, selectedTickets, initialCloseType]);
 
 const currentUnitId = selectedTickets[0]?.unitId;
 const targetClient = clients.find(c => String(c.unitId) === String(currentUnitId));
@@ -399,6 +401,21 @@ return;
 if (isPartialOnBehalf && !notes.trim()) {
 toast.error('اكتب سبب الإنهاء بالنيابة في الملاحظات');
 return;
+}
+// A batch can have different active supervisors for each ticket. Selecting
+// a supervisor who is not active on every ticket would fail atomically in
+// the API; explain this before submitting the report.
+if (privileged && !isFullClosure && selectedTickets.some(ticket =>
+  effectiveSelectedSupervisorIds.some(id => !(ticket.assignedSupervisorIds || []).includes(id))
+)) {
+  toast.error('المشرف المختار ليس نشطاً على كل التذاكر؛ اقفل تذاكر كل مجموعة مشرفين بشكل منفصل.');
+  return;
+}
+if (!privileged && selectedTickets.some(ticket =>
+  !(ticket.assignedSupervisorIds || []).includes(user?.uid || '')
+)) {
+  toast.error('بعض التذاكر لم تعد مسندة إليك؛ حدّث القائمة وأعد اختيار تذاكرك النشطة.');
+  return;
 }
 
 setLoading(true);
