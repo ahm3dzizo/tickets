@@ -1469,7 +1469,7 @@ export default function Settings() {
                           {(['end', 'start'] as const).map(side => (
                             <div key={side} className="space-y-1">
                               <label className="text-muted-foreground text-[10px] font-bold text-right block uppercase tracking-widest">{side === 'end' ? 'إلى' : 'من'}</label>
-                              <input type="time" value={currentWH[field]?.[side] || ''}
+                              <input type="time" value={displayWH[field]?.[side] || ''}
                                 onChange={e => setEditingWH({ ...displayWH, [field]: { ...(displayWH[field] || {}), [side]: e.target.value } })}
                                 className={`w-full bg-muted/50 border border-border rounded-xl h-10 px-3 text-foreground text-center focus:outline-none focus:border-${color}-500/50 font-mono text-sm`} />
                             </div>
