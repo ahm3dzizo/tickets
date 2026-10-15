@@ -84,7 +84,7 @@ export interface SupervisorClosureRequest {
   requesterUid: string;
   approverUids: string[];
   votes: Record<string, { decision: 'approve' | 'reject'; notes: string; at: string }>;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'canceled';
   notes: string;
   items: Array<{description: string; status: string}>;
   createdAt: string;
@@ -103,6 +103,11 @@ export const supervisorClosureApi = {
     post<{status: string; changed: boolean}>(
       `/tickets/closure-approvals/${encodeURIComponent(id)}/decision`,
       {decision, notes},
+    ),
+  cancel: (id: string, reason: string) =>
+    post<{status: string; changed: boolean}>(
+      `/tickets/closure-approvals/${encodeURIComponent(id)}/cancel`,
+      {reason},
     ),
 };
 
