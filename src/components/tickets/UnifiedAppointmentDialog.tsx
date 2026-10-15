@@ -592,6 +592,10 @@ export function UnifiedAppointmentDialog({
 
   useEffect(() => {
     if (!open || !canSendWhatsApp) return;
+    if (isDateDisallowed) {
+      setDynamicPreview('يرجى اختيار يوم عمل متاح لإرسال الفترة للعميل.');
+      return;
+    }
     const fetch = async () => {
       try {
         const result = await whatsappApi.previewAppointmentRange(multiIds, {
@@ -608,7 +612,7 @@ export function UnifiedAppointmentDialog({
     };
     const timer = setTimeout(fetch, 500);
     return () => clearTimeout(timer);
-  }, [open, startDate, endDate, preferredTimeLabel, notes, multiIds, clientPhone, canSendWhatsApp]);
+  }, [open, startDate, endDate, preferredTimeLabel, notes, multiIds, clientPhone, canSendWhatsApp, isDateDisallowed]);
 
   // ── Save (internal) ────────────────────────────────────────────────────────
 
