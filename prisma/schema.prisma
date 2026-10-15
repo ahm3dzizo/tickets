@@ -191,10 +191,35 @@ model TicketClosureReport {
   image       Bytes
   state       String   @default("pending")
   error       String?
+  approvalRequestId String?
+  snapshot    Json?
   createdAt   DateTime @default(now())
   sentAt      DateTime?
 
   @@index([state, createdAt])
+}
+
+// A single batch can contain several tickets for the same customer + unit.
+// Each non-initiating active supervisor records an independent approval.
+// The original ticket list and expected responsibilities are frozen for the vote.
+model TicketClosureApproval {
+  id                  String   @id @default(cuid())
+  ticketIds           String[]
+  projectId           String
+  unitId              String?
+  clientId            String?
+  requesterUid        String
+  approverUids        String[]
+  expectedRoles       Json
+  votes               Json     @default("{}")
+  notes               String
+  items               Json
+  status              String   @default("pending")
+  createdAt           DateTime @default(now())
+  resolvedAt          DateTime?
+
+  @@index([status, createdAt])
+  @@index([requesterUid, status])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
