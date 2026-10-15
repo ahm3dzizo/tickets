@@ -87,18 +87,31 @@ async function generatePendingClosureReports() {
       rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 
       const first = rows[0];
+      const snapshot = job.snapshot && typeof job.snapshot === 'object' && !Array.isArray(job.snapshot)
+        ? job.snapshot as {partial?: boolean; notes?: string; items?: Closure['items']}
+        : null;
+      const isPartial = snapshot?.partial === true;
+      const sender = isPartial
+        ? await prisma.user.findUnique({
+            where:{uid:job.senderUid},select:{displayName:true},
+          })
+        : null;
+      const senderName = sender?.displayName || 'مقدم التقرير';
       const reportItems = uniqueClosureItems(
-        rows.flatMap(ticket =>
-          Array.isArray(ticket.maintenanceItems)
-            ? ticket.maintenanceItems as Closure['items']
-            : [],
-        ),
+        isPartial
+          ? (Array.isArray(snapshot?.items) ? snapshot.items : [])
+          : rows.flatMap(ticket =>
+              Array.isArray(ticket.maintenanceItems)
+                ? ticket.maintenanceItems as Closure['items']
+                : [],
+            ),
       );
-      const reportNotes = [...new Set(
-        rows
-          .map(ticket => ticket.closureNotes?.trim())
-          .filter((note): note is string => Boolean(note)),
-      )].join('\n');
+      const reportNotes = isPartial
+        ? snapshot?.notes || ''
+        : [...new Set(
+            rows.map(ticket => ticket.closureNotes?.trim())
+              .filter((note): note is string => Boolean(note)),
+          )].join('\n');
 
       const body = {
         ticket_num: rows.map(ticket => ticket.ticketId).join('، '),
@@ -106,7 +119,9 @@ async function generatePendingClosureReports() {
         customer_name: first.client?.name || '',
         phone: job.phone,
         maint_items: reportItems.map(item => [item.description, item.status]),
-        notes: reportNotes,
+        notes: isPartial
+          ? `تقرير جزئي لأعمال المشرف ${senderName} فقط؛ أعمال باقي المشرفين لا تزال مفتوحة.\n${reportNotes}`
+          : reportNotes,
         block: first.unit?.block?.blockNumber || '',
         project: first.project.name,
         nhc: first.project.abbreviation,
@@ -117,13 +132,16 @@ async function generatePendingClosureReports() {
       };
 
       const image = await renderReport(body);
-      const caption = await buildClosingMsg({
-        ticketId: body.ticket_num,
-        clientName: body.customer_name,
-        description: reportItems.map(item => item.description).join('، '),
-        unitNumber: body.villa,
-        closureNotes: reportNotes,
-      });
+      const caption = isPartial
+        ? `تقرير أعمال جزئي للتذاكر ${body.ticket_num} من المشرف ${senderName}.\n` +
+          'التقرير يشمل أعمال هذا المشرف فقط. بقية المشرفين لم يعتمدوا الإغلاق النهائي، وتبقى أعمالهم قيد المتابعة.'
+        : await buildClosingMsg({
+          ticketId: body.ticket_num,
+          clientName: body.customer_name,
+          description: reportItems.map(item => item.description).join('، '),
+          unitNumber: body.villa,
+          closureNotes: reportNotes,
+        });
 
       await prisma.ticketClosureReport.update({
         where: { id: job.id },
@@ -179,13 +197,27 @@ async function sendPendingClosureReports() {
 
       if (!result.sent) throw new Error(result.error || 'WHATSAPP_NOT_SENT');
 
-      await prisma.ticketClosureReport.update({
-        where: { id: job.id },
-        data: {
-          state: 'sent',
-          sentAt: new Date(),
-          error: null,
-        },
+      await prisma.$transaction(async tx => {
+        await tx.ticketClosureReport.update({
+          where: { id: job.id },
+          data: {
+            state: 'sent', sentAt: new Date(), error: null,
+          },
+        });
+        for (const ticketId of job.ticketIds) {
+          await tx.ticketAudit.create({
+            data: {
+              ticketId,
+              field: job.snapshot ? 'تم إرسال تقرير أعمال المشرف الجزئي للعميل' : 'تم إرسال التقرير النهائي للعميل',
+              changedBy: job.senderUid,
+              newValue: JSON.stringify({
+                jobId: job.id, approvalId: job.approvalRequestId,
+                senderUid: job.senderUid, reportScope: job.snapshot ? 'partial' : 'final',
+                sentAt: new Date().toISOString(),
+              }),
+            },
+          });
+        }
       });
     } catch (error) {
       // Ambiguous delivery is never retried automatically: prevents duplicate customer reports.

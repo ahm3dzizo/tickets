@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -23,5 +25,9 @@ jobs:
         run: npm run lint
       - name: Test appointment workdays
         run: npm run test:workdays
+      - name: Test supervisor closure
+        run: npm run test:supervisor-close
+      - name: Verify approval migration safety
+        run: node scripts/apply-closure-approvals.js ${{ github.event.pull_request.base.sha }} --check
       - name: Build
         run: npm run build

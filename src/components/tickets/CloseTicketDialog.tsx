@@ -106,6 +106,7 @@ onOpenChange: (open: boolean) => void;
 selectedTickets: Ticket[];
 clients: Client[];
 projects?: Record<string, Project>;
+initialCloseType?: CloseType;
 onSuccess: (result?: CloseTicketSuccess) => void;
 }
 
@@ -124,24 +125,32 @@ onOpenChange,
 selectedTickets,
 clients,
 projects,
+initialCloseType = 'normal',
 onSuccess
 }: CloseTicketDialogProps) {
 const { user } = useAuth();
 const privileged = user?.role === 'admin' || user?.role === 'engineer';
+const isSupervisor = user?.role === 'supervisor';
+const [closureChoice, setClosureChoice] = useState<'self' | 'request_all'>('self');
 const supervisors = [...new Map(selectedTickets.flatMap(t => t.assignedSupervisors || []).map(s => [s.id, s])).values()];
 const activeSupervisorIds = [...new Set(selectedTickets.flatMap(t => t.assignedSupervisorIds || []))];
 const supervisorOptions = activeSupervisorIds.map(id => supervisors.find(s => s.id === id) || ({ id, name: id } as any));
 const [selectedSupervisorIds, setSelectedSupervisorIds] = useState<string[]>([]);
 const shared = selectedTickets.some(t => (t.assignedSupervisorIds?.length || 0) > 1 || (t.supervisorClosures?.length || 0) > 0);
+const needsOtherApproval = isSupervisor && selectedTickets.some(t =>
+  (t.assignedSupervisorIds || []).some(id => id !== user?.uid)
+);
+const selectionKey = selectedTickets.map(t => t.id).join('|');
 const [closeType, setCloseType] = useState<CloseType>('normal');
 const [loading, setLoading] = useState(false);
 const [copying, setCopying] = useState(false);
 const [notes, setNotes] = useState('');
 const [showMessagePreview, setShowMessagePreview] = useState(false);
-  const [maintItems, setMaintItems] = useState<{ description: string; status: string }[]>(
+  const [maintItems, setMaintItems] = useState<{ ticketId: string; description: string; status: string }[]>(
     selectedTickets.map(t => ({
+      ticketId: t.id,
       description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(),
-      status: 'تم'
+      status: 'تم',
     }))
   );
 
@@ -159,7 +168,8 @@ const [waConnected, setWaConnected] = useState<boolean | null>(null);
 
 React.useEffect(() => {
 if (open) {
-setCloseType('normal');
+setCloseType(shared ? 'normal' : initialCloseType);
+setClosureChoice('self');
 setSelectedSupervisorIds(
   privileged
     ? activeSupervisorIds
@@ -175,7 +185,7 @@ setOutOfScopeMsgTemplate(t.outOfScopeMsg || '');
 });
 whatsappApi.getStatus().then(s => setWaConnected(s.connected)).catch(() => setWaConnected(false));
 }
-}, [open, privileged, user?.uid, selectedTickets]);
+}, [open, privileged, user?.uid, selectionKey, initialCloseType]);
 
 const currentUnitId = selectedTickets[0]?.unitId;
 const targetClient = clients.find(c => String(c.unitId) === String(currentUnitId));
@@ -208,6 +218,8 @@ const isFullClosure =
   closeType === 'normal'
     ? allActiveSupervisorRolesSelected
     : !shared;
+const askingForAllApprovals = closeType === 'normal' && isSupervisor &&
+  closureChoice === 'request_all' && needsOtherApproval;
 const isPartialOnBehalf =
   closeType === 'normal' && privileged && !isFullClosure;
 const closureModeText =
@@ -228,20 +240,22 @@ const toggleSupervisor = (id: string) => {
 
 // Sync items if selectedTickets changes
 React.useEffect(() => {
-setMaintItems(selectedTickets.map(t => ({ description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم' })));
-}, [selectedTickets]);
+setMaintItems(selectedTickets.map(t => ({
+  ticketId: t.id, description: (t.description || '').replace(/(https?:\/\/[^\s]+)/g, '').trim(), status: 'تم',
+})));
+}, [selectionKey]);
 
 
 
 const addMaintItem = () => {
-setMaintItems([...maintItems, { description: '', status: 'تم' }]);
+setMaintItems([...maintItems, { ticketId: selectedTickets[0]?.id || '', description: '', status: 'تم' }]);
 };
 
 const removeMaintItem = (index: number) => {
 setMaintItems(maintItems.filter((_, i) => i !== index));
 };
 
-const updateItem = (index: number, field: 'description' | 'status', value: string) => {
+const updateItem = (index: number, field: 'description' | 'status' | 'ticketId', value: string) => {
 const newItems = [...maintItems];
 newItems[index] = { ...newItems[index], [field]: value };
 setMaintItems(newItems);
@@ -400,74 +414,84 @@ if (isPartialOnBehalf && !notes.trim()) {
 toast.error('اكتب سبب الإنهاء بالنيابة في الملاحظات');
 return;
 }
+// A batch can have different active supervisors for each ticket. Selecting
+// a supervisor who is not active on every ticket would fail atomically in
+// the API; explain this before submitting the report.
+if (privileged && !isFullClosure && selectedTickets.some(ticket =>
+  effectiveSelectedSupervisorIds.some(id => !(ticket.assignedSupervisorIds || []).includes(id))
+)) {
+  toast.error('المشرف المختار ليس نشطاً على كل التذاكر؛ اقفل تذاكر كل مجموعة مشرفين بشكل منفصل.');
+  return;
+}
+if (!privileged && !askingForAllApprovals && selectedTickets.some(ticket =>
+  !(ticket.assignedSupervisorIds || []).includes(user?.uid || '')
+)) {
+  toast.error('بعض التذاكر لم تعد مسندة إليك؛ حدّث القائمة وأعد اختيار تذاكرك النشطة.');
+  return;
+}
+if (askingForAllApprovals && !maintItems.some(item => item.description.trim())) {
+  toast.error('يجب توثيق الأعمال التي أنهيتها قبل إرسال طلب الموافقة.');
+  return;
+}
 
 setLoading(true);
 setCopying(true);
 
 try {
 const authToken = localStorage.getItem('retal_auth_token');
-const response = await fetch('/api/tickets/close', {
-  method: 'POST', headers: {'Content-Type': 'application/json', ...(authToken ? {Authorization: `Bearer ${authToken}`} : {})},
-  body: JSON.stringify({
-    ticketIds: selectedTickets.map(t => t.id),
-    scope: privileged
-      ? (isFullClosure ? 'all' : 'selected')
-      : 'self',
-    supervisorUids: privileged && !isFullClosure ? effectiveSelectedSupervisorIds : undefined,
-    notes,
-    items: maintItems,
-  }),
-});
-if (!response.ok) {
-  const error = await response.json().catch(() => ({}));
-  toast.error(
-    error.error === 'REASON_REQUIRED'
+const groups = [...selectedTickets.reduce((map, ticket) => {
+  const key = JSON.stringify([ticket.projectId, ticket.unitId, ticket.clientId]);
+  const row = map.get(key) || [];
+  row.push(ticket.id);
+  map.set(key, row);
+  return map;
+}, new Map<string, string[]>()).values()];
+const batches = askingForAllApprovals
+  ? [selectedTickets.map(t => t.id)]
+  : groups;
+for (const ticketIds of batches) {
+  const batchItems = maintItems.filter(item => ticketIds.includes(item.ticketId))
+    .map(({description,status}) => ({description,status}));
+  if (!batchItems.some(item => item.description.trim())) {
+    toast.error('اختر بنود الصيانة الخاصة بالتذاكر المختارة قبل الإغلاق.');
+    return;
+  }
+  const itemsByTicket = Object.fromEntries(selectedTickets.map(ticket => [
+    ticket.id, maintItems.filter(item => item.ticketId === ticket.id)
+      .map(({description,status}) => ({description,status})),
+  ]));
+  const response = await fetch(
+    askingForAllApprovals ? '/api/tickets/closure-approvals' : '/api/tickets/close', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', ...(authToken ? {Authorization: `Bearer ${authToken}`} : {})},
+      body: JSON.stringify(askingForAllApprovals ? {
+        ticketIds, notes, items: batchItems, itemsByTicket,
+      } : {
+        ticketIds,
+        scope: privileged ? (isFullClosure ? 'all' : 'selected') : 'self',
+        supervisorUids: privileged && !isFullClosure ? effectiveSelectedSupervisorIds : undefined,
+        notes, items: batchItems,
+      }),
+    }
+  );
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    toast.error(error.error === 'REASON_REQUIRED'
       ? 'سبب الإنهاء مطلوب فقط عند الإغلاق الجزئي بالنيابة عن مشرف'
-      : error.error || 'فشل إنهاء الدور'
-  ); return;
+      : error.error || 'فشل إنهاء الدور أو إرسال طلب الموافقة');
+    return;
+  }
 }
-if (response.headers.get('content-type')?.includes('application/json')) {
-  toast.success(isFullClosure
-    ? 'تم الإغلاق الكامل ووضع التقرير في طابور الإرسال'
-    : 'تم الإغلاق الجزئي؛ التقرير سيُرسل بعد إنهاء باقي المشرفين');
-  onSuccess({
-    ticketIds: selectedTickets.map(ticket => ticket.id),
-    final: isFullClosure,
-    closeType,
-  }); onOpenChange(false); return;
-}
-const blob = await response.blob();
-
-const firstTicketNo = selectedTickets[0]?.ticketId || selectedTickets[0]?.refNumber || 'ticket';
-const fileName = `${mainTicket?.unitNumber || 'villa'}-${firstTicketNo}.jpg`;
-let saved = false;
-
-// We no longer automatically download the blob to avoid cluttering the user's PC.
-// If the user picked a folder via directory picker, we still save it there silently.
-const dirHandle = await getSavedDirHandle();
-if (dirHandle) {
-try {
-const perm = await (dirHandle as any).requestPermission({ mode: 'readwrite' });
-if (perm === 'granted') {
-const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-const writable = await fileHandle.createWritable();
-await writable.write(blob);
-await writable.close();
-toast.success(`تم حفظ التقرير في ${dirHandle.name}/${fileName}`);
-}
-} catch {
-await clearDirHandle();
-}
-}
-
-const isWhatsAppSent = targetClient?.phone && previewMessage;
-toast.success(`تم حفظ الأدوار وإغلاق التذاكر المكتملة${isWhatsAppSent ? ' — التقرير النهائي في طابور الإرسال 💬' : ''}`);
+toast.success(askingForAllApprovals
+  ? 'تم إنهاء دورك وإرسال طلبات الموافقة للمشرفين. تقرير العميل معلّق حتى ردهم.'
+  : isFullClosure
+    ? 'تم الإغلاق النهائي وجدولة التقرير للعميل'
+    : 'تم إنهاء دورك مع إبقاء أدوار زملائك مفتوحة.');
 onSuccess({
   ticketIds: selectedTickets.map(ticket => ticket.id),
-  final: isFullClosure,
+  final: isFullClosure && !askingForAllApprovals,
   closeType,
-});
-onOpenChange(false);
+}); onOpenChange(false); return;
 } catch (error) {
 console.error('Error closing tickets:', error);
 toast.error('فشل إغلاق التذاكر');
@@ -504,6 +528,49 @@ return (
 </div>
 </div>
 </DialogHeader>
+{shared && (
+  <div className="space-y-3 rounded-2xl border border-blue-500/25 bg-blue-500/5 p-3 text-right" dir="rtl">
+    <p className="text-sm font-black text-foreground">التذاكر المشتركة والمشرفون المسؤولون</p>
+    <div className="max-h-40 space-y-2 overflow-y-auto">
+      {selectedTickets.map(ticket => (
+        <div key={ticket.id} className="rounded-xl border border-border/70 bg-background/70 p-2 text-xs">
+          <strong className="text-foreground">#{ticket.ticketId || ticket.refNumber}</strong>
+          <p className="mt-1 text-muted-foreground">
+            نشط: {(ticket.assignedSupervisorIds || []).map(id =>
+              supervisors.find(s => s.id === id)?.name || (id === user?.uid ? 'أنت' : id)
+            ).join('، ') || 'لا يوجد'}
+          </p>
+          {!!ticket.supervisorClosures?.length && (
+            <p className="mt-1 text-emerald-500">أنهى دوره: {ticket.supervisorClosures.map(h =>
+              h.supervisorName || (h.supervisorUid === user?.uid ? 'أنت' : h.supervisorUid)
+            ).join('، ')}</p>
+          )}
+        </div>
+      ))}
+    </div>
+    {needsOtherApproval && isSupervisor && (
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button type="button" onClick={() => setClosureChoice('self')}
+          className={cn('rounded-xl border p-3 text-right text-xs',
+            closureChoice === 'self' ? 'border-emerald-500 bg-emerald-500/10 font-black text-foreground' : 'border-border text-muted-foreground')}>
+          إنهاء دوري فقط
+          <small className="mt-1 block font-normal">التذكرة تظل مفتوحة للمشرفين الآخرين؛ بدون تقرير نهائي.</small>
+        </button>
+        <button type="button" onClick={() => setClosureChoice('request_all')}
+          className={cn('rounded-xl border p-3 text-right text-xs',
+            closureChoice === 'request_all' ? 'border-blue-500 bg-blue-500/10 font-black text-foreground' : 'border-border text-muted-foreground')}>
+          طلب الإغلاق للجميع
+          <small className="mt-1 block font-normal">إشعار لكل مشرف للموافقة أو الرفض. لن نرسل التقرير قبل الرد.</small>
+        </button>
+      </div>
+    )}
+    {askingForAllApprovals && (
+      <p className="rounded-lg bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+        عند موافقة الجميع: تقرير نهائي مجمّع. عند رفض أحدهم: تقرير جزئي بأعمالك فقط، وتبقى أدوار الآخرين مفتوحة.
+      </p>
+    )}
+  </div>
+)}
 <div className="rounded-2xl border border-border bg-muted/10 p-3 text-right space-y-3">
 <div className="flex items-center justify-between gap-3">
 <div>
@@ -520,7 +587,7 @@ return (
     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
     : 'border-amber-500/30 bg-amber-500/10 text-amber-500'
 )}>
-{isFullClosure ? 'إغلاق كامل' : 'إغلاق جزئي'}
+{askingForAllApprovals ? 'طلب موافقات' : isFullClosure ? 'إغلاق كامل' : 'إغلاق جزئي'}
 </span>
 </div>
 
@@ -578,7 +645,9 @@ return (
     ? 'border-emerald-500/25 bg-emerald-500/8 text-emerald-500'
     : 'border-amber-500/25 bg-amber-500/8 text-amber-500'
 )}>
-{closureModeText}
+{askingForAllApprovals
+  ? 'سيُقفل دورك ويصل إشعار لباقي المشرفين. التقرير يتوقف على نتيجة التصويت.'
+  : closureModeText}
 </div>
 {isPartialOnBehalf && (
   <p className="text-[11px] text-muted-foreground">سبب الإنهاء بالنيابة مطلوب في الملاحظات.</p>
@@ -641,6 +710,18 @@ className="text-blue-400 hover:text-blue-300 gap-1 h-7"
 <div className="space-y-2 sm:space-y-3">
 {maintItems.map((item, index) => (
 <div key={index} className="flex items-center gap-2 sm:gap-3 group animate-in slide-in-from-right-2">
+{selectedTickets.length > 1 && (
+  <select
+    aria-label="التذكرة الخاصة ببند الصيانة"
+    value={item.ticketId}
+    onChange={e => updateItem(index, 'ticketId', e.target.value)}
+    className="max-w-[105px] shrink-0 rounded-lg border border-border bg-background px-1 py-2 text-[11px] text-foreground"
+  >
+    {selectedTickets.map(ticket => <option key={ticket.id} value={ticket.id}>
+      #{ticket.ticketId || ticket.refNumber}
+    </option>)}
+  </select>
+)}
 <Button
 variant="ghost"
 size="icon"
@@ -759,7 +840,7 @@ closeType === 'normal' ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-1"
 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
 <>
 <Save className="w-4 h-4" />
-<span className="truncate">{isFullClosure ? 'تأكيد الإغلاق الكامل' : privileged ? 'تأكيد الإغلاق الجزئي' : 'إنهاء دوري'}</span>
+<span className="truncate">{askingForAllApprovals ? 'إنهاء دوري وطلب موافقة الجميع' : isFullClosure ? 'تأكيد الإغلاق الكامل' : privileged ? 'تأكيد الإغلاق الجزئي' : 'إنهاء دوري'}</span>
 </>
 )}
 </Button>

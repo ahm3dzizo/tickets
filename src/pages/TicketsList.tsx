@@ -57,6 +57,7 @@ export default function TicketsList() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [initialCloseType, setInitialCloseType] = useState<'normal' | 'absent' | 'out_of_scope'>('normal');
   const [apptTicket, setApptTicket] = useState<Ticket[] | null>(null);
   const [reassigning, setReassigning] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
@@ -216,8 +217,49 @@ export default function TicketsList() {
     finally { setReassigning(false); }
   };
 
+  const openSelectedTicketClosure = (requestedStatus = 'closed') => {
+    const selected = tickets.filter(ticket => selectedTicketIds.includes(ticket.id));
+    if (!selected.length) return;
+    const first = selected[0];
+    if (user?.role !== 'supervisor' && selected.some(ticket =>
+      ticket.projectId !== first.projectId ||
+      ticket.unitId !== first.unitId ||
+      ticket.clientId !== first.clientId
+    )) {
+      toast.error('اختر تذاكر نفس العميل والوحدة والمشروع للإغلاق.');
+      return;
+    }
+    if (user?.role === 'supervisor' && selected.some(ticket =>
+      ticket.projectId !== first.projectId ||
+      ticket.unitId !== first.unitId ||
+      ticket.clientId !== first.clientId
+    )) {
+      toast.info('سيتم تقسيم طلبات الموافقة والتقارير حسب كل عميل ووحدة، دون دمج بيانات عملاء مختلفين.');
+    }
+    const requestedType = requestedStatus === 'absent'
+      ? 'absent'
+      : requestedStatus === 'out_of_scope' || requestedStatus === 'out-of-scope'
+        ? 'out_of_scope'
+        : 'normal';
+    const hasSharedRoles = selected.some(ticket =>
+      (ticket.assignedSupervisorIds?.length ?? 0) > 1 ||
+      (ticket.supervisorClosures?.length ?? 0) > 0
+    );
+    if (requestedType !== 'normal' && hasSharedRoles) {
+      toast.info('التذكرة مشتركة؛ يجب إنهاء أدوار المشرفين من الإغلاق العادي أولاً.');
+    }
+    setInitialCloseType(hasSharedRoles ? 'normal' : requestedType);
+    setCloseDialogOpen(true);
+  };
+
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedTicketIds.length === 0) return;
+    // Terminal states must use /tickets/close so supervisor roles,
+    // maintenance reports, and WhatsApp delivery cannot be bypassed.
+    if (['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(newStatus)) {
+      openSelectedTicketClosure(newStatus);
+      return;
+    }
     try {
       await ticketsApi.bulkStatus(selectedTicketIds, newStatus);
       invalidateTicketCache();
@@ -601,12 +643,12 @@ export default function TicketsList() {
         </Tabs>
 
         {selectedTicketIds.length > 0 && (
-          <BulkActionBar count={selectedTicketIds.length} isMultiClient={uniqueClientIds.size > 1} onStatusChange={handleBulkStatusChange} onAppointment={handleAppointment} onContractor={() => setContractorDialogOpen(true)} onClose={() => setCloseDialogOpen(true)} onClear={() => setSelectedTicketIds([])} hidden={closeDialogOpen} />
+          <BulkActionBar count={selectedTicketIds.length} isMultiClient={uniqueClientIds.size > 1} onStatusChange={handleBulkStatusChange} onAppointment={handleAppointment} onContractor={() => setContractorDialogOpen(true)} onClose={() => openSelectedTicketClosure()} onClear={() => setSelectedTicketIds([])} hidden={closeDialogOpen} />
         )}
 
         <Suspense fallback={null}>
           {closeDialogOpen && (
-            <CloseTicketDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))} clients={Object.values(clients)} projects={projects} onSuccess={handleCloseSuccess} />
+            <CloseTicketDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} selectedTickets={tickets.filter(t => selectedTicketIds.includes(t.id))} clients={Object.values(clients)} projects={projects} initialCloseType={initialCloseType} onSuccess={handleCloseSuccess} />
           )}
 
           {ticketFormOpen && (

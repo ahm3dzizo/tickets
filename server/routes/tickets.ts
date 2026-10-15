@@ -1,4 +1,4 @@
-import {BulkStatusError, checkBulkStatusAccess, planBulkStatus} from '../services/bulk-ticket-status-policy.js';
+import {BulkStatusError, checkBulkStatusAccess, planBulkStatus, assertBulkStatusUsesClosureFlow} from '../services/bulk-ticket-status-policy.js';
 import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, requireAdmin, getRequesterRole, asTrimmedString } from "../auth.js";
@@ -12,10 +12,95 @@ import { maybeAutoFinishAppointment } from "./attendance.js";
 import type { TicketStatus } from "@prisma/client";
 
 import { closeTickets, closures } from '../services/ticket-closure.js';
+import { requestSupervisorClosure, voteSupervisorClosure, cancelSupervisorClosure, listSupervisorClosureApprovals } from '../services/supervisor-closure-approvals.js';
 import { deliverClosureReports } from '../services/closure-report-worker.js';
 import { invalidateTicketListResponseCache } from '../middleware/ticket-list-cache.js';
 
 const router = Router();
+
+function closureApprovalHttpError(e: unknown): {status: number; code: string; message: string} {
+  const code = e instanceof Error ? e.message : 'CLOSURE_APPROVAL_FAILED';
+  const forbidden = new Set(['FORBIDDEN', 'SUPERVISOR_NOT_ASSIGNED', 'SUPERVISOR_REQUIRED']);
+  const conflicted = new Set(['CLOSURE_APPROVAL_PENDING', 'DECISION_ALREADY_RECORDED',
+    'APPROVAL_ROLES_CHANGED', 'TICKET_ALREADY_CLOSED']);
+  const messages: Record<string,string> = {
+    FORBIDDEN: 'لا تملك صلاحية التصويت أو إدارة هذا الطلب.',
+    SUPERVISOR_NOT_ASSIGNED: 'التذكرة لم تُسند إليك ولا يوجد سجل لإنهاء دورك عليها.',
+    SUPERVISOR_REQUIRED: 'طلب إغلاق الجميع متاح للمشرف المسؤول فقط.',
+    CLOSURE_APPROVAL_PENDING: 'هناك طلب موافقة قيد الانتظار لهذه التذكرة. راجع صفحة الموافقات أولاً.',
+    APPROVAL_ROLES_CHANGED: 'تغيّر توزيع المشرفين بعد إرسال الطلب. يجب إلغاء الطلب القديم وإعادة إرساله.',
+    DECISION_ALREADY_RECORDED: 'تم تسجيل قرارك بالفعل ولا يمكن تغييره بعد الإرسال.',
+    TICKET_ALREADY_CLOSED: 'هذه التذكرة مغلقة بالفعل.',
+    TICKET_NOT_FOUND: 'إحدى التذاكر لم تعد موجودة.',
+    CLIENT_PHONE_REQUIRED: 'أضف رقم هاتف العميل قبل طلب إرسال تقرير الإغلاق.',
+    MULTI_CUSTOMER_ITEMS_REQUIRED: 'إغلاق تذاكر عملاء مختلفين يتطلب تحديد بنود كل تذكرة على حدة.',
+    MULTI_CUSTOMER_NOTES_REQUIRE_SEPARATE_REQUESTS:
+      'لمنع تسريب ملاحظات عميل لعميل آخر، أرسل كل مجموعة وحدها أو امسح الملاحظة المشتركة.',
+    MAINTENANCE_ITEMS_REQUIRED_FOR_EACH_TICKET: 'أضف بنود أعمال الصيانة لكل تذكرة من التذاكر المختارة.',
+    REJECTION_REASON_REQUIRED: 'سبب الرفض إلزامي.',
+    CANCELLATION_REASON_REQUIRED: 'سبب إلغاء طلب الموافقات إلزامي.',
+    INVALID_DECISION: 'قرار الموافقة أو الرفض غير صحيح.',
+    INVALID_MAINTENANCE_ITEMS: 'اكتب بند صيانة صحيحاً قبل إغلاق أعمالك.',
+    CLOSURE_APPROVAL_FAILED: 'تعذر تنفيذ العملية؛ حاول من جديد.',
+  };
+  return {status: forbidden.has(code) ? 403 : conflicted.has(code) ? 409 :
+    code === 'TICKET_NOT_FOUND' ? 404 : 400,
+    code, message: messages[code] || code};
+}
+
+router.get('/closure-approvals', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const ticketId = typeof req.query.ticketId === 'string' ? req.query.ticketId : undefined;
+    res.json(await listSupervisorClosureApprovals(req.uid!, ticketId));
+  } catch (e) {
+    const {status,code,message} = closureApprovalHttpError(e);
+    res.status(status).json({error:message,code});
+  }
+});
+
+router.post('/closure-approvals', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const result = await requestSupervisorClosure(req.uid!, req.body);
+    invalidateTicketListResponseCache();
+    getIO()?.emit('tickets:updated', {ids: req.body.ticketIds});
+    // No outbox dispatch while approvals are outstanding; immediate groups
+    // with no other supervisors can be generated normally.
+    void deliverClosureReports().catch(e => console.error('[ClosureApprovalReport]', e));
+    res.status(201).json(result);
+  } catch (e) {
+    const {status,code,message} = closureApprovalHttpError(e);
+    res.status(status).json({error:message,code});
+  }
+});
+
+router.post('/closure-approvals/:id/decision', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const result = await voteSupervisorClosure(req.uid!, req.params.id, req.body);
+    invalidateTicketListResponseCache();
+    getIO()?.emit('tickets:updated', {approvalId:req.params.id});
+    if (result.status !== 'pending') {
+      void deliverClosureReports().catch(e => console.error('[ClosureApprovalReport]', e));
+    }
+    res.json(result);
+  } catch (e) {
+    const {status,code,message} = closureApprovalHttpError(e);
+    res.status(status).json({error:message,code});
+  }
+});
+
+router.post('/closure-approvals/:id/cancel', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const result = await cancelSupervisorClosure(req.uid!, req.params.id, req.body.reason);
+    invalidateTicketListResponseCache();
+    getIO()?.emit('tickets:updated', {approvalId:req.params.id});
+    if (result.changed) void deliverClosureReports().catch(e => console.error('[ClosureApprovalReport]', e));
+    res.json(result);
+  } catch (e) {
+    const {status,code,message} = closureApprovalHttpError(e);
+    res.status(status).json({error:message,code});
+  }
+});
+
 router.post('/close', requireAuth, async (req: AuthRequest, res) => {
   try {
     if (!Array.isArray(req.body.ticketIds)) { res.status(400).json({error: 'INVALID_TICKET_IDS'}); return; }
@@ -1091,6 +1176,16 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     const ticket = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${req.params.id} FOR UPDATE`;
       const current = await tx.ticket.findUniqueOrThrow({where: {id: req.params.id}});
+      if ((normalizedStatus !== undefined || updatePayload.assignedSupervisorIds !== undefined) &&
+          await tx.ticketClosureApproval.findFirst({
+            where: { status: 'pending', ticketIds: { has: current.id } }, select: {id: true},
+          })) throw new Error('CLOSURE_APPROVAL_PENDING');
+      // Special terminal status updates are only valid for non-shared tickets.
+      // Shared responsibility must go through the per-supervisor closure workflow.
+      if (normalizedStatus && ['absent', 'out_of_scope'].includes(normalizedStatus) &&
+          (current.assignedSupervisorIds.length > 1 || closures(current.supervisorClosures).length > 0)) {
+        throw new Error('SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT');
+      }
       if (!supervisorExplicit && updatePayload.assignedSupervisorIds) updatePayload.assignedSupervisorIds = updatePayload.assignedSupervisorIds.filter((id: string) => !closures(current.supervisorClosures).some(h => h.supervisorUid === id));
       if (['closed', 'completed', 'absent', 'out_of_scope'].includes(current.status) && updatePayload.assignedSupervisorIds && !normalizedStatus) throw new Error('REOPEN_STATUS_REQUIRED');
       if (actor.role === 'supervisor' && !current.assignedSupervisorIds.includes(req.uid!)) throw new Error('SUPERVISOR_NOT_ACTIVE');
@@ -1245,6 +1340,7 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
     }
     const uniqueIds = [...new Set(ids.map(id => id.trim()))];
     const normalizedStatus = normalizeTicketStatus(status);
+    assertBulkStatusUsesClosureFlow(normalizedStatus);
     const actor = await prisma.user.findUnique({where: {uid: req.uid!}, include: {projects: {select: {id: true}}}});
     const updated = await prisma.$transaction(async tx => {
       for (const id of [...uniqueIds].sort()) await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${id} FOR UPDATE`;

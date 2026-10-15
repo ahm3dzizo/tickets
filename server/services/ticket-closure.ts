@@ -22,6 +22,9 @@ export async function closeTickets(uid: string, input: any) {
     for (const id of [...ids].sort()) await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${id} FOR UPDATE`;
     const rows = await tx.ticket.findMany({where: {id: {in: ids}}, include: {client: true, unit: {include: {block: true}}, project: true}});
     if (rows.length !== ids.length) throw new Error('TICKET_NOT_FOUND');
+    if (await tx.ticketClosureApproval.findFirst({
+      where: { status: 'pending', ticketIds: { hasSome: ids } }, select: { id: true },
+    })) throw new Error('CLOSURE_APPROVAL_PENDING');
     if (rows.some(t => actor.role !== 'admin' && !actor.projects.some(p => p.id === t.projectId))) throw new Error('FORBIDDEN');
     if (rows.some(t => t.unitId !== rows[0].unitId || t.clientId !== rows[0].clientId || t.projectId !== rows[0].projectId)) throw new Error('SAME_CUSTOMER_UNIT_REQUIRED');
     const finalRows: typeof rows = [];
