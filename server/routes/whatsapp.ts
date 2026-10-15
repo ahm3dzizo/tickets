@@ -3,8 +3,23 @@ import { AuthRequest, requireAuth } from '../auth.js';
 import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, sendWAText, pairWACode, buildAppointmentRangeMsg } from '../baileys.js';
 import qrcode from 'qrcode';
 import prisma from '../db.js';
+import { DEFAULT_WORK_HOURS, isWorkingDay, weekdayOf, type WorkHoursSettings } from './settings.js';
 
 const router = Router();
+
+// Suggested WhatsApp windows must follow the same project calendar as saved appointments.
+async function validateSuggestedRange(projectId: string, startDate: string, endDate: string): Promise<string | null> {
+  if (weekdayOf(startDate) < 0 || weekdayOf(endDate) < 0 || endDate < startDate) {
+    return 'الفترة المقترحة غير صحيحة';
+  }
+  const saved = await prisma.systemSetting.findUnique({ where: { key: 'work_hours' } });
+  const all = (saved?.value as unknown as WorkHoursSettings) || DEFAULT_WORK_HOURS;
+  const config = all.byProject?.[projectId] || all.default || DEFAULT_WORK_HOURS.default;
+  if (!isWorkingDay(startDate, config) || !isWorkingDay(endDate, config)) {
+    return 'الفترة تبدأ أو تنتهي في يوم إجازة. راجع أيام عمل المشروع';
+  }
+  return null;
+}
 
 // ─── GET /api/whatsapp/status ────────────────────────────────────────────────
 router.get('/status', requireAuth, async (req: AuthRequest, res) => {
@@ -144,10 +159,20 @@ router.post('/preview-appointment-range/:ticketId', requireAuth, async (req: Aut
     const ticketIds = ticketId.split(',');
     const tickets = await prisma.ticket.findMany({
       where: { id: { in: ticketIds } },
-      select: { ticketId: true, unit: { select: { unitNumber: true } }, client: { select: { name: true } } },
+      select: { ticketId: true, projectId: true, unit: { select: { unitNumber: true } }, client: { select: { name: true } } },
     });
     if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
 
+    const distinctProjects = new Set(tickets.map(t => t.projectId));
+    if (distinctProjects.size !== 1) {
+      res.status(400).json({ error: 'يجب أن تنتمي التذاكر لنفس المشروع' });
+      return;
+    }
+    const rangeError = await validateSuggestedRange(tickets[0].projectId, startDate, endDate);
+    if (rangeError) {
+      res.status(400).json({ error: rangeError });
+      return;
+    }
     const combinedTicketIds = tickets.map(t => t.ticketId).join(' و ');
     const firstTicket = tickets[0];
 
@@ -199,10 +224,20 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     const ticketIds = ticketId.split(',');
     const tickets = await prisma.ticket.findMany({
       where: { id: { in: ticketIds } },
-      select: { id: true, ticketId: true, status: true, unit: { select: { unitNumber: true } }, client: { select: { name: true } } },
+      select: { id: true, ticketId: true, projectId: true, status: true, unit: { select: { unitNumber: true } }, client: { select: { name: true } } },
     });
     if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
 
+    const distinctProjects = new Set(tickets.map(t => t.projectId));
+    if (distinctProjects.size !== 1) {
+      res.status(400).json({ error: 'يجب أن تنتمي التذاكر لنفس المشروع' });
+      return;
+    }
+    const rangeError = await validateSuggestedRange(tickets[0].projectId, startDate, endDate);
+    if (rangeError) {
+      res.status(400).json({ error: rangeError });
+      return;
+    }
     const combinedTicketIds = tickets.map(t => t.ticketId).join(' و ');
     const firstTicket = tickets[0];
 
