@@ -38,19 +38,40 @@ function pendingWhere(ids: string[]) {
 }
 function reportFrom(tx: TX, data: {
   ticketIds: string[]; senderUid: string; phone: string | null | undefined;
-  approvalRequestId?: string; items?: Item[]; notes?: string; partial?: boolean;
+  approvalRequestId?: string; items?: Item[]; notes?: string; partial?: boolean; hold?: boolean;
 }) {
   if (!data.phone) return Promise.resolve(null);
   return tx.ticketClosureReport.create({
     data: {
       ticketIds: data.ticketIds, senderUid: data.senderUid, phone: data.phone,
-      caption: '', image: Buffer.alloc(0), state: 'generating',
+      caption: '', image: Buffer.alloc(0),
+      state: data.hold ? 'awaiting_approval' : 'generating',
       approvalRequestId: data.approvalRequestId,
       ...(data.partial ? { snapshot: { items: data.items || [], notes: data.notes || '',
         partial: true, senderUid: data.senderUid } } : {}),
     },
   });
 }
+async function releaseHeldReport(tx: TX, data: {
+  approvalId: string; partial: boolean; items?: Item[]; notes?: string;
+}) {
+  const row = await tx.ticketClosureReport.findFirst({
+    where: {approvalRequestId:data.approvalId, state:'awaiting_approval'},
+    select: {id:true},
+  });
+  if (!row) return; // customer may have no phone number; approval still resolves.
+  await tx.ticketClosureReport.update({
+    where: {id:row.id},
+    data: {
+      state:'generating',
+      ...(data.partial ? {snapshot:{
+        items:data.items || [], notes:data.notes || '',
+        partial:true,
+      }} : {}),
+    },
+  });
+}
+
 async function audit(tx: TX, ticketId: string, field: string, changedBy: string, detail: unknown) {
   await tx.ticketAudit.create({
     data: { ticketId, field, changedBy, newValue: JSON.stringify(detail) },
@@ -145,6 +166,12 @@ export async function requestSupervisorClosure(uid: string, input: {
           expectedRoles: expectedRoles as Prisma.InputJsonValue,
           votes: {}, notes, items: items as unknown as Prisma.InputJsonValue,
         },
+      });
+      // Durable report queue record starts on the first request, but the
+      // worker cannot render/send it until approvals decide its exact scope.
+      await reportFrom(tx, {
+        ticketIds: approval.ticketIds, senderUid: uid,
+        phone: first.client?.phone, approvalRequestId: approval.id, hold: true,
       });
       const numbers = group.map(t => '#' + t.ticketId).join('، ');
       for (const ticket of group) await audit(tx, ticket.id, 'إرسال طلب الموافقة على الإغلاق لجميع المشرفين', uid, {
@@ -242,19 +269,14 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
           },
         });
       }
-      await reportFrom(tx, {
-        ticketIds: current.ticketIds, senderUid: current.requesterUid,
-        phone: rows[0]?.client?.phone, approvalRequestId: id,
-      });
+      await releaseHeldReport(tx, {approvalId:id, partial:false});
       for (const ticket of rows) await audit(tx, ticket.id, 'تم تجهيز تقرير الإغلاق النهائي بعد جميع الموافقات', current.requesterUid, {
         approvalId: id, approvedBy: current.approverUids, ticketIds: current.ticketIds,
       });
     } else if (status === 'rejected') {
       const partialItems = Array.isArray(current.items) ? current.items as Item[] : [];
-      await reportFrom(tx, {
-        ticketIds: current.ticketIds, senderUid: current.requesterUid,
-        phone: rows[0]?.client?.phone, approvalRequestId: id,
-        items: partialItems, notes: current.notes, partial: true,
+      await releaseHeldReport(tx, {
+        approvalId:id, items:partialItems, notes:current.notes, partial:true,
       });
       for (const ticket of rows) await audit(tx, ticket.id, 'إعداد تقرير جزئي بعد رفض مشرف آخر', current.requesterUid, {
         approvalId: id, rejectedBy: uid, remainingSupervisors: ticket.assignedSupervisorIds,
@@ -308,9 +330,8 @@ export async function cancelSupervisorClosure(uid: string, id: string, reason: u
     const current = await tx.ticketClosureApproval.findUniqueOrThrow({where:{id}});
     if (current.status !== 'pending') return {status:current.status, changed:false, request:current};
     const rows = await tx.ticket.findMany({where:{id:{in:current.ticketIds}}, include:{client:true}});
-    await reportFrom(tx, {
-      ticketIds:current.ticketIds, senderUid:current.requesterUid, phone:rows[0]?.client?.phone,
-      approvalRequestId:id, items:Array.isArray(current.items) ? current.items as Item[] : [],
+    await releaseHeldReport(tx, {
+      approvalId:id, items:Array.isArray(current.items) ? current.items as Item[] : [],
       notes:current.notes, partial:true,
     });
     for (const ticket of rows) {
