@@ -304,7 +304,7 @@ export async function listSupervisorClosureApprovals(uid: string, ticketId?: str
     select: {
       id: true, ticketIds: true, projectId: true, unitId: true,
       requesterUid: true, approverUids: true, votes: true, status: true,
-      notes: true, createdAt: true, resolvedAt: true,
+      notes: true, items: true, createdAt: true, resolvedAt: true,
     },
   });
   if (!requests.length) return [];
