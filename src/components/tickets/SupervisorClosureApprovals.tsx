@@ -47,6 +47,18 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
     } finally { setBusy(null); }
   };
 
+  const cancel = async (request: SupervisorClosureRequest) => {
+    const reason = (notes[request.id] || '').trim();
+    if (!reason) {toast.error('اكتب سبب الإلغاء قبل إنهاء الطلب.'); return;}
+    setBusy(request.id);
+    try {
+      await supervisorClosureApi.cancel(request.id, reason);
+      toast.success('تم إلغاء الطلب. تقرير أعمالك الجزئي في طابور الإرسال.');
+      await reload();
+    } catch (e) {toast.error(e instanceof Error ? e.message : 'تعذّر إلغاء الطلب');}
+    finally {setBusy(null);}
+  };
+
   if (!user || !['admin', 'engineer', 'supervisor'].includes(user.role)) return null;
   const visible = requests.filter(r => r.status === 'pending' || ticketId);
   if (!visible.length && !loading) return ticketId ? null : (
@@ -79,7 +91,8 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
               <strong className="text-sm text-foreground">تذاكر {ticketLabels.map(n => '#' + n).join('، ')}</strong>
               <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600">
                 {request.status === 'approved' ? 'تم الإغلاق النهائي' :
-                  request.status === 'rejected' ? 'تم إرسال التقرير الجزئي للطابور' :
+                  request.status === 'rejected' ? 'تقرير جزئي بعد الرفض' :
+                    request.status === 'canceled' ? 'تم إلغاء الطلب (تقرير جزئي)' :
                     'بانتظار الموافقات'}
               </span>
             </div>
@@ -105,6 +118,19 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock3 className="h-3.5 w-3.5" /> في انتظار {waiting.map(uid => request.people?.[uid] || uid).join('، ')}
               </p>
+            )}
+            {request.status === 'pending' && user.uid === request.requesterUid && (
+              <div className="space-y-2 rounded-xl border border-amber-500/30 p-2">
+                <textarea value={notes[request.id] || ''} onChange={e =>
+                  setNotes(previous => ({...previous, [request.id]:e.target.value}))}
+                  placeholder="سبب إلغاء طلب الموافقات (مطلوب)"
+                  className="min-h-14 w-full rounded-lg border border-input bg-background p-2 text-xs text-foreground" />
+                <Button type="button" variant="outline" disabled={busy === request.id}
+                  className="border-amber-500/50 text-amber-700 dark:text-amber-400"
+                  onClick={() => void cancel(request)}>
+                  إلغاء طلب الموافقة وإرسال تقرير أعمالي فقط
+                </Button>
+              </div>
             )}
             {mayVote && (
               <div className="space-y-2 rounded-xl border border-blue-500/20 bg-blue-500/5 p-2">
