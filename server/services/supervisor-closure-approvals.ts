@@ -105,6 +105,7 @@ export async function requestSupervisorClosure(uid: string, input: {
     });
     if (rows.length !== ticketIds.length) throw new Error('TICKET_NOT_FOUND');
     if (rows.some(ticket => !mayAccessProject(actor, ticket.projectId))) throw new Error('FORBIDDEN');
+    if (rows.some(ticket => !ticket.client?.phone)) throw new Error('CLIENT_PHONE_REQUIRED');
     validateApprovalInitiator(actor.role, uid, rows);
     const pending = await tx.ticketClosureApproval.findFirst({
       where: pendingWhere(ticketIds), select: { id: true },
