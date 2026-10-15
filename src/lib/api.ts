@@ -329,14 +329,18 @@ export const whatsappBotApi = {
 // ── Settings ──────────────────────────────────────────────────────────────────
 type WaTemplates = { openingMsg: string; closingMsg: string; absentMsg?: string; outOfScopeMsg?: string };
 export type TimePeriod = { start: string; end: string };
-export type WorkHoursConfig = {
-  enabled:       boolean;
+export type DailyWorkHours = {
   hasMorning?:   boolean;
   morning:       TimePeriod;
   hasBreak?:     boolean;
   break:         TimePeriod;
   hasAfternoon?: boolean;
   afternoon:     TimePeriod;
+};
+export type WorkHoursConfig = DailyWorkHours & {
+  enabled: boolean;
+  workingDays?: number[]; // 0 = Sunday, 5 = Friday, 6 = Saturday
+  dayOverrides?: Record<string, DailyWorkHours>;
 };
 export type WorkHoursSettings = {
   default:   WorkHoursConfig;

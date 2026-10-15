@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { appointmentsApi, whatsappApi, usersApi, ticketsApi, clientsApi, projectsApi, settingsApi, techniciansApi } from '@/lib/api';
+import type { WorkHoursConfig } from '@/lib/api';
+import { DEFAULT_WORKING_DAYS, addWorkingDays, dateWorkHours, isWorkingDate, nextWorkingDate } from '@/lib/workDays';
 import { toast } from 'sonner';
 import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { TypesSelector } from './TypesSelector';
@@ -31,16 +33,6 @@ interface TicketLike {
   detectedTypes?: string[];
   assignedSupervisorIds?: string[];
   status: string;
-}
-
-interface WorkHoursConfig {
-  enabled: boolean;
-  hasMorning?: boolean;
-  morning: { start: string; end: string };
-  hasBreak?: boolean;
-  break: { start: string; end: string };
-  hasAfternoon?: boolean;
-  afternoon: { start: string; end: string };
 }
 
 interface TimeOption {
@@ -75,6 +67,7 @@ const RANGE_PRESETS = [
 
 const DEFAULT_WH: WorkHoursConfig = {
   enabled: true,
+  workingDays: [...DEFAULT_WORKING_DAYS],
   hasMorning: true,
   morning: { start: '08:00', end: '12:00' },
   hasBreak: true,
@@ -87,18 +80,6 @@ function todayStr(): string {
   const d = new Date();
   const offset = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - offset).toISOString().split('T')[0];
-}
-
-function addDays(dateStr: string, n: number): string {
-  if (!dateStr) return todayStr();
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return todayStr();
-  let added = 0;
-  while (added < n) {
-    d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 5) added++; // skip Friday
-  }
-  return d.toISOString().split('T')[0];
 }
 
 function formatDateAr(ds: string): string {
@@ -311,8 +292,11 @@ export function UnifiedAppointmentDialog({
     return allWorkHours.default || DEFAULT_WH;
   }, [allWorkHours, currentProjectId]);
 
-  const timeOptions = useMemo(() => buildTimeOptions(workHours), [workHours]);
-  const endDate = addDays(startDate, rangeDays - 1);
+  const selectedDate = canSendWhatsApp ? startDate : date;
+  const dayHours = useMemo(() => dateWorkHours(selectedDate, workHours), [selectedDate, workHours]);
+  const isDateDisallowed = !isWorkingDate(selectedDate, workHours);
+  const timeOptions = useMemo(() => buildTimeOptions(dayHours), [dayHours]);
+  const endDate = addWorkingDays(startDate, rangeDays - 1, workHours);
 
   const preferredTimeLabel = useMemo(() => {
     if (timeMode === 'custom') return `الساعة ${customTime}`;
@@ -325,17 +309,17 @@ export function UnifiedAppointmentDialog({
 
   const effectiveTime = timeMode === 'custom' ? customTime : (finalTime || customTime);
   const effectiveMins = useMemo(() => toMins(effectiveTime), [effectiveTime]);
-  const isInsideWorkHours = useMemo(() => inWorkHours(effectiveMins, workHours), [effectiveMins, workHours]);
+  const isInsideWorkHours = useMemo(() => inWorkHours(effectiveMins, dayHours), [effectiveMins, dayHours]);
   const suggestedCorrectionMins = useMemo(() => {
-    if (isInsideWorkHours || !workHours.enabled) return null;
-    return autoCorrectMins(effectiveMins, workHours);
-  }, [isInsideWorkHours, effectiveMins, workHours]);
-  const isTimeDisallowed = workHours.enabled && !isInsideWorkHours && suggestedCorrectionMins === null;
+    if (isInsideWorkHours || !dayHours.enabled) return null;
+    return autoCorrectMins(effectiveMins, dayHours);
+  }, [isInsideWorkHours, effectiveMins, dayHours]);
+  const isTimeDisallowed = dayHours.enabled && !isInsideWorkHours && suggestedCorrectionMins === null;
 
   // mergedTypes kept as fallback for any remaining references
   const mergedTypes: Record<string, string> = { ...typeTranslations };
 
-  const checkDate = isCalendarMode ? dateStr : (canSendWhatsApp ? startDate : date);
+  const checkDate = selectedDate;
   const hasConflict = useMemo(() => {
     if (!checkDate) return false;
 
@@ -608,11 +592,15 @@ export function UnifiedAppointmentDialog({
 
   useEffect(() => {
     if (!open || !canSendWhatsApp) return;
+    if (isDateDisallowed) {
+      setDynamicPreview('يرجى اختيار يوم عمل متاح لإرسال الفترة للعميل.');
+      return;
+    }
     const fetch = async () => {
       try {
         const result = await whatsappApi.previewAppointmentRange(multiIds, {
           startDate,
-          endDate: addDays(startDate, rangeDays - 1),
+          endDate,
           preferredTime: preferredTimeLabel,
           notes: notes || undefined,
           phone: clientPhone || '966500000000',
@@ -624,18 +612,20 @@ export function UnifiedAppointmentDialog({
     };
     const timer = setTimeout(fetch, 500);
     return () => clearTimeout(timer);
-  }, [open, startDate, rangeDays, preferredTimeLabel, notes, multiIds, clientPhone, canSendWhatsApp]);
+  }, [open, startDate, endDate, preferredTimeLabel, notes, multiIds, clientPhone, canSendWhatsApp, isDateDisallowed]);
 
   // ── Save (internal) ────────────────────────────────────────────────────────
 
   const handleSave = async () => {
+    if (isDateDisallowed) { toast.error('هذا اليوم إجازة طبقاً لإعدادات العمل للمشروع'); return; }
+    if (isTimeDisallowed) { toast.error('الوقت خارج أوقات دوام هذا اليوم'); return; }
     setSaving(true);
     try {
       let saveTime = timeMode === 'custom' ? customTime : (finalTime || undefined);
-      if (saveTime && workHours.enabled) {
+      if (saveTime && dayHours.enabled) {
         const mins = toMins(saveTime);
-        if (!inWorkHours(mins, workHours)) {
-          const corrected = autoCorrectMins(mins, workHours);
+        if (!inWorkHours(mins, dayHours)) {
+          const corrected = autoCorrectMins(mins, dayHours);
           if (corrected !== null) {
             saveTime = minsToHhmm(corrected);
           }
@@ -716,7 +706,7 @@ export function UnifiedAppointmentDialog({
         toast.success('تم حفظ الموعد بنجاح');
 
       } else if (isCalendarMode) {
-        const effectiveDate = dateStr ?? date;
+        const effectiveDate = date;
 
         if (hasExistingTickets && chosenTickets.length > 0) {
           const existingApptId: string | undefined = chosenTickets.find((t: any) => t.appointmentId)?.appointmentId;
@@ -779,7 +769,7 @@ export function UnifiedAppointmentDialog({
   // ── Send WhatsApp ──────────────────────────────────────────────────────────
 
   const handleSendWhatsApp = async () => {
-    if (!clientPhone) return;
+    if (!clientPhone || isDateDisallowed || isTimeDisallowed) return;
     setSending(true);
     try {
       const result = await whatsappApi.sendAppointmentRange(multiIds, {
@@ -808,7 +798,7 @@ export function UnifiedAppointmentDialog({
   // ── Can save ───────────────────────────────────────────────────────────────
 
   const isBusy = saving || sending;
-  const canSave = !isBusy && !isTimeDisallowed && (
+  const canSave = !isBusy && !isDateDisallowed && !isTimeDisallowed && (
     isEditMode
       ? !!date
       : isTicketMode
@@ -878,7 +868,7 @@ export function UnifiedAppointmentDialog({
           {/* Calendar add mode: show date */}
           {isCalendarMode && dateStr && (
             <p className="text-sm text-muted-foreground text-right mt-1">
-              {new Date(dateStr).toLocaleDateString('ar-EG', {
+              {new Date(date).toLocaleDateString('ar-EG', {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
               })}
             </p>
@@ -1200,13 +1190,14 @@ export function UnifiedAppointmentDialog({
                   onChange={e => {
                     const val = e.target.value;
                     if (!val) return;
-                    const d = new Date(val);
-                    if (d.getDay() === 5) {
-                      toast.error('لا يمكن اختيار يوم الجمعة، تم التحويل للسبت تلقائياً.');
-                      d.setDate(d.getDate() + 1);
-                      setStartDate(d.toISOString().split('T')[0]);
-                    } else {
+                    if (isWorkingDate(val, workHours)) {
                       setStartDate(val);
+                    } else {
+                      const next = nextWorkingDate(val, workHours);
+                      toast.error(next
+                        ? 'هذا اليوم إجازة للمشروع، تم الانتقال لأول يوم عمل متاح.'
+                        : 'لا توجد أيام عمل مفعلة للمشروع. عدّل أيام العمل من الإعدادات.');
+                      setStartDate(next || val);
                     }
                   }}
                   className="w-full bg-background border border-input rounded-xl h-10 sm:h-11 px-3 text-foreground text-sm"
@@ -1245,7 +1236,7 @@ export function UnifiedAppointmentDialog({
           )}
 
           {/* ── DATE PICKER (non-WhatsApp modes) ─────────────────────── */}
-          {!canSendWhatsApp && !isCalendarMode && (
+          {!canSendWhatsApp && (
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold block">التاريخ</Label>
               <input
@@ -1254,6 +1245,19 @@ export function UnifiedAppointmentDialog({
                 onChange={e => setDate(e.target.value)}
                 className="w-full bg-background border border-input rounded-xl h-10 sm:h-11 px-3 text-foreground text-sm"
               />
+            </div>
+          )}
+          {isDateDisallowed && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-right">
+              <p className="text-xs font-bold text-red-600 dark:text-red-400">هذا اليوم إجازة في إعدادات المشروع، ولا يمكن حجز موعد عليه.</p>
+              {nextWorkingDate(selectedDate, workHours) && (
+                <button type="button" className="mt-2 text-xs font-bold text-blue-600 underline dark:text-blue-400"
+                  onClick={() => canSendWhatsApp
+                    ? setStartDate(nextWorkingDate(selectedDate, workHours)!)
+                    : setDate(nextWorkingDate(selectedDate, workHours)!)}>
+                  الانتقال إلى يوم العمل التالي
+                </button>
+              )}
             </div>
           )}
 
@@ -1293,7 +1297,7 @@ export function UnifiedAppointmentDialog({
                 onChange={e => { setCustomTime(e.target.value); setTimeMode('custom'); }}
                 className={cn(
                   "w-full bg-background border rounded-xl h-10 sm:h-11 px-3 text-foreground text-sm transition-colors",
-                  workHours.enabled && !isInsideWorkHours
+                  dayHours.enabled && !isInsideWorkHours
                     ? (suggestedCorrectionMins !== null ? "border-amber-500/60 focus:border-amber-500" : "border-red-500/60 focus:border-red-500")
                     : "border-input"
                 )}
@@ -1301,7 +1305,7 @@ export function UnifiedAppointmentDialog({
             </div>
 
             {/* تنبيه وقيود أوقات الدوام */}
-            {workHours.enabled && !isInsideWorkHours && (
+            {dayHours.enabled && !isInsideWorkHours && (
               <div className="pt-1">
                 {suggestedCorrectionMins !== null ? (
                   <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-amber-700 dark:text-amber-300">
@@ -1326,7 +1330,7 @@ export function UnifiedAppointmentDialog({
                     <div>
                       <p className="font-bold">الوقت المحدد ({fmtTime(effectiveTime)}) خارج أوقات الدوام المعتمدة</p>
                       <p className="text-[11px] text-red-600/80 dark:text-red-400/80 mt-0.5 leading-normal">
-                        أوقات العمل المتاحة: {getWorkHoursSummary(workHours)}
+                        أوقات العمل المتاحة: {getWorkHoursSummary(dayHours)}
                       </p>
                     </div>
                   </div>
@@ -1495,7 +1499,7 @@ export function UnifiedAppointmentDialog({
             {canSendWhatsApp && (
               <Button
                 onClick={handleSendWhatsApp}
-                disabled={isBusy || !startDate || hasConflict}
+                disabled={isBusy || isDateDisallowed || isTimeDisallowed || !startDate || hasConflict}
                 className="w-full rounded-2xl h-11 sm:h-12 font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/10"
               >
                 {sending
