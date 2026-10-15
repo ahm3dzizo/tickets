@@ -384,10 +384,12 @@ export async function listSupervisorClosureApprovals(uid: string, ticketId?: str
   const requests = await prisma.ticketClosureApproval.findMany({
     where: {
       ...(ticketId ? {ticketIds: {has: ticketId}} : {}),
-      ...(actor.role === 'admin' ? {} : {
-        projectId: {in: actor.projects.map(p => p.id)},
-        OR: [{requesterUid: uid}, {approverUids: {has: uid}}],
-      }),
+      ...(actor.role === 'admin' ? {} : actor.role === 'engineer'
+        ? {projectId: {in: actor.projects.map(p => p.id)}}
+        : {
+            projectId: {in: actor.projects.map(p => p.id)},
+            OR: [{requesterUid: uid}, {approverUids: {has: uid}}],
+          }),
     },
     orderBy: {createdAt: 'desc'}, take: ticketId ? 20 : 100,
     select: {
