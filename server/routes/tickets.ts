@@ -12,10 +12,61 @@ import { maybeAutoFinishAppointment } from "./attendance.js";
 import type { TicketStatus } from "@prisma/client";
 
 import { closeTickets, closures } from '../services/ticket-closure.js';
+import { requestSupervisorClosure, voteSupervisorClosure, listSupervisorClosureApprovals } from '../services/supervisor-closure-approvals.js';
 import { deliverClosureReports } from '../services/closure-report-worker.js';
 import { invalidateTicketListResponseCache } from '../middleware/ticket-list-cache.js';
 
 const router = Router();
+
+function closureApprovalHttpError(e: unknown): {status: number; code: string} {
+  const code = e instanceof Error ? e.message : 'CLOSURE_APPROVAL_FAILED';
+  const forbidden = new Set(['FORBIDDEN', 'SUPERVISOR_NOT_ASSIGNED', 'SUPERVISOR_REQUIRED']);
+  const conflicted = new Set(['CLOSURE_APPROVAL_PENDING', 'DECISION_ALREADY_RECORDED',
+    'APPROVAL_ROLES_CHANGED', 'TICKET_ALREADY_CLOSED']);
+  return {status: forbidden.has(code) ? 403 : conflicted.has(code) ? 409 :
+    code === 'TICKET_NOT_FOUND' ? 404 : 400, code};
+}
+
+router.get('/closure-approvals', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const ticketId = typeof req.query.ticketId === 'string' ? req.query.ticketId : undefined;
+    res.json(await listSupervisorClosureApprovals(req.uid!, ticketId));
+  } catch (e) {
+    const {status,code} = closureApprovalHttpError(e);
+    res.status(status).json({error:code});
+  }
+});
+
+router.post('/closure-approvals', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const result = await requestSupervisorClosure(req.uid!, req.body);
+    invalidateTicketListResponseCache();
+    getIO()?.emit('tickets:updated', {ids: req.body.ticketIds});
+    // No outbox dispatch while approvals are outstanding; immediate groups
+    // with no other supervisors can be generated normally.
+    void deliverClosureReports().catch(e => console.error('[ClosureApprovalReport]', e));
+    res.status(201).json(result);
+  } catch (e) {
+    const {status,code} = closureApprovalHttpError(e);
+    res.status(status).json({error:code});
+  }
+});
+
+router.post('/closure-approvals/:id/decision', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const result = await voteSupervisorClosure(req.uid!, req.params.id, req.body);
+    invalidateTicketListResponseCache();
+    getIO()?.emit('tickets:updated', {approvalId:req.params.id});
+    if (result.status !== 'pending') {
+      void deliverClosureReports().catch(e => console.error('[ClosureApprovalReport]', e));
+    }
+    res.json(result);
+  } catch (e) {
+    const {status,code} = closureApprovalHttpError(e);
+    res.status(status).json({error:code});
+  }
+});
+
 router.post('/close', requireAuth, async (req: AuthRequest, res) => {
   try {
     if (!Array.isArray(req.body.ticketIds)) { res.status(400).json({error: 'INVALID_TICKET_IDS'}); return; }
