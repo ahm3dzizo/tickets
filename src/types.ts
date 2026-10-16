@@ -88,6 +88,7 @@ export interface Ticket {
   priority: 'low' | 'medium' | 'high' | 'urgent' | number;
   assigneeName?: string;
   globalStatus?: Ticket['status'];
+  supervisorStatuses?: Record<string, Ticket['status']>;
   supervisorClosures?: {supervisorUid: string; supervisorName?: string; completedAt: string; completedByUid: string; notes: string; items: {description: string; status: string}[]}[];
   assignedSupervisorIds?: string[];
   // Virtual fields computed by the API from relations:
