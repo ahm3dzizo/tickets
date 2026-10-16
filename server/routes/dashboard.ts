@@ -1,4 +1,5 @@
 import {closures} from '../services/ticket-closure-plan.js';
+import {personalTicketStatus} from '../services/bulk-ticket-status-policy.js';
 import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth } from "../auth.js";
@@ -40,9 +41,10 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
       NOT: { description: { startsWith: 'موعد صيانة مجدول يدوياً للمشرف' } }
     };
 
-    const personalTickets = user.role === 'supervisor' ? (await prisma.ticket.findMany({where: ticketsWhere, select: {status: true, type: true, createdAt: true, closedAt: true, assignedSupervisorIds: true, supervisorClosures: true}})).map(t => {
+    const personalTickets = user.role === 'supervisor' ? (await prisma.ticket.findMany({where: ticketsWhere, select: {status: true, type: true, createdAt: true, closedAt: true, assignedSupervisorIds: true, supervisorClosures: true, supervisorStatuses: true}})).map(t => {
       const done = !t.assignedSupervisorIds.includes(user.uid) ? closures(t.supervisorClosures).find(h => h.supervisorUid === user.uid) : undefined;
-      return done ? {...t, status: 'closed' as const, closedAt: new Date(done.completedAt)} : t;
+      return {...t, status: personalTicketStatus(t, user.uid),
+        ...(done ? {closedAt: new Date(done.completedAt)} : {})};
     }) : null;
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);

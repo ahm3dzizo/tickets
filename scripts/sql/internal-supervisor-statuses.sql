@@ -1,0 +1,4 @@
+BEGIN;
+ALTER TABLE "Ticket"
+  ADD COLUMN IF NOT EXISTS "supervisorStatuses" JSONB NOT NULL DEFAULT '{}'::jsonb;
+COMMIT;

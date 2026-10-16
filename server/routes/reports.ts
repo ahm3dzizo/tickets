@@ -1,4 +1,5 @@
 import { closures } from '../services/ticket-closure-plan.js';
+import {personalTicketStatus} from '../services/bulk-ticket-status-policy.js';
 import { Router } from 'express';
 import { AuthRequest, requireAuth } from '../auth.js';
 import prisma from '../db.js';
@@ -68,7 +69,7 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
       select: {
         id: true, type: true, typeId: true, subTypeId: true,
         status: true, priority: true, projectId: true,
-        clientId: true, assignedSupervisorIds: true, supervisorClosures: true,
+        clientId: true, assignedSupervisorIds: true, supervisorClosures: true, supervisorStatuses: true,
         issuedAt: true, createdAt: true, closedAt: true,
         unit:   { select: { unitNumber: true } },
         client: { select: { name: true } },
@@ -78,7 +79,10 @@ router.get('/stats', requireAuth, async (req: AuthRequest, res) => {
     // Filter by date range using issuedAt
     const filtered = allTickets.map(t => {
       const done = closures(t.supervisorClosures).find(h => h.supervisorUid === user.uid);
-      return user.role === 'supervisor' && done && !t.assignedSupervisorIds.includes(user.uid) ? {...t, status: 'closed' as const, closedAt: new Date(done.completedAt)} : t;
+      return user.role === 'supervisor'
+        ? {...t, status: personalTicketStatus(t, user.uid),
+            ...(done && !t.assignedSupervisorIds.includes(user.uid) ? {closedAt: new Date(done.completedAt)} : {})}
+        : t;
     }).filter(t => {
       const d = parseIssued(t.issuedAt, t.createdAt);
       if (from && d < new Date(from)) return false;

@@ -242,7 +242,8 @@ export const ticketsApi = {
   create:       (data: any)                            => post<any>('/tickets', data),
   bulkCreate:   (tickets: any[])                       => post<{ count: number }>('/tickets/bulk', { tickets }),
   update:       (id: string, data: any)                => put<any>(`/tickets/${id}`, data),
-  bulkStatus:   (ids: string[], status: string)        => patch<{count: number}>('/tickets/bulk-status', { ids, status }),
+  bulkStatus:   (ids: string[], status: string, supervisorUid?: string) =>
+    patch<{count: number}>('/tickets/bulk-status', { ids, status, ...(supervisorUid ? {supervisorUid} : {}) }),
   bulkUpdateImported: (updates: { id: string; status: string; closedAt?: string | null }[]) =>
     post<{count: number}>('/tickets/bulk-update-imported', { updates }),
   delete:       (id: string)                           => del<any>(`/tickets/${id}`),
