@@ -27,7 +27,7 @@ jobs:
         run: npm run test:workdays
       - name: Test supervisor closure
         run: npm run test:supervisor-close
-      - name: Verify approval migration safety
-        run: node scripts/apply-closure-approvals.js ${{ github.event.pull_request.base.sha }} --check
+      - name: Verify internal status migration safety
+        run: node scripts/apply-internal-supervisor-statuses.js ${{ github.event.pull_request.base.sha }} --check
       - name: Build
         run: npm run build
