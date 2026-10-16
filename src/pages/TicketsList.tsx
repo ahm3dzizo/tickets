@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { AlertTriangle, FileUp, User, UserPlus, HelpCircle, Loader2, Plus, HardHat, ShieldAlert, Download, ShieldOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +59,11 @@ export default function TicketsList() {
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [initialCloseType, setInitialCloseType] = useState<'normal' | 'absent' | 'out_of_scope'>('normal');
+  const [statusRoleChoice, setStatusRoleChoice] = useState<{
+    status: string;
+    options: {uid: string; name: string}[];
+  } | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [apptTicket, setApptTicket] = useState<Ticket[] | null>(null);
   const [reassigning, setReassigning] = useState(false);
   const [autoLinking, setAutoLinking] = useState(false);
@@ -252,23 +258,58 @@ export default function TicketsList() {
     setCloseDialogOpen(true);
   };
 
-  const handleBulkStatusChange = async (newStatus: string) => {
-    if (selectedTicketIds.length === 0) return;
-    // Terminal states must use /tickets/close so supervisor roles,
-    // maintenance reports, and WhatsApp delivery cannot be bypassed.
-    if (['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(newStatus)) {
-      openSelectedTicketClosure(newStatus);
+  // The status menu is deliberately internal-only, including closed/absent.
+  // The separate yellow "إغلاق" button is the customer-facing closure flow.
+  const applyInternalStatus = async (newStatus: string, supervisorUid?: string) => {
+    setUpdatingStatus(true);
+    try {
+      const count = selectedTicketIds.length;
+      await ticketsApi.bulkStatus(selectedTicketIds, newStatus, supervisorUid);
+      invalidateTicketCache();
+      toast.success(`تم تغيير الحالة داخليًا لـ ${count} تذكرة دون إرسال رسالة للعميل`);
+      setStatusRoleChoice(null);
+      setSelectedTicketIds([]);
+      void refreshTicketsNow();
+    } catch (error) {
+      console.error('[TicketsBulkStatus] internal status failed', error);
+      toast.error(error instanceof Error ? error.message : 'فشل تحديث الحالة');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleBulkStatusChange = (newStatus: string) => {
+    if (!selectedTicketIds.length || updatingStatus) return;
+    const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
+    if (!selected.length) return;
+    if (user?.role === 'supervisor') {
+      void applyInternalStatus(newStatus);
       return;
     }
-    try {
-      await ticketsApi.bulkStatus(selectedTicketIds, newStatus);
-      invalidateTicketCache();
-      toast.success(`تم تحديث ${selectedTicketIds.length} تذكرة`);
-      setSelectedTicketIds([]); loadData();
-    } catch (error) {
-      console.error('[TicketsBulkStatus] update failed', error);
-      toast.error(error instanceof Error ? error.message : 'فشل تحديث الحالة');
+    const roleIds = (ticket: Ticket) => [...new Set([
+      ...(ticket.assignedSupervisorIds || []),
+      ...(ticket.supervisorClosures || []).map(h => h.supervisorUid),
+    ])];
+    const shared = selected.filter(t => roleIds(t).length > 1);
+    if (!shared.length) {
+      void applyInternalStatus(newStatus);
+      return;
     }
+    // Admin/engineer must choose whose role is changed, not silently replace
+    // the statuses of every supervisor assigned to the shared ticket.
+    const common = roleIds(selected[0]).filter(uid =>
+      selected.every(t => roleIds(t).includes(uid))
+    );
+    if (!common.length) {
+      toast.error('التذاكر المختارة لا تشترك في مشرف واحد؛ اختار تذاكر نفس المشرف لتغيير حالته.');
+      return;
+    }
+    const nameByUid = new Map(selected.flatMap(t =>
+      (t.assignedSupervisors || []).map(s => [s.id, s.name] as const)
+    ));
+    setStatusRoleChoice({status: newStatus, options: common.map(uid => ({
+      uid, name: nameByUid.get(uid) || uid,
+    }))});
   };
 
   const handleAppointment = () => {
@@ -641,6 +682,28 @@ export default function TicketsList() {
             </div>
           </TabsContent>
         </Tabs>
+
+        <Dialog open={!!statusRoleChoice} onOpenChange={open => {if (!open && !updatingStatus) setStatusRoleChoice(null);}}>
+          <DialogContent className="max-w-[420px] rounded-2xl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="text-right">تغيير الحالة داخليًا لمشرف واحد</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground text-right">
+              التذكرة مشتركة. حدد دور المشرف الذي تريد تغيير حالته؛
+              حالة بقية المشرفين لن تتغير ولن تُرسل أي رسالة أو تقرير للعميل.
+            </p>
+            <div className="space-y-2">
+              {statusRoleChoice?.options.map(opt => (
+                <Button key={opt.uid} type="button" variant="outline"
+                  disabled={updatingStatus}
+                  className="w-full justify-start text-right"
+                  onClick={() => void applyInternalStatus(statusRoleChoice.status, opt.uid)}>
+                  {updatingStatus ? 'جارٍ التحديث...' : opt.name}
+                </Button>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {selectedTicketIds.length > 0 && (
           <BulkActionBar count={selectedTicketIds.length} isMultiClient={uniqueClientIds.size > 1} onStatusChange={handleBulkStatusChange} onAppointment={handleAppointment} onContractor={() => setContractorDialogOpen(true)} onClose={() => openSelectedTicketClosure()} onClear={() => setSelectedTicketIds([])} hidden={closeDialogOpen} />
