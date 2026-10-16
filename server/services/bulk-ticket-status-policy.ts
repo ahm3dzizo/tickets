@@ -34,12 +34,13 @@ export function personalTicketStatus(
   uid: string,
 ): TicketStatus {
   const personal = supervisorStatuses(ticket.supervisorStatuses)[uid];
-  if (personal) return personal;
+  // A real close via "إغلاق" or a supervisor approval must take precedence
+  // over an old nonterminal status (e.g. pending) set from the action menu.
   if (!ticket.assignedSupervisorIds.includes(uid) &&
       closures(ticket.supervisorClosures).some(h => h.supervisorUid === uid)) {
-    return 'closed';
+    return personal && terminal.has(personal) ? personal : 'closed';
   }
-  return ticket.status;
+  return personal || ticket.status;
 }
 
 export function checkBulkStatusAccess(actor: Actor | null, rows: Row[], expectedCount: number) {
