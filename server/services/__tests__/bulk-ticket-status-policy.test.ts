@@ -127,3 +127,18 @@ test('malformed stored personal statuses are safely ignored', () => {
   assert.deepEqual(supervisorStatuses(null),{});
   assert.deepEqual(supervisorStatuses({a:'pending',b:'invalid',c:3}),{a:'pending'});
 });
+
+test('explicit customer report closure overrides stale internal waiting status for that supervisor', () => {
+  const waiting = planBulkStatus(a, shared, 'waiting');
+  const afterRealClose = {
+    ...shared,
+    ...waiting,
+    assignedSupervisorIds: ['b'],
+    supervisorClosures: [{
+      supervisorUid: 'a', completedAt: new Date().toISOString(),
+      completedByUid: 'a', notes: 'تم التقرير', items: [],
+    }],
+  };
+  assert.equal(personalTicketStatus(afterRealClose, 'a'), 'closed');
+  assert.equal(personalTicketStatus(afterRealClose, 'b'), 'open');
+});
