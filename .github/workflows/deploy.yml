@@ -232,8 +232,8 @@ jobs:
             if git diff --quiet "$PREVIOUS_SHA" "$DEPLOY_SHA" -- prisma/schema.prisma; then
               echo "Prisma schema is unchanged; skipping database mutation safely."
             else
-              echo "Checking narrowly scoped additive approval workflow update..."
-              node scripts/apply-closure-approvals.js "$PREVIOUS_SHA"
+              echo "Checking narrowly scoped additive supervisor internal status update..."
+              node scripts/apply-internal-supervisor-statuses.js "$PREVIOUS_SHA"
             fi
           fi
 
