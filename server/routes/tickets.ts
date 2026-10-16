@@ -1,4 +1,4 @@
-import {BulkStatusError, checkBulkStatusAccess, planBulkStatus, assertBulkStatusUsesClosureFlow} from '../services/bulk-ticket-status-policy.js';
+import {BulkStatusError, checkBulkStatusAccess, planBulkStatus, personalTicketStatus} from '../services/bulk-ticket-status-policy.js';
 import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, requireAdmin, getRequesterRole, asTrimmedString } from "../auth.js";
@@ -524,7 +524,12 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     return {
       ...t,
       globalStatus: t.status,
-      ...(role === 'supervisor' && !t.assignedSupervisorIds.includes(req.uid!) && closures(t.supervisorClosures).some(h => h.supervisorUid === req.uid!) ? {status: 'closed', closedAt: closures(t.supervisorClosures).find(h => h.supervisorUid === req.uid!)?.completedAt} : {}),
+      ...(role === 'supervisor' ? {
+        status: personalTicketStatus(t, req.uid!),
+        ...(!t.assignedSupervisorIds.includes(req.uid!) && closures(t.supervisorClosures).some(h => h.supervisorUid === req.uid!)
+          ? {closedAt: closures(t.supervisorClosures).find(h => h.supervisorUid === req.uid!)?.completedAt}
+          : {}),
+      } : {}),
       appointmentTime:  apptInFuture ? apptTime : null,
       appointmentNotes: appt?.notes ?? null,
       appointment:      appt ? { id: appt.id, date: appt.date, time: appt.time ?? null, status: appt.status } : null,
@@ -679,7 +684,15 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   }
   if (role === 'supervisor' && !ticket.assignedSupervisorIds.includes(req.uid!) && !closures(ticket.supervisorClosures).some(h => h.supervisorUid === req.uid!)) {res.status(403).json({error: 'Forbidden'}); return;}
   const [enriched] = await enrichTickets([ticket]);
-  res.json({ ...enriched, globalStatus: ticket.status, ...(role === 'supervisor' && !ticket.assignedSupervisorIds.includes(req.uid!) && closures(ticket.supervisorClosures).some(h => h.supervisorUid === req.uid!) ? {status: 'closed'} : {}), subTypeName: (ticket as any).ticketSubType?.nameAr ?? null });
+  res.json({ ...enriched, globalStatus: ticket.status,
+    ...(role === 'supervisor' ? {
+      status: personalTicketStatus(ticket, req.uid!),
+      ...(!ticket.assignedSupervisorIds.includes(req.uid!) &&
+          closures(ticket.supervisorClosures).some(h => h.supervisorUid === req.uid!)
+        ? {closedAt: closures(ticket.supervisorClosures).find(h => h.supervisorUid === req.uid!)?.completedAt}
+        : {}),
+    } : {}),
+    subTypeName: (ticket as any).ticketSubType?.nameAr ?? null });
 });
 
 // POST /api/tickets
@@ -1334,24 +1347,54 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
   const rawStatus = req.body?.status;
   const count = Array.isArray(req.body?.ids) ? req.body.ids.length : 0;
   try {
-    const {ids, status} = req.body as {ids?: unknown; status?: unknown};
+    const {ids, status, supervisorUid} = req.body as {ids?: unknown; status?: unknown; supervisorUid?: unknown};
+    if (supervisorUid !== undefined && (typeof supervisorUid !== 'string' || !supervisorUid.trim())) {
+      throw new BulkStatusError('INVALID_SUPERVISOR_ID', 400, 'معرف المشرف غير صالح.');
+    }
     if (!Array.isArray(ids) || !ids.length || ids.length > 200 || ids.some(id => typeof id !== 'string' || !id.trim())) {
       throw new BulkStatusError('INVALID_TICKET_IDS',400,'اختر من 1 إلى 200 تذكرة لتحديث الحالة.');
     }
     const uniqueIds = [...new Set(ids.map(id => id.trim()))];
     const normalizedStatus = normalizeTicketStatus(status);
-    assertBulkStatusUsesClosureFlow(normalizedStatus);
+    // This endpoint only changes an internal ticket/role status. It never
+    // generates closing reports, requests approvals or sends WhatsApp.
     const actor = await prisma.user.findUnique({where: {uid: req.uid!}, include: {projects: {select: {id: true}}}});
     const updated = await prisma.$transaction(async tx => {
       for (const id of [...uniqueIds].sort()) await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${id} FOR UPDATE`;
-      const rows = await tx.ticket.findMany({where: {id: {in: uniqueIds}}, select: {id: true, projectId: true, status: true, assignedSupervisorIds: true, supervisorClosures: true}});
+      const rows = await tx.ticket.findMany({
+        where: {id: {in: uniqueIds}},
+        select: {id: true, projectId: true, status: true, assignedSupervisorIds: true,
+          supervisorClosures: true, supervisorStatuses: true},
+      });
       checkBulkStatusAccess(actor, rows, uniqueIds.length);
+      const pending = await tx.ticketClosureApproval.findFirst({
+        where: {status: 'pending', ticketIds: {hasSome: uniqueIds}},
+        select: {id: true},
+      });
+      if (pending) throw new BulkStatusError('CLOSURE_APPROVAL_PENDING', 409,
+        'هناك طلب موافقة على إغلاق إحدى التذاكر. يجب حسمه قبل تغيير الحالة.');
       for (const row of rows) {
-        const data = planBulkStatus(actor!, row, normalizedStatus);
+        const data = planBulkStatus(actor!, row, normalizedStatus,
+          typeof supervisorUid === 'string' ? supervisorUid : undefined);
         await tx.ticket.update({where: {id: row.id}, data});
-        if (row.status !== data.status || JSON.stringify(row.assignedSupervisorIds) !== JSON.stringify(data.assignedSupervisorIds)) {
-          await tx.ticketAudit.create({data: {ticketId: row.id, field: 'تغيير الحالة من القائمة', changedBy: req.uid!, oldValue: JSON.stringify({status: row.status, assignedSupervisorIds: row.assignedSupervisorIds, supervisorClosures: row.supervisorClosures}), newValue: JSON.stringify({requestedStatus: normalizedStatus, status: data.status, assignedSupervisorIds: data.assignedSupervisorIds})}});
-        }
+        await tx.ticketAudit.create({data: {
+          ticketId: row.id,
+          field: 'تغيير حالة داخلي بدون تقرير للعميل',
+          changedBy: req.uid!,
+          oldValue: JSON.stringify({
+            globalStatus: row.status,
+            supervisorStatuses: row.supervisorStatuses,
+            active: row.assignedSupervisorIds,
+          }),
+          newValue: JSON.stringify({
+            requestedStatus: normalizedStatus,
+            targetSupervisorUid: actor!.role === 'supervisor' ? actor!.uid : supervisorUid || null,
+            globalStatus: data.status,
+            supervisorStatuses: data.supervisorStatuses,
+            active: data.assignedSupervisorIds,
+            customerNotification: false,
+          }),
+        }});
       }
       return {count: rows.length};
     }, {timeout: 30000});
