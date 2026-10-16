@@ -1202,10 +1202,22 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       if (!supervisorExplicit && updatePayload.assignedSupervisorIds) updatePayload.assignedSupervisorIds = updatePayload.assignedSupervisorIds.filter((id: string) => !closures(current.supervisorClosures).some(h => h.supervisorUid === id));
       if (['closed', 'completed', 'absent', 'out_of_scope'].includes(current.status) && updatePayload.assignedSupervisorIds && !normalizedStatus) throw new Error('REOPEN_STATUS_REQUIRED');
       if (actor.role === 'supervisor' && !current.assignedSupervisorIds.includes(req.uid!)) throw new Error('SUPERVISOR_NOT_ACTIVE');
+      // A normal edit must never overwrite every supervisor's status on a
+      // shared ticket. Their roles are changed through the internal status
+      // action, where management explicitly chooses one supervisor.
+      if (normalizedStatus && actor.role === 'supervisor') {
+        Object.assign(updatePayload, planBulkStatus(actor, current, normalizedStatus));
+      } else if (normalizedStatus &&
+          [...new Set([...current.assignedSupervisorIds,
+            ...closures(current.supervisorClosures).map(h => h.supervisorUid)])].length > 1) {
+        if (current.status !== normalizedStatus) throw new Error('SUPERVISOR_TARGET_REQUIRED');
+        updatePayload.status = undefined;
+      }
       if (['closed', 'completed', 'absent', 'out_of_scope'].includes(current.status) && normalizedStatus && !['closed', 'completed', 'absent', 'out_of_scope'].includes(normalizedStatus) && actor.role !== 'admin' && actor.role !== 'engineer') throw new Error('FORBIDDEN');
       if (['closed', 'completed', 'absent', 'out_of_scope'].includes(current.status) && normalizedStatus && !['closed', 'completed', 'absent', 'out_of_scope'].includes(normalizedStatus)) {
         updatePayload.closedAt = null;
         updatePayload.supervisorClosures = [];
+        updatePayload.supervisorStatuses = {};
         if (!supervisorExplicit) updatePayload.assignedSupervisorIds = [...new Set([...current.assignedSupervisorIds, ...closures(current.supervisorClosures).map(h => h.supervisorUid)])];
       }
       if (normalizedStatus && ['absent', 'out_of_scope'].includes(normalizedStatus)) {
