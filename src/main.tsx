@@ -39,7 +39,35 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // boot. Register after the first page load and when the main thread is idle.
 // Auto-update/offline behavior stays enabled; only startup contention is removed.
 function registerPwaWhenIdle() {
-  const register = () => registerSW({ immediate: true });
+  const register = () => registerSW({
+    immediate: true,
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) return;
+
+      // Chrome can keep an existing Tickets tab open for hours (especially on
+      // Android) without navigating. The previous bundle then keeps running
+      // even after a successful production deployment. Check for a newer SW
+      // whenever the tab becomes active, instead of waiting for navigation.
+      // Vite PWA autoUpdate handles activation and reload when one is found.
+      let lastCheckAt = 0;
+      const checkForUpdate = () => {
+        if (!navigator.onLine || document.visibilityState === 'hidden') return;
+        const now = Date.now();
+        if (now - lastCheckAt < 60_000) return;
+        lastCheckAt = now;
+        void registration.update().catch(() => {
+          // An offline or transient network error should not interrupt tickets.
+        });
+      };
+
+      window.addEventListener('focus', checkForUpdate);
+      window.addEventListener('pageshow', checkForUpdate);
+      document.addEventListener('visibilitychange', checkForUpdate);
+      window.addEventListener('online', checkForUpdate);
+      window.setInterval(checkForUpdate, 10 * 60_000);
+      checkForUpdate();
+    },
+  });
 
   const requestIdle = (window as any).requestIdleCallback as
     | ((callback: () => void, options?: { timeout: number }) => number)
