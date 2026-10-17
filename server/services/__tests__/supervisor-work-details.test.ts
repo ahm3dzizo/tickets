@@ -39,8 +39,9 @@ test('engineer must select supervisor for shared contractor/note statuses',()=>{
 });
 test('solo contractor assignment updates ticket-wide legacy data for existing UI',()=>{
   const planned=planWorkAssignment({},'a',false,contractor);
-  assert.equal(planned.legacy.contractorId,'c1');
-  assert.equal(planned.legacy.contractorNote,null);
+  assert.deepEqual(planned.legacy,{
+    contractorId:'c1', contractorNote:null, assigneeName:'مقاول 1',
+  });
 });
 test('changing role from contractor to normal clears its details without touching others',()=>{
   const first=planWorkAssignment({},'a',true,contractor);
