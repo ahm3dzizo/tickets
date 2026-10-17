@@ -10,6 +10,7 @@ import { sendWAText, buildOpeningMsg, buildClosingMsg, buildAbsentMsg, buildOutO
 import { createNotification } from "../notificationService.js";
 import { maybeAutoFinishAppointment } from "./attendance.js";
 import type { TicketStatus } from "@prisma/client";
+import { planWorkAssignment, workDetailForSupervisor, type SupervisorWorkInfo } from '../services/supervisor-work-details.js';
 
 import { closeTickets, closures } from '../services/ticket-closure.js';
 import { requestSupervisorClosure, voteSupervisorClosure, cancelSupervisorClosure, listSupervisorClosureApprovals } from '../services/supervisor-closure-approvals.js';
@@ -1356,30 +1357,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// Each supervisor keeps their own contractor assignment/note; the ticket-wide
-// legacy fields are only used when there is a single supervisor.
-type SupervisorWorkInfo = {
-  contractorId: string | null;
-  contractorName: string | null;
-  contractorNote: string | null;
-  assigneeName: string | null;
-};
-function workDetails(value: unknown): Record<string, SupervisorWorkInfo> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  return {...value as Record<string, SupervisorWorkInfo>};
-}
-function workDetailForSupervisor(ticket: {
-  supervisorWorkDetails?: unknown; assignedSupervisorIds: string[];
-}, uid: string) {
-  const detail = workDetails(ticket.supervisorWorkDetails)[uid];
-  return detail ? {
-    contractorId: detail.contractorId,
-    contractorName: detail.contractorName,
-    contractorNote: detail.contractorNote,
-    assigneeName: detail.assigneeName,
-  } : {};
-}
-
 // PATCH /api/tickets/bulk-status
 router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
   const rawStatus = req.body?.status;
@@ -1450,7 +1427,6 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
           ...closures(row.supervisorClosures).map(h => h.supervisorUid)])];
         const targetUid = actor!.role === 'supervisor' ? actor!.uid :
           (typeof supervisorUid === 'string' ? supervisorUid : roles.length === 1 ? roles[0] : null);
-        const details = workDetails(row.supervisorWorkDetails);
         const info: SupervisorWorkInfo | null = normalizedStatus === 'contractor' ? {
           contractorId: contractor!.id, contractorName: contractor!.name,
           contractorNote: null, assigneeName: contractor!.name,
@@ -1458,20 +1434,11 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
           contractorId: null, contractorName: null,
           contractorNote: String(contractorNote).trim(), assigneeName: 'ملاحظة',
         } : null;
-        if (targetUid) {
-          if (info) details[targetUid] = info;
-          else delete details[targetUid];
-        }
-        const solo = roles.length <= 1;
+        const assignment = planWorkAssignment(row.supervisorWorkDetails,
+          targetUid, roles.length > 1, info);
         await tx.ticket.update({where: {id: row.id}, data: {
-          ...data, supervisorWorkDetails: details,
-          // Keep ticket-wide contractor fields for single-owner and unassigned
-          // tickets only; a shared ticket's colleagues must remain unchanged.
-          ...(solo ? {
-            contractorId: info?.contractorId ?? null,
-            contractorNote: info?.contractorNote ?? null,
-            ...(info ? {assigneeName: info.assigneeName} : {}),
-          } : {}),
+          ...data, supervisorWorkDetails: assignment.details,
+          ...assignment.legacy,
         }});
         await tx.ticketAudit.create({data: {
           ticketId: row.id,
@@ -1489,7 +1456,7 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
             globalStatus: data.status,
             supervisorStatuses: data.supervisorStatuses,
             active: data.assignedSupervisorIds,
-            workDetails: details,
+            workDetails: assignment.details,
             customerNotification: false,
           }),
         }});
