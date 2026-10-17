@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { TicketTable, BulkActionBar } from '@/components/tickets/TicketTable';
 import { ticketsApi, projectsApi, clientsApi } from '@/lib/api';
+import type { ContractorSelection } from '@/components/tickets/AssignContractorDialog';
 import { getCachedTickets, invalidateTicketCache, refreshCachedTickets } from '@/lib/ticketCache';
 import { Ticket, Project, Client } from '@/types';
 import { classifyOnServer } from '@/services/classificationApi';
@@ -69,6 +70,8 @@ export default function TicketsList() {
   const [autoLinking, setAutoLinking] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
   const [contractorDialogOpen, setContractorDialogOpen] = useState(false);
+  const [contractorTargetUid, setContractorTargetUid] = useState<string | undefined>();
+  const [contractorMode, setContractorMode] = useState<'contractor' | 'note'>('contractor');
   const [activeTab, setActiveTab] = useState(() => {
     const stored = sessionStorage.getItem('ticketsListTab');
     return stored && stored !== 'all' ? stored : 'linked';
@@ -260,22 +263,44 @@ export default function TicketsList() {
 
   // The status menu is deliberately internal-only, including closed/absent.
   // The separate yellow "إغلاق" button is the customer-facing closure flow.
-  const applyInternalStatus = async (newStatus: string, supervisorUid?: string) => {
+  const applyInternalStatus = async (
+    newStatus: string, supervisorUid?: string, details?: ContractorSelection,
+  ): Promise<boolean> => {
     setUpdatingStatus(true);
     try {
       const count = selectedTicketIds.length;
-      await ticketsApi.bulkStatus(selectedTicketIds, newStatus, supervisorUid);
+      await ticketsApi.bulkStatus(selectedTicketIds, newStatus, supervisorUid, details
+        ? { contractorId: details.contractorId, contractorNote: details.contractorNote } : undefined);
       invalidateTicketCache();
       toast.success(`تم تغيير الحالة داخليًا لـ ${count} تذكرة دون إرسال رسالة للعميل`);
       setStatusRoleChoice(null);
       setSelectedTicketIds([]);
       void refreshTicketsNow();
+      return true;
     } catch (error) {
       console.error('[TicketsBulkStatus] internal status failed', error);
       toast.error(error instanceof Error ? error.message : 'فشل تحديث الحالة');
+      return false;
     } finally {
       setUpdatingStatus(false);
     }
+  };
+
+  const openInternalContractorDialog = (status: string, supervisorUid?: string) => {
+    if (status === 'contractor' && new Set(tickets.filter(t =>
+      selectedTicketIds.includes(t.id)).map(t => t.projectId)).size > 1) {
+      toast.error('اختار تذاكر مشروع واحد عند إسناد مقاول.');
+      return;
+    }
+    setContractorTargetUid(supervisorUid);
+    setContractorMode(status === 'note' ? 'note' : 'contractor');
+    setStatusRoleChoice(null);
+    setContractorDialogOpen(true);
+  };
+  const chooseInternalStatusTarget = (status: string, supervisorUid?: string) => {
+    if (status === 'contractor' || status === 'note') {
+      openInternalContractorDialog(status, supervisorUid);
+    } else void applyInternalStatus(status, supervisorUid);
   };
 
   const handleBulkStatusChange = (newStatus: string) => {
@@ -283,7 +308,7 @@ export default function TicketsList() {
     const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
     if (!selected.length) return;
     if (user?.role === 'supervisor') {
-      void applyInternalStatus(newStatus);
+      chooseInternalStatusTarget(newStatus);
       return;
     }
     const roleIds = (ticket: Ticket) => [...new Set([
@@ -292,7 +317,7 @@ export default function TicketsList() {
     ])];
     const shared = selected.filter(t => roleIds(t).length > 1);
     if (!shared.length) {
-      void applyInternalStatus(newStatus);
+      chooseInternalStatusTarget(newStatus);
       return;
     }
     // Admin/engineer must choose whose role is changed, not silently replace
@@ -697,7 +722,7 @@ export default function TicketsList() {
                 <Button key={opt.uid} type="button" variant="outline"
                   disabled={updatingStatus}
                   className="w-full justify-start text-right"
-                  onClick={() => void applyInternalStatus(statusRoleChoice.status, opt.uid)}>
+                  onClick={() => chooseInternalStatusTarget(statusRoleChoice.status, opt.uid)}>
                   {updatingStatus ? 'جارٍ التحديث...' : opt.name}
                 </Button>
               ))}
@@ -706,7 +731,7 @@ export default function TicketsList() {
         </Dialog>
 
         {selectedTicketIds.length > 0 && (
-          <BulkActionBar count={selectedTicketIds.length} isMultiClient={uniqueClientIds.size > 1} onStatusChange={handleBulkStatusChange} onAppointment={handleAppointment} onContractor={() => setContractorDialogOpen(true)} onClose={() => openSelectedTicketClosure()} onClear={() => setSelectedTicketIds([])} hidden={closeDialogOpen} />
+          <BulkActionBar count={selectedTicketIds.length} isMultiClient={uniqueClientIds.size > 1} onStatusChange={handleBulkStatusChange} onAppointment={handleAppointment} onContractor={() => handleBulkStatusChange('contractor')} onClose={() => openSelectedTicketClosure()} onClear={() => setSelectedTicketIds([])} hidden={closeDialogOpen} />
         )}
 
         <Suspense fallback={null}>
@@ -733,7 +758,15 @@ export default function TicketsList() {
           )}
 
           {contractorDialogOpen && (
-            <AssignContractorDialog open={contractorDialogOpen} onOpenChange={setContractorDialogOpen} tickets={selectedTickets} projectId={selectedTickets[0]?.projectId || ''} onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadData(); }} />
+            <AssignContractorDialog
+              open={contractorDialogOpen}
+              onOpenChange={setContractorDialogOpen}
+              tickets={selectedTickets}
+              projectId={selectedTickets[0]?.projectId || ''}
+              initialMode={contractorMode}
+              onSelection={selection => applyInternalStatus(selection.status, contractorTargetUid, selection)}
+              onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadData(); }}
+            />
           )}
         </Suspense>
       </div>
