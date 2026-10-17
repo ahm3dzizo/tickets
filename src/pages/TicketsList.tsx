@@ -372,7 +372,8 @@ export default function TicketsList() {
     [tickets],
   );
   const contractorTickets = useMemo(
-    () => tickets.filter(t => t.status === 'contractor' || t.status === 'note'),
+    () => tickets.filter(t => t.status === 'contractor' || t.status === 'note' ||
+      Object.values(t.supervisorStatuses || {}).some(s => s === 'contractor' || s === 'note')),
     [tickets],
   );
   const unclassifiedTickets = useMemo(
