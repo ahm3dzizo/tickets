@@ -173,7 +173,8 @@ const DEFAULT_STATUS_OPTIONS = [
   { key: 'in_progress',   label: 'قيد التنفيذ' },
   { key: 'waiting',       label: 'بانتظار الموعد' },
   { key: 'pending',       label: 'معلقة' },
-  { key: 'contractor',    label: 'مقاول / ملاحظة' },
+  { key: 'contractor',    label: 'مقاول' },
+  { key: 'note',          label: 'ملاحظة' },
   { key: 'completed',     label: 'مكتملة' },
   { key: 'closed',        label: 'مغلقة' },
   { key: 'out_of_scope',  label: 'خارج اختصاص', danger: true },
@@ -230,8 +231,7 @@ export function BulkActionBar({
               key={opt.key}
               className={cn('text-start justify-start hover:bg-white/5', opt.danger && 'hover:bg-rose-500/10 text-rose-400')}
               onClick={() => {
-                if ((opt.key === 'contractor' || opt.key === 'note') && onContractor) onContractor();
-                else onStatusChange(opt.key);
+                onStatusChange(opt.key);
               }}
             >
               {opt.label}
