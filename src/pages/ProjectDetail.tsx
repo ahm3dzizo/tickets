@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Project, Ticket, Client, User } from '@/types';
@@ -24,6 +25,7 @@ import { ClientForm } from '@/components/clients/ClientForm';
 import { TicketForm } from '@/components/tickets/TicketForm';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { AssignContractorDialog } from '@/components/tickets/AssignContractorDialog';
+import type { ContractorSelection } from '@/components/tickets/AssignContractorDialog';
 import { UnifiedImportModal } from '@/components/tickets/UnifiedImportModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -42,6 +44,13 @@ export default function ProjectDetail() {
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
   const [contractorDialogOpen, setContractorDialogOpen] = useState(false);
+  const [contractorMode, setContractorMode] = useState<'contractor' | 'note'>('contractor');
+  const [contractorTargetUid, setContractorTargetUid] = useState<string | undefined>();
+  const [statusRoleChoice, setStatusRoleChoice] = useState<{
+    status: string;
+    options: {uid: string; name: string}[];
+  } | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const loadData = async () => {
     if (!id) return;
@@ -79,17 +88,56 @@ export default function ProjectDetail() {
 
   if (!project) return null;
 
-  const handleBulkStatusChange = async (newStatus: string) => {
-    if (selectedTicketIds.length === 0) return;
+  const applyInternalStatus = async (status: string, supervisorUid?: string,
+    details?: ContractorSelection): Promise<boolean> => {
+    setUpdatingStatus(true);
     try {
-      await ticketsApi.bulkStatus(selectedTicketIds, newStatus);
-      toast.success('تم تحديث حالة التذاكر المختارة');
+      await ticketsApi.bulkStatus(selectedTicketIds, status, supervisorUid,
+        details ? {contractorId: details.contractorId, contractorNote: details.contractorNote} : undefined);
+      toast.success('تم تحديث الحالة داخليًا بدون أي رسالة للعميل');
+      setStatusRoleChoice(null);
       setSelectedTicketIds([]);
-      loadData();
+      void loadData();
+      return true;
     } catch (error) {
-      console.error('Error updating tickets:', error);
       toast.error(error instanceof Error ? error.message : 'فشل تحديث حالة التذاكر');
+      return false;
+    } finally {setUpdatingStatus(false);}
+  };
+  const proceedStatus = (status: string, supervisorUid?: string) => {
+    if (status === 'contractor' || status === 'note') {
+      setContractorMode(status);
+      setContractorTargetUid(supervisorUid);
+      setStatusRoleChoice(null);
+      setContractorDialogOpen(true);
+    } else void applyInternalStatus(status, supervisorUid);
+  };
+  const handleBulkStatusChange = (newStatus: string) => {
+    if (!selectedTicketIds.length || updatingStatus) return;
+    if (currentUser?.role === 'supervisor') {
+      proceedStatus(newStatus);
+      return;
     }
+    const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
+    const roles = (t: Ticket) => [...new Set([
+      ...(t.assignedSupervisorIds || []),
+      ...(t.supervisorClosures || []).map(h => h.supervisorUid),
+    ])];
+    if (!selected.some(t => roles(t).length > 1)) {
+      proceedStatus(newStatus);
+      return;
+    }
+    const common = roles(selected[0]).filter(uid =>
+      selected.every(t => roles(t).includes(uid)));
+    if (!common.length) {
+      toast.error('حدد مجموعة تذاكر تشترك في مشرف واحد أولاً.');
+      return;
+    }
+    const names = new Map(selected.flatMap(t =>
+      (t.assignedSupervisors || []).map(s => [s.id,s.name] as const)));
+    setStatusRoleChoice({status: newStatus, options: common.map(uid => ({
+      uid, name: names.get(uid) || uid,
+    }))});
   };
 
   const handleSendWhatsApp = () => {
@@ -212,7 +260,7 @@ export default function ProjectDetail() {
               isMultiClient={isMultiClient}
               onStatusChange={handleBulkStatusChange}
               onAppointment={handleSendWhatsApp}
-              onContractor={() => setContractorDialogOpen(true)}
+              onContractor={() => handleBulkStatusChange('contractor')}
               onClose={() => setIsCloseDialogOpen(true)}
               onClear={() => setSelectedTicketIds([])}
               statusOptions={[
@@ -220,6 +268,7 @@ export default function ProjectDetail() {
                 { key: 'in_progress', label: 'جاري العمل' },
                 { key: 'waiting', label: 'بانتظار الموعد' },
                 { key: 'contractor', label: 'مقاول' },
+                { key: 'note', label: 'ملاحظة' },
               ]}
             />
           );
@@ -319,11 +368,33 @@ export default function ProjectDetail() {
         onSuccess={() => { setSelectedTicketIds([]); loadData(); }}
       />
 
+      <Dialog open={!!statusRoleChoice}
+        onOpenChange={open => {if (!open && !updatingStatus) setStatusRoleChoice(null);}}>
+        <DialogContent className="max-w-[420px] rounded-2xl" dir="rtl">
+          <DialogHeader><DialogTitle className="text-right">تغيير حالة مشرف فقط</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground text-right">
+            التذكرة مشتركة. اختار المشرف صاحب الحالة، وزميله مش هتتغير حالته.
+            مفيش رسالة أو تقرير هيتبعت للعميل.
+          </p>
+          <div className="space-y-2">
+            {statusRoleChoice?.options.map(opt => (
+              <Button key={opt.uid} type="button" variant="outline" disabled={updatingStatus}
+                className="w-full justify-start"
+                onClick={() => proceedStatus(statusRoleChoice.status, opt.uid)}>
+                {opt.name}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <AssignContractorDialog
         open={contractorDialogOpen}
         onOpenChange={setContractorDialogOpen}
         tickets={tickets.filter(t => selectedTicketIds.includes(t.id))}
         projectId={project?.id || ''}
+        initialMode={contractorMode}
+        onSelection={selection => applyInternalStatus(selection.status, contractorTargetUid, selection)}
         onSuccess={() => { setContractorDialogOpen(false); setSelectedTicketIds([]); loadData(); }}
       />
     </Layout>

@@ -154,6 +154,7 @@ model Ticket {
   assignedSupervisorIds String[]     @default([])
   supervisorClosures    Json         @default("[]")
   supervisorStatuses   Json         @default("{}")
+  supervisorWorkDetails Json         @default("{}")
   detectedTypes         String[]     @default([])
   detectedSubTypeIds    String[]     @default([])
   closureNotes          String?

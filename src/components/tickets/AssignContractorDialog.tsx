@@ -27,7 +27,7 @@ interface AssignContractorDialogProps {
   projectId: string;
   onSuccess: () => void;
   initialMode?: 'contractor' | 'note';
-  onSelection?: (selection: ContractorSelection) => void;
+  onSelection?: (selection: ContractorSelection) => boolean | void | Promise<boolean | void>;
 }
 
 export function AssignContractorDialog({
@@ -115,8 +115,13 @@ export function AssignContractorDialog({
         return;
       }
       if (onSelection) {
-        onSelection({status: 'contractor', contractorId: selectedContractor.id, contractorNote: null, assigneeName: selectedContractor.name});
-        onOpenChange(false);
+        setLoading(true);
+        try {
+          const saved = await onSelection({status: 'contractor', contractorId: selectedContractor.id, contractorNote: null, assigneeName: selectedContractor.name});
+          if (saved !== false) onOpenChange(false);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'فشل تغيير حالة المقاول');
+        } finally {setLoading(false);}
         return;
       }
       setLoading(true);
@@ -156,8 +161,13 @@ export function AssignContractorDialog({
         return;
       }
       if (onSelection) {
-        onSelection({status: 'note', contractorId: null, contractorNote: noteText.trim(), assigneeName: 'ملاحظة'});
-        onOpenChange(false);
+        setLoading(true);
+        try {
+          const saved = await onSelection({status: 'note', contractorId: null, contractorNote: noteText.trim(), assigneeName: 'ملاحظة'});
+          if (saved !== false) onOpenChange(false);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'فشل حفظ الملاحظة');
+        } finally {setLoading(false);}
         return;
       }
       setLoading(true);

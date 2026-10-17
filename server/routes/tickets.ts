@@ -10,6 +10,7 @@ import { sendWAText, buildOpeningMsg, buildClosingMsg, buildAbsentMsg, buildOutO
 import { createNotification } from "../notificationService.js";
 import { maybeAutoFinishAppointment } from "./attendance.js";
 import type { TicketStatus } from "@prisma/client";
+import { planWorkAssignment, workDetailForSupervisor, type SupervisorWorkInfo } from '../services/supervisor-work-details.js';
 
 import { closeTickets, closures } from '../services/ticket-closure.js';
 import { requestSupervisorClosure, voteSupervisorClosure, cancelSupervisorClosure, listSupervisorClosureApprovals } from '../services/supervisor-closure-approvals.js';
@@ -526,6 +527,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       globalStatus: t.status,
       ...(role === 'supervisor' ? {
         status: personalTicketStatus(t, req.uid!),
+        ...workDetailForSupervisor(t, req.uid!),
         ...(!t.assignedSupervisorIds.includes(req.uid!) && closures(t.supervisorClosures).some(h => h.supervisorUid === req.uid!)
           ? {closedAt: closures(t.supervisorClosures).find(h => h.supervisorUid === req.uid!)?.completedAt}
           : {}),
@@ -687,6 +689,7 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   res.json({ ...enriched, globalStatus: ticket.status,
     ...(role === 'supervisor' ? {
       status: personalTicketStatus(ticket, req.uid!),
+      ...workDetailForSupervisor(ticket, req.uid!),
       ...(!ticket.assignedSupervisorIds.includes(req.uid!) &&
           closures(ticket.supervisorClosures).some(h => h.supervisorUid === req.uid!)
         ? {closedAt: closures(ticket.supervisorClosures).find(h => h.supervisorUid === req.uid!)?.completedAt}
@@ -1359,7 +1362,10 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
   const rawStatus = req.body?.status;
   const count = Array.isArray(req.body?.ids) ? req.body.ids.length : 0;
   try {
-    const {ids, status, supervisorUid} = req.body as {ids?: unknown; status?: unknown; supervisorUid?: unknown};
+    const {ids, status, supervisorUid, contractorId, contractorNote} = req.body as {
+      ids?: unknown; status?: unknown; supervisorUid?: unknown;
+      contractorId?: unknown; contractorNote?: unknown;
+    };
     if (supervisorUid !== undefined && (typeof supervisorUid !== 'string' || !supervisorUid.trim())) {
       throw new BulkStatusError('INVALID_SUPERVISOR_ID', 400, 'معرف المشرف غير صالح.');
     }
@@ -1368,6 +1374,21 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
     }
     const uniqueIds = [...new Set(ids.map(id => id.trim()))];
     const normalizedStatus = normalizeTicketStatus(status);
+    // No client-facing communication: status and contractor/note are internal.
+    if (normalizedStatus === 'contractor' &&
+        (typeof contractorId !== 'string' || !contractorId.trim())) {
+      throw new BulkStatusError('CONTRACTOR_REQUIRED',400,'اختر المقاول أولًا.');
+    }
+    if (normalizedStatus === 'note' &&
+        (typeof contractorNote !== 'string' || !contractorNote.trim() || contractorNote.length > 4000)) {
+      throw new BulkStatusError('NOTE_REQUIRED',400,'اكتب ملاحظة صحيحة (حد أقصى 4000 حرف).');
+    }
+    if (contractorId !== undefined && contractorId !== null && typeof contractorId !== 'string') {
+      throw new BulkStatusError('INVALID_CONTRACTOR_ID',400,'المقاول المحدد غير صالح.');
+    }
+    if (contractorNote !== undefined && contractorNote !== null && typeof contractorNote !== 'string') {
+      throw new BulkStatusError('INVALID_CONTRACTOR_NOTE',400,'الملاحظة غير صالحة.');
+    }
     // This endpoint only changes an internal ticket/role status. It never
     // generates closing reports, requests approvals or sends WhatsApp.
     const actor = await prisma.user.findUnique({where: {uid: req.uid!}, include: {projects: {select: {id: true}}}});
@@ -1376,7 +1397,8 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
       const rows = await tx.ticket.findMany({
         where: {id: {in: uniqueIds}},
         select: {id: true, projectId: true, status: true, assignedSupervisorIds: true,
-          supervisorClosures: true, supervisorStatuses: true},
+          supervisorClosures: true, supervisorStatuses: true,
+          supervisorWorkDetails: true},
       });
       checkBulkStatusAccess(actor, rows, uniqueIds.length);
       const pending = await tx.ticketClosureApproval.findFirst({
@@ -1385,10 +1407,39 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
       });
       if (pending) throw new BulkStatusError('CLOSURE_APPROVAL_PENDING', 409,
         'هناك طلب موافقة على إغلاق إحدى التذاكر. يجب حسمه قبل تغيير الحالة.');
+      const contractor = normalizedStatus === 'contractor'
+        ? await tx.contractor.findUnique({
+            where: {id: String(contractorId).trim()},
+            select: {id: true, name: true,
+              assignments: {select: {projectId: true}}},
+          })
+        : null;
+      if (normalizedStatus === 'contractor' && (!contractor ||
+          rows.some(row => !contractor.assignments.some(assignment =>
+            assignment.projectId === row.projectId)))) {
+        throw new BulkStatusError('CONTRACTOR_PROJECT_MISMATCH',400,
+          'المقاول مش مرتبط بكل المشاريع المختارة. اختار تذاكر مشروع واحد ومقاول مرتبط بيه.');
+      }
       for (const row of rows) {
         const data = planBulkStatus(actor!, row, normalizedStatus,
           typeof supervisorUid === 'string' ? supervisorUid : undefined);
-        await tx.ticket.update({where: {id: row.id}, data});
+        const roles = [...new Set([...row.assignedSupervisorIds,
+          ...closures(row.supervisorClosures).map(h => h.supervisorUid)])];
+        const targetUid = actor!.role === 'supervisor' ? actor!.uid :
+          (typeof supervisorUid === 'string' ? supervisorUid : roles.length === 1 ? roles[0] : null);
+        const info: SupervisorWorkInfo | null = normalizedStatus === 'contractor' ? {
+          contractorId: contractor!.id, contractorName: contractor!.name,
+          contractorNote: null, assigneeName: contractor!.name,
+        } : normalizedStatus === 'note' ? {
+          contractorId: null, contractorName: null,
+          contractorNote: String(contractorNote).trim(), assigneeName: 'ملاحظة',
+        } : null;
+        const assignment = planWorkAssignment(row.supervisorWorkDetails,
+          targetUid, roles.length > 1, info);
+        await tx.ticket.update({where: {id: row.id}, data: {
+          ...data, supervisorWorkDetails: assignment.details,
+          ...assignment.legacy,
+        }});
         await tx.ticketAudit.create({data: {
           ticketId: row.id,
           field: 'تغيير حالة داخلي بدون تقرير للعميل',
@@ -1397,6 +1448,7 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
             globalStatus: row.status,
             supervisorStatuses: row.supervisorStatuses,
             active: row.assignedSupervisorIds,
+            workDetails: row.supervisorWorkDetails,
           }),
           newValue: JSON.stringify({
             requestedStatus: normalizedStatus,
@@ -1404,6 +1456,7 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
             globalStatus: data.status,
             supervisorStatuses: data.supervisorStatuses,
             active: data.assignedSupervisorIds,
+            workDetails: assignment.details,
             customerNotification: false,
           }),
         }});
