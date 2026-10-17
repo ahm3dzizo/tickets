@@ -526,6 +526,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       globalStatus: t.status,
       ...(role === 'supervisor' ? {
         status: personalTicketStatus(t, req.uid!),
+        ...workDetailForSupervisor(t, req.uid!),
         ...(!t.assignedSupervisorIds.includes(req.uid!) && closures(t.supervisorClosures).some(h => h.supervisorUid === req.uid!)
           ? {closedAt: closures(t.supervisorClosures).find(h => h.supervisorUid === req.uid!)?.completedAt}
           : {}),
@@ -687,6 +688,7 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   res.json({ ...enriched, globalStatus: ticket.status,
     ...(role === 'supervisor' ? {
       status: personalTicketStatus(ticket, req.uid!),
+      ...workDetailForSupervisor(ticket, req.uid!),
       ...(!ticket.assignedSupervisorIds.includes(req.uid!) &&
           closures(ticket.supervisorClosures).some(h => h.supervisorUid === req.uid!)
         ? {closedAt: closures(ticket.supervisorClosures).find(h => h.supervisorUid === req.uid!)?.completedAt}
