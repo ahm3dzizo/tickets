@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import { CheckSquare, Square, MoreHorizontal, Eye, Edit2, AlertCircle, Clock, Search, Briefcase, FileImage, ShieldAlert, ShieldOff, Check, ChevronDown, ChevronUp, ChevronsUpDown, X, Edit, MessageCircle, Download, Sparkles, Loader2, MessageSquare, CalendarDays, HardHat, User, Filter, Archive, SlidersHorizontal, RotateCcw } from 'lucide-react';
-import { formatAppointmentDayTime } from '@/lib/utils';
+import { formatAppointmentDayTime, formatAppointmentDateTimeAr } from '@/lib/utils';
+import {hasScheduledTicketBadge} from '@/lib/ticket-appointment-state';
 import { classifyOnServer } from '@/services/classificationApi';
 import { ticketsApi } from '@/lib/api';
 import { toast } from 'sonner';
@@ -933,7 +934,7 @@ export function TicketTable({
       const note = ((ticket as any).contractorNote || '').trim();
       return note ? (note.length > 22 ? note.slice(0, 22) + '…' : note) : 'ملاحظة';
     }
-    if (ticket.status === 'pending' && (ticket as any).appointmentTime) {
+    if (hasScheduledTicketBadge(ticket)) {
       return 'تم تحديد موعد';
     }
     return statusTranslations[ticket.status] ?? ticket.status;
@@ -1407,7 +1408,7 @@ export function TicketTable({
                       )}
                       <span className={cn(
                         'text-[10px] font-bold px-2 py-0.5 rounded-full border max-w-[120px] truncate',
-                        ticket.status === 'pending' && (ticket as any).appointmentTime
+                        hasScheduledTicketBadge(ticket)
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                           : statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20'
                       )}>
@@ -1431,7 +1432,7 @@ export function TicketTable({
                       {ticket.appointmentTime ? (
                         <>
                           {supervisorNames.length > 0 && <span className="text-muted-foreground/30 text-xs shrink-0">·</span>}
-                          <span className="text-[11px] text-emerald-500 font-bold shrink-0">{ticket.appointmentTime}</span>
+                          <span className="text-[11px] text-emerald-500 font-bold shrink-0">{formatAppointmentDateTimeAr(ticket.appointmentTime)}</span>
                         </>
                       ) : null}
                     </div>
@@ -1775,7 +1776,9 @@ export function TicketTable({
                         )}
                         <span className={cn(
                           'inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border max-w-[110px] truncate',
-                          statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+                          hasScheduledTicketBadge(ticket)
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : statusColors[ticket.status] ?? 'bg-slate-500/10 text-slate-400 border-slate-500/20',
                         )}>
                           {getStatusLabel(ticket)}
                         </span>
