@@ -1,3 +1,4 @@
+import {hasScheduledTicketBadge} from '@/lib/ticket-appointment-state';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -68,11 +69,11 @@ export function TicketCard({ ticket }: TicketCardProps) {
             <span className="text-[10px] text-slate-500 font-mono font-medium">#{ticket.id.slice(0, 8)}</span>
             <Badge variant="outline" className={cn(
               "text-[10px] font-bold px-2 py-0.5 rounded-full",
-              ticket.status === 'pending' && ticket.appointmentTime
+              hasScheduledTicketBadge(ticket)
                 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
                 : statusColors[ticket.status]
             )}>
-              {ticket.status === 'pending' && ticket.appointmentTime
+              {hasScheduledTicketBadge(ticket)
                 ? 'تم تحديد موعد'
                 : (statusTranslations[ticket.status] ?? ticket.status)}
             </Badge>
