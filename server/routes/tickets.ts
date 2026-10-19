@@ -521,7 +521,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     const appt = (t as any).appointment;
     const apptTime = appt ? [appt.date, appt.time].filter(Boolean).join(' ') : null;
     // Compare by date string so same-day appointments (no time) still show
-    const apptInFuture = appt?.date ? appt.date >= todayStr : false;
+    const apptInFuture = appt?.date && appt.status === 'scheduled' ? appt.date >= todayStr : false;
     return {
       ...t,
       globalStatus: t.status,
