@@ -11,7 +11,7 @@
     "start": "NODE_ENV=production tsx server/main.ts",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test:workdays": "node --experimental-strip-types --test src/lib/workDays.test.ts src/lib/appointmentTimeAvailability.test.ts src/lib/appointment-time-display.test.ts",
+    "test:workdays": "node --experimental-strip-types --test src/lib/workDays.test.ts src/lib/appointmentTimeAvailability.test.ts src/lib/appointment-time-display.test.ts src/lib/ticket-appointment-state.test.ts",
     "test:supervisor-close": "node --import tsx --test server/services/__tests__/ticket-closure-plan.test.ts server/services/__tests__/bulk-ticket-status-policy.test.ts server/services/__tests__/closure-approval-policy.test.ts server/services/__tests__/supervisor-work-details.test.ts",
     "phones:audit": "tsx scripts/audit-phone-duplicates.ts",
     "supervisors:reconcile": "tsx scripts/reconcile-ticket-supervisors.ts",
