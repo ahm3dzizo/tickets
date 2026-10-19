@@ -1,3 +1,4 @@
+import { formatAppointmentTime12Ar } from '@/lib/appointment-time-display';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   CalendarDays, Clock, AlertTriangle, AlertCircle, CheckCircle2, Eye, Send, Save,
@@ -285,7 +286,7 @@ export function UnifiedAppointmentDialog({
   const endDate = addWorkingDays(startDate, rangeDays - 1, workHours);
 
   const preferredTimeLabel = useMemo(() => {
-    if (timeMode === 'custom') return `الساعة ${customTime}`;
+    if (timeMode === 'custom') return `الساعة ${formatAppointmentTime12Ar(customTime)}`;
     return timeOptions.find(o => o.value === timeMode)?.label ?? timeMode;
   }, [timeMode, customTime, timeOptions]);
 
