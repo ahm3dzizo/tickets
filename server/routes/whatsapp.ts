@@ -3,6 +3,7 @@ import { AuthRequest, requireAuth } from '../auth.js';
 import { getWAStatus, getWAQRCode, getLinkedPhone, startWA, stopWA, sendWAText, pairWACode, buildAppointmentRangeMsg } from '../baileys.js';
 import qrcode from 'qrcode';
 import prisma from '../db.js';
+import {ticketStatusAfterAppointmentRangeSent} from '../../src/lib/ticket-appointment-state.js';
 import { DEFAULT_WORK_HOURS, isWorkingDay, weekdayOf, type WorkHoursSettings } from './settings.js';
 
 const router = Router();
@@ -224,7 +225,11 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     const ticketIds = ticketId.split(',');
     const tickets = await prisma.ticket.findMany({
       where: { id: { in: ticketIds } },
-      select: { id: true, ticketId: true, projectId: true, status: true, unit: { select: { unitNumber: true } }, client: { select: { name: true } } },
+      select: {
+        id: true, ticketId: true, projectId: true, status: true,
+        appointment: {select: {date: true, status: true}},
+        unit: { select: { unitNumber: true } }, client: { select: { name: true } },
+      },
     });
     if (!tickets.length) { res.status(404).json({ error: 'التذاكر غير موجودة' }); return; }
 
@@ -261,12 +266,20 @@ router.post('/appointment-range/:ticketId', requireAuth, async (req: AuthRequest
     if (result.sent) {
       const waSentNow = new Date();
       for (const t of tickets) {
+        // A proposal message is not an appointment cancellation: preserve an
+        // already scheduled visit. This also repairs legacy tickets stuck at
+        // "waiting" even though they have a valid scheduled appointment.
+        const hasScheduledAppointment = t.appointment?.status === 'scheduled' &&
+          t.appointment.date >= new Date().toISOString().slice(0, 10);
+        const nextStatus = ticketStatusAfterAppointmentRangeSent(
+          t.status, hasScheduledAppointment,
+        );
         await prisma.ticket.update({
           where: { id: t.id },
           data: {
-            ...(t.status !== 'closed' ? { status: 'waiting' } : {}),
+            ...(nextStatus ? {status: nextStatus} : {}),
             lastWaSentAt: waSentNow,
-          }
+          },
         });
         try {
           await (prisma as any).ticketAudit.create({
