@@ -110,7 +110,7 @@ export interface Ticket {
   subTypeName?: string | null;
   appointmentTime?: string | null;
   appointmentNotes?: string | null;
-  appointment?: { id: string; date: string; time?: string | null } | null;
+  appointment?: { id: string; date: string; time?: string | null; status?: 'scheduled' | 'completed' | 'cancelled' } | null;
   createdAt: any;
   closedAt?: any;
   closureNotes?: string;
