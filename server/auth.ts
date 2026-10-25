@@ -134,14 +134,24 @@ export function sanitizeSpecialties(input: unknown): string[] {
 
 export function normalizePhoneNumber(value: unknown): string | null {
   if (value === null || value === undefined) return null;
-  const raw = String(value).trim();
+
+  // Accept Arabic-Indic and Persian digits as well as Western digits.
+  const raw = String(value).trim().replace(/[٠-٩۰-۹]/g, (digit) => {
+    const code = digit.charCodeAt(0);
+    return String(code >= 0x06f0 ? code - 0x06f0 : code - 0x0660);
+  });
   if (!raw || !/^[+\d\s().-]+$/.test(raw)) return null;
+
   let normalized = raw.replace(/\D/g, "");
   if (normalized.startsWith("00")) normalized = normalized.slice(2);
-  // Store Saudi mobile numbers in international form so 05xxxxxxxx,
-  // 5xxxxxxxx and +9665xxxxxxxx cannot create separate accounts.
-  if (/^05\d{8}$/.test(normalized)) normalized = `966${normalized.slice(1)}`;
+
+  // Canonicalize Saudi mobile numbers to 9665xxxxxxxx, accepting:
+  // 05xxxxxxxx, 5xxxxxxxx, 9665xxxxxxxx, +9665xxxxxxxx, 009665xxxxxxxx,
+  // and the commonly mistyped 96605xxxxxxxx / +966 05xxxxxxxx forms.
+  if (/^96605\d{8}$/.test(normalized)) normalized = `966${normalized.slice(4)}`;
+  else if (/^05\d{8}$/.test(normalized)) normalized = `966${normalized.slice(1)}`;
   else if (/^5\d{8}$/.test(normalized)) normalized = `966${normalized}`;
+
   return normalized.length >= 7 && normalized.length <= 15 ? normalized : null;
 }
 
