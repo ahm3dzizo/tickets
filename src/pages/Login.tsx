@@ -130,7 +130,7 @@ export default function Login() {
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  placeholder="05xxxxxxxx"
+                  placeholder="05xxxxxxxx أو +9665xxxxxxxx"
                   className="h-12 rounded-2xl pr-11 text-right bg-muted/50 border-transparent focus:border-primary/40 focus:bg-card focus:ring-3 focus:ring-primary/10 transition-all"
                   value={identifier}
                   onChange={e => setIdentifier(e.target.value)}
@@ -206,7 +206,7 @@ export default function Login() {
                 <p className="text-right text-[12px] text-muted-foreground">أدخل رقم الهاتف المسجل لتصلك رسالة واتساب بكود الاستعادة.</p>
                 <Input
                   type="tel"
-                  placeholder="رقم الهاتف (مثال: 05xxxxxxxx)"
+                  placeholder="05xxxxxxxx أو 5xxxxxxxx أو +9665xxxxxxxx"
                   className="h-10 text-right bg-background border-amber-500/20 focus:border-amber-500/40"
                   value={resetIdentifier}
                   onChange={e => setResetIdentifier(e.target.value)}
