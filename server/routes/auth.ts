@@ -57,12 +57,16 @@ function phoneLookupVariants(value: unknown): string[] {
     `00${normalized}`,
   ]);
 
-  // Saudi legacy rows may still be stored as 05xxxxxxxx or 5xxxxxxxx while new
-  // writes use 9665xxxxxxxx. Accept every canonical legacy form during rollout.
+  // Match canonical, international, and legacy Saudi formats stored in older rows.
   if (/^9665\d{8}$/.test(normalized)) {
     const bare = normalized.slice(3); // 5xxxxxxxx
+    const national = `0${bare}`; // 05xxxxxxxx
+    const internationalWithNationalZero = `966${national}`; // 96605xxxxxxxx
     variants.add(bare);
-    variants.add(`0${bare}`); // 05xxxxxxxx
+    variants.add(national);
+    variants.add(internationalWithNationalZero);
+    variants.add(`+${internationalWithNationalZero}`);
+    variants.add(`00${internationalWithNationalZero}`);
   }
 
   return [...variants];
