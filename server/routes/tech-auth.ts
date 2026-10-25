@@ -333,12 +333,28 @@ router.post('/login', TECH_LOGIN_LIMITER, async (req, res) => {
 
     const normalizedUsername = normalizePhoneNumber(username);
     const rawUsername = String(username).trim();
-    const tech = normalizedUsername
+    const variants = new Set<string>();
+    if (normalizedUsername) {
+      variants.add(normalizedUsername);
+      variants.add(`+${normalizedUsername}`);
+      variants.add(`00${normalizedUsername}`);
+      if (/^9665\d{8}$/.test(normalizedUsername)) {
+        const bare = normalizedUsername.slice(3);
+        const national = `0${bare}`;
+        const internationalWithNationalZero = `966${national}`;
+        variants.add(bare);
+        variants.add(national);
+        variants.add(internationalWithNationalZero);
+        variants.add(`+${internationalWithNationalZero}`);
+        variants.add(`00${internationalWithNationalZero}`);
+      }
+    }
+    const directTech = normalizedUsername
       ? await prisma.technician.findFirst({
           where: {
             OR: [
-              { username: normalizedUsername },
-              { phoneNumber: normalizedUsername },
+              { username: { in: [...variants] } },
+              { phoneNumber: { in: [...variants] } },
               ...(rawUsername !== normalizedUsername ? [{ username: rawUsername }, { phoneNumber: rawUsername }] : []),
             ],
           },
@@ -348,6 +364,26 @@ router.post('/login', TECH_LOGIN_LIMITER, async (req, res) => {
           },
         })
       : null;
+
+    // Older technician records may contain spaces/dashes/parentheses. Compare
+    // normalized values only if the indexed exact-format lookup found no match.
+    const tech = directTech ?? (normalizedUsername
+      ? (await prisma.technician.findMany({
+          where: {
+            OR: [
+              { username: { not: "" } },
+              { phoneNumber: { not: null } },
+            ],
+          },
+          include: {
+            supervisor: { select: { uid: true, displayName: true } },
+            project: { select: { id: true, name: true } },
+          },
+        })).find(candidate =>
+          normalizePhoneNumber(candidate.username) === normalizedUsername ||
+          normalizePhoneNumber(candidate.phoneNumber) === normalizedUsername
+        ) ?? null
+      : null);
 
     if (!tech || !tech.isActive || !tech.passwordHash) {
       res.status(401).json({ error: 'Invalid credentials or inactive account' });
