@@ -568,7 +568,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: "projectId مطلوب" });
   }
-  const closeMissingTickets = req.body.closeMissingTickets === "true" || req.body.closeMissingTickets === true;
+  const closeMissingTickets = true; // دايمًا نغلق المفقودة تلقائياً
 
   const filePath = req.file.path;
 
