@@ -10,7 +10,7 @@ import { invalidateKeywordCache } from "./keywords.js";
 import { nudgeReclassifyWorker } from "./reclassify-worker.js";
 
 const NARA_URL = "https://router.bynara.id/v1/chat/completions";
-const NARA_MODEL = process.env.NARA_MODEL || "agnes-2.5-flash";
+const NARA_MODEL = process.env.NARA_MODEL || "laguna-s-2.1";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free";
 

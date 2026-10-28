@@ -68,7 +68,7 @@ function configuredProviders(): TranslationProvider[] {
       label: 'NaraRouter',
       url: 'https://router.bynara.id/v1/chat/completions',
       apiKey: process.env.NARA_API_KEY,
-      model: process.env.NARA_TRANSLATION_MODEL || process.env.NARA_MODEL || 'agnes-2.5-flash',
+      model: process.env.NARA_TRANSLATION_MODEL || process.env.NARA_MODEL || 'laguna-s-2.1',
     });
   }
   if (process.env.OPENROUTER_API_KEY) {
