@@ -432,14 +432,14 @@ export function UnifiedAppointmentDialog({
             const d = appt.date || todayStr();
             const t = appt.time || '';
             setDate(d); setStartDate(d);
-            if (t) { setCustomTime(t); setTimeMode('custom'); } else setTimeMode('morning');
+            if (t) { setCustomTime(t); setTimeMode('custom'); } else setTimeMode('custom');
             setNotes(appt.notes || '');
             const supIds: string[] = appt.supervisorIds || [];
             setSelectedSupIds(supIds.length ? supIds : (primaryTicket.assignedSupervisorIds ? [...primaryTicket.assignedSupervisorIds] : []));
             setSelectedTechId(appt.technicianId || appt.technician?.id || null);
           })
           .catch(() => {
-            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
+            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('custom');
             setNotes('');
             setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length ? [...primaryTicket.assignedSupervisorIds] : []);
             setSelectedTechId(null);
@@ -454,10 +454,10 @@ export function UnifiedAppointmentDialog({
             setStartDate(d); setDate(d);
             if (t) { setCustomTime(t); setTimeMode('custom'); }
           } else {
-            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
+            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('custom');
           }
         } else {
-          setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
+          setStartDate(todayStr()); setDate(todayStr()); setTimeMode('custom');
         }
         setNotes('');
         setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length
@@ -468,7 +468,7 @@ export function UnifiedAppointmentDialog({
 
     } else if (isCalendarMode) {
       setDate(dateStr || todayStr());
-      setTimeMode('morning');
+      setTimeMode('custom');
       setCustomTime('09:00');
       setNotes('');
       setSelectedClientId(''); setSelectedUnitId(''); setSelectedUnit('');
