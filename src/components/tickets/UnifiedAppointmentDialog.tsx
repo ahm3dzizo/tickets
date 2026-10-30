@@ -1,4 +1,3 @@
-import { formatAppointmentTime12Ar } from '@/lib/appointment-time-display';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   CalendarDays, Clock, AlertTriangle, AlertCircle, CheckCircle2, Eye, Send, Save,
@@ -180,10 +179,6 @@ export function UnifiedAppointmentDialog({
   const isTicketMode = !isEditMode && (tickets?.length ?? 0) > 0;
   const isCalendarMode = !isEditMode && !isTicketMode;
   const canSendWhatsApp = isTicketMode && !!clientPhone;
-  // Work-hours quick-select (الصباح/بعد الظهر) only makes sense when opened
-  // from the tickets page — from المواعيد (calendar add) or تعديل موعد
-  // (edit), just show a plain date + time picker instead.
-  const showWorkHoursShortcuts = isTicketMode;
 
   const primaryTicket = tickets?.[0] ?? null;
   const multiIds = tickets?.map(t => t.id).join(',') ?? '';
@@ -285,7 +280,6 @@ export function UnifiedAppointmentDialog({
   const selectableTimes = useMemo(() => availableTimes(dayHours), [dayHours]);
   const endDate = addWorkingDays(startDate, rangeDays - 1, workHours);
 
-  const preferredTimeLabel = customTime;
 
   const finalTime = timeMode === 'custom'
     ? customTime
@@ -764,7 +758,7 @@ export function UnifiedAppointmentDialog({
       const result = await whatsappApi.sendAppointmentRange(multiIds, {
         startDate,
         endDate,
-        preferredTime: preferredTimeLabel,
+        preferredTime: customTime,
         notes: notes || undefined,
         phone: clientPhone,
         clientName: primaryTicket?.clientName || '',
