@@ -1,4 +1,3 @@
-import { formatPreferredAppointmentTimeAr } from '../src/lib/appointment-time-display.js';
 import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import path from 'path';
@@ -682,7 +681,7 @@ export async function buildAppointmentRangeMsg(params: AppointmentRangeParams): 
   msg += `\n\nتفاصيل الموعد المقترح:\n`;
   msg += `من ${params.startDate}\n`;
   msg += `إلى ${params.endDate}\n\n`;
-  msg += `الوقت المفضل: ${formatPreferredAppointmentTimeAr(params.preferredTime)}\n`;
+  msg += `الوقت المتاح: ${params.preferredTime}\n`;
   if (params.notes) {
     msg += `ملاحظات: ${params.notes}\n`;
   }
