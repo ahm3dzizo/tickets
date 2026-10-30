@@ -1,4 +1,3 @@
-import { formatAppointmentTime12Ar } from '@/lib/appointment-time-display';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   CalendarDays, Clock, AlertTriangle, AlertCircle, CheckCircle2, Eye, Send, Save,
@@ -180,10 +179,6 @@ export function UnifiedAppointmentDialog({
   const isTicketMode = !isEditMode && (tickets?.length ?? 0) > 0;
   const isCalendarMode = !isEditMode && !isTicketMode;
   const canSendWhatsApp = isTicketMode && !!clientPhone;
-  // Work-hours quick-select (الصباح/بعد الظهر) only makes sense when opened
-  // from the tickets page — from المواعيد (calendar add) or تعديل موعد
-  // (edit), just show a plain date + time picker instead.
-  const showWorkHoursShortcuts = isTicketMode;
 
   const primaryTicket = tickets?.[0] ?? null;
   const multiIds = tickets?.map(t => t.id).join(',') ?? '';
@@ -205,7 +200,7 @@ export function UnifiedAppointmentDialog({
   const [startDate, setStartDate] = useState(todayStr()); // range start (WhatsApp mode)
   const [date, setDate] = useState(todayStr());           // single date (other modes)
   const [rangeDays, setRangeDays] = useState(2);
-  const [timeMode, setTimeMode] = useState<string>('morning');
+  const [timeMode, setTimeMode] = useState<string>('custom');
   const [customTime, setCustomTime] = useState('09:00');
 
   // WhatsApp preview
@@ -285,10 +280,6 @@ export function UnifiedAppointmentDialog({
   const selectableTimes = useMemo(() => availableTimes(dayHours), [dayHours]);
   const endDate = addWorkingDays(startDate, rangeDays - 1, workHours);
 
-  const preferredTimeLabel = useMemo(() => {
-    if (timeMode === 'custom') return `الساعة ${formatAppointmentTime12Ar(customTime)}`;
-    return timeOptions.find(o => o.value === timeMode)?.label ?? timeMode;
-  }, [timeMode, customTime, timeOptions]);
 
   const finalTime = timeMode === 'custom'
     ? customTime
@@ -385,7 +376,7 @@ export function UnifiedAppointmentDialog({
     if (isEditMode && editGroup) {
       const [d, t] = (editGroup.appointmentTime || '').split(' ');
       setDate(d || todayStr());
-      if (t) { setCustomTime(t); setTimeMode('custom'); } else setTimeMode('morning');
+      if (t) { setCustomTime(t); setTimeMode('custom'); } else setTimeMode('custom');
       setNotes(editGroup.notes || '');
       const typesSet: Set<string> = editGroup.types instanceof Set
         ? editGroup.types
@@ -441,14 +432,14 @@ export function UnifiedAppointmentDialog({
             const d = appt.date || todayStr();
             const t = appt.time || '';
             setDate(d); setStartDate(d);
-            if (t) { setCustomTime(t); setTimeMode('custom'); } else setTimeMode('morning');
+            if (t) { setCustomTime(t); setTimeMode('custom'); } else setTimeMode('custom');
             setNotes(appt.notes || '');
             const supIds: string[] = appt.supervisorIds || [];
             setSelectedSupIds(supIds.length ? supIds : (primaryTicket.assignedSupervisorIds ? [...primaryTicket.assignedSupervisorIds] : []));
             setSelectedTechId(appt.technicianId || appt.technician?.id || null);
           })
           .catch(() => {
-            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
+            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('custom');
             setNotes('');
             setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length ? [...primaryTicket.assignedSupervisorIds] : []);
             setSelectedTechId(null);
@@ -463,10 +454,10 @@ export function UnifiedAppointmentDialog({
             setStartDate(d); setDate(d);
             if (t) { setCustomTime(t); setTimeMode('custom'); }
           } else {
-            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
+            setStartDate(todayStr()); setDate(todayStr()); setTimeMode('custom');
           }
         } else {
-          setStartDate(todayStr()); setDate(todayStr()); setTimeMode('morning');
+          setStartDate(todayStr()); setDate(todayStr()); setTimeMode('custom');
         }
         setNotes('');
         setSelectedSupIds(primaryTicket.assignedSupervisorIds?.length
@@ -477,7 +468,7 @@ export function UnifiedAppointmentDialog({
 
     } else if (isCalendarMode) {
       setDate(dateStr || todayStr());
-      setTimeMode('morning');
+      setTimeMode('custom');
       setCustomTime('09:00');
       setNotes('');
       setSelectedClientId(''); setSelectedUnitId(''); setSelectedUnit('');
@@ -593,7 +584,7 @@ export function UnifiedAppointmentDialog({
         const result = await whatsappApi.previewAppointmentRange(multiIds, {
           startDate,
           endDate,
-          preferredTime: preferredTimeLabel,
+          preferredTime: customTime,
           notes: notes || undefined,
           phone: clientPhone || '966500000000',
           clientName: primaryTicket?.clientName || '',
@@ -604,7 +595,7 @@ export function UnifiedAppointmentDialog({
     };
     const timer = setTimeout(fetch, 500);
     return () => clearTimeout(timer);
-  }, [open, startDate, endDate, preferredTimeLabel, notes, multiIds, clientPhone, canSendWhatsApp, isDateDisallowed]);
+  }, [open, startDate, endDate, customTime, notes, multiIds, clientPhone, canSendWhatsApp, isDateDisallowed]);
 
   // ── Save (internal) ────────────────────────────────────────────────────────
 
@@ -767,7 +758,7 @@ export function UnifiedAppointmentDialog({
       const result = await whatsappApi.sendAppointmentRange(multiIds, {
         startDate,
         endDate,
-        preferredTime: preferredTimeLabel,
+        preferredTime: customTime,
         notes: notes || undefined,
         phone: clientPhone,
         clientName: primaryTicket?.clientName || '',
@@ -1256,31 +1247,9 @@ export function UnifiedAppointmentDialog({
           {/* ── TIME OPTIONS (from work hours — ALL MODES) ────────────── */}
           <div className="space-y-2">
             <Label className="text-muted-foreground text-[11px] uppercase font-bold tracking-wider block">
-              {canSendWhatsApp ? 'الوقت المفضل للعميل' : 'وقت الموعد'}
+              {canSendWhatsApp ? 'الوقت المتاح' : 'وقت الموعد'}
             </Label>
-            {showWorkHoursShortcuts && timeOptions.filter(opt => opt.value !== 'custom').length > 0 && (
-              <div className={cn(
-                "grid gap-2",
-                timeOptions.filter(opt => opt.value !== 'custom').length > 1 ? "grid-cols-2" : "grid-cols-1"
-              )}>
-                {timeOptions.filter(opt => opt.value !== 'custom').map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setTimeMode(opt.value)}
-                    className={cn(
-                      'h-9 sm:h-10 rounded-xl text-xs font-bold border transition-all px-2',
-                      timeMode === opt.value
-                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-700 dark:text-blue-300'
-                        : 'bg-muted/50 border-input text-muted-foreground hover:border-foreground/30'
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {/* الوقت المحدد ظاهر دايماً — مش محتاج تدوس على زرار عشان يظهر */}
+            {/* اختيار وقت فعلي من الأوقات المتاحة، بدون تقسيم صباحي أو مسائي */}
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
               <input
@@ -1298,15 +1267,15 @@ export function UnifiedAppointmentDialog({
             {dayHours.enabled && selectableTimes.length > 0 && (
               <div className="space-y-1.5" dir="rtl">
                 <p className="text-[11px] font-bold text-muted-foreground">
-                  {isInsideWorkHours ? 'أوقات أخرى متاحة' : 'اختار وقتاً متاحاً بدلاً من الوقت المرفوض'}
+                  {isInsideWorkHours ? 'الوقت المتاح' : 'اختار وقتاً متاحاً بدلاً من الوقت المرفوض'}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {(isInsideWorkHours ? selectableTimes.slice(0, 4) : suggestedTimes).map(hhmm => (
+                  {(isInsideWorkHours ? selectableTimes : suggestedTimes).map(hhmm => (
                     <button key={hhmm} type="button" onClick={() => {
                       setCustomTime(hhmm);
                       setTimeMode('custom');
                     }} className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                      {fmtTime(hhmm)}
+                      {hhmm}
                     </button>
                   ))}
                 </div>
