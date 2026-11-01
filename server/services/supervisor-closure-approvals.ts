@@ -1,5 +1,6 @@
 import prisma from '../db.js';
 import { randomUUID } from 'node:crypto';
+import { itemsForTicket, itemsForReport } from './closure-approval-items.js';
 import type { Prisma } from '@prisma/client';
 import { createNotification } from '../notificationService.js';
 import { closures, planClosure, uniqueClosureItems, type Closure } from './ticket-closure-plan.js';
@@ -13,25 +14,6 @@ import {
 // the other supervisors' uncompleted work or the live ticket's global status.
 type TX = Prisma.TransactionClient;
 type Item = Closure['items'][number];
-
-// New approval requests persist work items per ticket. Keep array support for
-// approval rows created by older deployments.
-function itemsForTicket(value: unknown, ticketId: string): Item[] {
-  if (Array.isArray(value)) return value as Item[];
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const mapped = (value as Record<string, unknown>)[ticketId];
-    return Array.isArray(mapped) ? mapped as Item[] : [];
-  }
-  return [];
-}
-function itemsForReport(value: unknown): Item[] {
-  if (Array.isArray(value)) return value as Item[];
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return Object.values(value as Record<string, unknown>).flatMap(items =>
-      Array.isArray(items) ? items as Item[] : []);
-  }
-  return [];
-}
 
 function validItems(value: unknown): value is Item[] {
   return Array.isArray(value) && value.length > 0 && value.length <= 200 &&
@@ -296,7 +278,7 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
             });
         }
         if (active.length > 0) throw new Error('APPROVAL_ROLES_CHANGED');
-        const allItems = uniqueClosureItems([...history.flatMap(h => h.items), ...itemsForTicket(contributionsByTicket, ticket.id)]);
+        const allItems = uniqueClosureItems([...history.flatMap(h => h.items), ...itemsForTicket<Item>(contributionsByTicket, ticket.id)]);
         await tx.ticket.update({
           where: {id: ticket.id},
           data: {
@@ -313,7 +295,7 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
         approvalId: id, approvedBy: current.approverUids, ticketIds: current.ticketIds,
       });
     } else if (status === 'rejected') {
-      const partialItems = itemsForReport(current.items);
+      const partialItems = itemsForReport<Item>(current.items);
       await releaseHeldReport(tx, {
         approvalId:id, items:partialItems, notes:current.notes, partial:true,
       });
