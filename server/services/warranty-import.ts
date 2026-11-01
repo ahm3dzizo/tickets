@@ -18,7 +18,7 @@ export function normalizeWarrantyUnitReference(raw: unknown, projectAbbreviation
   let unitPart = value.replace(/^(?:villa|unit|الوحدة|فيلا)\s*[-:/#]?\s*/i, "").trim();
   const escapedAbbreviation = abbreviation.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
   const ownPrefix = new RegExp("^" + escapedAbbreviation + "[-_/\\s]+(.+)$", "i");
-  const ownMatch = value.match(ownPrefix);
+  const ownMatch = unitPart.match(ownPrefix);
 
   if (ownMatch) {
     unitPart = ownMatch[1].trim();
