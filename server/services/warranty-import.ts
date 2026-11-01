@@ -15,7 +15,7 @@ export function normalizeWarrantyUnitReference(raw: unknown, projectAbbreviation
   const abbreviation = westernDigits(projectAbbreviation || "").trim();
   if (!value || !abbreviation) return null;
 
-  let unitPart = value;
+  let unitPart = value.replace(/^(?:villa|unit|الوحدة|فيلا)\s*[-:/#]?\s*/i, "").trim();
   const escapedAbbreviation = abbreviation.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
   const ownPrefix = new RegExp("^" + escapedAbbreviation + "[-_/\\s]+(.+)$", "i");
   const ownMatch = value.match(ownPrefix);
@@ -30,7 +30,6 @@ export function normalizeWarrantyUnitReference(raw: unknown, projectAbbreviation
     unitPart = value;
   }
 
-  unitPart = unitPart.replace(/^(?:villa|unit|الوحدة|فيلا)\s*[-:/#]?\s*/i, "").trim();
   if (/^\d+$/.test(unitPart)) return String(Number(unitPart));
 
   const trailingNumber = unitPart.match(/[-_/\\s]+(\d+)$/);
