@@ -242,6 +242,18 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
       return;
     }
 
+    if (updates.size === 0) {
+      res.status(422).json({
+        success: false,
+        updated: 0,
+        totalRows: rows.length,
+        skippedBlankRows,
+        errors: ["لم يتم العثور على أي وحدة صالحة للتحديث في الملف"],
+        errorCount: 1,
+      });
+      return;
+    }
+
     const operations = [...updates.values()].map(update => prisma.unit.update({
       where: { id: update.unitId },
       data: {
@@ -249,7 +261,15 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
         ...(update.warrantyExpiryDate ? { warrantyExpiryDate: update.warrantyExpiryDate } : {}),
       },
     }));
-    if (operations.length > 0) await prisma.$transaction(operations);
+    await prisma.$transaction(operations);
+    console.info("[Warranties Import] completed", {
+      uid: req.uid,
+      projectId: project.id,
+      projectName: project.name,
+      updated: operations.length,
+      totalRows: rows.length,
+      skippedBlankRows,
+    });
 
     res.json({
       success: true,
