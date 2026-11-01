@@ -22,7 +22,7 @@ export function normalizeWarrantyUnitReference(raw: unknown, projectAbbreviation
 
   if (ownMatch) {
     unitPart = ownMatch[1].trim();
-  } else if (/^[A-Za-z0-9]+[-_/\s]+.+$/.test(value)) {
+  } else if (/^[A-Za-z0-9]+[-_/\s]+.+$/.test(unitPart)) {
     // An explicit different prefix must never be silently replaced.
     return null;
   }
@@ -49,7 +49,7 @@ export function parseWarrantyDate(raw: unknown): string | null {
 
   let date: Date | null = null;
   if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
-    date = new Date(Date.UTC(raw.getFullYear(), raw.getMonth(), raw.getDate()));
+    date = new Date(Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate()));
   } else if (typeof raw === "number" && Number.isFinite(raw) && raw > 0 && raw < 100000) {
     date = new Date(Date.UTC(1899, 11, 30) + Math.round(raw) * 86400000);
   } else {
