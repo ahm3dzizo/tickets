@@ -13,6 +13,13 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Warranties() {
   const [warranties, setWarranties] = useState<any[]>([]);
@@ -24,6 +31,8 @@ export default function Warranties() {
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expiring' | 'expired'>('all');
   const [importing, setImporting] = useState(false);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [selectedImportProjectId, setSelectedImportProjectId] = useState("");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -116,19 +125,42 @@ export default function Warranties() {
     XLSX.writeFile(wb, `warranties_export.xlsx`);
   };
 
+  const startWarrantyImport = () => {
+    if (projects.length === 0) {
+      toast.error("لا يوجد مشروع متاح لحسابك لاستيراد الضمانات");
+      return;
+    }
+
+    if (projects.length === 1) {
+      setSelectedImportProjectId(projects[0].id);
+      fileInputRef.current?.click();
+      return;
+    }
+
+    setSelectedImportProjectId("");
+    setProjectPickerOpen(true);
+  };
+
+  const chooseImportProject = (projectId: string) => {
+    setSelectedImportProjectId(projectId);
+    setProjectPickerOpen(false);
+    fileInputRef.current?.click();
+  };
+
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       setImporting(true);
-      const res = await warrantiesApi.import(file);
+      if (!selectedImportProjectId) {
+        toast.error("اختر المشروع أولاً");
+        return;
+      }
+      const res = await warrantiesApi.import(file, selectedImportProjectId);
       if (res.success) {
-        toast.success(`تم التحديث: ${res.updated} وحدة بنجاح`);
-        if (res.errors && res.errors.length > 0) {
-          toast.warning(`تم التحديث ببعض الأخطاء: \n${res.errors.slice(0, 5).join('\\n')}`);
-        }
-        loadData();
+        toast.success(`تم تحديث ${res.updated} وحدة في مشروع ${res.projectName || ""}`);
+        await loadData();
       }
     } catch (err: any) {
       toast.error(err.message || 'فشل استيراد الضمانات');
@@ -164,9 +196,9 @@ export default function Warranties() {
               onChange={handleImportExcel} 
             />
             <Button 
-              onClick={() => fileInputRef.current?.click()} 
+              onClick={startWarrantyImport} 
               variant="outline" 
-              disabled={importing}
+              disabled={importing || loading}
               className="gap-2 border-indigo-500/20 hover:bg-indigo-500/10 hover:text-indigo-500 transition-colors"
             >
               <FileSpreadsheet className="w-4 h-4" /> 
@@ -177,6 +209,33 @@ export default function Warranties() {
             </Button>
           </div>
         </div>
+
+        <Dialog open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
+          <DialogContent dir="rtl" className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>اختيار مشروع استيراد الضمانات</DialogTitle>
+              <DialogDescription>
+                أرقام الوحدات غير المسبوقة ستُطابق باستخدام اختصار المشروع المحدد.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2 max-h-72 overflow-y-auto">
+              {projects.map(project => (
+                <Button
+                  key={project.id}
+                  type="button"
+                  variant="outline"
+                  className="h-auto justify-between py-3 text-right"
+                  onClick={() => chooseImportProject(project.id)}
+                >
+                  <span className="font-semibold">{project.name}</span>
+                  <span className="text-xs text-muted-foreground" dir="ltr">
+                    {project.abbreviation || "بدون اختصار"}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Filters Section */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
