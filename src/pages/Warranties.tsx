@@ -17,7 +17,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -199,7 +198,7 @@ export default function Warranties() {
             <Button 
               onClick={startWarrantyImport} 
               variant="outline" 
-              disabled={importing}
+              disabled={importing || loading}
               className="gap-2 border-indigo-500/20 hover:bg-indigo-500/10 hover:text-indigo-500 transition-colors"
             >
               <FileSpreadsheet className="w-4 h-4" /> 
@@ -235,7 +234,6 @@ export default function Warranties() {
                 </Button>
               ))}
             </div>
-            <DialogFooter />
           </DialogContent>
         </Dialog>
 
