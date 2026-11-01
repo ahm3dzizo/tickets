@@ -27,10 +27,10 @@ export function normalizeWarrantyUnitReference(raw: unknown, projectAbbreviation
     return null;
   }
 
-  if (/^\d+$/.test(unitPart)) return String(Number(unitPart));
+  if (/^\d+$/.test(unitPart)) return unitPart.replace(/^0+(?=\d)/, "");
 
   const trailingNumber = unitPart.match(/[-_/\s]+(\d+)$/);
-  if (trailingNumber) return String(Number(trailingNumber[1]));
+  if (trailingNumber) return trailingNumber[1].replace(/^0+(?=\d)/, "");
   return unitPart.toLocaleUpperCase("en-US");
 }
 
@@ -51,7 +51,7 @@ export function parseWarrantyDate(raw: unknown): string | null {
   if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
     date = new Date(Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate()));
   } else if (typeof raw === "number" && Number.isFinite(raw) && raw > 0 && raw < 100000) {
-    date = new Date(Date.UTC(1899, 11, 30) + Math.round(raw) * 86400000);
+    date = new Date(Date.UTC(1899, 11, 30) + Math.floor(raw) * 86400000);
   } else {
     const value = westernDigits(String(raw)).trim();
     const dmy = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
