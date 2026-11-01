@@ -22,17 +22,14 @@ export function normalizeWarrantyUnitReference(raw: unknown, projectAbbreviation
 
   if (ownMatch) {
     unitPart = ownMatch[1].trim();
-  } else if (/^[A-Za-z0-9]+[-_/\\s]+.+$/.test(value)) {
+  } else if (/^[A-Za-z0-9]+[-_/\s]+.+$/.test(value)) {
     // An explicit different prefix must never be silently replaced.
     return null;
-  } else {
-    // A bare value is interpreted as abbreviation + separator + unit number.
-    unitPart = value;
   }
 
   if (/^\d+$/.test(unitPart)) return String(Number(unitPart));
 
-  const trailingNumber = unitPart.match(/[-_/\\s]+(\d+)$/);
+  const trailingNumber = unitPart.match(/[-_/\s]+(\d+)$/);
   if (trailingNumber) return String(Number(trailingNumber[1]));
   return unitPart.toLocaleUpperCase("en-US");
 }
