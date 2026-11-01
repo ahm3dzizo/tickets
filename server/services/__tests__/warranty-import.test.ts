@@ -16,6 +16,7 @@ test("qualifies unprefixed unit numbers using the selected project abbreviation"
 test("accepts the selected project prefix and rejects a different explicit prefix", () => {
   assert.equal(normalizeWarrantyUnitReference("PRJ-0012", "PRJ"), "12");
   assert.equal(normalizeWarrantyUnitReference("PRJ_12", "PRJ"), "12");
+  assert.equal(normalizeWarrantyUnitReference("Unit PRJ-12", "PRJ"), "12");
   assert.equal(normalizeWarrantyUnitReference("OTHER-12", "PRJ"), null);
 });
 
