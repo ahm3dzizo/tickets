@@ -14,6 +14,25 @@ import {
 type TX = Prisma.TransactionClient;
 type Item = Closure['items'][number];
 
+// New approval requests persist work items per ticket. Keep array support for
+// approval rows created by older deployments.
+function itemsForTicket(value: unknown, ticketId: string): Item[] {
+  if (Array.isArray(value)) return value as Item[];
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const mapped = (value as Record<string, unknown>)[ticketId];
+    return Array.isArray(mapped) ? mapped as Item[] : [];
+  }
+  return [];
+}
+function itemsForReport(value: unknown): Item[] {
+  if (Array.isArray(value)) return value as Item[];
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return Object.values(value as Record<string, unknown>).flatMap(items =>
+      Array.isArray(items) ? items as Item[] : []);
+  }
+  return [];
+}
+
 function validItems(value: unknown): value is Item[] {
   return Array.isArray(value) && value.length > 0 && value.length <= 200 &&
     value.every(item => item && typeof item.description === 'string' &&
@@ -131,7 +150,7 @@ export async function requestSupervisorClosure(uid: string, input: {
         if (!validItems(source)) throw new Error('MAINTENANCE_ITEMS_REQUIRED_FOR_EACH_TICKET');
         return uniqueClosureItems(source);
       };
-      const groupItems = uniqueClosureItems(group.flatMap(ticket => ownItems(ticket.id)));
+      const itemsByTicket = Object.fromEntries(group.map(ticket => [ticket.id, ownItems(ticket.id)]));
       const approvers = [...new Set(group.flatMap(t => t.assignedSupervisorIds.filter(s => s !== uid)))];
       const expectedRoles: Record<string, string[]> = {};
       for (const ticket of group) {
@@ -178,7 +197,7 @@ export async function requestSupervisorClosure(uid: string, input: {
           clientId: first.clientId,
           requesterUid: uid, approverUids: approvers,
           expectedRoles: expectedRoles as Prisma.InputJsonValue,
-          votes: {}, notes, items: groupItems as unknown as Prisma.InputJsonValue,
+          votes: {}, notes, items: itemsByTicket as unknown as Prisma.InputJsonValue,
         },
       });
       // Durable report queue record starts on the first request, but the
@@ -251,7 +270,7 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
         });
     }
     if (status === 'approved') {
-      const contributions = Array.isArray(current.items) ? current.items as Item[] : [];
+      const contributionsByTicket = current.items;
       for (const ticket of rows) {
         let active = ticket.assignedSupervisorIds;
         let history = closures(ticket.supervisorClosures);
@@ -277,7 +296,7 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
             });
         }
         if (active.length > 0) throw new Error('APPROVAL_ROLES_CHANGED');
-        const allItems = uniqueClosureItems([...history.flatMap(h => h.items), ...contributions]);
+        const allItems = uniqueClosureItems([...history.flatMap(h => h.items), ...itemsForTicket(contributionsByTicket, ticket.id)]);
         await tx.ticket.update({
           where: {id: ticket.id},
           data: {
@@ -294,7 +313,7 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
         approvalId: id, approvedBy: current.approverUids, ticketIds: current.ticketIds,
       });
     } else if (status === 'rejected') {
-      const partialItems = Array.isArray(current.items) ? current.items as Item[] : [];
+      const partialItems = itemsForReport(current.items);
       await releaseHeldReport(tx, {
         approvalId:id, items:partialItems, notes:current.notes, partial:true,
       });
@@ -351,7 +370,7 @@ export async function cancelSupervisorClosure(uid: string, id: string, reason: u
     if (current.status !== 'pending') return {status:current.status, changed:false, request:current};
     const rows = await tx.ticket.findMany({where:{id:{in:current.ticketIds}}, include:{client:true}});
     await releaseHeldReport(tx, {
-      approvalId:id, items:Array.isArray(current.items) ? current.items as Item[] : [],
+      approvalId:id, items:itemsForReport(current.items),
       notes:current.notes, partial:true,
     });
     for (const ticket of rows) {
