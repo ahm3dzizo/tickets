@@ -17,7 +17,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, callback) => {
     const allowed = /\.(xlsx|xls|csv)$/i.test(file.originalname);
-    callback(allowed ? null : new Error("صيغة الملف غير مدعومة؛ استخدم Excel أو CSV"), allowed);
+    callback(null, allowed);
   },
 });
 
