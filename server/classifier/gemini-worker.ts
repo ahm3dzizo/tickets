@@ -22,6 +22,18 @@ const RATE_LIMIT_PAUSE_RPM    = 70_000;
 const RATE_LIMIT_PAUSE_RPD    = 60 * 60_000;
 const BUSY_DELAY_MS           = 1_000;
 const IDLE_DELAYS_MS          = [15_000, 30_000, 60_000, 5 * 60_000];
+const AI_RETRY_BASE_MS        = 5 * 60_000;
+const AI_RETRY_MAX_MS         = 30 * 60_000;
+const _aiRetryAfter           = new Map<string, { until: number; attempts: number }>();
+
+function deferAiRetry(ticketIds: string[]): void {
+  const now = Date.now();
+  for (const id of ticketIds) {
+    const attempts = (_aiRetryAfter.get(id)?.attempts ?? 0) + 1;
+    const delay = Math.min(AI_RETRY_BASE_MS * (2 ** (attempts - 1)), AI_RETRY_MAX_MS);
+    _aiRetryAfter.set(id, { until: now + delay, attempts });
+  }
+}
 
 let _timer: ReturnType<typeof setTimeout> | null = null;
 let _running = false;
@@ -128,11 +140,15 @@ async function processBatch(): Promise<number> {
       status:             { notIn: ["closed", "out_of_scope"] },
     },
     orderBy: { createdAt: "asc" },
-    take:    BATCH_SIZE,
+    take:    BATCH_SIZE * 10,
     select:  { id: true, description: true, projectId: true, type: true },
   });
 
-  const valid = tickets.filter(t => t.description && t.description.length >= MIN_DESC_LEN);
+  const nowMs = Date.now();
+  const eligible = tickets
+    .filter(t => ( _aiRetryAfter.get(t.id)?.until ?? 0) <= nowMs)
+    .slice(0, BATCH_SIZE);
+  const valid = eligible.filter(t => t.description && t.description.length >= MIN_DESC_LEN);
   if (valid.length === 0) return 0;
 
   const batchItems = valid.map(t => ({ id: t.id, description: t.description! }));
@@ -243,7 +259,10 @@ async function processBatch(): Promise<number> {
   }
 
   if (aiRequestFailed && needGemini.length > 0) {
-    console.warn(`[ClassifyWorker] ${needGemini.length} low-confidence ticket(s) remain queued for a later AI retry`);
+    deferAiRetry(needGemini.map(item => item.id));
+    console.warn(`[ClassifyWorker] ${needGemini.length} low-confidence ticket(s) remain queued; retry deferred with backoff`);
+  } else {
+    for (const item of needGemini) _aiRetryAfter.delete(item.id);
   }
 
   return valid.length;
