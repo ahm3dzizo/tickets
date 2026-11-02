@@ -87,7 +87,7 @@ export interface SupervisorClosureRequest {
   votes: Record<string, { decision: 'approve' | 'reject'; notes: string; at: string }>;
   status: 'pending' | 'approved' | 'rejected' | 'canceled';
   notes: string;
-  items: Array<{description: string; status: string}>;
+  items: Array<{description: string; status: string}> | Record<string, Array<{description: string; status: string}>>;
   createdAt: string;
   resolvedAt?: string | null;
 }
