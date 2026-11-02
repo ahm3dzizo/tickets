@@ -344,8 +344,10 @@ export async function classifyBatchWithGemini(
     { role: "user",   content: `البلاغات:\n${ticketLines}` },
   ];
 
+  const excludedProviders = new Set<string>();
+  let lastProviderError: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const provider = getProvider();
+    const provider = getProvider(excludedProviders);
     if (!provider) break;
 
     try {
