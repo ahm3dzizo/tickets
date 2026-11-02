@@ -65,3 +65,11 @@ test("warranty export keeps all seven system-derived columns", () => {
   assert.equal(row["رقم الوحدة"], "A-12");
   assert.equal(row["حالة الضمان"], "ساري");
 });
+
+test("export status is derived from expiry date, including the upcoming window", async () => {
+  const { getWarrantyStatus } = await import("../../../src/lib/warrantyExcel.ts");
+  const now = new Date("2026-11-02T12:00:00.000Z");
+  assert.equal(getWarrantyStatus("2026-11-01", now), "منتهي");
+  assert.equal(getWarrantyStatus("2026-11-20", now), "ينتهي قريباً");
+  assert.equal(getWarrantyStatus("2027-01-01", now), "ساري");
+});
