@@ -133,7 +133,17 @@ export async function requestSupervisorClosure(uid: string, input: {
         return uniqueClosureItems(source);
       };
       const itemsByTicket = Object.fromEntries(group.map(ticket => [ticket.id, ownItems(ticket.id)]));
-      const approvers = [...new Set(group.flatMap(t => t.assignedSupervisorIds.filter(s => s !== uid)))];
+      const candidateApprovers = [...new Set(group.flatMap(t => t.assignedSupervisorIds.filter(s => s !== uid)))];
+      const delegationRows = candidateApprovers.length
+        ? await tx.systemSetting.findMany({
+            where: {key: {in: candidateApprovers.map(supervisorUid => `supervisor_closure_delegation:${supervisorUid}`)}},
+          })
+        : [];
+      const delegatedUids = new Set(delegationRows.filter(setting => {
+        const value = setting.value as {projects?: Record<string, boolean>};
+        return value?.projects?.[first.projectId] === true;
+      }).map(setting => setting.key.slice('supervisor_closure_delegation:'.length)));
+      const approvers = candidateApprovers.filter(supervisorUid => !delegatedUids.has(supervisorUid));
       const expectedRoles: Record<string, string[]> = {};
       for (const ticket of group) {
         let active = ticket.assignedSupervisorIds;
@@ -154,6 +164,42 @@ export async function requestSupervisorClosure(uid: string, input: {
           });
           await audit(tx, ticket.id, 'المشرف أنهى أعماله وطلب الموافقة على الإغلاق', uid, {
             supervisorUid: uid, remaining: active, workItems: ownItems(ticket.id), notes,
+          });
+        }
+        // Apply any standing project delegation immediately. The initiating
+        // supervisor completes only the delegated person's role; the audit
+        // retains both identities and no unrelated permissions are granted.
+        for (const delegatedUid of candidateApprovers.filter(supervisorUid => delegatedUids.has(supervisorUid))) {
+          if (!active.includes(delegatedUid)) continue;
+          const delegatedPlan = planClosure(active, history,
+            {uid: delegatedUid, role: 'supervisor'}, 'self', undefined,
+            'تم الإغلاق وفق التفويض المسبق من المشرف',
+            [{description: 'إغلاق بالنيابة وفق التفويض المسبق', status: 'تم'}]);
+          active = delegatedPlan.active;
+          history = delegatedPlan.history.map(closure =>
+            closure.supervisorUid === delegatedUid
+              ? {...closure, completedByUid: uid}
+              : closure
+          );
+          await audit(tx, ticket.id, 'إغلاق دور المشرف وفق تفويض مسبق للمشروع', uid, {
+            projectId: ticket.projectId, delegatedSupervisorUid: delegatedUid,
+            completedByUid: uid, delegation: 'project',
+          });
+        }
+        if (delegatedUids.size > 0) {
+          const fullyClosed = active.length === 0;
+          await tx.ticket.update({
+            where: {id: ticket.id},
+            data: {
+              assignedSupervisorIds: active,
+              supervisorClosures: history as unknown as Prisma.InputJsonValue,
+              status: fullyClosed ? 'closed' : 'in_progress',
+              closedAt: fullyClosed ? new Date() : null,
+              ...(fullyClosed ? {
+                maintenanceItems: history.flatMap(closure => closure.items) as unknown as Prisma.InputJsonValue,
+                closureNotes: history.map(closure => closure.notes).filter(Boolean).join('\\n'),
+              } : {}),
+            },
           });
         }
         expectedRoles[ticket.id] = [...active];
