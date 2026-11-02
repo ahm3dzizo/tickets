@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Project } from '@/types';
+import { WARRANTY_EXPORT_COLUMNS, WARRANTY_IMPORT_COLUMNS, createWarrantyExportRow } from '@/lib/warrantyExcel';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -106,19 +107,10 @@ export default function Warranties() {
     const rows = filtered.map(w => {
       const expiryDate = new Date(w.warrantyExpiryDate);
       const status = expiryDate < new Date() ? 'منتهي' : 'ساري';
-      
-      return {
-        'رقم الفيلا': w.unitNumber,
-        'اسم العميل': w.clientName,
-        'رقم الجوال': w.clientPhone,
-        'المشروع': w.projectName,
-        'تاريخ التسليم': w.handoverDate,
-        'تاريخ الانتهاء': w.warrantyExpiryDate,
-        'حالة الضمان': status
-      };
+      return createWarrantyExportRow(w, status);
     });
     
-    const ws = XLSX.utils.json_to_sheet(rows);
+    const ws = XLSX.utils.json_to_sheet(rows, { header: [...WARRANTY_EXPORT_COLUMNS] });
     ws['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'الضمانات');
@@ -131,14 +123,32 @@ export default function Warranties() {
       return;
     }
 
-    if (projects.length === 1) {
-      setSelectedImportProjectId(projects[0].id);
-      fileInputRef.current?.click();
-      return;
-    }
-
+    // Always ask for the project explicitly before opening the file picker.
     setSelectedImportProjectId("");
     setProjectPickerOpen(true);
+  };
+
+  const downloadImportTemplate = async () => {
+    const XLSX = await import('xlsx');
+    const workbook = XLSX.utils.book_new();
+    const dataSheet = XLSX.utils.aoa_to_sheet([[...WARRANTY_IMPORT_COLUMNS]]);
+    dataSheet['!cols'] = [{ wch: 20 }, { wch: 18 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(workbook, dataSheet, 'نموذج الاستيراد');
+
+    const instructions = [
+      ['تعليمات استيراد الضمانات'],
+      ['1. اختر المشروع من نافذة الاختيار في التطبيق قبل تحديد الملف.'],
+      ['2. أدخل رقم الوحدة كما هو مسجل في المشروع المختار.'],
+      ['3. أدخل تاريخ التسليم أو تاريخ الانتهاء على الأقل لكل وحدة.'],
+      ['4. إذا أدخلت تاريخ التسليم فقط، يحسب النظام تاريخ الانتهاء بعد سنة.'],
+      ['5. اسم العميل ورقم الجوال واسم المشروع وحالة الضمان تُجلب أو تُحدد من النظام ولا تُدخل في الملف.'],
+      ['6. لا تكرر رقم الوحدة داخل الملف.'],
+      ['صيغة التاريخ: DD/MM/YYYY أو YYYY-MM-DD.'],
+    ];
+    const instructionsSheet = XLSX.utils.aoa_to_sheet(instructions);
+    instructionsSheet['!cols'] = [{ wch: 100 }];
+    XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'تعليمات');
+    XLSX.writeFile(workbook, 'warranty_import_template.xlsx');
   };
 
   const chooseImportProject = (projectId: string) => {
@@ -204,8 +214,11 @@ export default function Warranties() {
               <FileSpreadsheet className="w-4 h-4" /> 
               {importing ? 'جاري الاستيراد...' : 'استيراد Excel'}
             </Button>
+            <Button onClick={downloadImportTemplate} variant="outline" className="gap-2 border-sky-500/20 hover:bg-sky-500/10 hover:text-sky-500 transition-colors">
+              <Download className="w-4 h-4" /> تنزيل نموذج الاستيراد
+            </Button>
             <Button onClick={exportExcel} variant="outline" className="gap-2 border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-500 transition-colors">
-              <Download className="w-4 h-4" /> تصدير Excel
+              <FileSpreadsheet className="w-4 h-4" /> تصدير Excel
             </Button>
           </div>
         </div>
@@ -242,7 +255,7 @@ export default function Warranties() {
           <div className="md:col-span-5 relative">
             <Search className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="ابحث برقم الفيلا، اسم العميل، الجوال..."
+              placeholder="ابحث برقم الوحدة، اسم العميل، الجوال..."
               className="pl-4 pr-11 h-12 rounded-2xl border-border bg-card shadow-sm text-base"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -302,7 +315,7 @@ export default function Warranties() {
             <table className="w-full text-right text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/20 text-muted-foreground font-semibold">
-                  <th className="px-6 py-4 whitespace-nowrap">رقم الفيلا</th>
+                  <th className="px-6 py-4 whitespace-nowrap">رقم الوحدة</th>
                   <th className="px-6 py-4 whitespace-nowrap">اسم العميل</th>
                   <th className="px-6 py-4 whitespace-nowrap">رقم الجوال</th>
                   <th className="px-6 py-4 whitespace-nowrap">المشروع</th>
