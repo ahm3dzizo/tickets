@@ -14,6 +14,14 @@ export const WARRANTY_EXPORT_COLUMNS = [
   "حالة الضمان",
 ] as const;
 
+export function getWarrantyStatus(expiryValue: string | Date, now = new Date()): string {
+  const expiryDate = new Date(expiryValue);
+  const nextMonth = new Date(now.getTime() + 30 * 86_400_000);
+  if (expiryDate < now) return "منتهي";
+  if (expiryDate <= nextMonth) return "ينتهي قريباً";
+  return "ساري";
+}
+
 export function createWarrantyExportRow(warranty: any, status: string) {
   return {
     "رقم الوحدة": warranty.unitNumber,
