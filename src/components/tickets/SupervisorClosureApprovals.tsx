@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supervisorClosureApi, type SupervisorClosureRequest } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CheckCircle2, Clock3, Loader2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -12,6 +13,7 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
 
   const reload = useCallback(async () => {
     if (!user || !['admin', 'engineer', 'supervisor'].includes(user.role)) return;
@@ -59,15 +61,17 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
     finally {setBusy(null);}
   };
 
-  if (!user || !['admin', 'engineer', 'supervisor'].includes(user.role)) return null;
   const visible = requests.filter(r => r.status === 'pending' || ticketId);
+  const needsMyDecision = !!user && requests.some(request => request.status === 'pending' && request.approverUids.includes(user.uid) && !request.votes?.[user.uid]);
+  useEffect(() => { if (ticketId && needsMyDecision) setApprovalModalOpen(true); }, [ticketId, needsMyDecision]);
+  if (!user || !['admin', 'engineer', 'supervisor'].includes(user.role)) return null;
   if (!visible.length && !loading) return ticketId ? null : (
     <p className="rounded-xl border border-border p-4 text-center text-muted-foreground" dir="rtl">
       لا توجد طلبات موافقة معلّقة حاليًا.
     </p>
   );
 
-  return (
+  const panel = (
     <section className="space-y-3 rounded-2xl border border-amber-500/20 bg-card p-3 sm:p-4" dir="rtl">
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -106,8 +110,8 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
               </p>
             )}
             <p className="text-xs text-foreground">
-              أعمال مقدّم الطلب: {Array.isArray(request.items)
-                ? request.items.map(item => `${item.description} (${item.status})`).join('، ') : 'غير محددة'}
+              أعمال مقدّم الطلب: {(Array.isArray(request.items) ? request.items : Object.values(request.items || {}).flat())
+                .map(item => `${item.description} (${item.status})`).join('، ') || 'غير محددة'}
             </p>
             {!!request.notes && <p className="text-xs text-muted-foreground">ملاحظات: {request.notes}</p>}
             <div className="flex flex-wrap gap-1.5">
@@ -172,4 +176,18 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
       })}
     </section>
   );
+
+  if (ticketId && needsMyDecision && approvalModalOpen) {
+    return (
+      <Dialog open={approvalModalOpen} onOpenChange={setApprovalModalOpen}>
+        <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>موافقة مطلوبة على إغلاق تذكرة مشتركة</DialogTitle>
+          </DialogHeader>
+          {panel}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  return panel;
 }

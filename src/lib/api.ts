@@ -87,7 +87,7 @@ export interface SupervisorClosureRequest {
   votes: Record<string, { decision: 'approve' | 'reject'; notes: string; at: string }>;
   status: 'pending' | 'approved' | 'rejected' | 'canceled';
   notes: string;
-  items: Array<{description: string; status: string}>;
+  items: Array<{description: string; status: string}> | Record<string, Array<{description: string; status: string}>>;
   createdAt: string;
   resolvedAt?: string | null;
 }
@@ -387,6 +387,9 @@ export type WorkHoursSettings = {
   default:   WorkHoursConfig;
   byProject: Record<string, WorkHoursConfig>;
 };
+export type SupervisorClosureDelegationSettings = {
+  projects: Record<string, {name: string; enabled: boolean}>;
+};
 export const settingsApi = {
   getWhatsAppTemplates: () =>
     get<WaTemplates>('/settings/whatsapp-templates'),
@@ -396,6 +399,10 @@ export const settingsApi = {
     get<WorkHoursSettings>('/settings/work-hours'),
   updateWorkHours: (data: WorkHoursSettings) =>
     put<WorkHoursSettings>('/settings/work-hours', data),
+  getSupervisorClosureDelegation: () =>
+    get<SupervisorClosureDelegationSettings>('/settings/supervisor-closure-delegation'),
+  updateSupervisorClosureDelegation: (projectId: string, enabled: boolean) =>
+    put<{projectId: string; enabled: boolean}>('/settings/supervisor-closure-delegation', {projectId, enabled}),
 };
 
 // ── Reports ───────────────────────────────────────────────────────────────────

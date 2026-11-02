@@ -588,6 +588,36 @@ export default function Settings() {
     return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'ص' : 'م'}`;
   };
 
+  // ── Supervisor closure delegation ─────────────────────────────────────────
+  const [delegationProjects, setDelegationProjects] = useState<Record<string, {name: string; enabled: boolean}>>({});
+  const [loadingDelegation, setLoadingDelegation] = useState(false);
+  const [savingDelegation, setSavingDelegation] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.role !== 'supervisor' || openSection !== 'delegation') return;
+    setLoadingDelegation(true);
+    settingsApi.getSupervisorClosureDelegation()
+      .then(data => setDelegationProjects(data.projects || {}))
+      .catch(() => toast.error('تعذر تحميل إعدادات التفويض'))
+      .finally(() => setLoadingDelegation(false));
+  }, [openSection, user?.role]);
+
+  const toggleClosureDelegation = async (projectId: string, enabled: boolean) => {
+    setSavingDelegation(projectId);
+    try {
+      await settingsApi.updateSupervisorClosureDelegation(projectId, enabled);
+      setDelegationProjects(current => ({
+        ...current,
+        [projectId]: {...current[projectId], enabled},
+      }));
+      toast.success(enabled ? 'تم تفعيل التفويض لهذا المشروع' : 'تم إيقاف التفويض لهذا المشروع');
+    } catch (error: any) {
+      toast.error(error?.message || 'تعذر حفظ إعداد التفويض');
+    } finally {
+      setSavingDelegation(null);
+    }
+  };
+
   // ── Avatar initials ─────────────────────────────────────────────────────────
   const initials = (user?.displayName ?? user?.email ?? 'U')
     .split(' ').slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
@@ -604,6 +634,9 @@ export default function Settings() {
         { key: 'templates', title: 'قوالب الواتساب',     desc: 'تخصيص الرسائل التلقائية للعملاء',     icon: MessageSquare, accent: 'blue'   },
         { key: 'whatsappbot', title: 'بوت الأوامر',      desc: 'رقم بوت يستقبل أوامر من الموظفين',    icon: Bot,           accent: 'purple' },
       ] as SectionMeta[] : []),
+      ...(user?.role === 'supervisor' ? [
+        { key: 'delegation', title: 'تفويض إغلاق التذاكر', desc: 'السماح لفريق الإشراف بإنهاء دورك لكل مشروع', icon: Shield, accent: 'purple' },
+      ] as SectionMeta[] : []),
       ...((user?.role === 'admin' || user?.role === 'engineer') ? [
         { key: 'workhours', title: 'أوقات الدوام',       desc: 'فترات العمل والمواعيد لكل مشروع',     icon: Clock,         accent: 'amber'  },
       ] as SectionMeta[] : []),
@@ -617,6 +650,39 @@ export default function Settings() {
   // ── Section content ──────────────────────────────────────────────────────────
   const renderContent = (key: string): React.ReactNode => {
     switch (key) {
+
+      // ── Supervisor closure delegation ───────────────────────────────────────
+      case 'delegation': return user?.role !== 'supervisor' ? null : (
+        <div className="space-y-4 text-right" dir="rtl">
+          <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-3">
+            <p className="text-sm font-bold text-foreground">تفويض مسبق لإغلاق دورك</p>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">
+              فعّل التفويض للمشروع المطلوب فقط. عندها يستطيع مشرف آخر مشارك معك في التذكرة إنهاء دورك نيابة عنك دون انتظار موافقة منفصلة. لا يمنحه ذلك صلاحية تعديل التذكرة أو إغلاق أدوار أخرى.
+            </p>
+          </div>
+          {loadingDelegation ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> جاري تحميل المشاريع...</div>
+          ) : Object.entries(delegationProjects).length === 0 ? (
+            <p className="rounded-xl border border-border p-4 text-center text-sm text-muted-foreground">لا توجد مشاريع مسندة إلى حسابك.</p>
+          ) : (
+            <div className="space-y-2">
+              {Object.entries(delegationProjects).map(([projectId, project]) => (
+                <div key={projectId} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-foreground">{project.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{project.enabled ? 'التفويض مفعّل لهذا المشروع' : 'التفويض متوقف — ستظل الموافقة مطلوبة'}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {savingDelegation === projectId && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                    <Toggle checked={project.enabled} onChange={enabled => void toggleClosureDelegation(projectId, enabled)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] leading-5 text-muted-foreground">الإعداد الافتراضي متوقف. تغيير الإعداد يؤثر على عمليات الإغلاق الجديدة فقط، ولا يغيّر طلبات الموافقة المعلّقة.</p>
+        </div>
+      );
 
       // ── Profile ──────────────────────────────────────────────────────────────
       case 'profile': return (

@@ -1,5 +1,7 @@
 import prisma from '../db.js';
 import { randomUUID } from 'node:crypto';
+import { itemsForTicket, itemsForReport } from './closure-approval-items.js';
+import { delegatedSupervisorsForProject } from './closure-approval-delegation.js';
 import type { Prisma } from '@prisma/client';
 import { createNotification } from '../notificationService.js';
 import { closures, planClosure, uniqueClosureItems, type Closure } from './ticket-closure-plan.js';
@@ -131,8 +133,15 @@ export async function requestSupervisorClosure(uid: string, input: {
         if (!validItems(source)) throw new Error('MAINTENANCE_ITEMS_REQUIRED_FOR_EACH_TICKET');
         return uniqueClosureItems(source);
       };
-      const groupItems = uniqueClosureItems(group.flatMap(ticket => ownItems(ticket.id)));
-      const approvers = [...new Set(group.flatMap(t => t.assignedSupervisorIds.filter(s => s !== uid)))];
+      const itemsByTicket = Object.fromEntries(group.map(ticket => [ticket.id, ownItems(ticket.id)]));
+      const candidateApprovers = [...new Set(group.flatMap(t => t.assignedSupervisorIds.filter(s => s !== uid)))];
+      const delegationRows = candidateApprovers.length
+        ? await tx.systemSetting.findMany({
+            where: {key: {in: candidateApprovers.map(supervisorUid => `supervisor_closure_delegation:${supervisorUid}`)}},
+          })
+        : [];
+      const delegatedUids = delegatedSupervisorsForProject(candidateApprovers, delegationRows, first.projectId);
+      const approvers = candidateApprovers.filter(supervisorUid => !delegatedUids.has(supervisorUid));
       const expectedRoles: Record<string, string[]> = {};
       for (const ticket of group) {
         let active = ticket.assignedSupervisorIds;
@@ -153,6 +162,42 @@ export async function requestSupervisorClosure(uid: string, input: {
           });
           await audit(tx, ticket.id, 'المشرف أنهى أعماله وطلب الموافقة على الإغلاق', uid, {
             supervisorUid: uid, remaining: active, workItems: ownItems(ticket.id), notes,
+          });
+        }
+        // Apply any standing project delegation immediately. The initiating
+        // supervisor completes only the delegated person's role; the audit
+        // retains both identities and no unrelated permissions are granted.
+        for (const delegatedUid of candidateApprovers.filter(supervisorUid => delegatedUids.has(supervisorUid))) {
+          if (!active.includes(delegatedUid)) continue;
+          const delegatedPlan = planClosure(active, history,
+            {uid: delegatedUid, role: 'supervisor'}, 'self', undefined,
+            'تم الإغلاق وفق التفويض المسبق من المشرف',
+            [{description: 'إغلاق بالنيابة وفق التفويض المسبق', status: 'تم'}]);
+          active = delegatedPlan.active;
+          history = delegatedPlan.history.map(closure =>
+            closure.supervisorUid === delegatedUid
+              ? {...closure, completedByUid: uid}
+              : closure
+          );
+          await audit(tx, ticket.id, 'إغلاق دور المشرف وفق تفويض مسبق للمشروع', uid, {
+            projectId: ticket.projectId, delegatedSupervisorUid: delegatedUid,
+            completedByUid: uid, delegation: 'project',
+          });
+        }
+        if (delegatedUids.size > 0) {
+          const fullyClosed = active.length === 0;
+          await tx.ticket.update({
+            where: {id: ticket.id},
+            data: {
+              assignedSupervisorIds: active,
+              supervisorClosures: history as unknown as Prisma.InputJsonValue,
+              status: fullyClosed ? 'closed' : 'in_progress',
+              closedAt: fullyClosed ? new Date() : null,
+              ...(fullyClosed ? {
+                maintenanceItems: history.flatMap(closure => closure.items) as unknown as Prisma.InputJsonValue,
+                closureNotes: history.map(closure => closure.notes).filter(Boolean).join('\\n'),
+              } : {}),
+            },
           });
         }
         expectedRoles[ticket.id] = [...active];
@@ -178,7 +223,7 @@ export async function requestSupervisorClosure(uid: string, input: {
           clientId: first.clientId,
           requesterUid: uid, approverUids: approvers,
           expectedRoles: expectedRoles as Prisma.InputJsonValue,
-          votes: {}, notes, items: groupItems as unknown as Prisma.InputJsonValue,
+          votes: {}, notes, items: itemsByTicket as unknown as Prisma.InputJsonValue,
         },
       });
       // Durable report queue record starts on the first request, but the
@@ -251,7 +296,7 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
         });
     }
     if (status === 'approved') {
-      const contributions = Array.isArray(current.items) ? current.items as Item[] : [];
+      const contributionsByTicket = current.items;
       for (const ticket of rows) {
         let active = ticket.assignedSupervisorIds;
         let history = closures(ticket.supervisorClosures);
@@ -277,7 +322,7 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
             });
         }
         if (active.length > 0) throw new Error('APPROVAL_ROLES_CHANGED');
-        const allItems = uniqueClosureItems([...history.flatMap(h => h.items), ...contributions]);
+        const allItems = uniqueClosureItems([...history.flatMap(h => h.items), ...itemsForTicket<Item>(contributionsByTicket, ticket.id)]);
         await tx.ticket.update({
           where: {id: ticket.id},
           data: {
@@ -294,7 +339,7 @@ export async function voteSupervisorClosure(uid: string, id: string, input: {
         approvalId: id, approvedBy: current.approverUids, ticketIds: current.ticketIds,
       });
     } else if (status === 'rejected') {
-      const partialItems = Array.isArray(current.items) ? current.items as Item[] : [];
+      const partialItems = itemsForReport<Item>(current.items);
       await releaseHeldReport(tx, {
         approvalId:id, items:partialItems, notes:current.notes, partial:true,
       });
@@ -351,7 +396,7 @@ export async function cancelSupervisorClosure(uid: string, id: string, reason: u
     if (current.status !== 'pending') return {status:current.status, changed:false, request:current};
     const rows = await tx.ticket.findMany({where:{id:{in:current.ticketIds}}, include:{client:true}});
     await releaseHeldReport(tx, {
-      approvalId:id, items:Array.isArray(current.items) ? current.items as Item[] : [],
+      approvalId:id, items:itemsForReport(current.items),
       notes:current.notes, partial:true,
     });
     for (const ticket of rows) {

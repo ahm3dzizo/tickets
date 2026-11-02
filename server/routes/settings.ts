@@ -235,4 +235,64 @@ router.put('/work-hours', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+
+// ── Project-scoped supervisor closure delegation ────────────────────────────
+// Each supervisor controls only their own delegation settings. Disabled by default.
+router.get('/supervisor-closure-delegation', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {uid: req.uid!},
+      select: {role: true, disabled: true, projects: {select: {id: true, name: true}}},
+    });
+    if (!user || user.disabled || user.role !== 'supervisor') {
+      res.status(403).json({error: 'إعداد التفويض متاح للمشرف فقط.'});
+      return;
+    }
+    const setting = await prisma.systemSetting.findUnique({
+      where: {key: `supervisor_closure_delegation:${req.uid!}`},
+    });
+    const saved = (setting?.value || {}) as {projects?: Record<string, boolean>};
+    const projects = Object.fromEntries(user.projects.map(project => [
+      project.id, {name: project.name, enabled: saved.projects?.[project.id] === true},
+    ]));
+    res.json({projects});
+  } catch (err: any) {
+    res.status(500).json({error: err.message});
+  }
+});
+
+router.put('/supervisor-closure-delegation', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId.trim() : '';
+    const enabled = req.body?.enabled;
+    if (!projectId || typeof enabled !== 'boolean') {
+      res.status(400).json({error: 'حدد المشروع وحالة التفويض.'});
+      return;
+    }
+    const user = await prisma.user.findUnique({
+      where: {uid: req.uid!},
+      select: {role: true, disabled: true, projects: {select: {id: true}}},
+    });
+    if (!user || user.disabled || user.role !== 'supervisor' ||
+        !user.projects.some(project => project.id === projectId)) {
+      res.status(403).json({error: 'لا يمكنك تعديل التفويض لهذا المشروع.'});
+      return;
+    }
+    const key = `supervisor_closure_delegation:${req.uid!}`;
+    const current = await prisma.systemSetting.findUnique({where: {key}});
+    const value = (current?.value || {}) as {projects?: Record<string, boolean>};
+    const projects = {...(value.projects || {})};
+    if (enabled) projects[projectId] = true;
+    else delete projects[projectId];
+    await prisma.systemSetting.upsert({
+      where: {key},
+      update: {value: {projects} as any},
+      create: {key, value: {projects} as any},
+    });
+    res.json({projectId, enabled});
+  } catch (err: any) {
+    res.status(500).json({error: err.message});
+  }
+});
+
 export default router;
