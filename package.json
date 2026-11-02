@@ -17,7 +17,8 @@
     "supervisors:reconcile": "tsx scripts/reconcile-ticket-supervisors.ts",
     "delete-tickets": "npx tsx scripts/delete-tickets.ts",
     "delete-tickets:dry": "npx tsx scripts/delete-tickets.ts --dry-run",
-    "test:warranty-import": "node --import tsx --test server/services/__tests__/warranty-import.test.ts"
+    "test:warranty-import": "node --import tsx --test server/services/__tests__/warranty-import.test.ts",
+    "test:classifier-policy": "node --import tsx --test server/classifier/__tests__/provider-policy.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
