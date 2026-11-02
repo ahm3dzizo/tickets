@@ -207,7 +207,7 @@ async function callProvider(
   let data: any = await response.json();
   // Some ordinary chat models do not implement response_format. Keep them usable,
   // while the parser and taxonomy validation below still enforce the contract.
-  if (jsonMode && response.status === 400 && /response.format|json.mode|unsupported/i.test(JSON.stringify(data))) {
+  if (jsonMode && response.status === 400) {
     delete body.response_format;
     response = await request();
     data = await response.json();
