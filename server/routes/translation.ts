@@ -25,6 +25,18 @@ const TRANSLATION_BATCH_SIZE = 20;
 const TRANSLATION_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 500;
 
+// Per-provider temporary bans (keyed by label)
+const _providerPausedUntil: Record<string, number> = {};
+
+function isProviderAvailable(label: string): boolean {
+  return Date.now() > (_providerPausedUntil[label] ?? 0);
+}
+
+function banProvider(label: string, durationMs: number, reason: string): void {
+  _providerPausedUntil[label] = Date.now() + durationMs;
+  console.warn(`[Translation] ${label} paused for ${Math.round(durationMs / 60_000)}m (${reason})`);
+}
+
 async function allowEitherAuth(req: any, res: any, next: any) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
@@ -172,7 +184,10 @@ async function translateWithProvider(
 
   const data: any = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(`${response.status}: ${data?.error?.message || response.statusText}`);
+    throw Object.assign(
+      new Error(`${response.status}: ${data?.error?.message || response.statusText}`),
+      { status: response.status },
+    );
   }
   if (/(?:safety|moderation|guard(?:rail)?)/i.test(String(data?.model || ''))) {
     throw new Error('router selected a safety model');
@@ -206,7 +221,7 @@ async function translateBatch(
   targetLang: TargetLanguage,
   context?: string,
 ): Promise<string[]> {
-  const providers = configuredProviders();
+  const providers = configuredProviders().filter(p => isProviderAvailable(p.label));
   if (providers.length === 0) throw new Error('No translation AI provider is configured');
 
   const errors: string[] = [];
@@ -216,7 +231,13 @@ async function translateBatch(
       console.log(`[Translation] ${provider.label}/${provider.model}: ${texts.length} → ${targetLang}`);
       return translated;
     } catch (error: any) {
-      errors.push(`${provider.label}: ${error?.message || error}`);
+      const msg: string = error?.message || String(error);
+      if (error?.status === 400 || /^400:/.test(msg)) {
+        banProvider(provider.label, 30 * 60_000, `HTTP 400 — model may not support this request`);
+      } else if (error?.status === 429 || /^429:|per.day|per_day/i.test(msg)) {
+        banProvider(provider.label, 60 * 60_000, `rate limited (429)`);
+      }
+      errors.push(`${provider.label}: ${msg}`);
     }
   }
   throw new Error(`All translation providers failed (${errors.join(' | ')})`);
