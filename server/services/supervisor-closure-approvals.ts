@@ -108,7 +108,28 @@ export async function requestSupervisorClosure(uid: string, input: {
     if (rows.length !== ticketIds.length) throw new Error('TICKET_NOT_FOUND');
     if (rows.some(ticket => !mayAccessProject(actor, ticket.projectId))) throw new Error('FORBIDDEN');
     if (rows.some(ticket => !ticket.client?.phone)) throw new Error('CLIENT_PHONE_REQUIRED');
-    validateApprovalInitiator(actor.role, uid, rows);
+
+    // Pre-fetch delegation settings for ALL supervisors on ANY of the requested tickets.
+    // This lets us exempt "delegation-only" tickets (where the requester isn't assigned
+    // but a delegated supervisor is the sole assignee) from the assignment requirement.
+    const allCandidateSups = [...new Set(rows.flatMap(t => t.assignedSupervisorIds.filter(s => s !== uid)))];
+    const allDelegationRows = allCandidateSups.length
+      ? await tx.systemSetting.findMany({
+          where: { key: { in: allCandidateSups.map(s => `supervisor_closure_delegation:${s}`) } },
+        })
+      : [];
+    const delegationOnlyTicketIds = new Set(
+      rows
+        .filter(t => !t.assignedSupervisorIds.includes(uid))
+        .filter(t => {
+          const sups = t.assignedSupervisorIds;
+          const delegated = delegatedSupervisorsForProject(sups, allDelegationRows, t.projectId);
+          return sups.some(s => delegated.has(s));
+        })
+        .map(t => t.id),
+    );
+
+    validateApprovalInitiator(actor.role, uid, rows, delegationOnlyTicketIds);
     const pending = await tx.ticketClosureApproval.findFirst({
       where: pendingWhere(ticketIds), select: { id: true },
     });
@@ -128,18 +149,33 @@ export async function requestSupervisorClosure(uid: string, input: {
     const notifications: Array<{ uid: string; ticketId: string; numbers: string }> = [];
     for (const group of groups.values()) {
       const first = group[0];
+      const DELEGATION_PLACEHOLDER: Item[] = [{description: 'إغلاق بالنيابة وفق التفويض المسبق', status: 'تم'}];
       const ownItems = (id: string) => {
         const source = mapped ? mapped[id] : items;
-        if (!validItems(source)) throw new Error('MAINTENANCE_ITEMS_REQUIRED_FOR_EACH_TICKET');
+        if (!validItems(source)) {
+          // Delegation-only tickets don't require items from the requester.
+          if (delegationOnlyTicketIds.has(id)) return uniqueClosureItems(DELEGATION_PLACEHOLDER);
+          throw new Error('MAINTENANCE_ITEMS_REQUIRED_FOR_EACH_TICKET');
+        }
         return uniqueClosureItems(source);
       };
       const itemsByTicket = Object.fromEntries(group.map(ticket => [ticket.id, ownItems(ticket.id)]));
       const candidateApprovers = [...new Set(group.flatMap(t => t.assignedSupervisorIds.filter(s => s !== uid)))];
-      const delegationRows = candidateApprovers.length
-        ? await tx.systemSetting.findMany({
-            where: {key: {in: candidateApprovers.map(supervisorUid => `supervisor_closure_delegation:${supervisorUid}`)}},
-          })
-        : [];
+      // Re-use the pre-fetched delegation rows for supervisors already in allDelegationRows;
+      // only query for any new candidates not seen at the top-level fetch.
+      const newCandidates = candidateApprovers.filter(
+        s => !allDelegationRows.some(r => r.key === `supervisor_closure_delegation:${s}`),
+      );
+      const delegationRows = [
+        ...allDelegationRows.filter(r =>
+          candidateApprovers.some(s => r.key === `supervisor_closure_delegation:${s}`),
+        ),
+        ...(newCandidates.length
+          ? await tx.systemSetting.findMany({
+              where: { key: { in: newCandidates.map(s => `supervisor_closure_delegation:${s}`) } },
+            })
+          : []),
+      ];
       const delegatedUids = delegatedSupervisorsForProject(candidateApprovers, delegationRows, first.projectId);
       const approvers = candidateApprovers.filter(supervisorUid => !delegatedUids.has(supervisorUid));
       const expectedRoles: Record<string, string[]> = {};

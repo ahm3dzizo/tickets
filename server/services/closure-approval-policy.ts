@@ -18,13 +18,16 @@ export function approvalOutcome(approvers: string[], votes: ApprovalVotes): Appr
 
 export function validateApprovalInitiator(
   role: string, uid: string,
-  tickets: Array<{ status: string; assignedSupervisorIds: string[]; supervisorClosures: unknown }>,
+  tickets: Array<{ id: string; status: string; assignedSupervisorIds: string[]; supervisorClosures: unknown }>,
+  delegationCoveredIds: Set<string> = new Set(),
 ) {
   if (role !== 'supervisor' || tickets.length === 0) throw new Error('SUPERVISOR_REQUIRED');
   for (const ticket of tickets) {
     if (['closed', 'completed', 'out_of_scope', 'absent'].includes(ticket.status)) {
       throw new Error('TICKET_ALREADY_CLOSED');
     }
+    // Tickets fully covered by a delegated supervisor don't require the requester to be assigned.
+    if (delegationCoveredIds.has(ticket.id)) continue;
     const personallyActive = ticket.assignedSupervisorIds.includes(uid);
     const personallyCompleted = closures(ticket.supervisorClosures).some(c => c.supervisorUid === uid);
     if (!personallyActive && !personallyCompleted) throw new Error('SUPERVISOR_NOT_ASSIGNED');
