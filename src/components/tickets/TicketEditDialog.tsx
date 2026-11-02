@@ -93,6 +93,10 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{
+    newStatus: string;
+    selectedUids: string[];
+  } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -113,6 +117,7 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
     setContractorSelection(null);
     setContractorOpen(false);
     setAppointmentOpen(false);
+    setPendingStatusChange(null);
     setPriority(String(ticket.priority));
     setDescription(parsed.cleanText);
     setTypes(initialTypes);
@@ -152,6 +157,24 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
     () => supervisors.filter(item => supervisorIds.includes(item.uid)),
     [supervisors, supervisorIds],
   );
+
+  const allRoleUids = useMemo(() => {
+    const assigned = ticket.assignedSupervisorIds ?? [];
+    const completed = (ticket.supervisorClosures ?? []).map(h => h.supervisorUid);
+    return [...new Set([...assigned, ...completed])];
+  }, [ticket.assignedSupervisorIds, ticket.supervisorClosures]);
+
+  const isSharedTicket = allRoleUids.length > 1;
+
+  const supervisorNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (ticket.assignedSupervisors ?? []).forEach(s => map.set(s.id, s.name));
+    (ticket.supervisorClosures ?? []).forEach(h => {
+      if (h.supervisorName) map.set(h.supervisorUid, h.supervisorName);
+    });
+    supervisors.forEach(s => map.set(s.uid, s.displayName));
+    return map;
+  }, [ticket.assignedSupervisors, ticket.supervisorClosures, supervisors]);
 
   const addAttachmentLink = () => {
     const value = attachmentInput.trim();
@@ -202,6 +225,25 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
     setContractorSelection(null);
   };
 
+  const applyPendingStatusChange = async () => {
+    if (!pendingStatusChange || !pendingStatusChange.selectedUids.length || saving) return;
+    setSaving(true);
+    try {
+      for (const uid of pendingStatusChange.selectedUids) {
+        await ticketsApi.bulkStatus([ticket.id], pendingStatusChange.newStatus, uid);
+      }
+      invalidateTicketCache();
+      toast.success(t.saved);
+      setPendingStatusChange(null);
+      onOpenChange(false);
+      await onSaved();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t.saveFailed);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const save = async () => {
     if (!types.length) return;
     setSaving(true);
@@ -227,8 +269,11 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
       const primarySupervisor = selected.find(item => item.uid === supervisorIds[0]) ?? selected[0];
       const supervisorsChanged = !sameStringSet(initialSupervisorIds, supervisorIds);
 
+      const statusChanged = normalizeStatus(ticket.status) !== status;
+      const needsSupervisorTarget = statusChanged && isSharedTicket && !['closed', 'completed'].includes(status);
+
       await ticketsApi.update(ticket.id, {
-        status,
+        ...(needsSupervisorTarget ? {} : {status}),
         priority: Number.isFinite(Number(priority)) ? Number(priority) : priority,
         description: finalDescription,
         type: types[0],
@@ -238,10 +283,17 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
           assignedSupervisorIds: supervisorIds,
           assigneeName: primarySupervisor?.displayName ?? null,
         } : {}),
-        ...(contractorSelection && contractorSelection.status === status ? contractorSelection : {}),
+        ...(!needsSupervisorTarget && contractorSelection && contractorSelection.status === status ? contractorSelection : {}),
       });
 
       invalidateTicketCache();
+
+      if (needsSupervisorTarget) {
+        toast.success(t.saved + ' — اختر المشرف لتطبيق تغيير الحالة');
+        setPendingStatusChange({newStatus: status, selectedUids: []});
+        return;
+      }
+
       toast.success(t.saved);
       onOpenChange(false);
       await onSaved();
@@ -466,8 +518,45 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
           </div>
         </div>
 
+        {pendingStatusChange && (
+          <div className="border-t border-border/60 bg-muted/30 px-4 py-4 sm:px-6" dir="rtl">
+            <p className="mb-3 text-sm font-semibold text-right">
+              تم حفظ البيانات — اختر المشرف لتطبيق تغيير الحالة:
+            </p>
+            <div className="mb-3 space-y-2">
+              {allRoleUids.map(uid => {
+                const isSelected = pendingStatusChange.selectedUids.includes(uid);
+                return (
+                  <Button key={uid} type="button"
+                    variant={isSelected ? 'default' : 'outline'}
+                    disabled={saving}
+                    className="w-full justify-start text-right rounded-xl"
+                    onClick={() => setPendingStatusChange(prev => prev ? {
+                      ...prev,
+                      selectedUids: isSelected
+                        ? prev.selectedUids.filter(id => id !== uid)
+                        : [...prev.selectedUids, uid],
+                    } : null)}>
+                    {supervisorNameMap.get(uid) || uid}
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="ghost" disabled={saving}
+                onClick={() => { setPendingStatusChange(null); onOpenChange(false); void onSaved(); }}>
+                تخطي
+              </Button>
+              <Button type="button" disabled={!pendingStatusChange.selectedUids.length || saving}
+                onClick={applyPendingStatusChange}>
+                {saving ? t.saving : 'تطبيق الحالة'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <DialogFooter className="sticky bottom-0 z-20 min-w-0 max-w-full border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
-          <Button onClick={save} disabled={saving || !types.length} className="w-full min-w-0 max-w-full rounded-xl sm:w-auto">
+          <Button onClick={save} disabled={saving || !types.length || !!pendingStatusChange} className="w-full min-w-0 max-w-full rounded-xl sm:w-auto">
             {uploading ? t.uploading : saving ? t.saving : t.save}
           </Button>
         </DialogFooter>
