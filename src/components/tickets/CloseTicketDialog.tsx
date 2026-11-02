@@ -449,6 +449,7 @@ const groups = [...selectedTickets.reduce((map, ticket) => {
 const batches = askingForAllApprovals
   ? [selectedTickets.map(t => t.id)]
   : groups;
+let approvalRequests: Array<{status: string}> = [];
 for (const ticketIds of batches) {
   const batchItems = maintItems.filter(item => ticketIds.includes(item.ticketId))
     .map(({description,status}) => ({description,status}));
@@ -481,15 +482,23 @@ for (const ticketIds of batches) {
       : error.error || 'فشل إنهاء الدور أو إرسال طلب الموافقة');
     return;
   }
+  if (askingForAllApprovals) {
+    const result = await response.json().catch(() => ({}));
+    approvalRequests = Array.isArray(result.requests) ? result.requests : [];
+  }
 }
+const hasPendingApprovals = askingForAllApprovals && approvalRequests.some(request => request.status === 'pending');
+const approvalFullyClosed = askingForAllApprovals && approvalRequests.length > 0 && approvalRequests.every(request => request.status === 'approved');
 toast.success(askingForAllApprovals
-  ? 'تم إنهاء دورك وإرسال طلبات الموافقة للمشرفين. تقرير العميل معلّق حتى ردهم.'
+  ? hasPendingApprovals
+    ? 'تم إنهاء دورك وإرسال طلبات الموافقة للمشرفين. تقرير العميل معلّق حتى ردهم.'
+    : 'تم الإغلاق النهائي وفق التفويضات المسبقة وجدولة التقرير للعميل.'
   : isFullClosure
     ? 'تم الإغلاق النهائي وجدولة التقرير للعميل'
     : 'تم إنهاء دورك مع إبقاء أدوار زملائك مفتوحة.');
 onSuccess({
   ticketIds: selectedTickets.map(ticket => ticket.id),
-  final: isFullClosure && !askingForAllApprovals,
+  final: askingForAllApprovals ? approvalFullyClosed : isFullClosure,
   closeType,
 }); onOpenChange(false); return;
 } catch (error) {
