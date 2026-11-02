@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Project } from '@/types';
-import { WARRANTY_EXPORT_COLUMNS, WARRANTY_IMPORT_COLUMNS, createWarrantyExportRow } from '@/lib/warrantyExcel';
+import { WARRANTY_EXPORT_COLUMNS, WARRANTY_IMPORT_COLUMNS, createWarrantyExportRow, getWarrantyStatus } from '@/lib/warrantyExcel';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -105,8 +105,7 @@ export default function Warranties() {
     }
     
     const rows = filtered.map(w => {
-      const expiryDate = new Date(w.warrantyExpiryDate);
-      const status = expiryDate < new Date() ? 'منتهي' : 'ساري';
+      const status = getWarrantyStatus(w.warrantyExpiryDate);
       return createWarrantyExportRow(w, status);
     });
     
