@@ -61,17 +61,17 @@ export function SupervisorClosureApprovals({ ticketId }: { ticketId?: string }) 
     finally {setBusy(null);}
   };
 
-  if (!user || !['admin', 'engineer', 'supervisor'].includes(user.role)) return null;
   const visible = requests.filter(r => r.status === 'pending' || ticketId);
   const needsMyDecision = !!user && requests.some(request => request.status === 'pending' && request.approverUids.includes(user.uid) && !request.votes?.[user.uid]);
   useEffect(() => { if (ticketId && needsMyDecision) setApprovalModalOpen(true); }, [ticketId, needsMyDecision]);
+  if (!user || !['admin', 'engineer', 'supervisor'].includes(user.role)) return null;
   if (!visible.length && !loading) return ticketId ? null : (
     <p className="rounded-xl border border-border p-4 text-center text-muted-foreground" dir="rtl">
       لا توجد طلبات موافقة معلّقة حاليًا.
     </p>
   );
 
-  return (
+  const panel = (
     <section className="space-y-3 rounded-2xl border border-amber-500/20 bg-card p-3 sm:p-4" dir="rtl">
       <div className="flex items-center justify-between gap-3">
         <div>
