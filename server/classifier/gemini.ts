@@ -8,6 +8,7 @@ import prisma from "../db.js";
 import { loadKeywordsFromDB, normalizeArabic } from "./keywords.js";
 import { invalidateKeywordCache } from "./keywords.js";
 import { nudgeReclassifyWorker } from "./reclassify-worker.js";
+import { getProviderFallbackOrder } from "./provider-policy.js";
 
 const NARA_URL = "https://router.bynara.id/v1/chat/completions";
 const NARA_MODEL = process.env.NARA_MODEL || "laguna-s-2.1";
@@ -42,11 +43,17 @@ function providerAvailable(label: string): boolean {
 
 // ── Provider cascade: NaraRouter → OpenRouter ──────────────────────────────
 function getProvider(excluded: Set<string> = new Set()): ProviderConfig | null {
-  if (!excluded.has("NaraRouter") && process.env.NARA_API_KEY && providerAvailable("NaraRouter")) {
-    return { url: NARA_URL, model: NARA_MODEL, apiKey: process.env.NARA_API_KEY, label: "NaraRouter" };
+  const configured = [
+    ...(process.env.NARA_API_KEY ? ["NaraRouter"] : []),
+    ...(process.env.OPENROUTER_API_KEY ? ["OpenRouter"] : []),
+  ];
+  const unavailable = configured.filter(label => !providerAvailable(label));
+  const next = getProviderFallbackOrder(configured, unavailable, [...excluded])[0];
+  if (next === "NaraRouter") {
+    return { url: NARA_URL, model: NARA_MODEL, apiKey: process.env.NARA_API_KEY!, label: "NaraRouter" };
   }
-  if (!excluded.has("OpenRouter") && process.env.OPENROUTER_API_KEY && providerAvailable("OpenRouter")) {
-    return { url: OPENROUTER_URL, model: OPENROUTER_MODEL, apiKey: process.env.OPENROUTER_API_KEY, label: "OpenRouter" };
+  if (next === "OpenRouter") {
+    return { url: OPENROUTER_URL, model: OPENROUTER_MODEL, apiKey: process.env.OPENROUTER_API_KEY!, label: "OpenRouter" };
   }
   return null;
 }
