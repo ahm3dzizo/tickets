@@ -14,6 +14,7 @@ import { nudgeTranslationWorker } from "../translation-worker.js";
 import { classifyBatchWithGemini, geminiEnabled, learnFromGeminiResult } from "./gemini.js";
 import { classifyBatchWithML } from "./ml-client.js";
 import { buildContextPayload, findSupervisorsDB, uniqueStringList } from "./db-helpers.js";
+import { getAiRetryDelayMs } from "./provider-policy.js";
 
 const BATCH_SIZE              = 10;
 const MIN_DESC_LEN            = 5;
@@ -30,7 +31,7 @@ function deferAiRetry(ticketIds: string[]): void {
   const now = Date.now();
   for (const id of ticketIds) {
     const attempts = (_aiRetryAfter.get(id)?.attempts ?? 0) + 1;
-    const delay = Math.min(AI_RETRY_BASE_MS * (2 ** (attempts - 1)), AI_RETRY_MAX_MS);
+    const delay = getAiRetryDelayMs(attempts, AI_RETRY_BASE_MS, AI_RETRY_MAX_MS);
     _aiRetryAfter.set(id, { until: now + delay, attempts });
   }
 }
