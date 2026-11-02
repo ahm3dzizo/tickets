@@ -41,3 +41,27 @@ test("adds one calendar year and clamps leap day", () => {
   assert.equal(addOneWarrantyYear("2025-06-05"), "2026-06-05");
   assert.equal(addOneWarrantyYear("2024-02-29"), "2025-02-28");
 });
+
+import {
+  WARRANTY_EXPORT_COLUMNS,
+  WARRANTY_IMPORT_COLUMNS,
+  createWarrantyExportRow,
+} from "../../../src/lib/warrantyExcel.ts";
+
+test("warranty import template has only unit and date columns", () => {
+  assert.deepEqual([...WARRANTY_IMPORT_COLUMNS], ["رقم الوحدة", "تاريخ التسليم", "تاريخ الانتهاء"]);
+});
+
+test("warranty export keeps all seven system-derived columns", () => {
+  assert.deepEqual([...WARRANTY_EXPORT_COLUMNS], [
+    "رقم الوحدة", "اسم العميل", "رقم الجوال", "المشروع",
+    "تاريخ التسليم", "تاريخ الانتهاء", "حالة الضمان",
+  ]);
+  const row = createWarrantyExportRow({
+    unitNumber: "A-12", clientName: "عميل", clientPhone: "0500000000",
+    projectName: "المشروع", handoverDate: "2026-01-01", warrantyExpiryDate: "2027-01-01",
+  }, "ساري");
+  assert.deepEqual(Object.keys(row), [...WARRANTY_EXPORT_COLUMNS]);
+  assert.equal(row["رقم الوحدة"], "A-12");
+  assert.equal(row["حالة الضمان"], "ساري");
+});
