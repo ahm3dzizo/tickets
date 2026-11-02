@@ -1,6 +1,7 @@
 import prisma from '../db.js';
 import { randomUUID } from 'node:crypto';
 import { itemsForTicket, itemsForReport } from './closure-approval-items.js';
+import { delegatedSupervisorsForProject } from './closure-approval-delegation.js';
 import type { Prisma } from '@prisma/client';
 import { createNotification } from '../notificationService.js';
 import { closures, planClosure, uniqueClosureItems, type Closure } from './ticket-closure-plan.js';
@@ -139,10 +140,7 @@ export async function requestSupervisorClosure(uid: string, input: {
             where: {key: {in: candidateApprovers.map(supervisorUid => `supervisor_closure_delegation:${supervisorUid}`)}},
           })
         : [];
-      const delegatedUids = new Set(delegationRows.filter(setting => {
-        const value = setting.value as {projects?: Record<string, boolean>};
-        return value?.projects?.[first.projectId] === true;
-      }).map(setting => setting.key.slice('supervisor_closure_delegation:'.length)));
+      const delegatedUids = delegatedSupervisorsForProject(candidateApprovers, delegationRows, first.projectId);
       const approvers = candidateApprovers.filter(supervisorUid => !delegatedUids.has(supervisorUid));
       const expectedRoles: Record<string, string[]> = {};
       for (const ticket of group) {
