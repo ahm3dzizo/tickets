@@ -23,22 +23,29 @@ interface ProviderConfig {
 
 // ── Per-provider rate-limit pause tracking ─────────────────────────────────
 const _pausedUntil: Record<string, number> = {};
+const _unavailableUntil: Record<string, number> = {};
 
 export function markProviderRateLimited(label: string, pauseMs: number): void {
   _pausedUntil[label] = Date.now() + pauseMs;
   console.warn(`[${label}] Rate limited — pausing ${Math.round(pauseMs / 60000)}m`);
 }
 
+function markProviderUnavailable(label: string, pauseMs: number, reason: string): void {
+  _unavailableUntil[label] = Date.now() + pauseMs;
+  console.warn(`[${label}] Temporarily disabled for ${Math.round(pauseMs / 60000)}m (${reason})`);
+}
+
 function providerAvailable(label: string): boolean {
-  return Date.now() > (_pausedUntil[label] ?? 0);
+  const now = Date.now();
+  return now > (_pausedUntil[label] ?? 0) && now > (_unavailableUntil[label] ?? 0);
 }
 
 // ── Provider cascade: NaraRouter → OpenRouter ──────────────────────────────
-function getProvider(): ProviderConfig | null {
-  if (process.env.NARA_API_KEY && providerAvailable("NaraRouter")) {
+function getProvider(excluded: Set<string> = new Set()): ProviderConfig | null {
+  if (!excluded.has("NaraRouter") && process.env.NARA_API_KEY && providerAvailable("NaraRouter")) {
     return { url: NARA_URL, model: NARA_MODEL, apiKey: process.env.NARA_API_KEY, label: "NaraRouter" };
   }
-  if (process.env.OPENROUTER_API_KEY && providerAvailable("OpenRouter")) {
+  if (!excluded.has("OpenRouter") && process.env.OPENROUTER_API_KEY && providerAvailable("OpenRouter")) {
     return { url: OPENROUTER_URL, model: OPENROUTER_MODEL, apiKey: process.env.OPENROUTER_API_KEY, label: "OpenRouter" };
   }
   return null;
@@ -205,7 +212,11 @@ async function callProvider(
     throw Object.assign(new Error(`429 ${provider.label}`), { is429: true });
   }
   if (!response.ok) {
-    throw new Error(`${provider.label} ${response.status}: ${data.error?.message || response.statusText}`);
+    const providerMessage = typeof data?.error?.message === "string" ? data.error.message.slice(0, 500) : response.statusText;
+    throw Object.assign(new Error(`${provider.label} ${response.status}: ${providerMessage}`), {
+      provider: provider.label,
+      status: response.status,
+    });
   }
   return data;
 }
@@ -230,8 +241,10 @@ export async function classifyWithGemini(
   ];
 
   // Try providers in cascade order (NaraRouter → OpenRouter)
+  const excludedProviders = new Set<string>();
+  let lastProviderError: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const provider = getProvider();
+    const provider = getProvider(excludedProviders);
     if (!provider) break;
 
     try {
@@ -272,11 +285,21 @@ export async function classifyWithGemini(
         continue;
       }
     } catch (err: any) {
-      if (err.is429) continue; // provider marked as paused, loop tries next
-      console.error(`[${provider.label}] classify error:`, err.message);
-      return null;
+      if (err.is429) {
+        excludedProviders.add(provider.label);
+        lastProviderError = err;
+        continue;
+      }
+      lastProviderError = err;
+      excludedProviders.add(provider.label);
+      if (provider.label === "NaraRouter" && err.status === 400) {
+        markProviderUnavailable(provider.label, 30 * 60_000, "rejected request (HTTP 400)");
+      }
+      console.error(`[${provider.label}] classify error (status=${err.status ?? "network"}):`, err.message);
+      continue;
     }
   }
+  if (lastProviderError) console.error("[Classifier] all configured providers failed; retaining fallback classification");
   return null;
 }
 
@@ -371,11 +394,21 @@ export async function classifyBatchWithGemini(
         continue;
       }
     } catch (err: any) {
-      if (err.is429) continue;
-      console.error(`[${provider?.label} batch] error:`, err.message);
-      throw err;
+      if (err.is429) {
+        excludedProviders.add(provider.label);
+        lastProviderError = err;
+        continue;
+      }
+      lastProviderError = err;
+      excludedProviders.add(provider.label);
+      if (provider.label === "NaraRouter" && err.status === 400) {
+        markProviderUnavailable(provider.label, 30 * 60_000, "rejected batch request (HTTP 400)");
+      }
+      console.error(`[${provider.label} batch] error (status=${err.status ?? "network"}):`, err.message);
+      continue;
     }
   }
+  if (lastProviderError) throw lastProviderError;
   return [];
 }
 
