@@ -52,15 +52,15 @@ fi
 # Optional: set model (default is llama-3.3-70b-versatile)
 echo ""
 echo "Available Groq models:"
-echo "  1) llama-3.3-70b-versatile  (default — best accuracy)"
-echo "  2) llama-3.1-8b-instant     (faster, lower accuracy)"
+echo "  1) llama3-70b-8192      (default — best accuracy, free tier)"
+echo "  2) llama-3.1-8b-instant (faster, lower accuracy)"
 echo "  3) Keep current / skip"
 echo ""
 read -rp "Choose model [1/2/3]: " MODEL_CHOICE
 
 MODEL=""
 case "$MODEL_CHOICE" in
-  1) MODEL="llama-3.3-70b-versatile" ;;
+  1) MODEL="llama3-70b-8192" ;;
   2) MODEL="llama-3.1-8b-instant" ;;
   *) MODEL="" ;;
 esac
