@@ -14,6 +14,8 @@ const NARA_URL = "https://router.bynara.id/v1/chat/completions";
 const NARA_MODEL = process.env.NARA_MODEL || "laguna-s-2.1";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
 interface ProviderConfig {
   url: string;
@@ -41,11 +43,12 @@ function providerAvailable(label: string): boolean {
   return now > (_pausedUntil[label] ?? 0) && now > (_unavailableUntil[label] ?? 0);
 }
 
-// ── Provider cascade: NaraRouter → OpenRouter ──────────────────────────────
+// ── Provider cascade: NaraRouter → OpenRouter → Groq ──────────────────────
 function getProvider(excluded: Set<string> = new Set()): ProviderConfig | null {
   const configured = [
     ...(process.env.NARA_API_KEY ? ["NaraRouter"] : []),
     ...(process.env.OPENROUTER_API_KEY ? ["OpenRouter"] : []),
+    ...(process.env.GROQ_API_KEY ? ["Groq"] : []),
   ];
   const unavailable = configured.filter(label => !providerAvailable(label));
   const next = getProviderFallbackOrder(configured, unavailable, [...excluded])[0];
@@ -55,7 +58,90 @@ function getProvider(excluded: Set<string> = new Set()): ProviderConfig | null {
   if (next === "OpenRouter") {
     return { url: OPENROUTER_URL, model: OPENROUTER_MODEL, apiKey: process.env.OPENROUTER_API_KEY!, label: "OpenRouter" };
   }
+  if (next === "Groq") {
+    return { url: GROQ_URL, model: GROQ_MODEL, apiKey: process.env.GROQ_API_KEY!, label: "Groq" };
+  }
   return null;
+}
+
+/** Get a Groq-specific provider config (bypasses cascade — for daily batch worker). */
+export function getGroqProvider(): ProviderConfig | null {
+  if (!process.env.GROQ_API_KEY) return null;
+  return { url: GROQ_URL, model: GROQ_MODEL, apiKey: process.env.GROQ_API_KEY, label: "Groq" };
+}
+
+/** Call a specific Groq provider with a batch of tickets (used by groq-daily-worker). */
+export async function callGroqBatch(
+  provider: ProviderConfig,
+  items: { id: string; description: string }[]
+): Promise<GeminiBatchResult[]> {
+  const [types, subTypes] = await Promise.all([getActiveTypes(), getActiveSubTypes()]);
+  if (types.length === 0) return [];
+
+  const typesList = types
+    .map((t) => {
+      const subs = subTypes.filter(s => s.parentKey === t.key).map(s => s.nameAr).join(" | ");
+      const desc = t.description ? ` — ${t.description}` : "";
+      return `- ${t.key}: ${t.nameAr}${desc}${subs ? ` (أنواع فرعية: ${subs})` : ""}`;
+    })
+    .join("\n");
+
+  const ticketLines = items
+    .map((item, i) => `${i + 1}. "${item.description.replace(/"/g, "'")}"`)
+    .join("\n");
+
+  const batchPrompt = `${buildPrompt(typesList)}
+
+صنّف كل بلاغ مرة واحدة وبنفس رقم i. يجب أن يحتوي results على كل الأرقام من 1 إلى ${items.length} بدون تكرار.
+الصيغة الوحيدة المسموحة:
+{"results":[{"i":1,"items":[{"type":"key","subType":"اسم فرعي أو null"}],"confidence":0.9}]}`;
+
+  const messages = [
+    { role: "system", content: batchPrompt },
+    { role: "user",   content: `البلاغات:\n${ticketLines}` },
+  ];
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const data = await callProvider(provider, messages, true);
+    const text = data.choices?.[0]?.message?.content?.trim() || "";
+    try {
+      if (!text) throw new Error("Empty text returned from API");
+      if (!isNormalClassificationModel(data.model)) throw new Error('router selected a safety/moderation model');
+      const root = parseJsonValue<{ results?: RawBatchClassification[] }>(text, '{');
+      const parsed = root.results;
+      if (!Array.isArray(parsed) || parsed.length !== items.length) throw new Error('results must contain every input ticket exactly once');
+      const indexes = parsed.map(r => r?.i);
+      if (new Set(indexes).size !== items.length || indexes.some(i => !Number.isInteger(i) || i < 1 || i > items.length)) {
+        throw new Error('results contain missing, repeated, or invalid indexes');
+      }
+      const validTypeKeys = new Set(types.map((t) => t.key));
+      const results = parsed
+        .sort((a, b) => a.i - b.i)
+        .map((r) => {
+          const classifiedItems = validateItems(r.items, validTypeKeys, subTypes);
+          const confidence = normalizeConfidence(r.confidence);
+          const validTypes = [...new Set(classifiedItems.map(it => it.type))];
+          const allSubTypeIds = [...new Set(classifiedItems.flatMap((item) => {
+            if (!item.subType) return [];
+            const match = subTypes.find(s => s.nameAr === item.subType && s.parentKey === item.type);
+            return match ? [match.id] : [];
+          }))];
+          return {
+            id: items[r.i - 1].id,
+            primaryType: validTypes[0] ?? "unclassified",
+            allTypes: validTypes,
+            subTypeId: allSubTypeIds[0],
+            allSubTypeIds,
+            confidence,
+          };
+        });
+      return results;
+    } catch (err: any) {
+      console.warn(`[${provider.label} batch] Invalid output attempt ${attempt + 1}: ${err.message}`);
+      messages.push({ role: 'system', content: `المحاولة السابقة خالفت العقد. أعد JSON فقط، results فيها بالضبط ${items.length} عناصر.` });
+    }
+  }
+  return [];
 }
 
 export function geminiEnabled(): boolean {

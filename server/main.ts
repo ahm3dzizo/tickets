@@ -76,6 +76,7 @@ import { startReclassifyWorker, stopReclassifyWorker } from "./classifier/reclas
 import { startTrainWorker, stopTrainWorker } from "./classifier/train-worker.js";
 import { seedSubTypes } from "./classifier/seed-subtypes.js";
 import { startTranslationWorker, stopTranslationWorker } from "./translation-worker.js";
+import { startGroqDailyWorker, stopGroqDailyWorker } from "./classifier/groq-daily-worker.js";
 
 let globalIo: any = null;
 
@@ -277,6 +278,7 @@ async function startServer() {
   startReclassifyWorker();
   startTrainWorker();
   startTranslationWorker();
+  startGroqDailyWorker();
 
   seedSubTypes().catch((e) => console.error('⚠️  Sub-type seed failed:', e.message));
 
@@ -307,6 +309,7 @@ async function shutdown() {
   stopReclassifyWorker();
   stopTrainWorker();
   stopTranslationWorker();
+  stopGroqDailyWorker();
   await closeAllSessions();
   process.exit(0);
 }
