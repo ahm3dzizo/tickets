@@ -6,6 +6,7 @@ const TARGET_LANGS: TargetLanguage[] = ['en', 'hi', 'ur'];
 const MAX_TEXTS_PER_PASS = 60;
 const BUSY_DELAY_MS = 2_000;
 const IDLE_DELAYS_MS = [20_000, 60_000, 5 * 60_000, 15 * 60_000];
+const NO_PROVIDER_PAUSE_MS = 4 * 60 * 60_000; // 4 hours when no provider available
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
@@ -109,17 +110,24 @@ async function processTranslationPass(): Promise<TranslationPassResult> {
   }
 
   let translatedCount = 0;
+  let allFailed = true;
   for (const targetLang of TARGET_LANGS) {
     const cachedSet = cachedByLanguage.get(targetLang) ?? new Set<string>();
     const missing = sourceTexts.filter(text => !cachedSet.has(text));
-    if (missing.length === 0) continue;
+    if (missing.length === 0) { allFailed = false; continue; }
 
     try {
       await translateAndCache(missing, targetLang, 'Pre-translation of classified maintenance ticket content', false);
       translatedCount += missing.length;
+      allFailed = false;
       console.log(`[TranslationWorker] cached ${missing.length} texts → ${targetLang}`);
     } catch (error: any) {
-      console.warn(`[TranslationWorker] ${targetLang} pass failed; it will be retried later:`, error?.message || error);
+      const msg: string = error?.message || String(error);
+      console.warn(`[TranslationWorker] ${targetLang} pass failed; it will be retried later:`, msg);
+      if (msg.includes('No translation AI provider')) {
+        // All providers are unavailable — no point retrying for hours
+        throw Object.assign(new Error(msg), { noProvider: true });
+      }
     }
   }
 
@@ -139,13 +147,25 @@ async function runWorker(): Promise<void> {
 
   running = true;
   let result: TranslationPassResult = { translatedCount: 0, scannedTickets: 0 };
+  let noProvider = false;
   try {
     result = await processTranslationPass();
   } catch (error: any) {
-    console.error('[TranslationWorker] unexpected error:', error?.message || error);
+    if ((error as any).noProvider) {
+      noProvider = true;
+      console.warn('[TranslationWorker] no provider available — pausing 4h');
+    } else {
+      console.error('[TranslationWorker] unexpected error:', error?.message || error);
+    }
   } finally {
     running = false;
     if (!started) return;
+
+    if (noProvider) {
+      idleLevel = IDLE_DELAYS_MS.length - 1;
+      scheduleNext(NO_PROVIDER_PAUSE_MS);
+      return;
+    }
 
     if (nudged) {
       nudged = false;
@@ -166,6 +186,10 @@ async function runWorker(): Promise<void> {
 
 export function startTranslationWorker(): void {
   if (started) return;
+  if (process.env.DISABLE_TRANSLATION === 'true') {
+    console.log('[TranslationWorker] Disabled via DISABLE_TRANSLATION=true');
+    return;
+  }
   started = true;
   idleLevel = 0;
   console.log('[TranslationWorker] Started — adaptive/event-driven (20s → 15m idle)');
