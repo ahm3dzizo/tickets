@@ -14,10 +14,25 @@ const GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const API_KEY    = process.env.GROQ_API_KEY;
 
-const args   = process.argv.slice(2);
-const SAVE   = args.includes("--save");
-const ANY    = args.includes("--any");   // test on already-classified tickets too
-const LIMIT  = parseInt(args[args.indexOf("--limit") + 1] ?? "") || 20;
+const args        = process.argv.slice(2);
+const SAVE        = args.includes("--save");
+const ANY         = args.includes("--any");
+const LIST_MODELS = args.includes("--list-models");
+const LIMIT       = parseInt(args[args.indexOf("--limit") + 1] ?? "") || 20;
+
+// ── List available Groq models ───────────────────────────────────────────────
+
+async function listGroqModels(): Promise<void> {
+  const res = await fetch("https://api.groq.com/openai/v1/models", {
+    headers: { "Authorization": `Bearer ${API_KEY}` },
+  });
+  if (!res.ok) { console.error("Failed to fetch models:", res.status); return; }
+  const data: any = await res.json();
+  const models: string[] = (data.data ?? []).map((m: any) => m.id).sort();
+  console.log("\nAvailable Groq models:\n");
+  models.forEach(m => console.log(`  ${m}`));
+  console.log(`\nSet GROQ_MODEL=<id> in .env, then re-run the test.`);
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -76,6 +91,12 @@ async function main() {
   if (!API_KEY) {
     console.error("❌  GROQ_API_KEY not set. Run: bash scripts/setup-groq.sh");
     process.exit(1);
+  }
+
+  if (LIST_MODELS) {
+    await listGroqModels();
+    await prisma.$disconnect();
+    return;
   }
 
   console.log(`\n🔧  Model:  ${GROQ_MODEL}`);
