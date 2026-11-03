@@ -219,12 +219,15 @@ export function classifyFromKeywordsDB(
     }
   }
 
+  // Normalize confidence to [0,1]: score ≥ 5 is considered very confident
+  const normalizedConfidence = Math.min(maxScore / 5, 1);
+
   return {
     primaryType,
     allTypes:   candidates,
     typeId:     typeDbIdMap[primaryType] ?? null,
     subType:    bestSubType,
     subTypeId:  bestSubTypeId,
-    confidence: maxScore,
+    confidence: normalizedConfidence,
   };
 }

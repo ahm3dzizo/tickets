@@ -538,44 +538,64 @@ export async function learnFromGeminiResult(
   ]);
 
   try {
-    const words = normalizeArabic(description)
+    const allWords = normalizeArabic(description)
       .split(/\s+/)
       .filter((w) => w.length > 3 && !stopWords.has(w));
 
-    const uniqueWords = [...new Set(words)];
-    if (uniqueWords.length === 0) return;
+    if (allWords.length === 0) return;
+
+    // Term frequency map
+    const tf = new Map<string, number>();
+    for (const w of allWords) tf.set(w, (tf.get(w) ?? 0) + 1);
+
+    // Score = TF × length bonus (longer = more specific)
+    const scoredWords = [...tf.entries()]
+      .map(([word, freq]) => ({
+        word,
+        score: freq * (word.length >= 7 ? 2.0 : word.length >= 5 ? 1.4 : 1.0),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 15)
+      .map(({ word }) => word);
+
+    if (scoredWords.length === 0) return;
 
     for (const typeKey of types) {
       const typeRecord = await prisma.ticketType.findUnique({ where: { key: typeKey } });
       if (!typeRecord) continue;
 
-      const wordsToLearn = uniqueWords.slice(0, 8);
+      for (const word of scoredWords) {
+        const freq = tf.get(word) ?? 1;
 
-      for (const word of wordsToLearn) {
         const existing = await prisma.ticketTypeKeyword.findFirst({
           where: { keyword: word, typeId: typeRecord.id },
         });
 
         if (existing) {
+          // More appearances in this ticket = bigger weight boost
+          const boost = Math.min(0.05 + freq * 0.05, 0.3);
           await prisma.ticketTypeKeyword.update({
             where: { id: existing.id },
             data: {
               usageCount:        { increment: 1 },
-              weight:            Math.min(existing.weight + 0.1, 3.0),
+              weight:            Math.min(existing.weight + boost, 3.0),
               pendingReclassify: true,
             },
           });
         } else {
+          // Skip if this word is already confidently owned by another type
           const rival = await prisma.ticketTypeKeyword.findFirst({
-            where: { keyword: word, typeId: { not: typeRecord.id }, weight: { gt: 2.0 } },
+            where: { keyword: word, typeId: { not: typeRecord.id }, weight: { gt: 1.2 } },
           });
           if (rival) continue;
 
+          // Initial weight reflects how often the word appeared in this ticket
+          const initialWeight = Math.min(0.8 + freq * 0.2, 1.6);
           await prisma.ticketTypeKeyword.create({
             data: {
               keyword:           word,
               typeId:            typeRecord.id,
-              weight:            1.0,
+              weight:            initialWeight,
               source:            "gemini_learned",
               isLearned:         true,
               confidence:        0.75,
