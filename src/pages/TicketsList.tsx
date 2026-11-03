@@ -63,6 +63,7 @@ export default function TicketsList() {
   const [statusRoleChoice, setStatusRoleChoice] = useState<{
     status: string;
     options: {uid: string; name: string}[];
+    selected: string[];
   } | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [apptTicket, setApptTicket] = useState<Ticket[] | null>(null);
@@ -303,6 +304,27 @@ export default function TicketsList() {
     } else void applyInternalStatus(status, supervisorUid);
   };
 
+  const confirmStatusForSelectedSupervisors = async () => {
+    if (!statusRoleChoice || !statusRoleChoice.selected.length || updatingStatus) return;
+    const {status, selected} = statusRoleChoice;
+    setUpdatingStatus(true);
+    try {
+      for (const uid of selected) {
+        await ticketsApi.bulkStatus(selectedTicketIds, status, uid);
+      }
+      invalidateTicketCache();
+      toast.success(`تم تغيير الحالة داخليًا لـ ${selectedTicketIds.length} تذكرة دون إرسال رسالة للعميل`);
+      setStatusRoleChoice(null);
+      setSelectedTicketIds([]);
+      void refreshTicketsNow();
+    } catch (error) {
+      console.error('[TicketsBulkStatus] multi-supervisor status failed', error);
+      toast.error(error instanceof Error ? error.message : 'فشل تحديث الحالة');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const handleBulkStatusChange = (newStatus: string) => {
     if (!selectedTicketIds.length || updatingStatus) return;
     const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
@@ -334,7 +356,7 @@ export default function TicketsList() {
     ));
     setStatusRoleChoice({status: newStatus, options: common.map(uid => ({
       uid, name: nameByUid.get(uid) || uid,
-    }))});
+    })), selected: []});
   };
 
   const handleAppointment = () => {
@@ -712,21 +734,40 @@ export default function TicketsList() {
         <Dialog open={!!statusRoleChoice} onOpenChange={open => {if (!open && !updatingStatus) setStatusRoleChoice(null);}}>
           <DialogContent className="max-w-[420px] rounded-2xl" dir="rtl">
             <DialogHeader>
-              <DialogTitle className="text-right">تغيير الحالة داخليًا لمشرف واحد</DialogTitle>
+              <DialogTitle className="text-right">تغيير الحالة داخليًا</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground text-right">
-              التذكرة مشتركة. حدد دور المشرف الذي تريد تغيير حالته؛
+              التذكرة مشتركة. اختر المشرف أو المشرفين الذين تريد تغيير حالتهم؛
               حالة بقية المشرفين لن تتغير ولن تُرسل أي رسالة أو تقرير للعميل.
             </p>
             <div className="space-y-2">
-              {statusRoleChoice?.options.map(opt => (
-                <Button key={opt.uid} type="button" variant="outline"
-                  disabled={updatingStatus}
-                  className="w-full justify-start text-right"
-                  onClick={() => chooseInternalStatusTarget(statusRoleChoice.status, opt.uid)}>
-                  {updatingStatus ? 'جارٍ التحديث...' : opt.name}
-                </Button>
-              ))}
+              {statusRoleChoice?.options.map(opt => {
+                const isSelected = statusRoleChoice.selected.includes(opt.uid);
+                return (
+                  <Button key={opt.uid} type="button"
+                    variant={isSelected ? 'default' : 'outline'}
+                    disabled={updatingStatus}
+                    className="w-full justify-start text-right"
+                    onClick={() => setStatusRoleChoice(prev => prev ? {
+                      ...prev,
+                      selected: isSelected
+                        ? prev.selected.filter(uid => uid !== opt.uid)
+                        : [...prev.selected, opt.uid],
+                    } : null)}>
+                    {opt.name}
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="flex gap-2 justify-end pt-2 border-t">
+              <Button type="button" variant="ghost" disabled={updatingStatus}
+                onClick={() => setStatusRoleChoice(null)}>
+                إلغاء
+              </Button>
+              <Button type="button" disabled={!statusRoleChoice?.selected.length || updatingStatus}
+                onClick={confirmStatusForSelectedSupervisors}>
+                {updatingStatus ? 'جارٍ التحديث...' : 'تطبيق'}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
