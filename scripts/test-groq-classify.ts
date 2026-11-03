@@ -16,6 +16,7 @@ const API_KEY    = process.env.GROQ_API_KEY;
 
 const args   = process.argv.slice(2);
 const SAVE   = args.includes("--save");
+const ANY    = args.includes("--any");   // test on already-classified tickets too
 const LIMIT  = parseInt(args[args.indexOf("--limit") + 1] ?? "") || 20;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -80,24 +81,29 @@ async function main() {
   console.log(`\n🔧  Model:  ${GROQ_MODEL}`);
   console.log(`📦  Limit:  ${LIMIT} tickets`);
   console.log(`💾  Save:   ${SAVE ? "YES — results will be written to DB" : "NO (dry run)"}`);
+  console.log(`🎯  Mode:   ${ANY ? "any tickets (--any)" : "unclassified only"}`);
   console.log("─────────────────────────────────────────────\n");
 
-  // Fetch unclassified tickets
+  // Fetch tickets
   const tickets = await prisma.ticket.findMany({
-    where: {
-      type: "unclassified",
-      description: { not: "" },
-    },
-    orderBy: { createdAt: "asc" },
+    where: ANY
+      ? { description: { not: "" } }
+      : { type: "unclassified", description: { not: "" } },
+    orderBy: { createdAt: "desc" },
     take: LIMIT,
     select: { id: true, description: true, projectId: true, type: true },
   });
 
   const valid = tickets.filter(t => t.description && t.description.length >= 5);
-  console.log(`Found ${valid.length} unclassified tickets to test.\n`);
+  const label = ANY ? "tickets" : "unclassified tickets";
+  console.log(`Found ${valid.length} ${label} to test.\n`);
 
   if (valid.length === 0) {
-    console.log("✅  No unclassified tickets found!");
+    if (!ANY) {
+      console.log("✅  No unclassified tickets — try: npx tsx scripts/test-groq-classify.ts --any");
+    } else {
+      console.log("❌  No tickets found in DB at all.");
+    }
     await prisma.$disconnect();
     return;
   }
@@ -168,7 +174,8 @@ async function main() {
     const confidence: number = r.confidence ?? 0;
 
     const icon = primaryType !== "unclassified" ? "✅" : "⬜";
-    console.log(`${icon} [${r.i}] ${ticket.id.slice(0, 8)} → ${primaryType} (${Math.round(confidence * 100)}%)`);
+    const wasLabel = ticket.type !== primaryType ? ` (was: ${ticket.type})` : " ✓ confirmed";
+    console.log(`${icon} [${r.i}] ${ticket.id.slice(0, 8)} → ${primaryType} (${Math.round(confidence * 100)}%)${ANY ? wasLabel : ""}`);
     console.log(`   desc: ${ticket.description!.slice(0, 80)}${ticket.description!.length > 80 ? "…" : ""}`);
     if (allTypes.length > 1) console.log(`   also: ${allTypes.slice(1).join(", ")}`);
     console.log();
