@@ -52,9 +52,9 @@ fi
 # Optional: set model (default is llama-3.3-70b-versatile)
 echo ""
 echo "Available Groq models (for Arabic ticket classification):"
-echo "  1) allam-2-7b                        (default — Arabic native model)"
-echo "  2) canopylabs/orpheus-arabic-saudi   (Saudi Arabic dialect)"
-echo "  3) openai/gpt-oss-120b               (largest model, best JSON accuracy)"
+echo "  1) openai/gpt-oss-120b               (default — best accuracy, 100% on test)"
+echo "  2) allam-2-7b                        (Arabic native model)"
+echo "  3) canopylabs/orpheus-arabic-saudi   (Saudi Arabic dialect)"
 echo "  4) qwen/qwen3.8-27b                  (multilingual, 27B)"
 echo "  5) Keep current / skip"
 echo ""
@@ -62,9 +62,9 @@ read -rp "Choose model [1/2/3/4/5]: " MODEL_CHOICE
 
 MODEL=""
 case "$MODEL_CHOICE" in
-  1) MODEL="allam-2-7b" ;;
-  2) MODEL="canopylabs/orpheus-arabic-saudi" ;;
-  3) MODEL="openai/gpt-oss-120b" ;;
+  1) MODEL="openai/gpt-oss-120b" ;;
+  2) MODEL="allam-2-7b" ;;
+  3) MODEL="canopylabs/orpheus-arabic-saudi" ;;
   4) MODEL="qwen/qwen3.8-27b" ;;
   *) MODEL="" ;;
 esac
