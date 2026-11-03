@@ -351,9 +351,12 @@ export default function TicketsList() {
       toast.error('التذاكر المختارة لا تشترك في مشرف واحد؛ اختار تذاكر نفس المشرف لتغيير حالته.');
       return;
     }
-    const nameByUid = new Map(selected.flatMap(t =>
-      (t.assignedSupervisors || []).map(s => [s.id, s.name] as const)
-    ));
+    const nameByUid = new Map<string, string>([
+      ...selected.flatMap(t => (t.assignedSupervisors || []).map(s => [s.id, s.name] as const)),
+      ...selected.flatMap(t => (t.supervisorClosures || [])
+        .filter(h => h.supervisorName)
+        .map(h => [h.supervisorUid, h.supervisorName!] as const)),
+    ]);
     setStatusRoleChoice({status: newStatus, options: common.map(uid => ({
       uid, name: nameByUid.get(uid) || uid,
     })), selected: []});

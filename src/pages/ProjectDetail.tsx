@@ -153,8 +153,12 @@ export default function ProjectDetail() {
       toast.error('حدد مجموعة تذاكر تشترك في مشرف واحد أولاً.');
       return;
     }
-    const names = new Map(selected.flatMap(t =>
-      (t.assignedSupervisors || []).map(s => [s.id,s.name] as const)));
+    const names = new Map<string, string>([
+      ...selected.flatMap(t => (t.assignedSupervisors || []).map(s => [s.id, s.name] as const)),
+      ...selected.flatMap(t => (t.supervisorClosures || [])
+        .filter(h => h.supervisorName)
+        .map(h => [h.supervisorUid, h.supervisorName!] as const)),
+    ]);
     setStatusRoleChoice({status: newStatus, options: common.map(uid => ({
       uid, name: names.get(uid) || uid,
     })), selected: []});
