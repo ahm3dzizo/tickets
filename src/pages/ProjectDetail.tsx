@@ -117,6 +117,12 @@ export default function ProjectDetail() {
   const confirmStatusForSelectedSupervisors = async () => {
     if (!statusRoleChoice || !statusRoleChoice.selected.length || updatingStatus) return;
     const {status, selected} = statusRoleChoice;
+    // contractor/note require the contractor dialog — open it for the first selected supervisor
+    if (status === 'contractor' || status === 'note') {
+      setStatusRoleChoice(null);
+      proceedStatus(status, selected[0]);
+      return;
+    }
     setUpdatingStatus(true);
     try {
       for (const uid of selected) {
