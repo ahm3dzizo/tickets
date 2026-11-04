@@ -140,6 +140,11 @@ export default function ProjectDetail() {
   };
   const handleBulkStatusChange = (newStatus: string) => {
     if (!selectedTicketIds.length || updatingStatus) return;
+    // contractor/note apply to the whole ticket, not a specific supervisor slot
+    if (newStatus === 'contractor' || newStatus === 'note') {
+      proceedStatus(newStatus);
+      return;
+    }
     if (currentUser?.role === 'supervisor') {
       proceedStatus(newStatus);
       return;

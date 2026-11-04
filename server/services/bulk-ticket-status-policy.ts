@@ -144,9 +144,11 @@ export function planBulkStatus(actor: Actor, ticket: Row, desired: TicketStatus,
   const nextHistory = hadCompleted ? history.filter(h => h.supervisorUid !== roleUid) : history;
   // One supervisor: the ticket itself can follow their internal status.
   // Shared: preserve the global aggregate; only the chosen role changes.
+  // Exception: contractor/note are ticket-level, always update global status.
   const single = remaining.length === 1 && nextHistory.length === 0;
+  const isTicketLevel = desired === 'contractor' || desired === 'note';
   return {
-    status: single ? desired : terminal.has(ticket.status) ? 'in_progress' as TicketStatus : ticket.status,
+    status: (single || isTicketLevel) ? desired : terminal.has(ticket.status) ? 'in_progress' as TicketStatus : ticket.status,
     assignedSupervisorIds: remaining,
     supervisorClosures: nextHistory,
     supervisorStatuses: personal,

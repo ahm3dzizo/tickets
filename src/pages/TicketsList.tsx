@@ -335,6 +335,11 @@ export default function TicketsList() {
     if (!selectedTicketIds.length || updatingStatus) return;
     const selected = tickets.filter(t => selectedTicketIds.includes(t.id));
     if (!selected.length) return;
+    // contractor/note apply to the whole ticket, not a specific supervisor slot
+    if (newStatus === 'contractor' || newStatus === 'note') {
+      chooseInternalStatusTarget(newStatus);
+      return;
+    }
     if (user?.role === 'supervisor') {
       chooseInternalStatusTarget(newStatus);
       return;
