@@ -10,6 +10,8 @@ import {
   UserCheck,
   Clock,
   Package,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -411,22 +413,38 @@ export default function ProjectDetail() {
             التذكرة مشتركة. اختر المشرف أو المشرفين الذين تريد تغيير حالتهم؛
             حالة بقية المشرفين لن تتغير ولن تُرسل أي رسالة أو تقرير للعميل.
           </p>
+          {(statusRoleChoice?.options.length ?? 0) > 1 && (
+            <div className="flex justify-between items-center text-xs text-muted-foreground">
+              <span>{statusRoleChoice?.selected.length ?? 0} / {statusRoleChoice?.options.length ?? 0} مختار</span>
+              <button type="button" className="text-primary hover:underline"
+                onClick={() => setStatusRoleChoice(prev => prev ? {
+                  ...prev,
+                  selected: prev.selected.length === prev.options.length
+                    ? []
+                    : prev.options.map(o => o.uid),
+                } : null)}>
+                {statusRoleChoice?.selected.length === statusRoleChoice?.options.length ? 'إلغاء الكل' : 'اختيار الكل'}
+              </button>
+            </div>
+          )}
           <div className="space-y-2">
             {statusRoleChoice?.options.map(opt => {
               const isSelected = statusRoleChoice.selected.includes(opt.uid);
               return (
-                <Button key={opt.uid} type="button"
-                  variant={isSelected ? 'default' : 'outline'}
+                <button key={opt.uid} type="button"
                   disabled={updatingStatus}
-                  className="w-full justify-start"
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-right transition-colors ${isSelected ? 'bg-primary/10 border-primary/40 text-primary' : 'border-border hover:bg-white/5 text-foreground'}`}
                   onClick={() => setStatusRoleChoice(prev => prev ? {
                     ...prev,
                     selected: isSelected
                       ? prev.selected.filter(uid => uid !== opt.uid)
                       : [...prev.selected, opt.uid],
                   } : null)}>
-                  {opt.name}
-                </Button>
+                  {isSelected
+                    ? <CheckSquare className="w-4 h-4 shrink-0 text-primary" />
+                    : <Square className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                  <span className="font-medium">{opt.name}</span>
+                </button>
               );
             })}
           </div>
@@ -437,7 +455,7 @@ export default function ProjectDetail() {
             </Button>
             <Button type="button" disabled={!statusRoleChoice?.selected.length || updatingStatus}
               onClick={confirmStatusForSelectedSupervisors}>
-              {updatingStatus ? 'جارٍ التحديث...' : 'تطبيق'}
+              {updatingStatus ? 'جارٍ التحديث...' : `تطبيق${statusRoleChoice?.selected.length ? ` (${statusRoleChoice.selected.length})` : ''}`}
             </Button>
           </div>
         </DialogContent>
