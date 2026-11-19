@@ -20,6 +20,7 @@ import { ClientTicketsModal } from '@/components/tickets/ClientTicketsModal';
 import { TranslatedText } from '@/components/ui/TranslatedText';
 import { Languages } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 
 function dateStr(d: Date): string {
   const offset = d.getTimezoneOffset() * 60000;
@@ -223,7 +224,7 @@ export default function Appointments() {
       const map: Record<string, number> = {};
 
       allTickets.forEach((t: any) => {
-        if (t.status !== 'closed' && t.status !== 'out-of-scope') {
+        if (isActiveAppointmentTicketStatus(t.status)) {
           const key = t.unitId + '_' + (t.projectId || '');
           map[key] = (map[key] || 0) + 1;
         }
