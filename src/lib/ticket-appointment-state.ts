@@ -25,3 +25,15 @@ export function hasScheduledTicketBadge(ticket: {
     (ticket.status === 'pending' || ticket.status === 'waiting') &&
     (!ticket.appointment || ticket.appointment.status === 'scheduled'));
 }
+
+
+/**
+ * Tickets in a terminal workflow state must not be offered as active work
+ * when creating appointments or shown in the unit's active-ticket modal.
+ * Keep contractor/note and other internal states visible.
+ */
+export function isActiveAppointmentTicketStatus(status: string | null | undefined): boolean {
+  return !['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(
+    String(status || '').trim().toLowerCase(),
+  );
+}
