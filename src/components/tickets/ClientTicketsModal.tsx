@@ -6,6 +6,7 @@ import { formatAppointmentDayTime } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 
 interface ClientTicketsModalProps {
   open: boolean;
@@ -62,7 +63,7 @@ export function ClientTicketsModal({
         const tks = resTickets.filter(
           (t: any) =>
             String(t.unitId || '').trim() === String(unitId || '').trim() &&
-            !['closed', 'out_of_scope', 'out-of-scope', 'absent'].includes(t.status),
+            isActiveAppointmentTicketStatus(t.status),
         );
         setTickets(tks);
         setClients(resClients);
@@ -81,7 +82,7 @@ export function ClientTicketsModal({
     setSelectedIds(new Set());
   }, [open, unitId, projectId]);
 
-  const closableTickets = tickets.filter(t => t.status !== 'completed');
+  const closableTickets = tickets;
   const allSelected = closableTickets.length > 0 && closableTickets.every(t => selectedIds.has(t.id));
   const toggleSelectAll = () => {
     if (allSelected) {
