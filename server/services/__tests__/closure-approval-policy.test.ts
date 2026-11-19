@@ -34,14 +34,14 @@ test('assignment changes invalidate a pending approval atomically', () => {
 
 test('initiator must have active or already completed responsibility for every ticket', () => {
   assert.doesNotThrow(() => validateApprovalInitiator('supervisor','a', [
-    {status:'in_progress',assignedSupervisorIds:['a','b'],supervisorClosures:[]},
-    {status:'in_progress',assignedSupervisorIds:['b'],supervisorClosures:[{supervisorUid:'a'}]},
+    {id:'ticket-1',status:'in_progress',assignedSupervisorIds:['a','b'],supervisorClosures:[]},
+    {id:'ticket-2',status:'in_progress',assignedSupervisorIds:['b'],supervisorClosures:[{supervisorUid:'a'}]},
   ]));
   assert.throws(() => validateApprovalInitiator('supervisor','a',[
-    {status:'open',assignedSupervisorIds:['b'],supervisorClosures:[]},
+    {id:'ticket-3',status:'open',assignedSupervisorIds:['b'],supervisorClosures:[]},
   ]), /SUPERVISOR_NOT_ASSIGNED/);
   assert.throws(() => validateApprovalInitiator('supervisor','a',[
-    {status:'closed',assignedSupervisorIds:['a'],supervisorClosures:[]},
+    {id:'ticket-4',status:'closed',assignedSupervisorIds:['a'],supervisorClosures:[]},
   ]), /TICKET_ALREADY_CLOSED/);
 });
 

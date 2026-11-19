@@ -189,8 +189,11 @@ async function main() {
     const ticket = valid[r.i - 1];
     if (!ticket) continue;
 
-    const validItems = (r.items ?? []).filter((it: any) => validTypeKeys.has(it.type));
-    const allTypes: string[] = [...new Set(validItems.map((it: any) => it.type as string))];
+    const validItems: Array<{ type: string }> = (r.items ?? []).filter(
+      (it: any): it is { type: string } =>
+        typeof it?.type === 'string' && validTypeKeys.has(it.type),
+    );
+    const allTypes = [...new Set(validItems.map(it => it.type))];
     const primaryType: string = allTypes[0] ?? "unclassified";
     const confidence: number = r.confidence ?? 0;
 
