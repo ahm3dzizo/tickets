@@ -18,6 +18,7 @@ import { useTicketTypes } from '@/contexts/TicketTypesContext';
 import { TypesSelector } from './TypesSelector';
 import { TicketType } from '@/types';
 import { renderTableDescription } from './TicketTable';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -527,7 +528,7 @@ export function UnifiedAppointmentDialog({
           (t: any) => {
             const byClient = selectedClientId && t.clientId === selectedClientId;
             const byUnit = !!t.unitId && String(t.unitId) === String(unitId);
-            return (byClient || byUnit) && !['closed', 'out-of-scope', 'completed'].includes(t.status);
+            return (byClient || byUnit) && isActiveAppointmentTicketStatus(t.status);
           }
         );
         setLoadedTickets(tks);

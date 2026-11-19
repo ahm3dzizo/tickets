@@ -31,3 +31,17 @@ test('do not claim cancelled/nonexistent appointments or closed tickets are sche
   assert.equal(hasScheduledTicketBadge({status:'closed',appointmentTime:'2026-10-20 16:00',appointment:{status:'scheduled'}}),false);
   assert.equal(hasScheduledTicketBadge({status:'contractor',appointmentTime:'2026-10-20 16:00'}),false);
 });
+
+
+import {isActiveAppointmentTicketStatus} from './ticket-appointment-state.ts';
+
+test('terminal ticket states are excluded from appointment active-ticket lists',()=>{
+  for(const status of ['closed','completed','absent','out_of_scope','out-of-scope']) {
+    assert.equal(isActiveAppointmentTicketStatus(status),false,status);
+  }
+});
+test('nonterminal ticket states remain available for appointment workflows',()=>{
+  for(const status of ['open','in_progress','in-progress','pending','waiting','contractor','note']) {
+    assert.equal(isActiveAppointmentTicketStatus(status),true,status);
+  }
+});
