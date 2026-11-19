@@ -119,7 +119,7 @@ router.get("/conflicts", requireAuth, async (req: AuthRequest, res) => {
         unit:   { select: { unitNumber: true } },
         client: { select: { name: true } },
         tickets: {
-          where: { status: { notIn: ["closed", "completed", "out_of_scope"] } },
+          where: { status: { notIn: ["closed", "completed", "absent", "out_of_scope"] } },
           select: { id: true, ticketId: true, status: true },
         },
       },
