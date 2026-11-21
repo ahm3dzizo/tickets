@@ -595,7 +595,7 @@ router.get("/next-id", requireAuth, async (req, res) => {
 
 // POST /api/tickets/:id/special-close  — عدم تواجد أو خارج الاختصاص
 router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => {
-  const { closeType, notes } = req.body as { closeType: 'absent' | 'out_of_scope'; notes?: string };
+  const { closeType, notes, skipAutoSend } = req.body as { closeType: 'absent' | 'out_of_scope'; notes?: string; skipAutoSend?: boolean };
   if (!['absent', 'out_of_scope'].includes(closeType)) {
     res.status(400).json({ error: "closeType غير صالح" }); return;
   }
@@ -621,7 +621,7 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
     if (ticketInfo.assignedSupervisorIds.length > 1 || closures(ticketInfo.supervisorClosures).length) {res.status(409).json({error: 'SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT'}); return;}
 
     // محاولة إرسال الرسالة أولاً إذا كانت الخدمة مفعلة
-    if (await shouldAutoSendWA(uid)) {
+    if (!skipAutoSend && await shouldAutoSendWA(uid)) {
       const phone = ticketInfo.client?.phone;
       if (phone) {
         let msg = '';
@@ -649,6 +649,16 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
       where: { id: req.params.id },
       data: { status, closureNotes: notes || null, closedAt: new Date() },
       select: { id: true, ticketId: true, clientId: true, description: true, unitId: true, status: true, appointmentId: true },
+    });
+
+    await prisma.ticketAudit.create({
+      data: {
+        ticketId: ticket.id,
+        field: 'status',
+        oldValue: ticketInfo.status,
+        newValue: status,
+        changedBy: uid,
+      },
     });
 
     await maybeAutoFinishAppointment((ticket as any).appointmentId);
@@ -1056,6 +1066,9 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     }
     if (data.status !== undefined && ['closed', 'completed'].includes(normalizeTicketStatus(data.status))) {
       res.status(409).json({error: 'استخدم مسار الإغلاق لتسجيل دور المشرف والتقرير', code: 'USE_CLOSURE_ENDPOINT'}); return;
+    }
+    if (data.status !== undefined && ['absent', 'out_of_scope'].includes(normalizeTicketStatus(data.status))) {
+      res.status(409).json({error: 'استخدم مسار الإغلاق الخاص لتسجيل عدم التواجد أو سوء الاستخدام', code: 'USE_SPECIAL_CLOSE_ENDPOINT'}); return;
     }
     if (existingForValidation.assignedSupervisorIds.length > 1 && data.closedAt) {
       res.status(409).json({error: 'SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT'}); return;
