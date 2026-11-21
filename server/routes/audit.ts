@@ -48,6 +48,7 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
       'تم إرسال تقرير أعمال المشرف الجزئي للعميل',
       'تم إرسال التقرير النهائي للعميل',
       'تغيير حالة داخلي بدون تقرير للعميل',
+      'إغلاق خاص',
       'المشرف',
     ]);
     const parse = (value: string | null): Record<string, any> => {
@@ -97,6 +98,13 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
           return `${by} أرسل تقرير أعماله الجزئي للعميل، دون أعمال المشرفين الآخرين.`;
         case 'تم إرسال التقرير النهائي للعميل':
           return `${by} أرسل تقرير الإغلاق النهائي للعميل بعد استكمال الأدوار.`;
+        case 'إغلاق خاص': {
+          const target = d.targetSupervisorUid ? name(d.targetSupervisorUid) : null;
+          const reason = String(d.requestedStatus || '') === 'absent' ? 'عدم تواجد' : 'سوء استخدام / خارج الاختصاص';
+          return target
+            ? `${by} سجّل إغلاق «${reason}» لدور المشرف ${target}.`
+            : `${by} سجّل إغلاق «${reason}» للتذكرة.`;
+        }
         case 'المشرف':
           return (Array.isArray(d) ? d : []).map(name).join('، ') || 'لا يوجد مشرفون';
         case 'تغيير حالة داخلي بدون تقرير للعميل': {
