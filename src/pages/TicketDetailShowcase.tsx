@@ -532,7 +532,7 @@ export default function TicketDetailShowcase() {
           </CardContent>
         </Card>
 
-        {ticket.status !== 'closed' && (
+        {!['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(ticket.status) && (
           <div className="flex justify-end">
             <Button variant="outline" className="rounded-xl border-emerald-500/30 text-emerald-700 dark:text-emerald-300" onClick={() => setCloseOpen(true)}>
               <CheckCircle2 className="me-2 h-4 w-4" />
