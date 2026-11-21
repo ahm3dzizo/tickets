@@ -616,7 +616,7 @@ export function TicketTable({
     const ca = (t.createdAt as any)?.toDate ? (t.createdAt as any).toDate() : new Date(t.createdAt as any);
     const openDate = (t.issuedAt ? parseIssuedAt(t.issuedAt) : null) ?? ca;
     const closeDate = t.closedAt ? new Date(t.closedAt) : null;
-    const isClosed = t.status === 'closed' || t.status === 'out-of-scope' || t.status === 'out_of_scope' || t.status === 'absent';
+    const isClosed = ['closed', 'completed', 'out-of-scope', 'out_of_scope', 'absent'].includes(t.status);
     const endDate = (isClosed && closeDate) ? closeDate : new Date();
     switch (key) {
       case 'date':     return openDate.getTime();
