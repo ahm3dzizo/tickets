@@ -36,6 +36,8 @@ interface TicketLike {
   detectedTypes?: string[];
   assignedSupervisorIds?: string[];
   status: string;
+  supervisorClosures?: unknown;
+  supervisorStatuses?: Record<string, unknown> | null;
 }
 
 interface TimeOption {
