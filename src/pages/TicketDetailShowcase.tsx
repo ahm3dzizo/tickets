@@ -34,6 +34,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 import { ticketsApi, projectsApi, clientsApi, auditApi, settingsApi, whatsappApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { formatTicketDate, formatTicketDateTime } from '@/lib/ticketDate';
@@ -468,10 +469,12 @@ export default function TicketDetailShowcase() {
             </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 sm:p-4">
-            <Button className="h-14 rounded-2xl bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300" onClick={() => setAppointmentOpen(true)}>
-              <CalendarDays className="me-2 h-4 w-4" />
-              {t.scheduleAppointment}
-            </Button>
+            {isActiveAppointmentTicketStatus(ticket) && (
+              <Button className="h-14 rounded-2xl bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300" onClick={() => setAppointmentOpen(true)}>
+                <CalendarDays className="me-2 h-4 w-4" />
+                {t.scheduleAppointment}
+              </Button>
+            )}
             <div className="[&>button]:h-14 [&>button]:justify-center [&>button]:border-amber-500/20 [&>button]:bg-amber-500/10 [&>button]:text-amber-700 dark:[&>button]:text-amber-300">
               <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
             </div>
@@ -598,6 +601,8 @@ export default function TicketDetailShowcase() {
           detectedTypes: ticket.detectedTypes,
           assignedSupervisorIds: ticket.assignedSupervisorIds,
           status: ticket.status,
+          supervisorClosures: ticket.supervisorClosures,
+          supervisorStatuses: ticket.supervisorStatuses,
         }]}
         clientPhone={client?.phone}
         onSuccess={() => { setAppointmentOpen(false); loadData(); }}
