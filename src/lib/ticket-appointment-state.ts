@@ -50,7 +50,7 @@ export function isActiveAppointmentTicketStatus(
   if (value && typeof value === 'object') {
     if (Array.isArray(value.supervisorClosures) && value.supervisorClosures.length > 0) return false;
     const roleStatuses = Object.values(value.supervisorStatuses || {}).map(status =>
-      String(status || '').trim().toLowerCase(),
+      String(status || '').trim().toLowerCase().replace(/[\\s-]+/g, '_'),
     );
     if (roleStatuses.some(status => ['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope', 'misuse'].includes(status))) return false;
     value = value.status;
