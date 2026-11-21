@@ -475,8 +475,8 @@ export default function TicketDetailModern() {
                           </div>
                           {(entry.oldValue || entry.newValue) && (
                             <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                              {entry.oldValue && <span className="rounded-lg bg-rose-500/10 px-2 py-1 text-rose-600 dark:text-rose-400">{t.from}: {entry.oldValue}</span>}
-                              {entry.newValue && <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-emerald-600 dark:text-emerald-400">{t.to}: {entry.newValue}</span>}
+                              {entry.oldValue && <span className="rounded-lg bg-rose-500/10 px-2 py-1 text-rose-600 dark:text-rose-400">{t.from}: {entry.oldValueText || entry.oldValue}</span>}
+                              {entry.newValue && <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-emerald-600 dark:text-emerald-400">{t.to}: {entry.detailsText || entry.newValue}</span>}
                             </div>
                           )}
                         </div>
