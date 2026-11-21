@@ -900,16 +900,25 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
     // Fetch linked tickets to preserve non-pending statuses
     const linked = await prisma.ticket.findMany({
       where: { appointmentId: id },
-      select: { id: true, status: true },
+      select: {
+        id: true, status: true, supervisorClosures: true, supervisorStatuses: true,
+      },
     });
 
-    const pendingIds = linked.filter(t => t.status === "pending").map(t => t.id);
-    const otherIds   = linked.filter(t => t.status !== "pending").map(t => t.id);
-
-    const appointmentClear = {
-      appointmentId: null as null,
-      assignedSupervisorIds: [] as string[],
+    const isTerminalOrRoleClosed = (ticket: typeof linked[number]) => {
+      const status = String(ticket.status || '').trim().toLowerCase().replace(/[\\s-]+/g, '_');
+      const roleStatuses = Object.values((ticket.supervisorStatuses || {}) as Record<string, unknown>)
+        .map(value => String(value || '').trim().toLowerCase().replace(/[\\s-]+/g, '_'));
+      return ['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام'].includes(status)
+        || closures(ticket.supervisorClosures).length > 0
+        || roleStatuses.some(value => ['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام'].includes(value));
     };
+    const pendingIds = linked.filter(t => t.status === "pending" && !isTerminalOrRoleClosed(t)).map(t => t.id);
+    const otherIds = linked.filter(t => !pendingIds.includes(t.id)).map(t => t.id);
+
+    // Removing an appointment must never erase supervisor ownership or reopen
+    // a ticket that has a terminal/supervisor-level closure.
+    const appointmentClear = { appointmentId: null as null };
 
     if (pendingIds.length > 0) {
       await prisma.ticket.updateMany({
