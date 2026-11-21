@@ -410,7 +410,7 @@ export default function TicketDetail() {
               <Pencil className="w-4 h-4 me-2" />
               تعديل
             </Button>
-            {ticket.status !== 'closed' && (
+            {!['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(ticket.status) && (
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-xl px-4 sm:px-6 shadow-lg shadow-emerald-500/20 font-bold h-10 sm:h-11 flex-1 sm:flex-none order-1 sm:order-2"
                 onClick={() => setCloseDialogOpen(true)}
