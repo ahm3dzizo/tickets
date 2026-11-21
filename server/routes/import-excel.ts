@@ -419,7 +419,7 @@ function normalizeUnitNumber(raw: string): string {
 
 function normalizeStatus(rawStatus: unknown): string {
   if (rawStatus === null || rawStatus === undefined) return "open";
-  const s = String(rawStatus).toLowerCase().trim().replace(/[\\s-]+/g, "_");
+  const s = String(rawStatus).toLowerCase().trim().replace(/[\s-]+/g, "_");
   if (['absent', 'عدم_تواجد', 'عدم_التواجد', 'no_show'].includes(s)) return 'absent';
   if (['out_of_scope', 'misuse', 'سوء_استخدام', 'خارج_الاختصاص'].includes(s)) return 'out_of_scope';
   if (!s || s === "none" || s === "null" || s === "مفتوح" || s === "open" || s === "نشط") return "open";
