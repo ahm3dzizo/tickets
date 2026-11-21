@@ -96,8 +96,8 @@ export const statusTranslations: Record<string, string> = {
   waiting:         'في انتظار رد العميل',
   completed:       'مكتملة',
   closed:          'مغلقة',
-  'out-of-scope':  'خارج اختصاص',
-  'out_of_scope':  'خارج الاختصاص',
+  'out-of-scope':  'سوء استخدام / خارج الاختصاص',
+  'out_of_scope':  'سوء استخدام / خارج الاختصاص',
   absent:          'عدم تواجد',
   contractor:      'مقاول / ملاحظة',
   note:            'مقاول / ملاحظة',
@@ -128,7 +128,7 @@ export const STATUS_FILTER_GROUPS: { key: string; label: string; values: string[
   { key: 'contractor',    label: 'مقاول / ملاحظة', values: ['contractor', 'note'] },
   { key: 'completed',     label: 'مكتملة',         values: ['completed'] },
   { key: 'closed',        label: 'مغلقة',          values: ['closed'] },
-  { key: 'out-of-scope',  label: 'خارج اختصاص',    values: ['out-of-scope', 'out_of_scope'] },
+  { key: 'out-of-scope',  label: 'سوء استخدام / خارج الاختصاص',    values: ['out-of-scope', 'out_of_scope'] },
   { key: 'absent',        label: 'عدم تواجد',      values: ['absent'] },
 ];
 
