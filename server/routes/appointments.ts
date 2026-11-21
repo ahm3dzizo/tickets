@@ -184,7 +184,7 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
         tickets: {
           select: {
             id: true, ticketId: true, status: true, type: true, projectId: true,
-            assignedSupervisorIds: true,
+            assignedSupervisorIds: true, supervisorClosures: true, supervisorStatuses: true,
             unit:    { select: { unitNumber: true } },
             client:  { select: { name: true } },
             project: { select: { abbreviation: true } },
@@ -198,8 +198,16 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
       const apptUnitNumber = a.unit?.unitNumber || '';
       const apptClient = a.client?.name || '';
       const apptAbbr   = a.project?.abbreviation || '';
-      if (a.tickets.length > 0) {
-        return a.tickets.map((t: any) => ({
+      const activeTickets = a.tickets.filter((ticket: any) => {
+        const status = String(ticket.status || '').trim().toLowerCase().replace(/[\\s-]+/g, '_');
+        const roleStatuses = Object.values((ticket.supervisorStatuses || {}) as Record<string, unknown>)
+          .map(value => String(value || '').trim().toLowerCase());
+        return !['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام'].includes(status)
+          && !(Array.isArray(ticket.supervisorClosures) && ticket.supervisorClosures.length > 0)
+          && !roleStatuses.some(value => ['closed', 'completed', 'absent', 'out_of_scope', 'misuse'].includes(value));
+      });
+      if (activeTickets.length > 0) {
+        return activeTickets.map((t: any) => ({
           ...t,
           unitNumber: t.unit?.unitNumber || apptUnitNumber,
           clientName:  t.client?.name || apptClient,
