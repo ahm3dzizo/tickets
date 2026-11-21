@@ -279,7 +279,7 @@ function parseExcelAndDetectHeaders(
     if (cutoffTime > 0) {
       const rawStatus = row[mapping["status"]];
       const status = normalizeStatus(rawStatus);
-      if (status === "closed") {
+      if (["closed", "absent", "out_of_scope"].includes(status)) {
         const rawDate = row[mapping["createdAt"]];
         const dStr = normalizeDate(rawDate, detectedFormat);
         const t = dStr ? new Date(dStr).getTime() : 0;
@@ -419,14 +419,15 @@ function normalizeUnitNumber(raw: string): string {
 
 function normalizeStatus(rawStatus: unknown): string {
   if (rawStatus === null || rawStatus === undefined) return "open";
-  const s = String(rawStatus).toLowerCase().trim();
+  const s = String(rawStatus).toLowerCase().trim().replace(/[\\s-]+/g, "_");
+  if (['absent', 'عدم_تواجد', 'عدم_التواجد', 'no_show'].includes(s)) return 'absent';
+  if (['out_of_scope', 'misuse', 'سوء_استخدام', 'خارج_الاختصاص'].includes(s)) return 'out_of_scope';
   if (!s || s === "none" || s === "null" || s === "مفتوح" || s === "open" || s === "نشط") return "open";
   if (
     s === "مغلق" || s === "مغلوق" || s === "اغلاق" || s === "إغلاق" ||
     s === "closed" || s === "close" || s === "done" || s === "تم" ||
     s === "منتهي" || s === "منتهى" || s === "مكتمل" || s === "مكتملة" ||
-    s === "مكتمله" || s === "completed" || s === "out_of_scope" ||
-    s.startsWith("مغلق")
+    s === "مكتمله" || s === "completed" || s.startsWith("مغلق")
   ) return "closed";
   return "open";
 }
@@ -771,7 +772,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const rawStatus = get("status");
         const status = normalizeStatus(rawStatus);
         const issuedAt = normalizeDate(get("createdAt"), detectedFormat);
-        const closedAt = status === "closed"
+        const closedAt = ["closed", "absent", "out_of_scope"].includes(status)
           ? (normalizeClosedAt(get("closedAt"), issuedAt, detectedFormat) ?? new Date(issuedAt).toISOString())
           : normalizeClosedAt(get("closedAt"), issuedAt, detectedFormat);
 
