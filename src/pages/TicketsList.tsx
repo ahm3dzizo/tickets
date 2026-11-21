@@ -17,6 +17,7 @@ import { classifyOnServer } from '@/services/classificationApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { toast } from 'sonner';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 
 
 const TicketForm = lazy(() =>
@@ -375,8 +376,15 @@ export default function TicketsList() {
 
   const handleAppointment = () => {
     const selected = tickets.filter(t => selectedTicketIds?.includes(t.id));
-    if (selected.length === 0) return;
-    setApptTicket(selected);
+    const active = selected.filter(ticket => isActiveAppointmentTicketStatus(ticket));
+    if (active.length === 0) {
+      toast.info('التذاكر المحددة مغلقة أو انتهى دور المشرف فيها، ولا يمكن تحديد موعد جديد لها.');
+      return;
+    }
+    if (active.length !== selected.length) {
+      toast.info('تم استبعاد التذاكر المغلقة أو التي انتهى دور أحد مشرفيها من الموعد.');
+    }
+    setApptTicket(active);
     setApptOpen(true);
   };
 
