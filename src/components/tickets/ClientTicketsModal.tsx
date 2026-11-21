@@ -63,7 +63,7 @@ export function ClientTicketsModal({
         const tks = resTickets.filter(
           (t: any) =>
             String(t.unitId || '').trim() === String(unitId || '').trim() &&
-            isActiveAppointmentTicketStatus(t.status),
+            isActiveAppointmentTicketStatus(t),
         );
         setTickets(tks);
         setClients(resClients);
