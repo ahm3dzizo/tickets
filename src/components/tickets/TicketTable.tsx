@@ -96,8 +96,8 @@ export const statusTranslations: Record<string, string> = {
   waiting:         'في انتظار رد العميل',
   completed:       'مكتملة',
   closed:          'مغلقة',
-  'out-of-scope':  'خارج اختصاص',
-  'out_of_scope':  'خارج الاختصاص',
+  'out-of-scope':  'سوء استخدام / خارج الاختصاص',
+  'out_of_scope':  'سوء استخدام / خارج الاختصاص',
   absent:          'عدم تواجد',
   contractor:      'مقاول / ملاحظة',
   note:            'مقاول / ملاحظة',
@@ -128,7 +128,7 @@ export const STATUS_FILTER_GROUPS: { key: string; label: string; values: string[
   { key: 'contractor',    label: 'مقاول / ملاحظة', values: ['contractor', 'note'] },
   { key: 'completed',     label: 'مكتملة',         values: ['completed'] },
   { key: 'closed',        label: 'مغلقة',          values: ['closed'] },
-  { key: 'out-of-scope',  label: 'خارج اختصاص',    values: ['out-of-scope', 'out_of_scope'] },
+  { key: 'out-of-scope',  label: 'سوء استخدام / خارج الاختصاص',    values: ['out-of-scope', 'out_of_scope'] },
   { key: 'absent',        label: 'عدم تواجد',      values: ['absent'] },
 ];
 
@@ -616,7 +616,7 @@ export function TicketTable({
     const ca = (t.createdAt as any)?.toDate ? (t.createdAt as any).toDate() : new Date(t.createdAt as any);
     const openDate = (t.issuedAt ? parseIssuedAt(t.issuedAt) : null) ?? ca;
     const closeDate = t.closedAt ? new Date(t.closedAt) : null;
-    const isClosed = t.status === 'closed' || t.status === 'out-of-scope' || t.status === 'out_of_scope' || t.status === 'absent';
+    const isClosed = ['closed', 'completed', 'out-of-scope', 'out_of_scope', 'absent'].includes(t.status);
     const endDate = (isClosed && closeDate) ? closeDate : new Date();
     switch (key) {
       case 'date':     return openDate.getTime();

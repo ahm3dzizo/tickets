@@ -17,6 +17,7 @@ import { ticketEditText } from '@/i18n/ticketEdit';
 import { Ticket, TicketType } from '@/types';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 
 const t = ticketEditText.ar;
 const detailText = ticketDetailText.ar;
@@ -360,10 +361,12 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
                 </p>
               </div>
             </div>
-            <Button type="button" variant="outline" className="rounded-xl"
-              disabled={saving || uploading} onClick={() => setAppointmentOpen(true)}>
-              {ticket.appointmentId ? 'تعديل الموعد' : 'حجز موعد'}
-            </Button>
+            {isActiveAppointmentTicketStatus(ticket as any) && (
+              <Button type="button" variant="outline" className="rounded-xl"
+                disabled={saving || uploading} onClick={() => setAppointmentOpen(true)}>
+                {ticket.appointmentId ? 'تعديل الموعد' : 'حجز موعد'}
+              </Button>
+            )}
           </div>
 
           <div className="min-w-0 max-w-full space-y-1.5 overflow-hidden">

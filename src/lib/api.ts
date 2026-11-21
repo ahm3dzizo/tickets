@@ -242,6 +242,7 @@ export const ticketsApi = {
   create:       (data: any)                            => post<any>('/tickets', data),
   bulkCreate:   (tickets: any[])                       => post<{ count: number }>('/tickets/bulk', { tickets }),
   update:       (id: string, data: any)                => put<any>(`/tickets/${id}`, data),
+  specialClose: (id: string, closeType: 'absent' | 'out_of_scope', notes?: string, skipAutoSend = false) => post<any>(`/tickets/${id}/special-close`, { closeType, notes, skipAutoSend }),
   bulkStatus:   (ids: string[], status: string, supervisorUid?: string,
     details?: { contractorId?: string | null; contractorNote?: string | null }) =>
     patch<{count: number}>('/tickets/bulk-status', { ids, status,

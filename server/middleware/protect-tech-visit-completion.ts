@@ -46,7 +46,7 @@ export async function protectOpenTechVisitFromLegacyAutoFinish(
 
     const ticketId = (specialClose || ticketUpdate)![1];
     const targetStatus = specialClose
-      ? String(req.body?.closeType === 'out_of_scope' ? 'out_of_scope' : 'closed')
+      ? String(req.body?.closeType === 'out_of_scope' ? 'out_of_scope' : 'absent')
       : String(req.body?.status || '').toLowerCase();
 
     // If the target remains operationally active, the legacy helper will see a

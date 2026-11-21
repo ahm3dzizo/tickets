@@ -43,6 +43,7 @@ import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 import { TypesSelector } from '@/components/tickets/TypesSelector';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
@@ -232,7 +233,9 @@ export default function TicketDetail() {
     'pending': 'معلقة',
     'completed': 'مكتملة',
     'closed': 'مغلقة',
-    'out-of-scope': 'خارج اختصاص',
+    'absent': 'عدم تواجد',
+    'out_of_scope': 'سوء استخدام / خارج الاختصاص',
+    'out-of-scope': 'سوء استخدام / خارج الاختصاص',
   };
 
   const priorityTranslations: Record<string, string> = {
@@ -410,7 +413,7 @@ export default function TicketDetail() {
               <Pencil className="w-4 h-4 me-2" />
               تعديل
             </Button>
-            {ticket.status !== 'closed' && (
+            {!['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(ticket.status) && (
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 rounded-xl px-4 sm:px-6 shadow-lg shadow-emerald-500/20 font-bold h-10 sm:h-11 flex-1 sm:flex-none order-1 sm:order-2"
                 onClick={() => setCloseDialogOpen(true)}
@@ -451,13 +454,13 @@ export default function TicketDetail() {
                         </span>
                         <div className="flex-1 text-right">
                           <p className="text-xs">
-                            <span className="font-semibold text-foreground">{a.changedByName}</span>
+                            <span className="font-semibold text-foreground">{a.changedByName || a.changedBy}</span>
                             <span className="text-muted-foreground"> غيّر </span>
                             <span className="font-bold text-primary">{a.field}</span>
                           </p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">
-                            {a.oldValue && <span className="line-through text-red-400/70 me-2">{a.oldValue}</span>}
-                            <span className="text-emerald-400">{a.newValue}</span>
+                            {a.oldValue && <span className="line-through text-red-400/70 me-2">{a.oldValueText || a.oldValue}</span>}
+                            <span className="text-emerald-400">{a.detailsText || a.newValue}</span>
                           </p>
                         </div>
                         <div className="w-1.5 h-1.5 rounded-full bg-primary/40 mt-1.5 shrink-0" />
@@ -697,16 +700,16 @@ export default function TicketDetail() {
                   </div>
                 ) : (
                   <>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-center border-border bg-white/5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 text-xs h-12 rounded-2xl font-bold"
-                      onClick={() => {
-                        setApptOpen(true);
-                      }}
-                    >
-                      <CalendarDays className="w-4 h-4 me-2" />
-                      تحديد موعد
-                    </Button>
+                    {isActiveAppointmentTicketStatus(ticket) && (
+                      <Button
+                        variant="outline"
+                        className="w-full justify-center border-border bg-white/5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 text-xs h-12 rounded-2xl font-bold"
+                        onClick={() => setApptOpen(true)}
+                      >
+                        <CalendarDays className="w-4 h-4 me-2" />
+                        تحديد موعد
+                      </Button>
+                    )}
                     <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
                     <Button
                       variant="outline"
@@ -876,6 +879,8 @@ export default function TicketDetail() {
             detectedTypes: ticket.detectedTypes,
             assignedSupervisorIds: ticket.assignedSupervisorIds as string[] | undefined,
             status: ticket.status,
+            supervisorClosures: ticket.supervisorClosures,
+            supervisorStatuses: ticket.supervisorStatuses,
           }]}
           clientPhone={client?.phone}
           onSuccess={() => { setApptOpen(false); loadData(); }}

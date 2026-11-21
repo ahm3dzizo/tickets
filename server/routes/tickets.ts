@@ -595,11 +595,11 @@ router.get("/next-id", requireAuth, async (req, res) => {
 
 // POST /api/tickets/:id/special-close  — عدم تواجد أو خارج الاختصاص
 router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => {
-  const { closeType, notes } = req.body as { closeType: 'absent' | 'out_of_scope'; notes?: string };
+  const { closeType, notes, skipAutoSend } = req.body as { closeType: 'absent' | 'out_of_scope'; notes?: string; skipAutoSend?: boolean };
   if (!['absent', 'out_of_scope'].includes(closeType)) {
     res.status(400).json({ error: "closeType غير صالح" }); return;
   }
-  const status = closeType === 'out_of_scope' ? 'out_of_scope' : 'closed';
+  const status = closeType;
   try {
     const uid = req.uid!;
     
@@ -615,13 +615,17 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
     if (!ticketInfo) {
       res.status(404).json({ error: "التذكرة غير موجودة" }); return;
     }
+    if (['closed', 'completed', 'absent', 'out_of_scope'].includes(ticketInfo.status)) {
+      res.status(409).json({ error: 'التذكرة مغلقة بالفعل ولا يمكن تغيير سبب إغلاقها', code: 'TICKET_ALREADY_TERMINAL' });
+      return;
+    }
 
     const actor = await prisma.user.findUnique({where: {uid}, include: {projects: {select: {id: true}}}});
     if (!actor || actor.disabled || (actor.role !== 'admin' && !actor.projects.some(p => p.id === ticketInfo.projectId)) || (actor.role === 'supervisor' && !ticketInfo.assignedSupervisorIds.includes(uid))) {res.status(403).json({error: 'Forbidden'}); return;}
     if (ticketInfo.assignedSupervisorIds.length > 1 || closures(ticketInfo.supervisorClosures).length) {res.status(409).json({error: 'SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT'}); return;}
 
     // محاولة إرسال الرسالة أولاً إذا كانت الخدمة مفعلة
-    if (await shouldAutoSendWA(uid)) {
+    if (!skipAutoSend && await shouldAutoSendWA(uid)) {
       const phone = ticketInfo.client?.phone;
       if (phone) {
         let msg = '';
@@ -645,11 +649,65 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
       }
     }
 
+    const now = new Date();
+    const assignedRoleIds = [...new Set(ticketInfo.assignedSupervisorIds || [])];
+    const priorClosures = closures(ticketInfo.supervisorClosures);
+    const reason = closeType === 'absent' ? 'عدم تواجد' : 'سوء استخدام / خارج الاختصاص';
+    const nextClosures = [
+      ...priorClosures,
+      ...assignedRoleIds.map(supervisorUid => ({
+        supervisorUid,
+        completedAt: now.toISOString(),
+        completedByUid: uid,
+        notes: notes || reason,
+        items: [],
+      })),
+    ];
+    const existingRoleStatuses = ticketInfo.supervisorStatuses &&
+      typeof ticketInfo.supervisorStatuses === 'object' &&
+      !Array.isArray(ticketInfo.supervisorStatuses)
+        ? ticketInfo.supervisorStatuses as Record<string, string>
+        : {};
+    const nextRoleStatuses = {
+      ...existingRoleStatuses,
+      ...Object.fromEntries(assignedRoleIds.map(supervisorUid => [supervisorUid, status])),
+    };
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },
-      data: { status, closureNotes: notes || null, closedAt: new Date() },
+      data: {
+        status,
+        closureNotes: notes || reason,
+        closedAt: now,
+        assignedSupervisorIds: [],
+        supervisorClosures: nextClosures,
+        supervisorStatuses: nextRoleStatuses,
+      },
       select: { id: true, ticketId: true, clientId: true, description: true, unitId: true, status: true, appointmentId: true },
     });
+
+    await prisma.ticketAudit.create({
+      data: {
+        ticketId: ticket.id,
+        field: 'status',
+        oldValue: ticketInfo.status,
+        newValue: status,
+        changedBy: uid,
+      },
+    });
+    if (assignedRoleIds.length > 0) {
+      await prisma.ticketAudit.create({
+        data: {
+          ticketId: ticket.id,
+          field: 'إغلاق خاص',
+          oldValue: null,
+          newValue: JSON.stringify({
+            targetSupervisorUid: assignedRoleIds[0],
+            requestedStatus: status,
+          }),
+          changedBy: uid,
+        },
+      });
+    }
 
     await maybeAutoFinishAppointment((ticket as any).appointmentId);
 
@@ -1039,6 +1097,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         unitId: true,
         clientId: true,
         assignedSupervisorIds: true,
+        supervisorClosures: true,
       },
     });
 
@@ -1142,7 +1201,11 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         : undefined,
       closureNotes:          data.closureNotes         ?? undefined,
       maintenanceItems:      data.maintenanceItems     ?? undefined,
-      closedAt:              data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
+      closedAt:              data.closedAt !== undefined
+        ? (data.closedAt ? new Date(data.closedAt) : null)
+        : ['absent', 'out_of_scope'].includes(normalizedStatus || '') ? new Date()
+        : normalizedStatus !== undefined && !['closed', 'completed'].includes(normalizedStatus) ? null
+        : undefined,
       description:           data.description          ?? undefined,
       type:                  data.type                 ?? undefined,
       detectedTypes:         data.detectedTypes !== undefined ? uniqueStringList(data.detectedTypes) : undefined,
@@ -1452,7 +1515,7 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
           }),
           newValue: JSON.stringify({
             requestedStatus: normalizedStatus,
-            targetSupervisorUid: actor!.role === 'supervisor' ? actor!.uid : supervisorUid || null,
+            targetSupervisorUid: targetUid,
             globalStatus: data.status,
             supervisorStatuses: data.supervisorStatuses,
             active: data.assignedSupervisorIds,

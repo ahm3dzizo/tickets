@@ -47,17 +47,26 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
       'إلغاء طلب الإغلاق بالنيابة مع إرسال تقرير جزئي',
       'تم إرسال تقرير أعمال المشرف الجزئي للعميل',
       'تم إرسال التقرير النهائي للعميل',
+      'تغيير حالة داخلي بدون تقرير للعميل',
+      'إغلاق خاص',
+      'المشرف',
     ]);
     const parse = (value: string | null): Record<string, any> => {
       try {const data = JSON.parse(value || ''); return data && typeof data === 'object' ? data : {};}
       catch {return {};}
     };
     const details = audits.map(a => fields.has(a.field) ? parse(a.newValue) : null);
+    const oldDetails = audits.map(a => fields.has(a.field) ? parse(a.oldValue) : null);
+    const allDetails = [...details, ...oldDetails];
     const uids = [...new Set([
       ...audits.map(a => a.changedBy),
-      ...details.flatMap(d => d ? [
+      ...allDetails.flatMap(d => d ? [
         d.supervisorUid, d.requesterUid, d.approverUid, d.senderUid,
         d.initiator, d.originalRequester, d.confirmedByUid, d.rejectedBy,
+        d.targetSupervisorUid,
+        ...Object.keys(d.supervisorStatuses || {}),
+        ...(Array.isArray(d.active) ? d.active : []),
+        ...(Array.isArray(d) ? d : []),
         ...(Array.isArray(d.approvers) ? d.approvers : []),
         ...(Array.isArray(d.approvedBy) ? d.approvedBy : []),
       ] : []),
@@ -89,13 +98,50 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
           return `${by} أرسل تقرير أعماله الجزئي للعميل، دون أعمال المشرفين الآخرين.`;
         case 'تم إرسال التقرير النهائي للعميل':
           return `${by} أرسل تقرير الإغلاق النهائي للعميل بعد استكمال الأدوار.`;
+        case 'إغلاق خاص': {
+          const target = d.targetSupervisorUid ? name(d.targetSupervisorUid) : null;
+          const reason = String(d.requestedStatus || '') === 'absent' ? 'عدم تواجد' : 'سوء استخدام / خارج الاختصاص';
+          return target
+            ? `${by} سجّل إغلاق «${reason}» لدور المشرف ${target}.`
+            : `${by} سجّل إغلاق «${reason}» للتذكرة.`;
+        }
+        case 'المشرف':
+          return (Array.isArray(d) ? d : []).map(name).join('، ') || 'لا يوجد مشرفون';
+        case 'تغيير حالة داخلي بدون تقرير للعميل': {
+          const labels: Record<string, string> = {
+            closed: 'مغلق', completed: 'مكتمل', absent: 'عدم تواجد',
+            out_of_scope: 'سوء استخدام / خارج الاختصاص', contractor: 'مقاول',
+            note: 'ملاحظة', pending: 'معلق', in_progress: 'قيد التنفيذ',
+            open: 'مفتوح', waiting: 'بانتظار رد العميل',
+          };
+          const target = name(d.targetSupervisorUid);
+          const status = labels[String(d.requestedStatus || '')] || String(d.requestedStatus || 'غير محدد');
+          return d.targetSupervisorUid
+            ? `${by} غيّر الحالة الداخلية للمشرف ${target} إلى «${status}» دون إرسال تقرير للعميل.`
+            : `${by} غيّر الحالة الداخلية للتذكرة إلى «${status}» دون إرسال تقرير للعميل.`;
+        }
         default: return '';
       }
     };
-    res.json(audits.map((a, i) => ({
-      ...a, changedByName: nameMap[a.changedBy] ?? a.changedBy,
-      ...(details[i] ? {detailsText: formatDetails(a.field, details[i], name(a.changedBy))} : {}),
-    })));
+    const statusLabels: Record<string, string> = {
+      closed: 'مغلق', completed: 'مكتمل', absent: 'عدم تواجد',
+      out_of_scope: 'سوء استخدام / خارج الاختصاص', open: 'مفتوح',
+      pending: 'معلق', in_progress: 'قيد التنفيذ', waiting: 'بانتظار رد العميل',
+    };
+    res.json(audits.map((a, i) => {
+      const detail = details[i];
+      const old = detail && a.field === 'تغيير حالة داخلي بدون تقرير للعميل'
+        ? statusLabels[String(detail.globalStatus || '')] || String(detail.globalStatus || 'غير محدد')
+        : oldDetails[i] && a.field === 'المشرف'
+          ? formatDetails(a.field, oldDetails[i], name(a.changedBy))
+          : undefined;
+      return {
+        ...a,
+        changedByName: nameMap[a.changedBy] ?? a.changedBy,
+        ...(detail ? {detailsText: formatDetails(a.field, detail, name(a.changedBy))} : {}),
+        ...(old !== undefined ? {oldValueText: old} : {}),
+      };
+    }));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

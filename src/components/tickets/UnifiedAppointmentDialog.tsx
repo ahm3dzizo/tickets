@@ -36,6 +36,8 @@ interface TicketLike {
   detectedTypes?: string[];
   assignedSupervisorIds?: string[];
   status: string;
+  supervisorClosures?: unknown;
+  supervisorStatuses?: Record<string, unknown> | null;
 }
 
 interface TimeOption {
@@ -247,7 +249,10 @@ export function UnifiedAppointmentDialog({
     return map;
   }, [projects]);
 
-  const activeTickets: any[] = isCalendarMode ? loadedTickets : (tickets ?? []);
+  const appointmentCandidates: any[] = isCalendarMode ? loadedTickets : (tickets ?? []);
+  const activeTickets: any[] = isEditMode
+    ? (editGroup?.tickets ?? [])
+    : appointmentCandidates.filter((ticket: any) => isActiveAppointmentTicketStatus(ticket));
   const hasExistingTickets = activeTickets.length > 0;
 
   // Whenever the ticket list changes (e.g. villa switched), preselect them all.
@@ -528,7 +533,7 @@ export function UnifiedAppointmentDialog({
           (t: any) => {
             const byClient = selectedClientId && t.clientId === selectedClientId;
             const byUnit = !!t.unitId && String(t.unitId) === String(unitId);
-            return (byClient || byUnit) && isActiveAppointmentTicketStatus(t.status);
+            return (byClient || byUnit) && isActiveAppointmentTicketStatus(t);
           }
         );
         setLoadedTickets(tks);
@@ -795,7 +800,7 @@ export function UnifiedAppointmentDialog({
     isEditMode
       ? !!date
       : isTicketMode
-      ? (!!(canSendWhatsApp ? startDate : date) && !hasConflict)
+      ? (activeTickets.length > 0 && !!(canSendWhatsApp ? startDate : date) && !hasConflict)
       : isCalendarMode
       ? (
           !!selectedClientId

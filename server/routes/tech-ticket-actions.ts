@@ -16,7 +16,7 @@ const ALLOWED_TICKET_STATUSES = [
 
 type AllowedTicketStatus = typeof ALLOWED_TICKET_STATUSES[number];
 
-const UNRESOLVED_VISIT_STATUSES = ['open', 'pending', 'in_progress', 'note'];
+const UNRESOLVED_VISIT_STATUSES = ['open', 'pending', 'waiting', 'in_progress', 'contractor', 'note'];
 const TERMINAL_TICKET_STATUSES = ['completed', 'out_of_scope', 'absent'];
 
 function cleanNotes(value: unknown): string | null {
@@ -73,7 +73,7 @@ router.patch(
           },
         });
         if (!ticket) throw new Error('Ticket not in this appointment');
-        if (['closed', 'completed'].includes(ticket.status) && closures(ticket.supervisorClosures).length) throw new Error('التذكرة مغلقة؛ إعادة الفتح من الإدارة فقط');
+        if (['closed', 'completed', 'absent', 'out_of_scope'].includes(ticket.status)) throw new Error('التذكرة مغلقة؛ إعادة الفتح من الإدارة فقط');
         if (TERMINAL_TICKET_STATUSES.includes(status) && (ticket.assignedSupervisorIds.length > 1 || closures(ticket.supervisorClosures).length)) throw new Error('التذكرة مشتركة؛ يجب إنهاء أدوار المشرفين قبل الإغلاق النهائي');
 
         const now = new Date();

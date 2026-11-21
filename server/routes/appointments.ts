@@ -4,6 +4,7 @@ import prisma from "../db.js";
 import { AuthRequest, requireAuth, getRequesterRole } from "../auth.js";
 import { getIO } from "../socket.js";
 import { DEFAULT_WORK_HOURS, autoCorrectMins, isWorkingDay, getDateWorkHours, weekdayOf, toMins, type WorkHoursSettings } from "./settings.js";
+import { closures } from '../services/ticket-closure.js';
 
 const router = Router();
 
@@ -184,7 +185,7 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
         tickets: {
           select: {
             id: true, ticketId: true, status: true, type: true, projectId: true,
-            assignedSupervisorIds: true,
+            assignedSupervisorIds: true, supervisorClosures: true, supervisorStatuses: true,
             unit:    { select: { unitNumber: true } },
             client:  { select: { name: true } },
             project: { select: { abbreviation: true } },
@@ -198,8 +199,16 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
       const apptUnitNumber = a.unit?.unitNumber || '';
       const apptClient = a.client?.name || '';
       const apptAbbr   = a.project?.abbreviation || '';
-      if (a.tickets.length > 0) {
-        return a.tickets.map((t: any) => ({
+      const activeTickets = a.tickets.filter((ticket: any) => {
+        const status = String(ticket.status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+        const roleStatuses = Object.values((ticket.supervisorStatuses || {}) as Record<string, unknown>)
+          .map(value => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_'));
+        return !['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام', 'خارج_الاختصاص'].includes(status)
+          && !(Array.isArray(ticket.supervisorClosures) && ticket.supervisorClosures.length > 0)
+          && !roleStatuses.some(value => ['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام', 'خارج_الاختصاص'].includes(value));
+      });
+      if (activeTickets.length > 0) {
+        return activeTickets.map((t: any) => ({
           ...t,
           unitNumber: t.unit?.unitNumber || apptUnitNumber,
           clientName:  t.client?.name || apptClient,
@@ -660,8 +669,29 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
           status: true,
           projectId: true,
           unitId: true,
+          supervisorClosures: true,
+          supervisorStatuses: true,
         },
       });
+
+      // Closed and special-outcome tickets, plus tickets already closed
+      // by any supervisor in a shared assignment, cannot be scheduled again.
+      const terminalTickets = tickets.filter((ticket: any) => {
+        const status = String(ticket.status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+        const roleStatuses = Object.values((ticket.supervisorStatuses || {}) as Record<string, unknown>)
+          .map(value => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_'));
+        return ['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام', 'خارج_الاختصاص'].includes(status)
+          || (Array.isArray(ticket.supervisorClosures) && ticket.supervisorClosures.length > 0)
+          || roleStatuses.some(value => ['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام', 'خارج_الاختصاص'].includes(value));
+      });
+      if (terminalTickets.length > 0) {
+        res.status(409).json({
+          error: "لا يمكن إضافة تذاكر مغلقة أو منتهية إلى موعد جديد",
+          code: "TERMINAL_TICKETS_CANNOT_BE_SCHEDULED",
+          ticketIds: terminalTickets.map(ticket => ticket.id),
+        });
+        return;
+      }
 
       // Every requested ticket must exist
       if (tickets.length !== uniqueTicketIds.length) {
@@ -871,16 +901,25 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
     // Fetch linked tickets to preserve non-pending statuses
     const linked = await prisma.ticket.findMany({
       where: { appointmentId: id },
-      select: { id: true, status: true },
+      select: {
+        id: true, status: true, supervisorClosures: true, supervisorStatuses: true,
+      },
     });
 
-    const pendingIds = linked.filter(t => t.status === "pending").map(t => t.id);
-    const otherIds   = linked.filter(t => t.status !== "pending").map(t => t.id);
-
-    const appointmentClear = {
-      appointmentId: null as null,
-      assignedSupervisorIds: [] as string[],
+    const isTerminalOrRoleClosed = (ticket: typeof linked[number]) => {
+      const status = String(ticket.status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+      const roleStatuses = Object.values((ticket.supervisorStatuses || {}) as Record<string, unknown>)
+        .map(value => String(value || '').trim().toLowerCase().replace(/[\\s-]+/g, '_'));
+      return ['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام'].includes(status)
+        || closures(ticket.supervisorClosures).length > 0
+        || roleStatuses.some(value => ['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام'].includes(value));
     };
+    const pendingIds = linked.filter(t => t.status === "pending" && !isTerminalOrRoleClosed(t)).map(t => t.id);
+    const otherIds = linked.filter(t => !pendingIds.includes(t.id)).map(t => t.id);
+
+    // Removing an appointment must never erase supervisor ownership or reopen
+    // a ticket that has a terminal/supervisor-level closure.
+    const appointmentClear = { appointmentId: null as null };
 
     if (pendingIds.length > 0) {
       await prisma.ticket.updateMany({

@@ -36,10 +36,25 @@ test('do not claim cancelled/nonexistent appointments or closed tickets are sche
 import {isActiveAppointmentTicketStatus} from './ticket-appointment-state.ts';
 
 test('terminal ticket states are excluded from appointment active-ticket lists',()=>{
-  for(const status of ['closed','completed','absent','out_of_scope','out-of-scope']) {
+  for(const status of ['closed','completed','absent','out_of_scope','out-of-scope','misuse','عدم تواجد','سوء استخدام']) {
     assert.equal(isActiveAppointmentTicketStatus(status),false,status);
   }
 });
+test('a shared ticket with any supervisor closure is not offered for a new appointment',()=>{
+  assert.equal(isActiveAppointmentTicketStatus({status:'in_progress',supervisorClosures:[{supervisorUid:'sup-1'}]}),false);
+  assert.equal(isActiveAppointmentTicketStatus({status:'in_progress',supervisorStatuses:{'sup-1':'closed'}}),false);
+  assert.equal(isActiveAppointmentTicketStatus({status:'in_progress',supervisorClosures:[],supervisorStatuses:{'sup-1':'in_progress'}}),true);
+});
+test('Arabic and legacy supervisor outcomes are terminal for appointment selection', () => {
+  for (const status of ['سوء استخدام', 'عدم تواجد', 'خارج الاختصاص', 'out-of-scope']) {
+    assert.equal(isActiveAppointmentTicketStatus({
+      status: 'in_progress',
+      supervisorClosures: [],
+      supervisorStatuses: { supervisorA: status },
+    }), false, status);
+  }
+});
+
 test('nonterminal ticket states remain available for appointment workflows',()=>{
   for(const status of ['open','in_progress','in-progress','pending','waiting','contractor','note']) {
     assert.equal(isActiveAppointmentTicketStatus(status),true,status);

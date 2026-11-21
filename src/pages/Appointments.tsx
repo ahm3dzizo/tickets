@@ -224,7 +224,7 @@ export default function Appointments() {
       const map: Record<string, number> = {};
 
       allTickets.forEach((t: any) => {
-        if (isActiveAppointmentTicketStatus(t.status)) {
+        if (isActiveAppointmentTicketStatus(t)) {
           const key = t.unitId + '_' + (t.projectId || '');
           map[key] = (map[key] || 0) + 1;
         }

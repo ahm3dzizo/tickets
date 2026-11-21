@@ -30,7 +30,7 @@ export async function closeTickets(uid: string, input: any) {
     const finalRows: typeof rows = [];
     const results: {id: string; final: boolean; changed: boolean}[] = [];
     for (const ticket of rows) {
-      if (ticket.status === 'closed' || ticket.status === 'completed') {
+      if (['closed', 'completed', 'absent', 'out_of_scope'].includes(ticket.status)) {
         if (actor.role === 'supervisor' && !closures(ticket.supervisorClosures).some(h => h.supervisorUid === uid) && !ticket.assignedSupervisorIds.includes(uid)) throw new Error('FORBIDDEN');
         results.push({id: ticket.id, final: true, changed: false}); continue;
       }

@@ -33,6 +33,9 @@ export function personalTicketStatus(
   ticket: Pick<Row, 'status' | 'assignedSupervisorIds' | 'supervisorClosures' | 'supervisorStatuses'>,
   uid: string,
 ): TicketStatus {
+  // Global terminal outcomes are authoritative for every supervisor role.
+  // In particular, absence/misuse must never reappear as an active personal status.
+  if (ticket.status === 'absent' || ticket.status === 'out_of_scope') return ticket.status;
   const personal = supervisorStatuses(ticket.supervisorStatuses)[uid];
   // A real close via "إغلاق" or a supervisor approval must take precedence
   // over an old nonterminal status (e.g. pending) set from the action menu.

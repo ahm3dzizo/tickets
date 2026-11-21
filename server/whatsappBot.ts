@@ -110,9 +110,9 @@ interface PendingClosureChoice {
 }
 const pendingClosureChoices = new Map<string, PendingClosureChoice>(); // key: senderJid
 
-function closureDataFor(closureType: ClosureType): { status: 'closed' | 'out_of_scope'; closedAt: Date | null } {
+function closureDataFor(closureType: ClosureType): { status: 'closed' | 'absent' | 'out_of_scope'; closedAt: Date | null } {
   if (closureType === 'out_of_scope') return { status: 'out_of_scope', closedAt: new Date() };
-  if (closureType === 'absent') return { status: 'closed', closedAt: new Date() };
+  if (closureType === 'absent') return { status: 'absent', closedAt: new Date() };
   return { status: 'closed', closedAt: new Date() };
 }
 
@@ -582,7 +582,7 @@ async function cmdSupervisorTickets(
     const tickets = await prisma.ticket.findMany({
       where: {
         assignedSupervisorIds: { has: user.uid },
-        status: { notIn: ['closed', 'out_of_scope'] },
+        status: { notIn: ['closed', 'completed', 'absent', 'out_of_scope'] },
         ...projectWhere(projectIds),
       },
       include: {
@@ -625,7 +625,7 @@ async function cmdSupervisorTickets(
   const tickets = await prisma.ticket.findMany({
     where: {
       assignedSupervisorIds: { has: supervisor.uid },
-      status: { notIn: ['closed', 'out_of_scope'] },
+      status: { notIn: ['closed', 'completed', 'absent', 'out_of_scope'] },
       ...projectWhere(projectIds),
     },
     include: {
@@ -664,7 +664,7 @@ async function cmdReport(user: BotUser): Promise<string> {
       prisma.ticket.count({ where: { ...where, status: 'in_progress' } }),
       prisma.ticket.count({ where: { ...where, status: 'pending' } }),
       prisma.ticket.count({ where: { ...where, status: 'waiting' } }),
-      prisma.ticket.count({ where: { ...where, status: 'closed' } }),
+      prisma.ticket.count({ where: { ...where, status: { in: ['closed', 'completed', 'absent', 'out_of_scope'] } } }),
       prisma.ticket.count({ where }),
     ]);
 
@@ -715,7 +715,7 @@ async function prepareCloseTicket(
     return `❌ مفيش تذكرة رقم ${ticketId} في نطاق صلاحياتك.`;
   }
 
-  if (ticket.status === 'closed' || ticket.status === 'out_of_scope') {
+  if (['closed', 'completed', 'absent', 'out_of_scope'].includes(ticket.status)) {
     return `تذكرة #${ticketId} مقفولة بالفعل.`;
   }
 
@@ -906,11 +906,11 @@ async function prepareCloseTicketsList(
   }
 
   const openTickets = tickets.filter(
-    t => t.status !== 'closed' && t.status !== 'out_of_scope'
+    t => !['closed', 'completed', 'absent', 'out_of_scope'].includes(t.status)
   );
 
   const alreadyClosed = tickets.filter(
-    t => t.status === 'closed' || t.status === 'out_of_scope'
+    t => ['closed', 'completed', 'absent', 'out_of_scope'].includes(t.status)
   );
 
   const notFound = ticketIds.filter(
@@ -1281,7 +1281,7 @@ async function handleBotMessageInner(chatJid: string, senderJid: string, rawText
       case 'close_ticket': {
         const ticket = await prisma.ticket.findFirst({ where: { ticketId: intent.ticketId, ...projectWhere(projectIds), ...supervisorWhere(user) } });
         if (!ticket) { reply = `❌ مفيش تذكرة رقم ${intent.ticketId} في نطاق صلاحياتك.`; break; }
-        if (ticket.status === 'closed' || ticket.status === 'out_of_scope') { reply = `تذكرة #${intent.ticketId} مقفولة بالفعل.`; break; }
+        if (['closed', 'completed', 'absent', 'out_of_scope'].includes(ticket.status)) { reply = `تذكرة #${intent.ticketId} مقفولة بالفعل.`; break; }
         pendingClosureChoices.set(senderJid, { kind: 'ticket', ticketId: intent.ticketId, expiresAt: Date.now() + CONFIRM_TTL_MS });
         reply = `هتقفل تذكرة #${intent.ticketId}.\n${CLOSURE_PROMPT}`;
         break;

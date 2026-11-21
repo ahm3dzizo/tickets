@@ -377,11 +377,12 @@ return;
 
 // إغلاق التذاكر وتحديث الحالة
 await Promise.all(selectedTickets.map(ticket =>
-ticketsApi.update(ticket.id, {
-status: closeType,
-closedAt: new Date().toISOString(),
-closureNotes: notes || (closeType === 'absent' ? 'إغلاق لعدم تواجد العميل' : 'إغلاق خارج الاختصاص')
-})
+ticketsApi.specialClose(
+  ticket.id,
+  closeType,
+  notes || (closeType === 'absent' ? 'إغلاق لعدم تواجد العميل' : 'إغلاق بسبب سوء الاستخدام / خارج الاختصاص'),
+  true,
+)
 ));
 
 const label = closeType === 'absent' ? 'عدم التواجد' : 'خارج الاختصاص';

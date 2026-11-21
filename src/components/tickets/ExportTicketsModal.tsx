@@ -180,7 +180,7 @@ export function ExportTicketsModal({
         const createdAt = (ticket.createdAt as any)?.toDate?.() ?? new Date(ticket.createdAt as any);
         const openDate  = (ticket.issuedAt ? parseIssuedAt(ticket.issuedAt) : null) ?? createdAt;
         const closeDate = ticket.closedAt ? new Date(ticket.closedAt) : null;
-        const isClosed  = ticket.status === 'closed' || ticket.status === 'out-of-scope';
+        const isClosed  = ['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(ticket.status);
         return String(differenceInDays((isClosed && closeDate) ? closeDate : new Date(), openDate));
       }
       case 'clientName':  return ticket.clientName || '';

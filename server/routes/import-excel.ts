@@ -200,7 +200,7 @@ function parseExcelAndDetectHeaders(
   buffer: Buffer,
   fieldAliases: Record<string, string[]>,
   skipDateFilter: boolean = false
-): { allData: any[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: ImportDateFormat } {
+): { allData: any[], allTicketIds: string[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: ImportDateFormat } {
   const wb = readWorkbookForImport(buffer);
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
@@ -265,6 +265,13 @@ function parseExcelAndDetectHeaders(
   const cutoffTime = (!skipDateFilter && maxTime > 0) ? maxTime - 35 * 24 * 60 * 60 * 1000 : 0;
   let skippedByDateFilter = 0;
 
+  const allTicketIds = mapping["ticketId"]
+    ? [...new Set(allData.map(row => {
+        const value = row[mapping["ticketId"]];
+        return value ? normalizeTicketId(String(value).trim()) : "";
+      }).filter(Boolean))]
+    : [];
+
   const NEEDED_COLS = Object.values(mapping).filter(Boolean);
   const rows: any[] = [];
 
@@ -272,7 +279,7 @@ function parseExcelAndDetectHeaders(
     if (cutoffTime > 0) {
       const rawStatus = row[mapping["status"]];
       const status = normalizeStatus(rawStatus);
-      if (status === "closed") {
+      if (["closed", "absent", "out_of_scope"].includes(status)) {
         const rawDate = row[mapping["createdAt"]];
         const dStr = normalizeDate(rawDate, detectedFormat);
         const t = dStr ? new Date(dStr).getTime() : 0;
@@ -287,7 +294,7 @@ function parseExcelAndDetectHeaders(
     rows.push(r);
   }
 
-  return { allData: rows, mapping, skippedByDateFilter, detectedFormat };
+  return { allData: rows, allTicketIds, mapping, skippedByDateFilter, detectedFormat };
 }
 
 const router = Router();
@@ -412,14 +419,15 @@ function normalizeUnitNumber(raw: string): string {
 
 function normalizeStatus(rawStatus: unknown): string {
   if (rawStatus === null || rawStatus === undefined) return "open";
-  const s = String(rawStatus).toLowerCase().trim();
+  const s = String(rawStatus).toLowerCase().trim().replace(/[\s-]+/g, "_");
+  if (['absent', 'عدم_تواجد', 'عدم_التواجد', 'no_show'].includes(s)) return 'absent';
+  if (['out_of_scope', 'misuse', 'سوء_استخدام', 'خارج_الاختصاص'].includes(s)) return 'out_of_scope';
   if (!s || s === "none" || s === "null" || s === "مفتوح" || s === "open" || s === "نشط") return "open";
   if (
     s === "مغلق" || s === "مغلوق" || s === "اغلاق" || s === "إغلاق" ||
     s === "closed" || s === "close" || s === "done" || s === "تم" ||
     s === "منتهي" || s === "منتهى" || s === "مكتمل" || s === "مكتملة" ||
-    s === "مكتمله" || s === "completed" || s === "out_of_scope" ||
-    s.startsWith("مغلق")
+    s === "مكتمله" || s === "completed" || s.startsWith("مغلق")
   ) return "closed";
   return "open";
 }
@@ -619,9 +627,9 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       excelType:   ["تصنيف التذاكر", "التصنيف", "نوع التذاكر", "نوع المشكلة"],
     };
 
-    const { allData, mapping, skippedByDateFilter, detectedFormat } = parseExcelAndDetectHeaders(buffer, fieldAliases, shouldSkipDateFilter);
+    const { allData, allTicketIds, mapping, skippedByDateFilter, detectedFormat } = parseExcelAndDetectHeaders(buffer, fieldAliases, shouldSkipDateFilter);
 
-    if (allData.length === 0) {
+    if (allData.length === 0 && allTicketIds.length === 0) {
       res.write(JSON.stringify({ error: "الملف فارغ أو لا يحتوي على بيانات" }) + "\n");
       return res.end();
     }
@@ -764,7 +772,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const rawStatus = get("status");
         const status = normalizeStatus(rawStatus);
         const issuedAt = normalizeDate(get("createdAt"), detectedFormat);
-        const closedAt = status === "closed"
+        const closedAt = ["closed", "absent", "out_of_scope"].includes(status)
           ? (normalizeClosedAt(get("closedAt"), issuedAt, detectedFormat) ?? new Date(issuedAt).toISOString())
           : normalizeClosedAt(get("closedAt"), issuedAt, detectedFormat);
 
@@ -905,18 +913,16 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       }
     }
 
-    // ── 7.5 Close open tickets not present in the file (only if explicitly requested) ──
+    // ── 7.5 Close every project ticket absent from the complete uploaded file ──
+    // Use allTicketIds (before the recent-date optimization) so an old row that
+    // exists in Excel is never mistaken for a missing ticket.
     let closedMissingCount = 0;
     let missingCount = 0;
     {
-      const fileTicketIds = new Set(
-        rows.map(r => {
-          const tId = r[mapping["ticketId"]];
-          return tId ? normalizeTicketId(String(tId).trim()) : "";
-        }).filter(Boolean)
+      const fileTicketIds = new Set(allTicketIds);
+      const missingToUpdate = existingRows.filter(
+        t => !fileTicketIds.has(normalizeTicketId(String(t.ticketId).trim()))
       );
-
-      const missingToUpdate = existingRows.filter(t => t.assignedSupervisorIds.length <= 1 && !closures(t.supervisorClosures).length && t.status !== "closed" && !fileTicketIds.has(normalizeTicketId(String(t.ticketId).trim())));
       missingCount = missingToUpdate.length;
 
       if (closeMissingTickets && missingToUpdate.length > 0) {
@@ -924,27 +930,79 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const BATCH_MIS = 200;
         for (let i = 0; i < missingIds.length; i += BATCH_MIS) {
           const batch = missingIds.slice(i, i + BATCH_MIS);
-          const changedIds = await prisma.$transaction(async tx => {
-            for (const id of [...batch].sort()) await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${id} FOR UPDATE`;
-            const current = await tx.ticket.findMany({where: {id: {in: batch}}});
-            const allowed = current.filter(t => t.assignedSupervisorIds.length <= 1 && !closures(t.supervisorClosures).length && t.status !== 'closed');
-            await tx.ticket.updateMany({where: {id: {in: allowed.map(t => t.id)}}, data: {status: 'closed', closedAt: new Date()}});
-            return allowed.map(t => t.id);
+          const changed = await prisma.$transaction(async tx => {
+            for (const id of [...batch].sort()) {
+              await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${id} FOR UPDATE`;
+            }
+            const current = await tx.ticket.findMany({ where: { id: { in: batch } } });
+            const changed: Array<{ id: string; oldStatus: string; newStatus: string }> = [];
+            for (const ticket of current) {
+              // Keep special outcomes distinct while closing every supervisor role.
+              const special = ['absent', 'out_of_scope'].includes(String(ticket.status).toLowerCase());
+              const nextStatus = special ? ticket.status : 'closed';
+              const history = closures(ticket.supervisorClosures);
+              const completedUids = new Set(history.map(item => item.supervisorUid));
+              const currentStatuses = ticket.supervisorStatuses &&
+                typeof ticket.supervisorStatuses === 'object' &&
+                !Array.isArray(ticket.supervisorStatuses)
+                  ? ticket.supervisorStatuses as Record<string, string>
+                  : {};
+              const allRoleUids = [...new Set([
+                ...ticket.assignedSupervisorIds,
+                ...history.map(item => item.supervisorUid),
+                ...Object.keys(currentStatuses),
+              ])];
+              const newlyClosedUids = allRoleUids.filter(uid => !completedUids.has(uid));
+              const now = new Date();
+              const reason = nextStatus === 'absent'
+                ? 'إغلاق تلقائي — عدم تواجد'
+                : nextStatus === 'out_of_scope'
+                  ? 'إغلاق تلقائي — سوء استخدام / خارج الاختصاص'
+                  : 'إغلاق تلقائي بسبب عدم وجود التذكرة في ملف الإكسيل';
+              const nextHistory = [
+                ...history,
+                ...newlyClosedUids.map(supervisorUid => ({
+                  supervisorUid,
+                  completedAt: now.toISOString(),
+                  completedByUid: 'system:excel-import',
+                  notes: reason,
+                  items: [],
+                })),
+              ];
+              const nextStatuses = {
+                ...currentStatuses,
+                ...Object.fromEntries(allRoleUids.map(uid => [uid, nextStatus])),
+              };
+              const needsUpdate = ticket.status !== nextStatus || !ticket.closedAt ||
+                ticket.assignedSupervisorIds.length > 0 || newlyClosedUids.length > 0 ||
+                allRoleUids.some(uid => currentStatuses[uid] !== nextStatus);
+              if (needsUpdate) {
+                await tx.ticket.update({
+                  where: { id: ticket.id },
+                  data: {
+                    status: nextStatus,
+                    closedAt: ticket.closedAt || now,
+                    assignedSupervisorIds: [],
+                    supervisorClosures: nextHistory,
+                    supervisorStatuses: nextStatuses,
+                  },
+                });
+                changed.push({ id: ticket.id, oldStatus: ticket.status, newStatus: nextStatus });
+              }
+            }
+            return { processed: current.length, changed };
           });
-          const auditData = changedIds.map(id => {
-            const oldStatus = missingToUpdate.find(t => t.id === id)?.status || "open";
-            return {
-              ticketId: id,
-              field: "status",
-              oldValue: oldStatus,
-              newValue: "closed",
-              changedBy: "النظام (إغلاق تلقائي بسبب عدم وجود التذكرة في ملف الإكسيل المرفوع)",
-            };
-          });
-          if (auditData.length > 0) {
-            await prisma.ticketAudit.createMany({ data: auditData });
-          }
-          closedMissingCount += batch.length;
+          const auditData = changed.changed.map(item => ({
+            ticketId: item.id,
+            field: item.oldStatus === item.newStatus
+              ? "تأكيد إغلاق تلقائي — التذكرة غير موجودة في ملف الإكسيل"
+              : "status",
+            oldValue: item.oldStatus,
+            newValue: item.newStatus,
+            changedBy: "النظام (إغلاق تلقائي بسبب عدم وجود التذكرة في ملف الإكسيل المرفوع)",
+          }));
+          if (auditData.length > 0) await prisma.ticketAudit.createMany({ data: auditData });
+          closedMissingCount += changed.processed;
         }
       }
     }
