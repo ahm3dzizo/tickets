@@ -668,7 +668,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
       // Closed and special-outcome tickets, plus tickets already closed
       // by any supervisor in a shared assignment, cannot be scheduled again.
       const terminalTickets = tickets.filter((ticket: any) => {
-        const status = String(ticket.status || '').trim().toLowerCase().replace(/[\\s-]+/g, '_');
+        const status = String(ticket.status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
         const roleStatuses = Object.values((ticket.supervisorStatuses || {}) as Record<string, unknown>)
           .map(value => String(value || '').trim().toLowerCase());
         return ['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام'].includes(status)
