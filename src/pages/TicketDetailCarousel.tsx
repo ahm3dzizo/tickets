@@ -28,6 +28,7 @@ import { ReassignSupervisorButton } from '@/components/tickets/ReassignSuperviso
 import { TicketEditDialog } from '@/components/tickets/TicketEditDialog';
 import { TicketMediaCarousel } from '@/components/tickets/TicketMediaCarousel';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 import { ticketsApi, projectsApi, clientsApi, auditApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { requestWhatsAppOpen } from '@/lib/whatsappLauncher';
@@ -406,10 +407,12 @@ export default function TicketDetailCarousel() {
             </CardTitle>
           </CardHeader>
           <CardContent className="grid min-w-0 grid-cols-1 gap-2 p-3 min-[390px]:grid-cols-2 sm:p-4 md:grid-cols-4">
-            <Button className="h-14 min-w-0 rounded-2xl bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300" onClick={() => setAppointmentOpen(true)}>
-              <CalendarDays className="me-2 h-4 w-4 shrink-0" />
-              <span className="truncate">{t.scheduleAppointment}</span>
-            </Button>
+            {isActiveAppointmentTicketStatus(ticket) && (
+              <Button className="h-14 min-w-0 rounded-2xl bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300" onClick={() => setAppointmentOpen(true)}>
+                <CalendarDays className="me-2 h-4 w-4 shrink-0" />
+                <span className="truncate">{t.scheduleAppointment}</span>
+              </Button>
+            )}
             <div className="min-w-0 [&>button]:h-14 [&>button]:w-full [&>button]:min-w-0 [&>button]:justify-center [&>button]:overflow-hidden [&>button]:border-amber-500/20 [&>button]:bg-amber-500/10 [&>button]:text-amber-700 dark:[&>button]:text-amber-300">
               <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
             </div>
@@ -518,6 +521,8 @@ export default function TicketDetailCarousel() {
           detectedTypes: ticket.detectedTypes,
           assignedSupervisorIds: ticket.assignedSupervisorIds,
           status: ticket.status,
+          supervisorClosures: ticket.supervisorClosures,
+          supervisorStatuses: ticket.supervisorStatuses,
         }]}
         clientPhone={client?.phone}
         onSuccess={() => {
