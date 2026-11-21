@@ -16,7 +16,7 @@ const ALLOWED_TICKET_STATUSES = [
 
 type AllowedTicketStatus = typeof ALLOWED_TICKET_STATUSES[number];
 
-const UNRESOLVED_VISIT_STATUSES = ['open', 'pending', 'in_progress', 'note'];
+const UNRESOLVED_VISIT_STATUSES = ['open', 'pending', 'waiting', 'in_progress', 'contractor', 'note'];
 const TERMINAL_TICKET_STATUSES = ['completed', 'out_of_scope', 'absent'];
 
 function cleanNotes(value: unknown): string | null {
