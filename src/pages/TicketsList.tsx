@@ -256,7 +256,7 @@ export default function TicketsList() {
       (ticket.supervisorClosures?.length ?? 0) > 0
     );
     if (requestedType !== 'normal' && hasSharedRoles) {
-      toast.info('التذكرة مشتركة؛ يجب إنهاء أدوار المشرفين من الإغلاق العادي أولاً.');
+      toast.info('التذكرة مشتركة؛ يجب إنهاء أدوار المشرفين أولاً من قائمة الحالات الداخلية.');
     }
     setInitialCloseType(hasSharedRoles ? 'normal' : requestedType);
     setCloseDialogOpen(true);
