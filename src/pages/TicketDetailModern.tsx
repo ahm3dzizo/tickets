@@ -361,7 +361,7 @@ export default function TicketDetailModern() {
                   <Pencil className="me-2 h-4 w-4" />
                   {t.edit}
                 </Button>
-                {ticket.status !== 'closed' && (
+                {!['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(ticket.status) && (
                   <Button className="rounded-xl" onClick={() => setCloseOpen(true)}>
                     <CheckCircle2 className="me-2 h-4 w-4" />
                     {t.closeTicket}
