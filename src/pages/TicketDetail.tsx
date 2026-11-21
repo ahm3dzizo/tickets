@@ -232,7 +232,9 @@ export default function TicketDetail() {
     'pending': 'معلقة',
     'completed': 'مكتملة',
     'closed': 'مغلقة',
-    'out-of-scope': 'خارج اختصاص',
+    'absent': 'عدم تواجد',
+    'out_of_scope': 'سوء استخدام / خارج الاختصاص',
+    'out-of-scope': 'سوء استخدام / خارج الاختصاص',
   };
 
   const priorityTranslations: Record<string, string> = {
