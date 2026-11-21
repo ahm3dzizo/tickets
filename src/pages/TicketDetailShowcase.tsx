@@ -521,8 +521,8 @@ export default function TicketDetailShowcase() {
                       </div>
                       {(entry.oldValue || entry.newValue) && (
                         <div className="mt-1.5 flex flex-wrap gap-2 text-xs">
-                          {entry.oldValue && <span className="text-rose-500 line-through">{entry.oldValue}</span>}
-                          {entry.newValue && <span className="font-medium text-emerald-600 dark:text-emerald-400">{entry.newValue}</span>}
+                          {entry.oldValue && <span className="text-rose-500 line-through">{entry.oldValueText || entry.oldValue}</span>}
+                          {entry.newValue && <span className="font-medium text-emerald-600 dark:text-emerald-400">{entry.detailsText || entry.newValue}</span>}
                         </div>
                       )}
                     </div>
