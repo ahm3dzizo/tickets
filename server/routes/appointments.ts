@@ -199,7 +199,7 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
       const apptClient = a.client?.name || '';
       const apptAbbr   = a.project?.abbreviation || '';
       const activeTickets = a.tickets.filter((ticket: any) => {
-        const status = String(ticket.status || '').trim().toLowerCase().replace(/[\\s-]+/g, '_');
+        const status = String(ticket.status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
         const roleStatuses = Object.values((ticket.supervisorStatuses || {}) as Record<string, unknown>)
           .map(value => String(value || '').trim().toLowerCase());
         return !['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام'].includes(status)
