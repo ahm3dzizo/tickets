@@ -90,8 +90,8 @@ export const ticketDetailText = {
       absent: 'عدم تواجد',
       contractor: 'مقاول',
       note: 'ملاحظة',
-      'out-of-scope': 'خارج اختصاص',
-      out_of_scope: 'خارج اختصاص',
+      'out-of-scope': 'سوء استخدام / خارج الاختصاص',
+      out_of_scope: 'سوء استخدام / خارج الاختصاص',
     } as Record<string, string>,
     priorities: {
       '3': '3 - منخفض',
