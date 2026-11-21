@@ -1452,7 +1452,7 @@ router.patch("/bulk-status", requireAuth, async (req: AuthRequest, res) => {
           }),
           newValue: JSON.stringify({
             requestedStatus: normalizedStatus,
-            targetSupervisorUid: actor!.role === 'supervisor' ? actor!.uid : supervisorUid || null,
+            targetSupervisorUid: targetUid,
             globalStatus: data.status,
             supervisorStatuses: data.supervisorStatuses,
             active: data.assignedSupervisorIds,
