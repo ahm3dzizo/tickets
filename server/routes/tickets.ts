@@ -694,6 +694,20 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
         changedBy: uid,
       },
     });
+    if (assignedRoleIds.length > 0) {
+      await prisma.ticketAudit.create({
+        data: {
+          ticketId: ticket.id,
+          field: 'إغلاق خاص',
+          oldValue: null,
+          newValue: JSON.stringify({
+            targetSupervisorUid: assignedRoleIds[0],
+            requestedStatus: status,
+          }),
+          changedBy: uid,
+        },
+      });
+    }
 
     await maybeAutoFinishAppointment((ticket as any).appointmentId);
 
