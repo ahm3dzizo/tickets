@@ -458,7 +458,7 @@ export default function TicketDetailCarousel() {
                       </div>
                       {(entry.oldValue || entry.newValue) && (
                         <div className="mt-1.5 flex min-w-0 flex-wrap gap-2 text-xs">
-                          {entry.oldValue && <span className="break-all text-rose-500 line-through">{auditValue(entry.field, entry.oldValue)}</span>}
+                          {entry.oldValue && <span className="break-all text-rose-500 line-through">{entry.oldValueText || auditValue(entry.field, entry.oldValue)}</span>}
                           {entry.newValue && <span className="break-words font-medium text-emerald-600 dark:text-emerald-400">{entry.detailsText || auditValue(entry.field, entry.newValue)}</span>}
                         </div>
                       )}
