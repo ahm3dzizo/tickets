@@ -73,7 +73,7 @@ router.patch(
           },
         });
         if (!ticket) throw new Error('Ticket not in this appointment');
-        if (['closed', 'completed', 'absent', 'out_of_scope'].includes(ticket.status) && closures(ticket.supervisorClosures).length) throw new Error('التذكرة مغلقة؛ إعادة الفتح من الإدارة فقط');
+        if (['closed', 'completed', 'absent', 'out_of_scope'].includes(ticket.status)) throw new Error('التذكرة مغلقة؛ إعادة الفتح من الإدارة فقط');
         if (TERMINAL_TICKET_STATUSES.includes(status) && (ticket.assignedSupervisorIds.length > 1 || closures(ticket.supervisorClosures).length)) throw new Error('التذكرة مشتركة؛ يجب إنهاء أدوار المشرفين قبل الإغلاق النهائي');
 
         const now = new Date();
