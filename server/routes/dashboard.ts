@@ -153,7 +153,7 @@ router.get("/stats", requireAuth, async (req: AuthRequest, res) => {
     const [total, openCount, closedCount, unclassified] = personalTickets ? [personalTickets.length, personalTickets.filter(t=>t.status === 'open').length, personalTickets.filter(t=>['closed','completed','absent','out_of_scope'].includes(t.status)).length, personalTickets.filter(t=>t.type === 'unclassified').length] : await Promise.all([
       prisma.ticket.count({ where: ticketsWhere }),
       prisma.ticket.count({ where: { ...ticketsWhere, status: "open" } }),
-      prisma.ticket.count({ where: { ...ticketsWhere, status: "closed" } }),
+      prisma.ticket.count({ where: { ...ticketsWhere, status: { in: ['closed','completed','absent','out_of_scope'] } } }),
       prisma.ticket.count({ where: { ...ticketsWhere, type: "unclassified" } }),
     ]);
 
