@@ -43,6 +43,7 @@ import { formatAppointmentDayTime } from '@/lib/utils';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 import { TypesSelector } from '@/components/tickets/TypesSelector';
 import { Ticket, TicketType, Project, Client } from '@/types';
 import { cn } from '@/lib/utils';
@@ -699,16 +700,16 @@ export default function TicketDetail() {
                   </div>
                 ) : (
                   <>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-center border-border bg-white/5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 text-xs h-12 rounded-2xl font-bold"
-                      onClick={() => {
-                        setApptOpen(true);
-                      }}
-                    >
-                      <CalendarDays className="w-4 h-4 me-2" />
-                      تحديد موعد
-                    </Button>
+                    {isActiveAppointmentTicketStatus(ticket) && (
+                      <Button
+                        variant="outline"
+                        className="w-full justify-center border-border bg-white/5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 text-xs h-12 rounded-2xl font-bold"
+                        onClick={() => setApptOpen(true)}
+                      >
+                        <CalendarDays className="w-4 h-4 me-2" />
+                        تحديد موعد
+                      </Button>
+                    )}
                     <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
                     <Button
                       variant="outline"
@@ -878,6 +879,8 @@ export default function TicketDetail() {
             detectedTypes: ticket.detectedTypes,
             assignedSupervisorIds: ticket.assignedSupervisorIds as string[] | undefined,
             status: ticket.status,
+            supervisorClosures: ticket.supervisorClosures,
+            supervisorStatuses: ticket.supervisorStatuses,
           }]}
           clientPhone={client?.phone}
           onSuccess={() => { setApptOpen(false); loadData(); }}
