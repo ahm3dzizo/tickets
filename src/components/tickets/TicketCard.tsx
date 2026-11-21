@@ -29,6 +29,8 @@ const statusColors: Record<string, string> = {
   'completed': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
   'closed': 'bg-slate-800 text-slate-500 border-slate-700',
   'out-of-scope': 'bg-rose-500/15 text-rose-400 border-rose-500/20',
+  'out_of_scope': 'bg-rose-500/15 text-rose-400 border-rose-500/20',
+  'absent': 'bg-amber-500/15 text-amber-400 border-amber-500/20',
 };
 
 const priorityIcons = {
@@ -46,6 +48,8 @@ const statusTranslations: Record<string, string> = {
   'completed': 'مكتمل',
   'closed': 'مغلق',
   'out-of-scope': 'خارج اختصاص',
+  'out_of_scope': 'سوء استخدام / خارج الاختصاص',
+  'absent': 'عدم تواجد',
 };
 
 const priorityTranslations: Record<string, string> = {
