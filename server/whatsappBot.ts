@@ -110,9 +110,9 @@ interface PendingClosureChoice {
 }
 const pendingClosureChoices = new Map<string, PendingClosureChoice>(); // key: senderJid
 
-function closureDataFor(closureType: ClosureType): { status: 'closed' | 'out_of_scope'; closedAt: Date | null } {
+function closureDataFor(closureType: ClosureType): { status: 'closed' | 'absent' | 'out_of_scope'; closedAt: Date | null } {
   if (closureType === 'out_of_scope') return { status: 'out_of_scope', closedAt: new Date() };
-  if (closureType === 'absent') return { status: 'closed', closedAt: new Date() };
+  if (closureType === 'absent') return { status: 'absent', closedAt: new Date() };
   return { status: 'closed', closedAt: new Date() };
 }
 
@@ -715,7 +715,7 @@ async function prepareCloseTicket(
     return `❌ مفيش تذكرة رقم ${ticketId} في نطاق صلاحياتك.`;
   }
 
-  if (ticket.status === 'closed' || ticket.status === 'out_of_scope') {
+  if (['closed', 'completed', 'absent', 'out_of_scope'].includes(ticket.status)) {
     return `تذكرة #${ticketId} مقفولة بالفعل.`;
   }
 
