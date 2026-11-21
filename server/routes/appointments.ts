@@ -906,7 +906,7 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
     });
 
     const isTerminalOrRoleClosed = (ticket: typeof linked[number]) => {
-      const status = String(ticket.status || '').trim().toLowerCase().replace(/[\\s-]+/g, '_');
+      const status = String(ticket.status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
       const roleStatuses = Object.values((ticket.supervisorStatuses || {}) as Record<string, unknown>)
         .map(value => String(value || '').trim().toLowerCase().replace(/[\\s-]+/g, '_'));
       return ['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام'].includes(status)
