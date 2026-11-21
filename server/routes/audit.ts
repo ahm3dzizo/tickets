@@ -48,6 +48,7 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
       'تم إرسال تقرير أعمال المشرف الجزئي للعميل',
       'تم إرسال التقرير النهائي للعميل',
       'تغيير حالة داخلي بدون تقرير للعميل',
+      'المشرف',
     ]);
     const parse = (value: string | null): Record<string, any> => {
       try {const data = JSON.parse(value || ''); return data && typeof data === 'object' ? data : {};}
@@ -62,6 +63,7 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
         d.targetSupervisorUid,
         ...Object.keys(d.supervisorStatuses || {}),
         ...(Array.isArray(d.active) ? d.active : []),
+        ...(Array.isArray(d) ? d : []),
         ...(Array.isArray(d.approvers) ? d.approvers : []),
         ...(Array.isArray(d.approvedBy) ? d.approvedBy : []),
       ] : []),
@@ -93,6 +95,8 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
           return `${by} أرسل تقرير أعماله الجزئي للعميل، دون أعمال المشرفين الآخرين.`;
         case 'تم إرسال التقرير النهائي للعميل':
           return `${by} أرسل تقرير الإغلاق النهائي للعميل بعد استكمال الأدوار.`;
+        case 'المشرف':
+          return (Array.isArray(d) ? d : []).map(name).join('، ') || 'لا يوجد مشرفون';
         case 'تغيير حالة داخلي بدون تقرير للعميل': {
           const labels: Record<string, string> = {
             closed: 'مغلق', completed: 'مكتمل', absent: 'عدم تواجد',
@@ -109,10 +113,25 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
         default: return '';
       }
     };
-    res.json(audits.map((a, i) => ({
-      ...a, changedByName: nameMap[a.changedBy] ?? a.changedBy,
-      ...(details[i] ? {detailsText: formatDetails(a.field, details[i], name(a.changedBy))} : {}),
-    })));
+    const statusLabels: Record<string, string> = {
+      closed: 'مغلق', completed: 'مكتمل', absent: 'عدم تواجد',
+      out_of_scope: 'سوء استخدام / خارج الاختصاص', open: 'مفتوح',
+      pending: 'معلق', in_progress: 'قيد التنفيذ', waiting: 'بانتظار رد العميل',
+    };
+    res.json(audits.map((a, i) => {
+      const detail = details[i];
+      const old = detail && a.field === 'تغيير حالة داخلي بدون تقرير للعميل'
+        ? statusLabels[String(detail.globalStatus || '')] || String(detail.globalStatus || 'غير محدد')
+        : detail && a.field === 'المشرف'
+          ? formatDetails(a.field, detail, name(a.changedBy))
+          : undefined;
+      return {
+        ...a,
+        changedByName: nameMap[a.changedBy] ?? a.changedBy,
+        ...(detail ? {detailsText: formatDetails(a.field, detail, name(a.changedBy))} : {}),
+        ...(old !== undefined ? {oldValueText: old} : {}),
+      };
+    }));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
