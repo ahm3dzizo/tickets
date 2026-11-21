@@ -937,16 +937,47 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
             const current = await tx.ticket.findMany({ where: { id: { in: batch } } });
             const results: Array<{ id: string; oldStatus: string; newStatus: string }> = [];
             for (const ticket of current) {
-              // Preserve the special outcome as a distinct terminal state.
+              // Keep special outcomes distinct while closing every supervisor role.
               const special = ['absent', 'out_of_scope'].includes(String(ticket.status).toLowerCase());
               const nextStatus = special ? ticket.status : 'closed';
-              const needsUpdate = ticket.status !== nextStatus || !ticket.closedAt;
-              if (needsUpdate) {
-                await tx.ticket.update({
-                  where: { id: ticket.id },
-                  data: { status: nextStatus, closedAt: ticket.closedAt || new Date() },
-                });
-              }
+              const history = closures(ticket.supervisorClosures);
+              const completedUids = new Set(history.map(item => item.supervisorUid));
+              const newlyClosedUids = ticket.assignedSupervisorIds.filter(uid => !completedUids.has(uid));
+              const now = new Date();
+              const reason = nextStatus === 'absent'
+                ? 'إغلاق تلقائي — عدم تواجد'
+                : nextStatus === 'out_of_scope'
+                  ? 'إغلاق تلقائي — سوء استخدام / خارج الاختصاص'
+                  : 'إغلاق تلقائي بسبب عدم وجود التذكرة في ملف الإكسيل';
+              const nextHistory = [
+                ...history,
+                ...newlyClosedUids.map(supervisorUid => ({
+                  supervisorUid,
+                  completedAt: now.toISOString(),
+                  completedByUid: 'system:excel-import',
+                  notes: reason,
+                  items: [],
+                })),
+              ];
+              const currentStatuses = ticket.supervisorStatuses &&
+                typeof ticket.supervisorStatuses === 'object' &&
+                !Array.isArray(ticket.supervisorStatuses)
+                  ? ticket.supervisorStatuses as Record<string, string>
+                  : {};
+              const nextStatuses = {
+                ...currentStatuses,
+                ...Object.fromEntries(ticket.assignedSupervisorIds.map(uid => [uid, nextStatus])),
+              };
+              await tx.ticket.update({
+                where: { id: ticket.id },
+                data: {
+                  status: nextStatus,
+                  closedAt: ticket.closedAt || now,
+                  assignedSupervisorIds: [],
+                  supervisorClosures: nextHistory,
+                  supervisorStatuses: nextStatuses,
+                },
+              });
               results.push({ id: ticket.id, oldStatus: ticket.status, newStatus: nextStatus });
             }
             return results;
