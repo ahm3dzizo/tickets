@@ -35,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CloseTicketDialog } from '@/components/tickets/CloseTicketDialog';
 import { ReassignSupervisorButton } from '@/components/tickets/ReassignSupervisorButton';
 import { UnifiedAppointmentDialog } from '@/components/tickets/UnifiedAppointmentDialog';
+import { isActiveAppointmentTicketStatus } from '@/lib/ticket-appointment-state';
 import { ticketsApi, projectsApi, clientsApi, auditApi, settingsApi, whatsappApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { formatTicketDate, formatTicketDateTime } from '@/lib/ticketDate';
@@ -498,10 +499,12 @@ export default function TicketDetailModern() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                <Button className="h-12 justify-center rounded-2xl" onClick={() => setAppointmentOpen(true)}>
-                  <CalendarDays className="me-2 h-4 w-4" />
-                  {t.scheduleAppointment}
-                </Button>
+                {isActiveAppointmentTicketStatus(ticket) && (
+                  <Button className="h-12 justify-center rounded-2xl" onClick={() => setAppointmentOpen(true)}>
+                    <CalendarDays className="me-2 h-4 w-4" />
+                    {t.scheduleAppointment}
+                  </Button>
+                )}
                 <ReassignSupervisorButton ticket={ticket} onReassigned={loadData} />
                 <Button variant="outline" className="h-12 justify-center rounded-2xl text-emerald-600 dark:text-emerald-400" disabled={waSending} onClick={sendWhatsApp}>
                   <MessageSquareText className="me-2 h-4 w-4" />
@@ -623,6 +626,8 @@ export default function TicketDetailModern() {
           detectedTypes: ticket.detectedTypes,
           assignedSupervisorIds: ticket.assignedSupervisorIds,
           status: ticket.status,
+          supervisorClosures: ticket.supervisorClosures,
+          supervisorStatuses: ticket.supervisorStatuses,
         }]}
         clientPhone={client?.phone}
         onSuccess={() => {
