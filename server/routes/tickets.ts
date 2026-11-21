@@ -645,9 +645,39 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
       }
     }
 
+    const now = new Date();
+    const assignedRoleIds = [...new Set(ticketInfo.assignedSupervisorIds || [])];
+    const priorClosures = closures(ticketInfo.supervisorClosures);
+    const reason = closeType === 'absent' ? 'عدم تواجد' : 'سوء استخدام / خارج الاختصاص';
+    const nextClosures = [
+      ...priorClosures,
+      ...assignedRoleIds.map(supervisorUid => ({
+        supervisorUid,
+        completedAt: now.toISOString(),
+        completedByUid: uid,
+        notes: notes || reason,
+        items: [],
+      })),
+    ];
+    const existingRoleStatuses = ticketInfo.supervisorStatuses &&
+      typeof ticketInfo.supervisorStatuses === 'object' &&
+      !Array.isArray(ticketInfo.supervisorStatuses)
+        ? ticketInfo.supervisorStatuses as Record<string, string>
+        : {};
+    const nextRoleStatuses = {
+      ...existingRoleStatuses,
+      ...Object.fromEntries(assignedRoleIds.map(supervisorUid => [supervisorUid, status])),
+    };
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },
-      data: { status, closureNotes: notes || null, closedAt: new Date() },
+      data: {
+        status,
+        closureNotes: notes || reason,
+        closedAt: now,
+        assignedSupervisorIds: [],
+        supervisorClosures: nextClosures,
+        supervisorStatuses: nextRoleStatuses,
+      },
       select: { id: true, ticketId: true, clientId: true, description: true, unitId: true, status: true, appointmentId: true },
     });
 
@@ -1067,10 +1097,6 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     }
     if (data.status !== undefined && ['closed', 'completed'].includes(normalizeTicketStatus(data.status))) {
       res.status(409).json({error: 'استخدم مسار الإغلاق لتسجيل دور المشرف والتقرير', code: 'USE_CLOSURE_ENDPOINT'}); return;
-    }
-    if (data.status !== undefined && ['absent', 'out_of_scope'].includes(normalizeTicketStatus(data.status)) &&
-        (existingForValidation.assignedSupervisorIds.length > 1 || closures(existingForValidation.supervisorClosures).length > 0)) {
-      res.status(409).json({error: 'التذكرة مشتركة؛ حدّد نتيجة كل مشرف من قائمة الحالات أو استخدم مسار الإغلاق الجماعي', code: 'SHARED_TICKET_REQUIRES_ROLE_STATUS'}); return;
     }
     if (existingForValidation.assignedSupervisorIds.length > 1 && data.closedAt) {
       res.status(409).json({error: 'SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT'}); return;
