@@ -528,7 +528,7 @@ export function UnifiedAppointmentDialog({
           (t: any) => {
             const byClient = selectedClientId && t.clientId === selectedClientId;
             const byUnit = !!t.unitId && String(t.unitId) === String(unitId);
-            return (byClient || byUnit) && isActiveAppointmentTicketStatus(t.status);
+            return (byClient || byUnit) && isActiveAppointmentTicketStatus(t);
           }
         );
         setLoadedTickets(tks);
