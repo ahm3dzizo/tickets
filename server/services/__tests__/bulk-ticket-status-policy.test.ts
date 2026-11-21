@@ -13,6 +13,18 @@ const shared = {
   supervisorClosures:[], supervisorStatuses:{},
 };
 
+test('global absence and misuse outcomes override stale personal active statuses', () => {
+  for (const status of ['absent', 'out_of_scope'] as const) {
+    const terminalTicket = {
+      ...shared,
+      status,
+      supervisorStatuses: { a: 'in_progress', b: 'pending' },
+    };
+    assert.equal(personalTicketStatus(terminalTicket, 'a'), status);
+    assert.equal(personalTicketStatus(terminalTicket, 'b'), status);
+  }
+});
+
 test('changing pending status is personal and preserves colleague status', () => {
   checkBulkStatusAccess(a,[shared],1);
   const updated = planBulkStatus(a, shared, 'pending');
