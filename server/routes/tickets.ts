@@ -599,7 +599,7 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
   if (!['absent', 'out_of_scope'].includes(closeType)) {
     res.status(400).json({ error: "closeType غير صالح" }); return;
   }
-  const status = closeType === 'out_of_scope' ? 'out_of_scope' : 'closed';
+  const status = closeType;
   try {
     const uid = req.uid!;
     
