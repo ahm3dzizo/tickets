@@ -454,13 +454,13 @@ export default function TicketDetail() {
                         </span>
                         <div className="flex-1 text-right">
                           <p className="text-xs">
-                            <span className="font-semibold text-foreground">{a.changedByName}</span>
+                            <span className="font-semibold text-foreground">{a.changedByName || a.changedBy}</span>
                             <span className="text-muted-foreground"> غيّر </span>
                             <span className="font-bold text-primary">{a.field}</span>
                           </p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">
-                            {a.oldValue && <span className="line-through text-red-400/70 me-2">{a.oldValue}</span>}
-                            <span className="text-emerald-400">{a.newValue}</span>
+                            {a.oldValue && <span className="line-through text-red-400/70 me-2">{a.oldValueText || a.oldValue}</span>}
+                            <span className="text-emerald-400">{a.detailsText || a.newValue}</span>
                           </p>
                         </div>
                         <div className="w-1.5 h-1.5 rounded-full bg-primary/40 mt-1.5 shrink-0" />
