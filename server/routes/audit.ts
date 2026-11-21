@@ -47,6 +47,7 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
       'إلغاء طلب الإغلاق بالنيابة مع إرسال تقرير جزئي',
       'تم إرسال تقرير أعمال المشرف الجزئي للعميل',
       'تم إرسال التقرير النهائي للعميل',
+      'تغيير حالة داخلي بدون تقرير للعميل',
     ]);
     const parse = (value: string | null): Record<string, any> => {
       try {const data = JSON.parse(value || ''); return data && typeof data === 'object' ? data : {};}
@@ -58,6 +59,9 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
       ...details.flatMap(d => d ? [
         d.supervisorUid, d.requesterUid, d.approverUid, d.senderUid,
         d.initiator, d.originalRequester, d.confirmedByUid, d.rejectedBy,
+        d.targetSupervisorUid,
+        ...Object.keys(d.supervisorStatuses || {}),
+        ...(Array.isArray(d.active) ? d.active : []),
         ...(Array.isArray(d.approvers) ? d.approvers : []),
         ...(Array.isArray(d.approvedBy) ? d.approvedBy : []),
       ] : []),
@@ -89,6 +93,19 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
           return `${by} أرسل تقرير أعماله الجزئي للعميل، دون أعمال المشرفين الآخرين.`;
         case 'تم إرسال التقرير النهائي للعميل':
           return `${by} أرسل تقرير الإغلاق النهائي للعميل بعد استكمال الأدوار.`;
+        case 'تغيير حالة داخلي بدون تقرير للعميل': {
+          const labels: Record<string, string> = {
+            closed: 'مغلق', completed: 'مكتمل', absent: 'عدم تواجد',
+            out_of_scope: 'سوء استخدام / خارج الاختصاص', contractor: 'مقاول',
+            note: 'ملاحظة', pending: 'معلق', in_progress: 'قيد التنفيذ',
+            open: 'مفتوح', waiting: 'بانتظار رد العميل',
+          };
+          const target = name(d.targetSupervisorUid);
+          const status = labels[String(d.requestedStatus || '')] || String(d.requestedStatus || 'غير محدد');
+          return d.targetSupervisorUid
+            ? `${by} غيّر الحالة الداخلية للمشرف ${target} إلى «${status}» دون إرسال تقرير للعميل.`
+            : `${by} غيّر الحالة الداخلية للتذكرة إلى «${status}» دون إرسال تقرير للعميل.`;
+        }
         default: return '';
       }
     };
