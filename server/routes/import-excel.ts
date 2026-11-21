@@ -935,14 +935,24 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
               await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${id} FOR UPDATE`;
             }
             const current = await tx.ticket.findMany({ where: { id: { in: batch } } });
-            const results: Array<{ id: string; oldStatus: string; newStatus: string }> = [];
+            const changed: Array<{ id: string; oldStatus: string; newStatus: string }> = [];
             for (const ticket of current) {
               // Keep special outcomes distinct while closing every supervisor role.
               const special = ['absent', 'out_of_scope'].includes(String(ticket.status).toLowerCase());
               const nextStatus = special ? ticket.status : 'closed';
               const history = closures(ticket.supervisorClosures);
               const completedUids = new Set(history.map(item => item.supervisorUid));
-              const newlyClosedUids = ticket.assignedSupervisorIds.filter(uid => !completedUids.has(uid));
+              const currentStatuses = ticket.supervisorStatuses &&
+                typeof ticket.supervisorStatuses === 'object' &&
+                !Array.isArray(ticket.supervisorStatuses)
+                  ? ticket.supervisorStatuses as Record<string, string>
+                  : {};
+              const allRoleUids = [...new Set([
+                ...ticket.assignedSupervisorIds,
+                ...history.map(item => item.supervisorUid),
+                ...Object.keys(currentStatuses),
+              ])];
+              const newlyClosedUids = allRoleUids.filter(uid => !completedUids.has(uid));
               const now = new Date();
               const reason = nextStatus === 'absent'
                 ? 'إغلاق تلقائي — عدم تواجد'
@@ -959,30 +969,30 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
                   items: [],
                 })),
               ];
-              const currentStatuses = ticket.supervisorStatuses &&
-                typeof ticket.supervisorStatuses === 'object' &&
-                !Array.isArray(ticket.supervisorStatuses)
-                  ? ticket.supervisorStatuses as Record<string, string>
-                  : {};
               const nextStatuses = {
                 ...currentStatuses,
-                ...Object.fromEntries(ticket.assignedSupervisorIds.map(uid => [uid, nextStatus])),
+                ...Object.fromEntries(allRoleUids.map(uid => [uid, nextStatus])),
               };
-              await tx.ticket.update({
-                where: { id: ticket.id },
-                data: {
-                  status: nextStatus,
-                  closedAt: ticket.closedAt || now,
-                  assignedSupervisorIds: [],
-                  supervisorClosures: nextHistory,
-                  supervisorStatuses: nextStatuses,
-                },
-              });
-              results.push({ id: ticket.id, oldStatus: ticket.status, newStatus: nextStatus });
+              const needsUpdate = ticket.status !== nextStatus || !ticket.closedAt ||
+                ticket.assignedSupervisorIds.length > 0 || newlyClosedUids.length > 0 ||
+                allRoleUids.some(uid => currentStatuses[uid] !== nextStatus);
+              if (needsUpdate) {
+                await tx.ticket.update({
+                  where: { id: ticket.id },
+                  data: {
+                    status: nextStatus,
+                    closedAt: ticket.closedAt || now,
+                    assignedSupervisorIds: [],
+                    supervisorClosures: nextHistory,
+                    supervisorStatuses: nextStatuses,
+                  },
+                });
+                changed.push({ id: ticket.id, oldStatus: ticket.status, newStatus: nextStatus });
+              }
             }
-            return results;
+            return { processed: current.length, changed };
           });
-          const auditData = changed.map(item => ({
+          const auditData = changed.changed.map(item => ({
             ticketId: item.id,
             field: item.oldStatus === item.newStatus
               ? "تأكيد إغلاق تلقائي — التذكرة غير موجودة في ملف الإكسيل"
@@ -992,7 +1002,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
             changedBy: "النظام (إغلاق تلقائي بسبب عدم وجود التذكرة في ملف الإكسيل المرفوع)",
           }));
           if (auditData.length > 0) await prisma.ticketAudit.createMany({ data: auditData });
-          closedMissingCount += changed.length;
+          closedMissingCount += changed.processed;
         }
       }
     }
