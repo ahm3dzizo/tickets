@@ -1049,6 +1049,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         unitId: true,
         clientId: true,
         assignedSupervisorIds: true,
+        supervisorClosures: true,
       },
     });
 
@@ -1068,7 +1069,7 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       res.status(409).json({error: 'استخدم مسار الإغلاق لتسجيل دور المشرف والتقرير', code: 'USE_CLOSURE_ENDPOINT'}); return;
     }
     if (data.status !== undefined && ['absent', 'out_of_scope'].includes(normalizeTicketStatus(data.status)) &&
-        (existingForValidation.assignedSupervisorIds.length > 1)) {
+        (existingForValidation.assignedSupervisorIds.length > 1 || closures(existingForValidation.supervisorClosures).length > 0)) {
       res.status(409).json({error: 'التذكرة مشتركة؛ حدّد نتيجة كل مشرف من قائمة الحالات أو استخدم مسار الإغلاق الجماعي', code: 'SHARED_TICKET_REQUIRES_ROLE_STATUS'}); return;
     }
     if (existingForValidation.assignedSupervisorIds.length > 1 && data.closedAt) {
@@ -1158,7 +1159,9 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
       maintenanceItems:      data.maintenanceItems     ?? undefined,
       closedAt:              data.closedAt !== undefined
         ? (data.closedAt ? new Date(data.closedAt) : null)
-        : ['absent', 'out_of_scope'].includes(normalizedStatus || '') ? new Date() : undefined,
+        : ['absent', 'out_of_scope'].includes(normalizedStatus || '') ? new Date()
+        : normalizedStatus !== undefined && !['closed', 'completed'].includes(normalizedStatus) ? null
+        : undefined,
       description:           data.description          ?? undefined,
       type:                  data.type                 ?? undefined,
       detectedTypes:         data.detectedTypes !== undefined ? uniqueStringList(data.detectedTypes) : undefined,
