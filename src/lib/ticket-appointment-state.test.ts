@@ -45,6 +45,16 @@ test('a shared ticket with any supervisor closure is not offered for a new appoi
   assert.equal(isActiveAppointmentTicketStatus({status:'in_progress',supervisorStatuses:{'sup-1':'closed'}}),false);
   assert.equal(isActiveAppointmentTicketStatus({status:'in_progress',supervisorClosures:[],supervisorStatuses:{'sup-1':'in_progress'}}),true);
 });
+test('Arabic and legacy supervisor outcomes are terminal for appointment selection', () => {
+  for (const status of ['سوء استخدام', 'عدم تواجد', 'خارج الاختصاص', 'out-of-scope']) {
+    assert.equal(isActiveAppointmentTicketStatus({
+      status: 'in_progress',
+      supervisorClosures: [],
+      supervisorStatuses: { supervisorA: status },
+    }), false, status);
+  }
+});
+
 test('nonterminal ticket states remain available for appointment workflows',()=>{
   for(const status of ['open','in_progress','in-progress','pending','waiting','contractor','note']) {
     assert.equal(isActiveAppointmentTicketStatus(status),true,status);
