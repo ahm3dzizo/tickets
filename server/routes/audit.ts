@@ -55,9 +55,11 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
       catch {return {};}
     };
     const details = audits.map(a => fields.has(a.field) ? parse(a.newValue) : null);
+    const oldDetails = audits.map(a => fields.has(a.field) ? parse(a.oldValue) : null);
+    const allDetails = [...details, ...oldDetails];
     const uids = [...new Set([
       ...audits.map(a => a.changedBy),
-      ...details.flatMap(d => d ? [
+      ...allDetails.flatMap(d => d ? [
         d.supervisorUid, d.requesterUid, d.approverUid, d.senderUid,
         d.initiator, d.originalRequester, d.confirmedByUid, d.rejectedBy,
         d.targetSupervisorUid,
@@ -122,8 +124,8 @@ router.get("/ticket/:id", requireAuth, async (req: AuthRequest, res) => {
       const detail = details[i];
       const old = detail && a.field === 'تغيير حالة داخلي بدون تقرير للعميل'
         ? statusLabels[String(detail.globalStatus || '')] || String(detail.globalStatus || 'غير محدد')
-        : detail && a.field === 'المشرف'
-          ? formatDetails(a.field, detail, name(a.changedBy))
+        : oldDetails[i] && a.field === 'المشرف'
+          ? formatDetails(a.field, oldDetails[i], name(a.changedBy))
           : undefined;
       return {
         ...a,
