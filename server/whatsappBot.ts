@@ -582,7 +582,7 @@ async function cmdSupervisorTickets(
     const tickets = await prisma.ticket.findMany({
       where: {
         assignedSupervisorIds: { has: user.uid },
-        status: { notIn: ['closed', 'out_of_scope'] },
+        status: { notIn: ['closed', 'completed', 'absent', 'out_of_scope'] },
         ...projectWhere(projectIds),
       },
       include: {
@@ -906,11 +906,11 @@ async function prepareCloseTicketsList(
   }
 
   const openTickets = tickets.filter(
-    t => t.status !== 'closed' && t.status !== 'out_of_scope'
+    t => !['closed', 'completed', 'absent', 'out_of_scope'].includes(t.status)
   );
 
   const alreadyClosed = tickets.filter(
-    t => t.status === 'closed' || t.status === 'out_of_scope'
+    t => ['closed', 'completed', 'absent', 'out_of_scope'].includes(t.status)
   );
 
   const notFound = ticketIds.filter(
