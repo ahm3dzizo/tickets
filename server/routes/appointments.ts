@@ -201,7 +201,7 @@ router.get("/upcoming", requireAuth, async (req: AuthRequest, res) => {
       const activeTickets = a.tickets.filter((ticket: any) => {
         const status = String(ticket.status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
         const roleStatuses = Object.values((ticket.supervisorStatuses || {}) as Record<string, unknown>)
-          .map(value => String(value || '').trim().toLowerCase());
+          .map(value => String(value || '').trim().toLowerCase().replace(/[\\s-]+/g, '_'));
         return !['closed', 'completed', 'absent', 'out_of_scope', 'misuse', 'عدم_تواجد', 'سوء_استخدام'].includes(status)
           && !(Array.isArray(ticket.supervisorClosures) && ticket.supervisorClosures.length > 0)
           && !roleStatuses.some(value => ['closed', 'completed', 'absent', 'out_of_scope', 'misuse'].includes(value));
