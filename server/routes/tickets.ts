@@ -1067,8 +1067,9 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
     if (data.status !== undefined && ['closed', 'completed'].includes(normalizeTicketStatus(data.status))) {
       res.status(409).json({error: 'استخدم مسار الإغلاق لتسجيل دور المشرف والتقرير', code: 'USE_CLOSURE_ENDPOINT'}); return;
     }
-    if (data.status !== undefined && ['absent', 'out_of_scope'].includes(normalizeTicketStatus(data.status))) {
-      res.status(409).json({error: 'استخدم مسار الإغلاق الخاص لتسجيل عدم التواجد أو سوء الاستخدام', code: 'USE_SPECIAL_CLOSE_ENDPOINT'}); return;
+    if (data.status !== undefined && ['absent', 'out_of_scope'].includes(normalizeTicketStatus(data.status)) &&
+        (existingForValidation.assignedSupervisorIds.length > 1)) {
+      res.status(409).json({error: 'التذكرة مشتركة؛ حدّد نتيجة كل مشرف من قائمة الحالات أو استخدم مسار الإغلاق الجماعي', code: 'SHARED_TICKET_REQUIRES_ROLE_STATUS'}); return;
     }
     if (existingForValidation.assignedSupervisorIds.length > 1 && data.closedAt) {
       res.status(409).json({error: 'SHARED_TICKET_REQUIRES_CLOSURE_ENDPOINT'}); return;
@@ -1155,7 +1156,9 @@ router.put("/:id", requireAuth, async (req: AuthRequest, res) => {
         : undefined,
       closureNotes:          data.closureNotes         ?? undefined,
       maintenanceItems:      data.maintenanceItems     ?? undefined,
-      closedAt:              data.closedAt !== undefined ? (data.closedAt ? new Date(data.closedAt) : null) : undefined,
+      closedAt:              data.closedAt !== undefined
+        ? (data.closedAt ? new Date(data.closedAt) : null)
+        : ['absent', 'out_of_scope'].includes(normalizedStatus || '') ? new Date() : undefined,
       description:           data.description          ?? undefined,
       type:                  data.type                 ?? undefined,
       detectedTypes:         data.detectedTypes !== undefined ? uniqueStringList(data.detectedTypes) : undefined,
