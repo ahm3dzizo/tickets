@@ -615,6 +615,10 @@ router.post("/:id/special-close", requireAuth, async (req: AuthRequest, res) => 
     if (!ticketInfo) {
       res.status(404).json({ error: "التذكرة غير موجودة" }); return;
     }
+    if (['closed', 'completed', 'absent', 'out_of_scope'].includes(ticketInfo.status)) {
+      res.status(409).json({ error: 'التذكرة مغلقة بالفعل ولا يمكن تغيير سبب إغلاقها', code: 'TICKET_ALREADY_TERMINAL' });
+      return;
+    }
 
     const actor = await prisma.user.findUnique({where: {uid}, include: {projects: {select: {id: true}}}});
     if (!actor || actor.disabled || (actor.role !== 'admin' && !actor.projects.some(p => p.id === ticketInfo.projectId)) || (actor.role === 'supervisor' && !ticketInfo.assignedSupervisorIds.includes(uid))) {res.status(403).json({error: 'Forbidden'}); return;}
