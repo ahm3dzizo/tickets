@@ -32,8 +32,34 @@ export function hasScheduledTicketBadge(ticket: {
  * when creating appointments or shown in the unit's active-ticket modal.
  * Keep contractor/note and other internal states visible.
  */
-export function isActiveAppointmentTicketStatus(status: string | null | undefined): boolean {
-  return !['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope'].includes(
-    String(status || '').trim().toLowerCase(),
-  );
+export type AppointmentTicketState = {
+  status?: string | null;
+  supervisorClosures?: unknown;
+  supervisorStatuses?: Record<string, unknown> | null;
+};
+
+/**
+ * A supervisor-level closure makes the ticket unavailable for new appointments,
+ * even while another supervisor's shared-ticket role remains active.
+ * Special outcomes (absence / misuse / out of scope) are terminal like closure,
+ * but remain distinct persisted statuses for reporting and audit.
+ */
+export function isActiveAppointmentTicketStatus(
+  value: string | null | undefined | AppointmentTicketState,
+): boolean {
+  if (value && typeof value === 'object') {
+    if (Array.isArray(value.supervisorClosures) && value.supervisorClosures.length > 0) return false;
+    const roleStatuses = Object.values(value.supervisorStatuses || {}).map(status =>
+      String(status || '').trim().toLowerCase(),
+    );
+    if (roleStatuses.some(status => ['closed', 'completed', 'absent', 'out_of_scope', 'out-of-scope', 'misuse'].includes(status))) return false;
+    value = value.status;
+  }
+
+  const status = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return ![
+    'closed', 'close', 'completed', 'complete', 'absent', 'absence',
+    'عدم_تواجد', 'عدم_التواجد', 'out_of_scope', 'misuse',
+    'سوء_استخدام', 'خارج_الاختصاص',
+  ].includes(status);
 }
