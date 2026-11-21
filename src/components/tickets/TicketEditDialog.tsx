@@ -270,7 +270,7 @@ export function TicketEditDialog({ open, onOpenChange, ticket, onSaved }: Ticket
       const supervisorsChanged = !sameStringSet(initialSupervisorIds, supervisorIds);
 
       const statusChanged = normalizeStatus(ticket.status) !== status;
-      const needsSupervisorTarget = statusChanged && isSharedTicket && !['closed', 'completed', 'absent', 'out_of_scope'].includes(status);
+      const needsSupervisorTarget = statusChanged && isSharedTicket && !['closed', 'completed'].includes(status);
 
       await ticketsApi.update(ticket.id, {
         ...(needsSupervisorTarget ? {} : {status}),
