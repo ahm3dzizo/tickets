@@ -381,8 +381,8 @@ function extractTicketProjectCode(raw: unknown): string | null {
     const persian = "۰۱۲۳۴۵۶۷۸۹";
     const index = arabic.indexOf(digit);
     return String(index >= 0 ? index : persian.indexOf(digit));
-  }).trim().replace(/^(?:villa|unit|الوحدة|فيلا)\\s*[-:/#]?\\s*/i, "");
-  const match = value.match(/^([A-Za-z][A-Za-z0-9]*)[-_/\\s]+(\\d+)$/i);
+  }).trim().replace(/^(?:villa|unit|الوحدة|فيلا)\s*[-:/#]?\s*/i, "");
+  const match = value.match(/^([A-Za-z][A-Za-z0-9]*)[-_/\s]+(\d+)$/i);
   return match ? match[1].toUpperCase() : null;
 }
 
@@ -666,10 +666,10 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     }
     if (projectCodeErrors.length) {
       res.write(JSON.stringify({
-        error: "تم إيقاف الاستيراد قبل إجراء أي تعديل بسبب عدم تطابق بادئات المشاريع:\\n" +
-          projectCodeErrors.slice(0, 20).join("\\n") +
-          (projectCodeErrors.length > 20 ? `\\n... وهناك ${projectCodeErrors.length - 20} أخطاء أخرى.` : "")
-      }) + "\\n");
+        error: "تم إيقاف الاستيراد قبل إجراء أي تعديل بسبب عدم تطابق بادئات المشاريع:\n" +
+          projectCodeErrors.slice(0, 20).join("\n") +
+          (projectCodeErrors.length > 20 ? `\n... وهناك ${projectCodeErrors.length - 20} أخطاء أخرى.` : "")
+      }) + "\n");
       return res.end();
     }
 
