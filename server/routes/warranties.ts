@@ -85,6 +85,10 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
 
   try {
     const role = await getRequesterRole(req.uid!);
+    if (role !== "admin" && role !== "engineer" && role !== "supervisor") {
+      res.status(403).json({ error: "غير مسموح إلا للمدير أو المهندس أو المشرف باستيراد الضمانات" });
+      return;
+    }
     const requestedProjectId = String(req.body.projectId || "").trim();
     const projects = await prisma.project.findMany({
       where: {
