@@ -60,9 +60,10 @@ function projectCodeFromUnit(raw: unknown): string | null {
   return match ? match[1].toUpperCase() : null;
 }
 
-function splitWorkbookByProject(file: File, projects: Project[]): Array<{ project: Project; file: File; rows: number }> {
+async function splitWorkbookByProject(file: File, projects: Project[]): Promise<Array<{ project: Project; file: File; rows: number }>> {
   if (!projects.length) throw new Error('لا توجد مشاريع متاحة لحسابك.');
-  const workbook = XLSX.read(file, { type: 'array', cellDates: true });
+  const buffer = new Uint8Array(await file.arrayBuffer());
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!firstSheet) throw new Error('ملف الإكسيل لا يحتوي على ورقة بيانات.');
   const rows = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, defval: '', raw: false });
@@ -173,7 +174,7 @@ export function UnifiedImportModal({
     };
     try {
       // Validate and split the entire workbook before sending any import request.
-      const batches = splitWorkbookByProject(file, projects);
+      const batches = await splitWorkbookByProject(file, projects);
       for (let index = 0; index < batches.length; index++) {
         const batch = batches[index];
         const result = await ticketsApi.importExcel(
