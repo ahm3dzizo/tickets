@@ -1,6 +1,7 @@
 import { Router } from "express";
 import prisma from "../db.js";
 import { AuthRequest, requireAuth, requireAdmin, getRequesterRole } from "../auth.js";
+import { addOneWarrantyYear, parseWarrantyDate } from "../services/warranty-import.js";
 
 const router = Router();
 
@@ -280,8 +281,8 @@ router.post("/:id/import-structure", requireAuth, async (req: AuthRequest, res) 
       blockNumber: String(row?.blockNumber ?? "").trim(),
       name: String(row?.name ?? "").trim(),
       phone: String(row?.phone ?? "").trim(),
-      handoverDate: String(row?.handoverDate ?? "").trim(),
-      warrantyExpiryDate: String(row?.warrantyExpiryDate ?? "").trim(),
+      handoverDate: row?.handoverDate ?? "",
+      warrantyExpiryDate: row?.warrantyExpiryDate ?? "",
     }));
     const errors: string[] = [];
     const seenUnits = new Set<string>();
@@ -289,6 +290,8 @@ router.post("/:id/import-structure", requireAuth, async (req: AuthRequest, res) 
       if (!row.unitNumber) errors.push(`الصف ${row.rowNumber}: رقم الوحدة مطلوب`);
       if (row.name && !row.phone) errors.push(`الصف ${row.rowNumber}: رقم الجوال مطلوب عند إدخال اسم العميل`);
       if (row.phone && !row.name) errors.push(`الصف ${row.rowNumber}: اسم العميل مطلوب عند إدخال رقم الجوال`);
+      if (row.handoverDate && !parseWarrantyDate(row.handoverDate)) errors.push(`الصف ${row.rowNumber}: تاريخ التسليم غير صالح`);
+      if (row.warrantyExpiryDate && !parseWarrantyDate(row.warrantyExpiryDate)) errors.push(`الصف ${row.rowNumber}: تاريخ انتهاء الضمان غير صالح`);
       if (row.unitNumber) {
         const key = row.unitNumber.toLocaleLowerCase();
         if (seenUnits.has(key)) errors.push(`الصف ${row.rowNumber}: رقم الوحدة مكرر داخل الملف (${row.unitNumber})`);
@@ -336,8 +339,10 @@ router.post("/:id/import-structure", requireAuth, async (req: AuthRequest, res) 
             where: { id: existingUnit.id },
             data: {
               ...(blockId ? { blockId } : {}),
-              ...(row.handoverDate ? { handoverDate: row.handoverDate } : {}),
-              ...(row.warrantyExpiryDate ? { warrantyExpiryDate: row.warrantyExpiryDate } : {}),
+              ...(row.handoverDate ? { handoverDate: parseWarrantyDate(row.handoverDate)! } : {}),
+              ...(row.warrantyExpiryDate
+                ? { warrantyExpiryDate: parseWarrantyDate(row.warrantyExpiryDate)! }
+                : row.handoverDate ? { warrantyExpiryDate: addOneWarrantyYear(parseWarrantyDate(row.handoverDate)!) } : {}),
             },
           });
         } else {
@@ -346,8 +351,10 @@ router.post("/:id/import-structure", requireAuth, async (req: AuthRequest, res) 
               projectId: project.id,
               unitNumber: row.unitNumber,
               ...(blockId ? { blockId } : {}),
-              ...(row.handoverDate ? { handoverDate: row.handoverDate } : {}),
-              ...(row.warrantyExpiryDate ? { warrantyExpiryDate: row.warrantyExpiryDate } : {}),
+              ...(row.handoverDate ? { handoverDate: parseWarrantyDate(row.handoverDate)! } : {}),
+              ...(row.warrantyExpiryDate
+                ? { warrantyExpiryDate: parseWarrantyDate(row.warrantyExpiryDate)! }
+                : row.handoverDate ? { warrantyExpiryDate: addOneWarrantyYear(parseWarrantyDate(row.handoverDate)!) } : {}),
             },
           });
           unitsCreated++;
