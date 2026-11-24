@@ -251,4 +251,134 @@ router.get("/unit-details/:id", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+
+/**
+ * Import project structure and optional owners in one atomic operation.
+ * A unit may have zero or one owner; a client may own multiple units.
+ */
+router.post("/:id/import-structure", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const role = await getRequesterRole(req.uid!);
+    const project = await prisma.project.findFirst({
+      where: { id: req.params.id, ...(role === "admin" ? {} : { users: { some: { uid: req.uid! } } }) },
+      select: { id: true },
+    });
+    if (!project) {
+      res.status(404).json({ error: "المشروع غير موجود أو غير مسموح لك باستيراد بياناته" });
+      return;
+    }
+
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length || rows.length > 10000) {
+      res.status(422).json({ error: "ملف الاستيراد فارغ أو يتجاوز الحد المسموح (10000 صف)" });
+      return;
+    }
+
+    const normalized = rows.map((row: any, index: number) => ({
+      rowNumber: index + 2,
+      unitNumber: String(row?.unitNumber ?? "").trim(),
+      blockNumber: String(row?.blockNumber ?? "").trim(),
+      name: String(row?.name ?? "").trim(),
+      phone: String(row?.phone ?? "").trim(),
+      handoverDate: String(row?.handoverDate ?? "").trim(),
+      warrantyExpiryDate: String(row?.warrantyExpiryDate ?? "").trim(),
+    }));
+    const errors: string[] = [];
+    const seenUnits = new Set<string>();
+    normalized.forEach(row => {
+      if (!row.unitNumber) errors.push(`الصف ${row.rowNumber}: رقم الوحدة مطلوب`);
+      if (row.name && !row.phone) errors.push(`الصف ${row.rowNumber}: رقم الجوال مطلوب عند إدخال اسم العميل`);
+      if (row.phone && !row.name) errors.push(`الصف ${row.rowNumber}: اسم العميل مطلوب عند إدخال رقم الجوال`);
+      if (row.unitNumber) {
+        const key = row.unitNumber.toLocaleLowerCase();
+        if (seenUnits.has(key)) errors.push(`الصف ${row.rowNumber}: رقم الوحدة مكرر داخل الملف (${row.unitNumber})`);
+        seenUnits.add(key);
+      }
+    });
+    if (errors.length) {
+      res.status(422).json({ error: "توجد أخطاء في الملف؛ لم يتم حفظ أي بيانات", errors: errors.slice(0, 200) });
+      return;
+    }
+
+    const result = await prisma.$transaction(async tx => {
+      let blocksCreated = 0, unitsCreated = 0, clientsLinked = 0;
+      const blockCache = new Map<string, string>();
+      for (const row of normalized) {
+        let blockId: string | null = null;
+        if (row.blockNumber) {
+          const blockKey = row.blockNumber.toLocaleLowerCase();
+          blockId = blockCache.get(blockKey) || null;
+          if (!blockId) {
+            const existingBlock = await tx.block.findUnique({
+              where: { projectId_blockNumber: { projectId: project.id, blockNumber: row.blockNumber } },
+              select: { id: true },
+            });
+            const block = existingBlock || await tx.block.create({
+              data: { projectId: project.id, blockNumber: row.blockNumber },
+              select: { id: true },
+            });
+            if (!existingBlock) blocksCreated++;
+            blockId = block.id;
+            blockCache.set(blockKey, blockId);
+          }
+        }
+
+        const existingUnit = await tx.unit.findUnique({
+          where: { projectId_unitNumber: { projectId: project.id, unitNumber: row.unitNumber } },
+          include: { clients: { select: { clientId: true } } },
+        });
+        let unit;
+        if (existingUnit) {
+          if (row.blockNumber && existingUnit.blockId && existingUnit.blockId !== blockId) {
+            throw new Error(`الوحدة ${row.unitNumber} مرتبطة ببلوك مختلف بالفعل`);
+          }
+          unit = await tx.unit.update({
+            where: { id: existingUnit.id },
+            data: {
+              ...(blockId ? { blockId } : {}),
+              ...(row.handoverDate ? { handoverDate: row.handoverDate } : {}),
+              ...(row.warrantyExpiryDate ? { warrantyExpiryDate: row.warrantyExpiryDate } : {}),
+            },
+          });
+        } else {
+          unit = await tx.unit.create({
+            data: {
+              projectId: project.id,
+              unitNumber: row.unitNumber,
+              ...(blockId ? { blockId } : {}),
+              ...(row.handoverDate ? { handoverDate: row.handoverDate } : {}),
+              ...(row.warrantyExpiryDate ? { warrantyExpiryDate: row.warrantyExpiryDate } : {}),
+            },
+          });
+          unitsCreated++;
+        }
+
+        if (row.phone && row.name) {
+          const client = await tx.client.upsert({
+            where: { phone: row.phone },
+            create: { name: row.name, phone: row.phone },
+            update: { name: row.name },
+          });
+          const owner = existingUnit?.clients[0];
+          if (owner && owner.clientId !== client.id) {
+            throw new Error(`الوحدة ${row.unitNumber} مرتبطة بعميل آخر بالفعل؛ لم يتم استيراد الملف`);
+          }
+          await tx.clientUnit.upsert({
+            where: { clientId_unitId: { clientId: client.id, unitId: unit.id } },
+            create: { clientId: client.id, unitId: unit.id, isPrimary: true },
+            update: {},
+          });
+          clientsLinked++;
+        }
+      }
+      return { blocksCreated, unitsCreated, clientsLinked, rows: normalized.length };
+    });
+
+    res.status(200).json({ success: true, ...result });
+  } catch (error: any) {
+    console.error("[Project Structure Import]", error);
+    res.status(422).json({ error: error?.message || "فشل استيراد بيانات المشروع؛ لم يتم حفظ أي بيانات" });
+  }
+});
+
 export default router;
