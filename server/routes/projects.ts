@@ -101,11 +101,12 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   }
 
   const data = req.body;
-  // Engineers may create projects, but can only assign themselves. Admins retain
-  // the existing ability to assign engineers and supervisors.
-  const combinedUserIds = role === "admin"
-    ? [...(data.engineerIds || []), ...(data.supervisorIds || [])]
-    : [req.uid!];
+  // Both admins and engineers may assign engineers and supervisors when creating
+  // a project. Editing existing projects remains admin-only below.
+  const combinedUserIds = [...new Set([
+    ...(Array.isArray(data.engineerIds) ? data.engineerIds : []),
+    ...(Array.isArray(data.supervisorIds) ? data.supervisorIds : []),
+  ])];
   
   let officeLat = data.officeLat !== undefined ? (data.officeLat ? parseFloat(data.officeLat) : null) : null;
   let officeLng = data.officeLng !== undefined ? (data.officeLng ? parseFloat(data.officeLng) : null) : null;
