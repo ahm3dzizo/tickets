@@ -156,7 +156,6 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
     }
     for (const [key, ids] of abbreviationOwners) if (ids.length > 1) duplicateAbbreviations.add(key);
 
-    const unitsByProject = new Map<string, { id: string; unitNumber: string }[]>();
     const errors: string[] = [];
     const updates = new Map<string, { unitId: string; projectId: string; projectName: string; unitNumber: string; handoverDate?: string; warrantyExpiryDate?: string }>();
     const seenKeys = new Set<string>();
@@ -188,10 +187,6 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
       }
 
       const project = matchingProjects[0];
-      if (!unitsByProject.has(project.id)) {
-        // Loaded lazily below after the project prefix has been validated.
-        unitsByProject.set(project.id, []);
-      }
       const key = project.id + ":" + normalizeWarrantyUnitReference(rawUnit, project.abbreviation);
       if (seenKeys.has(key)) {
         errors.push("الصف " + rowNumber + ": رقم الوحدة \"" + rawUnit + "\" مكرر داخل الملف");
@@ -234,7 +229,7 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
           if (!key) continue;
           unitByKey.set(key, [...(unitByKey.get(key) || []), unit]);
         }
-        for (const [updateKey, update] of updates) {
+        for (const update of updates.values()) {
           if (update.projectId !== projectId) continue;
           const normalized = normalizeWarrantyUnitReference(update.unitNumber, project.abbreviation)!;
           const matches = unitByKey.get(normalized) || [];
