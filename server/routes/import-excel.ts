@@ -664,6 +664,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       const ticketId = mapping.ticketId ? String(row[mapping.ticketId] ?? "").trim() : "";
       if (!ticketId) continue;
       const rawUnit = mapping.excelUnitReference ? row[mapping.excelUnitReference] : "";
+      const rawDate = mapping.createdAt ? row[mapping.createdAt] : "";
+      if (!String(rawUnit ?? "").trim() && !String(rawDate ?? "").trim()) continue;
       const rowCode = extractTicketProjectCode(rawUnit);
       if (!rowCode || rowCode !== projectCode) {
         projectCodeErrors.push(`صف البيانات ${index + 1}: رقم الفيلا "${String(rawUnit ?? "").trim() || "فارغ"}" لا يطابق بادئة المشروع ${projectCode || "(غير محددة)"}.`);
