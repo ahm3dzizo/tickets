@@ -6,6 +6,7 @@ import fs from "fs";
 import * as XLSX from "xlsx";
 import {
   addOneWarrantyYear,
+  extractWarrantyProjectAbbreviation,
   normalizeWarrantyColumn,
   normalizeWarrantyUnitReference,
   parseWarrantyDate,
@@ -167,12 +168,11 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
       const rawUnit = String(row[unitColumn] ?? "").trim();
       if (!rawUnit) { skippedBlankRows++; return; }
 
-      const prefixMatch = rawUnit.match(/^(?:villa|unit|الوحدة|فيلا)?\s*([A-Za-z][A-Za-z0-9]*)\s*[-_/\s]+\s*(?:\d+)$/i);
-      if (!prefixMatch) {
+      const prefix = extractWarrantyProjectAbbreviation(rawUnit);
+      if (!prefix) {
         errors.push("الصف " + rowNumber + ": رقم الوحدة \"" + rawUnit + "\" لا يحتوي على رمز مشروع واضح. الصيغة المطلوبة: رمز المشروع-رقم الوحدة (مثال: ES2-2627)");
         return;
       }
-      const prefix = prefixMatch[1].toLocaleUpperCase("en-US");
       const matchingProjects = usableProjects.filter(project =>
         project.abbreviation.trim().toLocaleUpperCase("en-US") === prefix
       );
