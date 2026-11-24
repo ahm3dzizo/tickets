@@ -779,6 +779,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     const errors: string[] = [];
     const seenInFile = new Set<string>(); // للكشف عن مكررات الملف نفسه
 
+    // تتبع التذاكر التي لا يوجد لها وحدة مطابقة في النظام، أو وحدة بدون عميل
+    // مرتبط بها — عشان نعرف سبب "التذاكر غير المربوطة" بعد الاستيراد بدل التخمين.
+    const unresolvedUnitRefs = new Map<string, number>();   // رقم الفيلا (بعد التطبيع) → عدد التذاكر
+    const unitsWithoutClient = new Map<string, number>();
+
     const KEYWORD_MIN_SCORE = 1; // score 1 matches old unified import
 
     for (let index = 0; index < rows.length; index++) {
@@ -847,6 +852,15 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const unit = excelUnitLookup.get(cleanUnitReference);
         const unitId = unit?.id || null;
         const clientId = unit?.clientId || null;
+
+        if (cleanUnitReference) {
+          if (!unit) {
+            const key = `${rawUnitReference} → ${cleanUnitReference}`;
+            unresolvedUnitRefs.set(key, (unresolvedUnitRefs.get(key) || 0) + 1);
+          } else if (!unit.clientId) {
+            unitsWithoutClient.set(cleanUnitReference, (unitsWithoutClient.get(cleanUnitReference) || 0) + 1);
+          }
+        }
 
         // ── Assign Supervisors based on Final Types ──────────────────────────
         const requiredSpecialties = [...new Set(finalTypes.map((t: string) => typeToSpecialty[t] || "general"))];
@@ -1063,6 +1077,18 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       `ملف: ${rows.length} صف | تجاوز لقدامتها: ${skippedByDateFilter} | جديد: ${added} (مصنف: ${classifiedCount}, غير مصنف: ${unclassifiedCount}) | ` +
       `تحديث: ${updated} | إغلاق مفقود: ${closedMissingCount} | مكرر في الملف: ${skippedInFile} | موجود بدون تغيير: ${skippedInDB} | فشل: ${failed}`
     );
+    if (unresolvedUnitRefs.size > 0) {
+      console.warn(
+        `[ImportExcel] ${project.name} | وحدات غير موجودة في النظام (${[...unresolvedUnitRefs.values()].reduce((a, b) => a + b, 0)} تذكرة):`,
+        [...unresolvedUnitRefs.entries()].map(([ref, count]) => `${ref} (×${count})`).join(", ")
+      );
+    }
+    if (unitsWithoutClient.size > 0) {
+      console.warn(
+        `[ImportExcel] ${project.name} | وحدات موجودة بدون عميل مرتبط (${[...unitsWithoutClient.values()].reduce((a, b) => a + b, 0)} تذكرة):`,
+        [...unitsWithoutClient.entries()].map(([ref, count]) => `${ref} (×${count})`).join(", ")
+      );
+    }
 
     // Save to import history
     try {
@@ -1098,6 +1124,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         classified: classifiedCount,
         unclassified: unclassifiedCount,
         errors: errors.slice(0, 10),
+        unresolvedUnits: [...unresolvedUnitRefs.entries()].slice(0, 20).map(([ref, count]) => ({ ref, count })),
+        unitsWithoutClient: [...unitsWithoutClient.entries()].slice(0, 20).map(([ref, count]) => ({ ref, count })),
       }
     }) + "\n");
     res.end();

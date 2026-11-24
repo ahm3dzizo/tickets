@@ -172,6 +172,8 @@ export function UnifiedImportModal({
       skippedByDateFilter: 0, skippedInFile: 0, skippedInDB: 0,
       failed: 0, classified: 0, unclassified: 0,
     };
+    const unresolvedUnits: { project: string; ref: string; count: number }[] = [];
+    const unitsWithoutClient: { project: string; ref: string; count: number }[] = [];
     try {
       // Validate and split the entire workbook before sending any import request.
       const batches = await splitWorkbookByProject(file, projects);
@@ -187,7 +189,19 @@ export function UnifiedImportModal({
         for (const key of Object.keys(totals) as (keyof typeof totals)[]) {
           totals[key] += Number(result[key] ?? 0);
         }
+        for (const item of result.unresolvedUnits ?? []) {
+          unresolvedUnits.push({ project: batch.project.abbreviation, ...item });
+        }
+        for (const item of result.unitsWithoutClient ?? []) {
+          unitsWithoutClient.push({ project: batch.project.abbreviation, ...item });
+        }
         completedProjects++;
+      }
+      if (unresolvedUnits.length > 0) {
+        console.warn('[Import] وحدات غير موجودة في النظام:', unresolvedUnits);
+      }
+      if (unitsWithoutClient.length > 0) {
+        console.warn('[Import] وحدات موجودة بدون عميل مرتبط:', unitsWithoutClient);
       }
 
       const parts = [`تم استيراد ${batches.reduce((sum, item) => sum + item.rows, 0)} صف عبر ${completedProjects} مشروع.`];
@@ -199,6 +213,10 @@ export function UnifiedImportModal({
       if (totals.skippedInDB > 0) parts.push(`⏭ موجود بدون تغيير: ${totals.skippedInDB}`);
       if (totals.skippedInFile > 0) parts.push(`🔁 مكرر في الملف: ${totals.skippedInFile}`);
       if (totals.failed > 0) parts.push(`❌ فشل: ${totals.failed}`);
+      if (unresolvedUnits.length > 0 || unitsWithoutClient.length > 0) {
+        const examples = [...unresolvedUnits, ...unitsWithoutClient].slice(0, 5).map(u => `${u.ref} (${u.project})`).join('، ');
+        parts.push(`🔗 غير مربوطة بعميل: ${unresolvedUnits.reduce((s, u) => s + u.count, 0) + unitsWithoutClient.reduce((s, u) => s + u.count, 0)} — مثال: ${examples} (التفاصيل في الكونسول)`);
+      }
       toast.success(parts.join('\n'));
       setOpen(false);
       onImportSuccess?.();
