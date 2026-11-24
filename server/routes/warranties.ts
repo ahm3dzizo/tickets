@@ -83,26 +83,21 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
   }
 
   try {
-    const projectId = String(req.body.projectId || "").trim();
-    if (!projectId) {
-      res.status(400).json({ error: "يجب اختيار المشروع قبل استيراد الضمانات" });
-      return;
-    }
-
     const role = await getRequesterRole(req.uid!);
-    const project = await prisma.project.findFirst({
+    const requestedProjectId = String(req.body.projectId || "").trim();
+    const projects = await prisma.project.findMany({
       where: {
-        id: projectId,
+        ...(requestedProjectId ? { id: requestedProjectId } : {}),
         ...(role === "admin" ? {} : { users: { some: { uid: req.uid! } } }),
       },
       select: { id: true, name: true, abbreviation: true },
     });
-    if (!project) {
-      res.status(403).json({ error: "المشروع غير موجود أو غير مسموح لك باستيراد ضماناته" });
+    if (requestedProjectId && projects.length === 0) {
+      res.status(403).json({ error: "المشروع المحدد غير موجود أو غير مسموح لك باستيراد ضماناته" });
       return;
     }
-    if (!project.abbreviation?.trim()) {
-      res.status(422).json({ error: "اختصار المشروع غير مضبوط؛ لا يمكن مطابقة أرقام الوحدات بأمان" });
+    if (projects.length === 0) {
+      res.status(403).json({ error: "لا توجد مشاريع متاحة لحسابك لاستيراد الضمانات" });
       return;
     }
 
@@ -134,9 +129,7 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
     }
 
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      range: headerRowIndex,
-      defval: "",
-      raw: true,
+      range: headerRowIndex, defval: "", raw: true,
     });
     if (!rows.length) {
       res.status(400).json({ error: "الملف لا يحتوي على صفوف بيانات" });
@@ -152,143 +145,148 @@ router.post("/import", requireAuth, upload.single("file"), async (req: AuthReque
       return;
     }
 
-    const units = await prisma.unit.findMany({
-      where: { projectId: project.id },
-      select: { id: true, unitNumber: true },
-    });
-
-    const unitByKey = new Map<string, typeof units>();
-    for (const unit of units) {
-      const key = normalizeWarrantyUnitReference(unit.unitNumber, project.abbreviation);
-      if (!key) continue;
-      const matches = unitByKey.get(key) || [];
-      matches.push(unit);
-      unitByKey.set(key, matches);
+    const usableProjects = projects
+      .filter(project => Boolean(project.abbreviation?.trim()))
+      .sort((a, b) => b.abbreviation.trim().length - a.abbreviation.trim().length);
+    const duplicateAbbreviations = new Set<string>();
+    const abbreviationOwners = new Map<string, string[]>();
+    for (const project of usableProjects) {
+      const key = project.abbreviation.trim().toLocaleUpperCase("en-US");
+      abbreviationOwners.set(key, [...(abbreviationOwners.get(key) || []), project.id]);
     }
+    for (const [key, ids] of abbreviationOwners) if (ids.length > 1) duplicateAbbreviations.add(key);
 
-    const updates = new Map<string, { unitId: string; unitNumber: string; handoverDate?: string; warrantyExpiryDate?: string }>();
+    const unitsByProject = new Map<string, { id: string; unitNumber: string }[]>();
     const errors: string[] = [];
+    const updates = new Map<string, { unitId: string; projectId: string; projectName: string; unitNumber: string; handoverDate?: string; warrantyExpiryDate?: string }>();
     const seenKeys = new Set<string>();
+    const importedProjectIds = new Set<string>();
     let skippedBlankRows = 0;
 
     rows.forEach((row, index) => {
       const rowNumber = headerRowIndex + index + 2;
       const rawUnit = String(row[unitColumn] ?? "").trim();
-      if (!rawUnit) {
-        skippedBlankRows++;
+      if (!rawUnit) { skippedBlankRows++; return; }
+
+      const prefixMatch = rawUnit.match(/^(?:villa|unit|الوحدة|فيلا)?\s*([A-Za-z][A-Za-z0-9]*)\s*[-_/\s]+\s*(?:\d+)$/i);
+      if (!prefixMatch) {
+        errors.push("الصف " + rowNumber + ": رقم الوحدة \"" + rawUnit + "\" لا يحتوي على رمز مشروع واضح. الصيغة المطلوبة: رمز المشروع-رقم الوحدة (مثال: ES2-2627)");
+        return;
+      }
+      const prefix = prefixMatch[1].toLocaleUpperCase("en-US");
+      const matchingProjects = usableProjects.filter(project =>
+        project.abbreviation.trim().toLocaleUpperCase("en-US") === prefix
+      );
+      if (matchingProjects.length === 0) {
+        const configured = usableProjects.map(project => project.abbreviation).join("، ") || "لا توجد اختصارات مضبوطة";
+        errors.push("الصف " + rowNumber + ": رمز المشروع \"" + prefix + "\" في الوحدة \"" + rawUnit + "\" غير مطابق لأي اختصار مشروع متاح. الاختصارات المتاحة: " + configured);
+        return;
+      }
+      if (matchingProjects.length > 1 || duplicateAbbreviations.has(prefix)) {
+        errors.push("الصف " + rowNumber + ": رمز المشروع \"" + prefix + "\" مستخدم في أكثر من مشروع؛ يجب تصحيح اختصارات المشاريع قبل الاستيراد");
         return;
       }
 
-      const key = normalizeWarrantyUnitReference(rawUnit, project.abbreviation);
-      if (!key) {
-        errors.push("الصف " + rowNumber + ": رقم الوحدة \"" + rawUnit + "\" يحمل بادئة مختلفة أو تنسيقًا غير معروف");
-        return;
+      const project = matchingProjects[0];
+      if (!unitsByProject.has(project.id)) {
+        // Loaded lazily below after the project prefix has been validated.
+        unitsByProject.set(project.id, []);
       }
+      const key = project.id + ":" + normalizeWarrantyUnitReference(rawUnit, project.abbreviation);
       if (seenKeys.has(key)) {
         errors.push("الصف " + rowNumber + ": رقم الوحدة \"" + rawUnit + "\" مكرر داخل الملف");
         return;
       }
       seenKeys.add(key);
-
-      const matches = unitByKey.get(key) || [];
-      if (matches.length === 0) {
-        errors.push("الصف " + rowNumber + ": الوحدة \"" + rawUnit + "\" غير موجودة في مشروع " + project.name);
-        return;
-      }
-      if (matches.length > 1) {
-        errors.push("الصف " + rowNumber + ": رقم الوحدة \"" + rawUnit + "\" يطابق أكثر من وحدة بعد توحيد الرقم");
-        return;
-      }
+      importedProjectIds.add(project.id);
 
       const handoverDate = handoverColumn ? parseWarrantyDate(row[handoverColumn]) : null;
       const explicitExpiryDate = expiryColumn ? parseWarrantyDate(row[expiryColumn]) : null;
       if (handoverColumn && row[handoverColumn] !== "" && !handoverDate) {
-        errors.push("الصف " + rowNumber + ": تاريخ التسليم غير صالح");
-        return;
+        errors.push("الصف " + rowNumber + ": تاريخ التسليم غير صالح"); return;
       }
       if (expiryColumn && row[expiryColumn] !== "" && !explicitExpiryDate) {
-        errors.push("الصف " + rowNumber + ": تاريخ انتهاء الضمان غير صالح");
-        return;
+        errors.push("الصف " + rowNumber + ": تاريخ انتهاء الضمان غير صالح"); return;
       }
       if (!handoverDate && !explicitExpiryDate) {
-        errors.push("الصف " + rowNumber + ": لا يوجد تاريخ صالح للتحديث");
-        return;
+        errors.push("الصف " + rowNumber + ": لا يوجد تاريخ صالح للتحديث"); return;
       }
-
-      const unit = matches[0];
-      updates.set(unit.id, {
-        unitId: unit.id,
-        unitNumber: unit.unitNumber,
-        ...(handoverDate ? { handoverDate: handoverDate } : {}),
-        ...(explicitExpiryDate
-          ? { warrantyExpiryDate: explicitExpiryDate }
-          : handoverDate
-            ? { warrantyExpiryDate: addOneWarrantyYear(handoverDate) }
-            : {}),
+      const normalized = normalizeWarrantyUnitReference(rawUnit, project.abbreviation);
+      if (!normalized) {
+        errors.push("الصف " + rowNumber + ": تعذر قراءة رقم الوحدة \"" + rawUnit + "\" بعد مطابقة رمز المشروع"); return;
+      }
+      updates.set(key, {
+        unitId: "", projectId: project.id, projectName: project.name, unitNumber: rawUnit,
+        ...(handoverDate ? { handoverDate } : {}),
+        ...(explicitExpiryDate ? { warrantyExpiryDate: explicitExpiryDate } :
+          handoverDate ? { warrantyExpiryDate: addOneWarrantyYear(handoverDate) } : {}),
       });
     });
 
-    // Fail closed: never apply a partial workbook when any row is ambiguous or invalid.
+    // Resolve all unit references only after every row's project code has been classified.
+    if (errors.length === 0) {
+      for (const projectId of importedProjectIds) {
+        const project = projects.find(item => item.id === projectId)!;
+        const units = await prisma.unit.findMany({ where: { projectId }, select: { id: true, unitNumber: true } });
+        const unitByKey = new Map<string, { id: string; unitNumber: string }[]>();
+        for (const unit of units) {
+          const key = normalizeWarrantyUnitReference(unit.unitNumber, project.abbreviation);
+          if (!key) continue;
+          unitByKey.set(key, [...(unitByKey.get(key) || []), unit]);
+        }
+        for (const [updateKey, update] of updates) {
+          if (update.projectId !== projectId) continue;
+          const normalized = normalizeWarrantyUnitReference(update.unitNumber, project.abbreviation)!;
+          const matches = unitByKey.get(normalized) || [];
+          if (matches.length === 0) errors.push("الوحدة \"" + update.unitNumber + "\" غير موجودة في مشروع " + project.name);
+          else if (matches.length > 1) errors.push("رقم الوحدة \"" + update.unitNumber + "\" يطابق أكثر من وحدة في مشروع " + project.name);
+          else update.unitId = matches[0].id;
+        }
+      }
+    }
+
+    // Fail closed: no partial workbook writes if any row has an invalid or unknown project code.
     if (errors.length > 0) {
       res.status(422).json({
-        success: false,
-        updated: 0,
-        totalRows: rows.length,
-        skippedBlankRows,
-        errors: errors.slice(0, 200),
-        errorCount: errors.length,
-        message: "لم يتم تحديث أي وحدة؛ صحح الأخطاء ثم أعد الاستيراد",
+        success: false, updated: 0, totalRows: rows.length, skippedBlankRows,
+        errors: errors.slice(0, 200), errorCount: errors.length,
+        message: "تم إلغاء الاستيراد بالكامل؛ لم يتم تحديث أي وحدة. راجع رموز المشاريع وأرقام الوحدات والأخطاء الموضحة ثم أعد المحاولة",
       });
       return;
     }
-
     if (updates.size === 0) {
       res.status(422).json({
-        success: false,
-        updated: 0,
-        totalRows: rows.length,
-        skippedBlankRows,
-        errors: ["لم يتم العثور على أي وحدة صالحة للتحديث في الملف"],
-        errorCount: 1,
+        success: false, updated: 0, totalRows: rows.length, skippedBlankRows,
+        errors: ["لم يتم العثور على أي وحدة صالحة للتحديث في الملف"], errorCount: 1,
+        message: "لم يتم استيراد أي بيانات",
       });
       return;
     }
 
-    const operations = [...updates.values()].map(update => prisma.unit.update({
+    await prisma.$transaction([...updates.values()].map(update => prisma.unit.update({
       where: { id: update.unitId },
       data: {
         ...(update.handoverDate ? { handoverDate: update.handoverDate } : {}),
         ...(update.warrantyExpiryDate ? { warrantyExpiryDate: update.warrantyExpiryDate } : {}),
       },
-    }));
-    await prisma.$transaction(operations);
+    })));
+    const importedProjects = projects.filter(project => importedProjectIds.has(project.id));
     console.info("[Warranties Import] completed", {
-      uid: req.uid,
-      projectId: project.id,
-      projectName: project.name,
-      updated: operations.length,
-      totalRows: rows.length,
-      skippedBlankRows,
+      uid: req.uid, projectIds: [...importedProjectIds],
+      projectNames: importedProjects.map(project => project.name),
+      updated: updates.size, totalRows: rows.length, skippedBlankRows,
     });
-
     res.json({
-      success: true,
-      projectId: project.id,
-      projectName: project.name,
-      updated: operations.length,
-      totalRows: rows.length,
-      skippedBlankRows,
-      errors: [],
+      success: true, updated: updates.size, totalRows: rows.length, skippedBlankRows,
+      projectNames: importedProjects.map(project => project.name), errors: [],
+      message: "تم استيراد الضمانات بنجاح",
     });
   } catch (err: any) {
     console.error("[Warranties Import]", err);
     res.status(500).json({ error: "حدث خطأ أثناء استيراد الضمانات؛ لم يتم تأكيد اكتمال العملية" });
   } finally {
-    try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch (cleanupError) {
-      console.error("[Warranties Import] Failed to remove temporary file", cleanupError);
-    }
+    try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); }
+    catch (cleanupError) { console.error("[Warranties Import] Failed to remove temporary file", cleanupError); }
   }
 });
 
