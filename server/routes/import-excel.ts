@@ -631,7 +631,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     const fieldAliases: Record<string, string[]> = {
       ticketId:    ["رقم التذكرة", "ID", "id", "الرقم", "#", "رقم الطلب", "Case Number"],
-      excelUnitReference: ["رقم الفيلا", "فيلا", "villa", "رقم الوحدة", "الوحدة", "Unit"],
+      excelUnitReference: ["رقم الفيلا", "فيلا", "villa", "رقم الوحدة", "الوحدة", "Unit", "Unit: Unit Name", "Unit Name"],
       createdAt:   [
         "التاريخ",
         "date",

@@ -19,7 +19,7 @@ interface UnifiedImportModalProps {
 }
 
 const TICKET_ID_ALIASES = ['رقم التذكرة', 'ID', 'id', 'الرقم', '#', 'رقم الطلب', 'Case Number'];
-const UNIT_ALIASES = ['رقم الفيلا', 'فيلا', 'villa', 'رقم الوحدة', 'الوحدة', 'Unit'];
+const UNIT_ALIASES = ['رقم الفيلا', 'فيلا', 'villa', 'رقم الوحدة', 'الوحدة', 'Unit', 'Unit: Unit Name', 'Unit Name'];
 const DATE_ALIASES = ['التاريخ', 'date', 'تاريخ الإنشاء', 'issuedAt', 'Opened Date', 'Date/Time Opened', 'Date / Time Opened', 'Date Time Opened'];
 
 function cleanHeader(value: unknown): string {
