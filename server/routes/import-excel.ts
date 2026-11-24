@@ -583,6 +583,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
   try {
     // ── 1. Load project info ─────────────────────────────────────────────────
     const role = await getRequesterRole(req.uid!);
+    if (role !== "admin" && role !== "engineer" && role !== "supervisor") {
+      fs.unlinkSync(filePath);
+      res.write(JSON.stringify({ error: "غير مسموح إلا للمدير أو المهندس أو المشرف باستيراد التذاكر" }) + "\n");
+      return res.end();
+    }
     const projectWhere: any = { id: projectId };
     if (role !== "admin") {
       projectWhere.users = { some: { uid: req.uid! } };
