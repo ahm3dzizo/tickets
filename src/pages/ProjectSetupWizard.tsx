@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as XLSX from "xlsx";
-import { ArrowLeft, ArrowRight, CheckCircle2, FileSpreadsheet, Loader2, Upload } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { projectsApi, warrantiesApi } from "@/lib/api";
@@ -17,6 +17,13 @@ const FIELDS: { key: FieldKey; label: string; aliases: string[]; required?: bool
   { key: "warrantyExpiryDate", label: "تاريخ انتهاء الضمان", aliases: ["تاريخ انتهاء الضمان", "انتهاء الضمان", "تاريخ الانتهاء", "warranty expiry", "warranty end"] },
 ];
 const normalize = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase().replace(/[\\s_ـ-]+/g, "");
+const dateValue = (value: unknown): string => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  if (typeof value === "number" && Number.isFinite(value) && value > 0 && value < 100000) {
+    return new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 86400000).toISOString().slice(0, 10);
+  }
+  return String(value ?? "").trim();
+};
 
 export default function ProjectSetupWizard() {
   const { id = "" } = useParams();
@@ -78,8 +85,8 @@ export default function ProjectSetupWizard() {
     unitNumber: mapping.unitNumber ? String(row[mapping.unitNumber] ?? "").trim() : "",
     name: mapping.name ? String(row[mapping.name] ?? "").trim() : "",
     phone: mapping.phone ? String(row[mapping.phone] ?? "").trim() : "",
-    handoverDate: mapping.handoverDate ? String(row[mapping.handoverDate] ?? "").trim() : "",
-    warrantyExpiryDate: mapping.warrantyExpiryDate ? String(row[mapping.warrantyExpiryDate] ?? "").trim() : "",
+    handoverDate: mapping.handoverDate ? dateValue(row[mapping.handoverDate]) : "",
+    warrantyExpiryDate: mapping.warrantyExpiryDate ? dateValue(row[mapping.warrantyExpiryDate]) : "",
   })).filter(row => row.unitNumber);
 
   const importStructure = async () => {
