@@ -33,11 +33,14 @@ function normalizeArabicHeader(value: string): string {
 function findColumn(columns: unknown[], aliases: string[]): number {
   const normalized = columns.map(cleanHeader);
   for (const alias of aliases) {
-    const target = cleanHeader(alias);\n    if (!target) continue;\n    const index = normalized.findIndex(value => value === target);
+    const target = cleanHeader(alias);
+    if (!target) continue;
+    const index = normalized.findIndex(value => value === target);
     if (index >= 0) return index;
   }
   for (const alias of aliases) {
     const target = normalizeArabicHeader(cleanHeader(alias));
+    if (!target) continue;
     const matches = normalized
       .map((value, index) => ({ value: normalizeArabicHeader(value), index }))
       .filter(item => item.value === target);
