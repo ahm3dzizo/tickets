@@ -787,11 +787,10 @@ export const techApi = {
 // ── Warranties ────────────────────────────────────────────────────────────────
 export const warrantiesApi = {
   getAll: () => get<any[]>('/warranties'),
-  import: async (file: File, projectId: string) => {
-    if (!projectId) throw new Error('يجب اختيار المشروع قبل الاستيراد');
+  import: async (file: File, projectId?: string) => {
     const form = new FormData();
     form.append('file', file);
-    form.append('projectId', projectId);
+    if (projectId) form.append('projectId', projectId);
 
     const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
     const res = await fetch('/api/warranties/import', {
@@ -802,18 +801,13 @@ export const warrantiesApi = {
     const payload = await res.json().catch(() => ({ error: res.statusText }));
     if (!res.ok) {
       const details = Array.isArray(payload.errors) && payload.errors.length
-        ? `\n${payload.errors.slice(0, 8).join('\n')}`
+        ? `\n${payload.errors.slice(0, 20).join('\n')}${payload.errorCount > 20 ? `\n... وهناك ${payload.errorCount - 20} خطأ آخر` : ''}`
         : '';
       throw new Error((payload.message || payload.error || `HTTP ${res.status}`) + details);
     }
     return payload as {
-      success: boolean;
-      updated: number;
-      totalRows: number;
-      skippedBlankRows: number;
-      projectId: string;
-      projectName: string;
-      errors: string[];
+      success: boolean; updated: number; totalRows: number; skippedBlankRows: number;
+      projectNames?: string[]; errors: string[];
     };
   },
 };
