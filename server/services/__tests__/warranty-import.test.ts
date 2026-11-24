@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   addOneWarrantyYear,
+  extractWarrantyProjectAbbreviation,
   normalizeWarrantyColumn,
   normalizeWarrantyUnitReference,
   parseWarrantyDate,
@@ -72,4 +73,14 @@ test("export status is derived from expiry date, including the upcoming window",
   assert.equal(getWarrantyStatus("2026-11-01", now), "منتهي");
   assert.equal(getWarrantyStatus("2026-11-20", now), "ينتهي قريباً");
   assert.equal(getWarrantyStatus("2027-01-01", now), "ساري");
+});
+
+test("extracts explicit project codes from unit references", () => {
+  assert.equal(extractWarrantyProjectAbbreviation("ES-465"), "ES");
+  assert.equal(extractWarrantyProjectAbbreviation("ES2-2627"), "ES2");
+  assert.equal(extractWarrantyProjectAbbreviation("ES3-844"), "ES3");
+  assert.equal(extractWarrantyProjectAbbreviation("Unit ES2-2627"), "ES2");
+  assert.equal(extractWarrantyProjectAbbreviation("فيلا ES3-٨٤٤"), "ES3");
+  assert.equal(extractWarrantyProjectAbbreviation("2627"), null);
+  assert.equal(extractWarrantyProjectAbbreviation("UNKNOWN"), null);
 });

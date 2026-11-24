@@ -200,7 +200,7 @@ function parseExcelAndDetectHeaders(
   buffer: Buffer,
   fieldAliases: Record<string, string[]>,
   skipDateFilter: boolean = false
-): { allData: any[], allTicketIds: string[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: ImportDateFormat } {
+): { allData: any[], allRows: any[], allTicketIds: string[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: ImportDateFormat } {
   const wb = readWorkbookForImport(buffer);
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
@@ -294,7 +294,7 @@ function parseExcelAndDetectHeaders(
     rows.push(r);
   }
 
-  return { allData: rows, allTicketIds, mapping, skippedByDateFilter, detectedFormat };
+  return { allData: rows, allRows: allData, allTicketIds, mapping, skippedByDateFilter, detectedFormat };
 }
 
 const router = Router();
@@ -375,10 +375,26 @@ function autoMatch(columns: string[], aliases: string[]): string {
   return "";
 }
 
+function extractTicketProjectCode(raw: unknown): string | null {
+  const value = String(raw ?? "").replace(/[٠-٩۰-۹]/g, digit => {
+    const arabic = "٠١٢٣٤٥٦٧٨٩";
+    const persian = "۰۱۲۳۴۵۶۷۸۹";
+    const index = arabic.indexOf(digit);
+    return String(index >= 0 ? index : persian.indexOf(digit));
+  }).trim().replace(/^(?:villa|unit|الوحدة|فيلا)\s*[-:/#]?\s*/i, "");
+  const match = value.match(/^([A-Za-z][A-Za-z0-9]*)[-_/\s]+(\d+)$/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
 function normalizeUnitNumber(raw: string): string {
   if (!raw) return "";
 
-  const value = String(raw).trim();
+  const value = String(raw).replace(/[٠-٩۰-۹]/g, digit => {
+    const arabic = "٠١٢٣٤٥٦٧٨٩";
+    const persian = "۰۱۲۳۴۵۶۷۸۹";
+    const index = arabic.indexOf(digit);
+    return String(index >= 0 ? index : persian.indexOf(digit));
+  }).trim();
   if (!value) return "";
 
   // IMPORTANT:
@@ -583,6 +599,11 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
   try {
     // ── 1. Load project info ─────────────────────────────────────────────────
     const role = await getRequesterRole(req.uid!);
+    if (role !== "admin" && role !== "engineer" && role !== "supervisor") {
+      fs.unlinkSync(filePath);
+      res.write(JSON.stringify({ error: "غير مسموح إلا للمدير أو المهندس أو المشرف باستيراد التذاكر" }) + "\n");
+      return res.end();
+    }
     const projectWhere: any = { id: projectId };
     if (role !== "admin") {
       projectWhere.users = { some: { uid: req.uid! } };
@@ -627,10 +648,35 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       excelType:   ["تصنيف التذاكر", "التصنيف", "نوع التذاكر", "نوع المشكلة"],
     };
 
-    const { allData, allTicketIds, mapping, skippedByDateFilter, detectedFormat } = parseExcelAndDetectHeaders(buffer, fieldAliases, shouldSkipDateFilter);
+    const { allData, allRows, allTicketIds, mapping, skippedByDateFilter, detectedFormat } = parseExcelAndDetectHeaders(buffer, fieldAliases, shouldSkipDateFilter);
 
     if (allData.length === 0 && allTicketIds.length === 0) {
       res.write(JSON.stringify({ error: "الملف فارغ أو لا يحتوي على بيانات" }) + "\n");
+      return res.end();
+    }
+
+    // Validate every ticket row before any writes. Each split import must
+    // contain only rows whose explicit unit prefix belongs to this project.
+    const projectCode = String(project.abbreviation || "").trim().toUpperCase();
+    const projectCodeErrors: string[] = [];
+    for (let index = 0; index < allRows.length; index++) {
+      const row = allRows[index];
+      const ticketId = mapping.ticketId ? String(row[mapping.ticketId] ?? "").trim() : "";
+      if (!ticketId) continue;
+      const rawUnit = mapping.excelUnitReference ? row[mapping.excelUnitReference] : "";
+      const rawDate = mapping.createdAt ? row[mapping.createdAt] : "";
+      if (!String(rawUnit ?? "").trim() && !String(rawDate ?? "").trim()) continue;
+      const rowCode = extractTicketProjectCode(rawUnit);
+      if (!rowCode || rowCode !== projectCode) {
+        projectCodeErrors.push(`صف البيانات ${index + 1}: رقم الفيلا "${String(rawUnit ?? "").trim() || "فارغ"}" لا يطابق بادئة المشروع ${projectCode || "(غير محددة)"}.`);
+      }
+    }
+    if (projectCodeErrors.length) {
+      res.write(JSON.stringify({
+        error: "تم إيقاف الاستيراد قبل إجراء أي تعديل بسبب عدم تطابق بادئات المشاريع:\n" +
+          projectCodeErrors.slice(0, 20).join("\n") +
+          (projectCodeErrors.length > 20 ? `\n... وهناك ${projectCodeErrors.length - 20} أخطاء أخرى.` : "")
+      }) + "\n");
       return res.end();
     }
 
