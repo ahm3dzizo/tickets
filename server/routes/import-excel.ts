@@ -389,7 +389,12 @@ function extractTicketProjectCode(raw: unknown): string | null {
 function normalizeUnitNumber(raw: string): string {
   if (!raw) return "";
 
-  const value = String(raw).replace(/[٠-٩۰-۹]/g, digit => {\n    const arabic = "٠١٢٣٤٥٦٧٨٩";\n    const persian = "۰۱۲۳۴۵۶۷۸۹";\n    const index = arabic.indexOf(digit);\n    return String(index >= 0 ? index : persian.indexOf(digit));\n  }).trim();
+  const value = String(raw).replace(/[٠-٩۰-۹]/g, digit => {
+    const arabic = "٠١٢٣٤٥٦٧٨٩";
+    const persian = "۰۱۲۳۴۵۶۷۸۹";
+    const index = arabic.indexOf(digit);
+    return String(index >= 0 ? index : persian.indexOf(digit));
+  }).trim();
   if (!value) return "";
 
   // IMPORTANT:
