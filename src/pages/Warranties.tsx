@@ -15,11 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 
 export default function Warranties() {
@@ -32,8 +27,6 @@ export default function Warranties() {
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expiring' | 'expired'>('all');
   const [importing, setImporting] = useState(false);
-  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  const [selectedImportProjectId, setSelectedImportProjectId] = useState("");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -117,14 +110,7 @@ export default function Warranties() {
   };
 
   const startWarrantyImport = () => {
-    if (projects.length === 0) {
-      toast.error("لا يوجد مشروع متاح لحسابك لاستيراد الضمانات");
-      return;
-    }
-
-    // Always ask for the project explicitly before opening the file picker.
-    setSelectedImportProjectId("");
-    setProjectPickerOpen(true);
+    fileInputRef.current?.click();
   };
 
   const downloadImportTemplate = async () => {
@@ -136,11 +122,11 @@ export default function Warranties() {
 
     const instructions = [
       ['تعليمات استيراد الضمانات'],
-      ['1. اختر المشروع من نافذة الاختيار في التطبيق قبل تحديد الملف.'],
-      ['2. أدخل رقم الوحدة كما هو مسجل في المشروع المختار.'],
-      ['3. أدخل تاريخ التسليم أو تاريخ الانتهاء على الأقل لكل وحدة.'],
-      ['4. إذا أدخلت تاريخ التسليم فقط، يحسب النظام تاريخ الانتهاء بعد سنة.'],
-      ['5. اسم العميل ورقم الجوال واسم المشروع وحالة الضمان تُجلب أو تُحدد من النظام ولا تُدخل في الملف.'],
+      ['1. لا تحتاج لاختيار مشروع؛ يحدد النظام المشروع تلقائياً من رمز الوحدة المسجل في بداية الرقم.'],
+      ['2. يجب أن يطابق رمز الوحدة اختصار المشروع المسجل في النظام حرفياً (مثال: ES2-2627).'],
+      ['3. إذا كان الرمز غير معروف أو مكرراً بين المشاريع، يُلغى استيراد الملف بالكامل دون تحديث أي وحدة.'],
+      ['4. أدخل تاريخ التسليم أو تاريخ الانتهاء على الأقل لكل وحدة.'],
+      ['5. إذا أدخلت تاريخ التسليم فقط، يحسب النظام تاريخ الانتهاء بعد سنة.'],
       ['6. لا تكرر رقم الوحدة داخل الملف.'],
       ['صيغة التاريخ: DD/MM/YYYY أو YYYY-MM-DD.'],
     ];
@@ -150,25 +136,15 @@ export default function Warranties() {
     XLSX.writeFile(workbook, 'warranty_import_template.xlsx');
   };
 
-  const chooseImportProject = (projectId: string) => {
-    setSelectedImportProjectId(projectId);
-    setProjectPickerOpen(false);
-    fileInputRef.current?.click();
-  };
-
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       setImporting(true);
-      if (!selectedImportProjectId) {
-        toast.error("اختر المشروع أولاً");
-        return;
-      }
-      const res = await warrantiesApi.import(file, selectedImportProjectId);
+      const res = await warrantiesApi.import(file);
       if (res.success) {
-        toast.success(`تم تحديث ${res.updated} وحدة في مشروع ${res.projectName || ""}`);
+        toast.success(`تم تحديث ${res.updated} وحدة تلقائياً في ${(res.projectNames || []).join("، ")}`);
         await loadData();
       }
     } catch (err: any) {
@@ -221,33 +197,6 @@ export default function Warranties() {
             </Button>
           </div>
         </div>
-
-        <Dialog open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
-          <DialogContent dir="rtl" className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>اختيار مشروع استيراد الضمانات</DialogTitle>
-              <DialogDescription>
-                أرقام الوحدات غير المسبوقة ستُطابق باستخدام اختصار المشروع المحدد.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-2 max-h-72 overflow-y-auto">
-              {projects.map(project => (
-                <Button
-                  key={project.id}
-                  type="button"
-                  variant="outline"
-                  className="h-auto justify-between py-3 text-right"
-                  onClick={() => chooseImportProject(project.id)}
-                >
-                  <span className="font-semibold">{project.name}</span>
-                  <span className="text-xs text-muted-foreground" dir="ltr">
-                    {project.abbreviation || "بدون اختصار"}
-                  </span>
-                </Button>
-              ))}
-            </div>
-          </DialogContent>
-        </Dialog>
 
         {/* Filters Section */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
