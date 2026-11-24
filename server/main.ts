@@ -229,25 +229,60 @@ async function startServer() {
     try {
       const data = req.body;
       const projectId = req.params.projectId;
-      const phone = data.phone?.trim() || `unknown-${Date.now()}`;
-      const unit = await prisma.unit.upsert({
-        where: { projectId_unitNumber: { projectId, unitNumber: data.unitNumber || '0' } },
-        create: { projectId, unitNumber: data.unitNumber || '0', handoverDate: data.handoverDate, warrantyExpiryDate: data.warrantyExpiryDate },
-        update: { handoverDate: data.handoverDate, warrantyExpiryDate: data.warrantyExpiryDate }
+      const unitNumber = String(data.unitNumber || "").trim();
+      const name = String(data.name || "").trim();
+      const phone = String(data.phone || "").trim();
+      if (!unitNumber || !name || !phone) {
+        res.status(422).json({ error: "رقم الوحدة واسم العميل ورقم الجوال حقول مطلوبة" });
+        return;
+      }
+
+      const result = await prisma.$transaction(async tx => {
+        let blockId: string | undefined;
+        const blockNumber = String(data.blockNumber || "").trim();
+        if (blockNumber) {
+          const block = await tx.block.upsert({
+            where: { projectId_blockNumber: { projectId, blockNumber } },
+            create: { projectId, blockNumber },
+            update: {},
+            select: { id: true },
+          });
+          blockId = block.id;
+        }
+
+        const unit = await tx.unit.upsert({
+          where: { projectId_unitNumber: { projectId, unitNumber } },
+          create: {
+            projectId, unitNumber,
+            ...(blockId ? { blockId } : {}),
+            handoverDate: data.handoverDate || null,
+            warrantyExpiryDate: data.warrantyExpiryDate || null,
+          },
+          update: {
+            ...(blockId ? { blockId } : {}),
+            ...(data.handoverDate ? { handoverDate: data.handoverDate } : {}),
+            ...(data.warrantyExpiryDate ? { warrantyExpiryDate: data.warrantyExpiryDate } : {}),
+          },
+          include: { clients: { select: { clientId: true } } },
+        });
+        const client = await tx.client.upsert({
+          where: { phone },
+          create: { name, phone },
+          update: { name },
+        });
+        if (unit.clients.some(link => link.clientId !== client.id)) {
+          throw new Error(`الوحدة ${unitNumber} مرتبطة بعميل آخر بالفعل`);
+        }
+        await tx.clientUnit.upsert({
+          where: { clientId_unitId: { clientId: client.id, unitId: unit.id } },
+          create: { clientId: client.id, unitId: unit.id, isPrimary: true },
+          update: {},
+        });
+        return { ...client, projectId, unitId: unit.id, unitNumber: unit.unitNumber };
       });
-      const client = await prisma.client.upsert({
-        where: { phone },
-        create: { name: data.name, phone },
-        update: { name: data.name }
-      });
-      await prisma.clientUnit.upsert({
-        where: { clientId_unitId: { clientId: client.id, unitId: unit.id } },
-        create: { clientId: client.id, unitId: unit.id, isPrimary: true },
-        update: {}
-      });
-      res.status(201).json({ ...client, projectId, unitId: unit.id, unitNumber: unit.unitNumber });
+      res.status(201).json(result);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(422).json({ error: e.message || "فشل إضافة العميل والوحدة" });
     }
   });
 

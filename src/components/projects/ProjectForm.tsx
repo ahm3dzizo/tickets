@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   Briefcase,
@@ -114,7 +115,7 @@ export function ProjectForm({
 
         toast.success('تم تعديل المشروع بنجاح');
       } else {
-        await projectsApi.create({
+        const created = await projectsApi.create({
           name: name.trim(),
           location: location.trim(),
           abbreviation: abbreviation.trim(),
@@ -125,7 +126,12 @@ export function ProjectForm({
           createdAt: new Date().toISOString(),
         });
 
-        toast.success('تم إنشاء المشروع بنجاح');
+        toast.success('تم إنشاء المشروع؛ أكمل إعداد العملاء والوحدات');
+        setOpen(false);
+        resetForm();
+        onSuccess?.();
+        if (created?.id) navigate(`/projects/${created.id}/setup`);
+        return;
       }
 
       setOpen(false);
