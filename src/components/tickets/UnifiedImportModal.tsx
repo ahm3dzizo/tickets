@@ -19,7 +19,7 @@ interface UnifiedImportModalProps {
 }
 
 const TICKET_ID_ALIASES = ['رقم التذكرة', 'ID', 'id', 'الرقم', '#', 'رقم الطلب', 'Case Number'];
-const UNIT_ALIASES = ['رقم الفيلا', 'فيلا', 'villa', 'رقم الوحدة', 'الوحدة', 'Unit'];
+const UNIT_ALIASES = ['رقم الفيلا', 'فيلا', 'villa', 'رقم الوحدة', 'الوحدة', 'Unit'];\nconst DATE_ALIASES = ['التاريخ', 'date', 'تاريخ الإنشاء', 'issuedAt', 'Opened Date', 'Date/Time Opened', 'Date / Time Opened', 'Date Time Opened'];
 
 function cleanHeader(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
@@ -67,7 +67,7 @@ function splitWorkbookByProject(file: File, projects: Project[]): Array<{ projec
   const rows = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, defval: '', raw: false });
   let headerIndex = -1;
   let ticketColumn = -1;
-  let unitColumn = -1;
+  let unitColumn = -1;\n  let dateColumn = -1;
 
   for (let index = 0; index < Math.min(rows.length, 1000); index++) {
     const ticket = findColumn(rows[index], TICKET_ID_ALIASES);
