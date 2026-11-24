@@ -14,7 +14,7 @@ export function extractWarrantyProjectAbbreviation(raw: unknown): string | null 
   const value = westernDigits(String(raw ?? ""))
     .trim()
     .replace(/^(?:villa|unit|الوحدة|فيلا)\s*[-:/#]?\s*/i, "");
-  const match = value.match(/^([A-Za-z][A-Za-z0-9]*)[-_/\\s]+(\d+)$/i);
+  const match = value.match(/^([A-Za-z][A-Za-z0-9]*)[-_/\s]+(\d+)$/i);
   return match ? match[1].toLocaleUpperCase("en-US") : null;
 }
 
