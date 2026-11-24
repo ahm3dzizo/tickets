@@ -104,6 +104,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
   // Both admins and engineers may assign engineers and supervisors when creating
   // a project. Editing existing projects remains admin-only below.
   const combinedUserIds = [...new Set([
+    ...(role === "engineer" ? [req.uid!] : []),
     ...(Array.isArray(data.engineerIds) ? data.engineerIds : []),
     ...(Array.isArray(data.supervisorIds) ? data.supervisorIds : []),
   ])];
