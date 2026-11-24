@@ -245,7 +245,7 @@ export default function Projects() {
                     </Link>
 
                     {/* Edit */}
-                    {canCreateProject && (
+                    {user?.role === 'admin' && (
                       <div onClick={event => event.stopPropagation()}>
                         <ProjectForm
                           project={project}
