@@ -200,7 +200,7 @@ function parseExcelAndDetectHeaders(
   buffer: Buffer,
   fieldAliases: Record<string, string[]>,
   skipDateFilter: boolean = false
-): { allData: any[], allTicketIds: string[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: ImportDateFormat } {
+): { allData: any[], allRows: any[], allTicketIds: string[], mapping: Record<string, string>, skippedByDateFilter: number, detectedFormat: ImportDateFormat } {
   const wb = readWorkbookForImport(buffer);
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
