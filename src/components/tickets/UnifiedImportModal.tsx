@@ -33,7 +33,7 @@ function normalizeArabicHeader(value: string): string {
 function findColumn(columns: unknown[], aliases: string[]): number {
   const normalized = columns.map(cleanHeader);
   for (const alias of aliases) {
-    const index = normalized.findIndex(value => value === cleanHeader(alias));
+    const target = cleanHeader(alias);\n    if (!target) continue;\n    const index = normalized.findIndex(value => value === target);
     if (index >= 0) return index;
   }
   for (const alias of aliases) {
@@ -112,8 +112,8 @@ function splitWorkbookByProject(file: File, projects: Project[]): Array<{ projec
   }
 
   if (errors.length) {
-    throw new Error('تم إيقاف الاستيراد قبل أي تعديل بسبب أخطاء ربط المشاريع:\\n' + errors.slice(0, 20).join('\\n') +
-      (errors.length > 20 ? `\\n... وهناك ${errors.length - 20} أخطاء أخرى.` : ''));
+    throw new Error('تم إيقاف الاستيراد قبل أي تعديل بسبب أخطاء ربط المشاريع:\n' + errors.slice(0, 20).join('\n') +
+      (errors.length > 20 ? `\n... وهناك ${errors.length - 20} أخطاء أخرى.` : ''));
   }
   if (!grouped.size) throw new Error('لم يتم العثور على صفوف تذاكر صالحة في الملف.');
 
@@ -190,12 +190,12 @@ export function UnifiedImportModal({
       if (totals.skippedInDB > 0) parts.push(`⏭ موجود بدون تغيير: ${totals.skippedInDB}`);
       if (totals.skippedInFile > 0) parts.push(`🔁 مكرر في الملف: ${totals.skippedInFile}`);
       if (totals.failed > 0) parts.push(`❌ فشل: ${totals.failed}`);
-      toast.success(parts.join('\\n'));
+      toast.success(parts.join('\n'));
       setOpen(false);
       onImportSuccess?.();
     } catch (error: any) {
       const partial = completedProjects
-        ? `\\nتم بالفعل إنهاء استيراد ${completedProjects} مشروع قبل حدوث الخطأ.`
+        ? `\nتم بالفعل إنهاء استيراد ${completedProjects} مشروع قبل حدوث الخطأ.`
         : '';
       toast.error('فشل الاستيراد: ' + (error?.message || 'خطأ غير معروف') + partial);
       if (completedProjects) onImportSuccess?.();
