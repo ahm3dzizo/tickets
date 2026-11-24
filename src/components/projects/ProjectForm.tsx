@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
   Briefcase,
@@ -49,6 +50,8 @@ export function ProjectForm({
   open: openProp,
   onOpenChange,
 }: ProjectFormProps) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
   const setOpen = (value: boolean) => {
@@ -305,6 +308,7 @@ export function ProjectForm({
             </div>
           </div>
 
+          {user?.role === 'admin' && (
           <div className="space-y-2">
             <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
               المهندسين المسؤولين
@@ -352,6 +356,7 @@ export function ProjectForm({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          )}
 
           <DialogFooter className="pt-4 gap-3">
             <Button
