@@ -35,6 +35,7 @@ const Settings = lazy(() => import('@/pages/Settings'));
 const PushDiagnostics = lazy(() => import('@/pages/PushDiagnostics'));
 const Projects = lazy(() => import('@/pages/Projects'));
 const ProjectDetail = lazy(() => import('@/pages/ProjectDetail'));
+const ProjectSetupWizard = lazy(() => import('@/pages/ProjectSetupWizard'));
 const Clients = lazy(() => import('@/pages/Clients'));
 const Technicians = lazy(() => import('@/pages/Technicians'));
 const TeamMemberDetail = lazy(() => import('@/pages/TeamMemberDetail'));
@@ -165,6 +166,7 @@ function AppContent() {
             <Route path="/tickets" element={protectedElement(<TicketsList />)} />
             <Route path="/projects" element={protectedElement(<Projects />)} />
             <Route path="/projects/:id" element={protectedElement(<ProjectDetail />)} />
+            <Route path="/projects/:id/setup" element={protectedElement(<ProjectSetupWizard />)} />
             <Route path="/clients" element={protectedElement(<Clients />)} />
             <Route path="/technicians" element={protectedElement(<Technicians />)} />
             <Route path="/tickets/:id" element={protectedElement(<TicketDetail />)} />
