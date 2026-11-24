@@ -14,8 +14,6 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-} from "@/components/ui/dialog";
 
 export default function Warranties() {
   const [warranties, setWarranties] = useState<any[]>([]);
