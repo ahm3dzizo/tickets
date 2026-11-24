@@ -66,7 +66,9 @@ export function ProjectForm({
   const [officeLat, setOfficeLat] = useState('');
   const [officeLng, setOfficeLng] = useState('');
   const [selectedEngineers, setSelectedEngineers] = useState<string[]>([]);
+  const [selectedSupervisors, setSelectedSupervisors] = useState<string[]>([]);
   const [engineers, setEngineers] = useState<User[]>([]);
+  const [supervisors, setSupervisors] = useState<User[]>([]);
 
   const isEdit = !!project;
 
@@ -74,9 +76,10 @@ export function ProjectForm({
     if (!open || engineers.length > 0) return;
     usersApi
       .getAll()
-      .then(all =>
-        setEngineers(all.filter((u: User) => u.role === 'engineer'))
-      )
+      .then(all => {
+        setEngineers(all.filter((u: User) => u.role === 'engineer'));
+        setSupervisors(all.filter((u: User) => u.role === 'supervisor'));
+      })
       .catch(() => {});
   }, [open, engineers.length]);
 
@@ -88,6 +91,7 @@ export function ProjectForm({
       setOfficeLat(project.officeLat != null ? String(project.officeLat) : '');
       setOfficeLng(project.officeLng != null ? String(project.officeLng) : '');
       setSelectedEngineers(project.engineerIds || []);
+      setSelectedSupervisors(project.supervisorIds || []);
     }
 
     if (open && !project) {
@@ -125,7 +129,7 @@ export function ProjectForm({
           officeLat: officeLat ? parseFloat(officeLat) : null,
           officeLng: officeLng ? parseFloat(officeLng) : null,
           engineerIds: selectedEngineers,
-          supervisorIds: [],
+          supervisorIds: selectedSupervisors,
           createdAt: new Date().toISOString(),
         });
 
@@ -166,10 +170,19 @@ export function ProjectForm({
     setOfficeLat('');
     setOfficeLng('');
     setSelectedEngineers([]);
+    setSelectedSupervisors([]);
   };
 
   const toggleEngineer = (uid: string) => {
     setSelectedEngineers(prev =>
+      prev.includes(uid)
+        ? prev.filter(id => id !== uid)
+        : [...prev, uid]
+    );
+  };
+
+  const toggleSupervisor = (uid: string) => {
+    setSelectedSupervisors(prev =>
       prev.includes(uid)
         ? prev.filter(id => id !== uid)
         : [...prev, uid]
@@ -308,7 +321,6 @@ export function ProjectForm({
             </div>
           </div>
 
-          {user?.role === 'admin' && (
           <div className="space-y-2">
             <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
               المهندسين المسؤولين
@@ -356,7 +368,51 @@ export function ProjectForm({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          )}
+
+          <div className="space-y-2">
+            <Label className="text-slate-500 block text-right text-[10px] font-bold uppercase tracking-widest">
+              المشرفين المسؤولين
+            </Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between border-border bg-white/5 text-slate-300 rounded-xl h-12"
+                  />
+                }
+              >
+                <Users className="w-3 h-3 opacity-50" />
+                <span>
+                  {selectedSupervisors.length > 0
+                    ? `تم اختيار ${selectedSupervisors.length}`
+                    : 'اختر المشرفين'}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent dir="rtl" className="bg-card border-border text-slate-200 w-64 max-h-60 overflow-y-auto text-right">
+                {supervisors.map(supervisor => (
+                  <DropdownMenuItem
+                    key={supervisor.uid}
+                    className={cn(
+                      'hover:bg-white/5 cursor-pointer text-right justify-end gap-2',
+                      selectedSupervisors.includes(supervisor.uid) &&
+                        'bg-blue-500/10 text-blue-400'
+                    )}
+                    onClick={e => {
+                      e.preventDefault();
+                      toggleSupervisor(supervisor.uid);
+                    }}
+                  >
+                    {supervisor.displayName}
+                    {selectedSupervisors.includes(supervisor.uid) && (
+                      <Plus className="w-3 h-3 rotate-45" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
           <DialogFooter className="pt-4 gap-3">
             <Button
