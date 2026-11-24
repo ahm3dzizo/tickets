@@ -366,9 +366,9 @@ router.post("/:id/import-structure", requireAuth, async (req: AuthRequest, res) 
             create: { name: row.name, phone: row.phone },
             update: { name: row.name },
           });
-          const owner = existingUnit?.clients[0];
-          if (owner && owner.clientId !== client.id) {
-            throw new Error(`الوحدة ${row.unitNumber} مرتبطة بعميل آخر بالفعل؛ لم يتم استيراد الملف`);
+          const owners = existingUnit?.clients || [];
+          if (owners.length > 1 || owners.some(owner => owner.clientId !== client.id)) {
+            throw new Error("الوحدة " + row.unitNumber + " مرتبطة بعميل آخر بالفعل؛ لم يتم استيراد الملف");
           }
           await tx.clientUnit.upsert({
             where: { clientId_unitId: { clientId: client.id, unitId: unit.id } },
