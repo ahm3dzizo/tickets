@@ -93,9 +93,21 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // POST /api/projects
-router.post("/", requireAuth, requireAdmin, async (req, res) => {
+router.post("/", requireAuth, async (req: AuthRequest, res) => {
+  const role = await getRequesterRole(req.uid!);
+  if (role !== "admin" && role !== "engineer") {
+    res.status(403).json({ error: "غير مسموح لك بإنشاء مشروع" });
+    return;
+  }
+
   const data = req.body;
-  const combinedUserIds = [...(data.engineerIds || []), ...(data.supervisorIds || [])];
+  // Both admins and engineers may assign engineers and supervisors when creating
+  // a project. Editing existing projects remains admin-only below.
+  const combinedUserIds = [...new Set([
+    ...(role === "engineer" ? [req.uid!] : []),
+    ...(Array.isArray(data.engineerIds) ? data.engineerIds : []),
+    ...(Array.isArray(data.supervisorIds) ? data.supervisorIds : []),
+  ])];
   
   let officeLat = data.officeLat !== undefined ? (data.officeLat ? parseFloat(data.officeLat) : null) : null;
   let officeLng = data.officeLng !== undefined ? (data.officeLng ? parseFloat(data.officeLng) : null) : null;

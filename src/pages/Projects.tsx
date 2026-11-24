@@ -20,6 +20,7 @@ import { Link, useNavigate } from 'react-router-dom';
 export default function Projects() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const canCreateProject = user?.role === 'admin' || user?.role === 'engineer';
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +68,7 @@ export default function Projects() {
             </p>
           </div>
 
-          {user?.role === 'admin' && (
+          {canCreateProject && (
             <ProjectForm
               trigger={
                 <Button className="gap-2 shrink-0">
@@ -118,12 +119,12 @@ export default function Projects() {
             </h3>
 
             <p className="text-muted-foreground text-sm mt-1 mb-5">
-              {user?.role === 'admin'
+              {canCreateProject
                 ? 'ابدأ بإنشاء مشروعك الأول'
                 : 'لا توجد مشاريع مخصصة لك بعد'}
             </p>
 
-            {user?.role === 'admin' && <ProjectForm />}
+            {canCreateProject && <ProjectForm />}
           </div>
 
         ) : (
@@ -287,7 +288,7 @@ export default function Projects() {
             ))}
 
             {/* Add Project Card */}
-            {user?.role === 'admin' && (
+            {canCreateProject && (
               <ProjectForm
                 trigger={
                   <button
