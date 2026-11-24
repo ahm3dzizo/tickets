@@ -202,6 +202,7 @@ export const projectsApi = {
   getBlocks: (projectId: string) => get<any[]>(`/projects/${projectId}/blocks`),
   getUnits: (projectId: string) => get<any[]>(`/projects/${projectId}/units`),
   getUnitDetails: (unitId: string) => get<any>(`/projects/unit-details/${unitId}`),
+  importStructure: (id: string, rows: any[]) => post<any>(`/projects/${id}/import-structure`, { rows }),
 };
 
 // ── Clients ───────────────────────────────────────────────────────────────────
