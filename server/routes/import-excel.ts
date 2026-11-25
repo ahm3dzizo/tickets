@@ -745,6 +745,52 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       );
     }
 
+    // Preflight is deliberately read-only: never create/update/close tickets
+    // until every missing unit/client relationship has been resolved.
+    if (req.body.preflight === "true" || req.body.preflight === true) {
+      const issueMap = new Map<string, {
+        ref: string;
+        normalizedRef: string;
+        kind: "missing_unit" | "missing_client";
+        count: number;
+      }>();
+      const seen = new Set<string>();
+      for (const row of allData) {
+        const ticketId = normalizeTicketId(String(mapping.ticketId ? row[mapping.ticketId] ?? "" : "").trim());
+        if (!ticketId || seen.has(ticketId)) continue;
+        seen.add(ticketId);
+        const rawRef = String(mapping.excelUnitReference ? row[mapping.excelUnitReference] ?? "" : "").trim();
+        const normalizedRef = normalizeUnitNumber(rawRef);
+        if (!normalizedRef) continue;
+        const unit = excelUnitLookup.get(normalizedRef);
+        const kind = !unit ? "missing_unit" : !unit.clientId ? "missing_client" : null;
+        if (!kind) continue;
+        const key = `${kind}:${normalizedRef}`;
+        const existing = issueMap.get(key);
+        if (existing) existing.count++;
+        else issueMap.set(key, {
+          ref: rawRef || normalizedRef,
+          normalizedRef,
+          kind,
+          count: 1,
+        });
+      }
+
+      const issues = [...issueMap.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.normalizedRef.localeCompare(b.normalizedRef));
+      res.write(JSON.stringify({
+        done: true,
+        result: {
+          preflight: true,
+          projectId,
+          projectName: project.name,
+          projectCode: project.abbreviation,
+          issues,
+          duplicateUnitReferences: [...duplicateExcelUnitReferences],
+        },
+      }) + "\n");
+      return res.end();
+    }
+
     // ── Build waiting-status map to inherit for new tickets ───────────────
     const waitingByUnit = new Map<string, boolean>();
     const waitingByClient = new Map<string, boolean>();
