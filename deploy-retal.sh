@@ -226,11 +226,21 @@ print('✅ Generated Service Worker activation + push handler verified')
 PY
 
   banner "7) FRONTEND — DEPLOY DIST"
-  sudo mkdir -p "$WEB_DIR"
-  sudo rm -rf "$WEB_DIR"/*
-  sudo cp -a dist/. "$WEB_DIR/"
+  # Publish fingerprinted assets before switching index.html. Existing clients
+  # may still request chunks from the previous build after a deployment.
+  sudo mkdir -p "$WEB_DIR/assets"
+  if [ -d dist/assets ]; then
+    sudo cp -a dist/assets/. "$WEB_DIR/assets/"
+  fi
+  find dist -mindepth 1 -maxdepth 1 ! -name index.html ! -name assets \
+    -exec sudo cp -a {} "$WEB_DIR/" \;
+  sudo install -m 0644 dist/index.html "$WEB_DIR/index.html.next"
+  sudo mv -f "$WEB_DIR/index.html.next" "$WEB_DIR/index.html"
+  # Retain old hashed JS/CSS for 30 days so open tabs and delayed lazy imports
+  # don't break when a new build is published.
+  sudo find "$WEB_DIR/assets" -type f \( -name '*.js' -o -name '*.css' \) -mtime +30 -delete
   sudo chown -R www-data:www-data "$WEB_DIR"
-  echo "✅ Frontend deployed"
+  echo "✅ Frontend deployed; previous hashed chunks retained for 30 days"
 
   banner "8) FRONTEND — VERIFY DEPLOYED FILES"
   ls -lah "$WEB_DIR/index.html"
