@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { FileUp, Loader2 } from 'lucide-react';
 import { Project, Client } from '@/types';
-import { ticketsApi } from '@/lib/api';
+import { ticketsApi, projectsApi } from '@/lib/api';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
@@ -160,6 +160,13 @@ export function UnifiedImportModal({
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [skipDateFilter, setSkipDateFilter] = useState(false);
+  const [resolutionIssues, setResolutionIssues] = useState<Array<{
+    projectId: string; projectName: string; projectCode: string; ref: string; normalizedRef: string;
+    kind: 'missing_unit' | 'missing_client' | 'duplicate_reference'; count: number;
+    name: string; phone: string; blockNumber: string;
+  }>>([]);
+  const [pendingBatches, setPendingBatches] = useState<Array<{ project: Project; file: File; rows: number }>>([]);
+  const [savingResolution, setSavingResolution] = useState(false);
   const closeMissing = true;
 
   const processFile = useCallback(async (file: File) => {
@@ -175,8 +182,41 @@ export function UnifiedImportModal({
     const unresolvedUnits: { project: string; ref: string; count: number }[] = [];
     const unitsWithoutClient: { project: string; ref: string; count: number }[] = [];
     try {
-      // Validate and split the entire workbook before sending any import request.
+      // Read-only preflight across every project. No ticket is created or closed
+      // until missing units and client relationships have been resolved.
       const batches = await splitWorkbookByProject(file, projects);
+      const issuesToResolve: typeof resolutionIssues = [];
+      for (let index = 0; index < batches.length; index++) {
+        const batch = batches[index];
+        const preflight = await ticketsApi.importExcel(
+          batch.file, batch.project.id, false,
+          value => setProgress((index + value * 0.25) / batches.length),
+          skipDateFilter, true,
+        );
+        if (preflight.duplicateUnitReferences?.length) {
+          throw new Error(`يوجد أكثر من سجل وحدة يطابق نفس الرقم بعد التطبيع في مشروع ${batch.project.name}: ${preflight.duplicateUnitReferences.join('، ')}. يلزم تصحيح تكرار أرقام الوحدات قبل الاستيراد.`);
+        }
+        for (const issue of preflight.issues ?? []) {
+          issuesToResolve.push({
+            projectId: batch.project.id,
+            projectName: batch.project.name,
+            projectCode: batch.project.abbreviation || '',
+            ref: issue.ref,
+            normalizedRef: issue.normalizedRef,
+            kind: issue.kind,
+            count: issue.count,
+            name: '',
+            phone: '',
+            blockNumber: '',
+          });
+        }
+      }
+      if (issuesToResolve.length > 0) {
+        setPendingBatches(batches);
+        setResolutionIssues(issuesToResolve);
+        return;
+      }
+
       for (let index = 0; index < batches.length; index++) {
         const batch = batches[index];
         const result = await ticketsApi.importExcel(
@@ -232,6 +272,77 @@ export function UnifiedImportModal({
     }
   }, [loading, projects, skipDateFilter, onImportSuccess]);
 
+  const updateResolutionIssue = (index: number, field: 'name' | 'phone' | 'blockNumber', value: string) => {
+    setResolutionIssues(current => current.map((issue, issueIndex) =>
+      issueIndex === index ? { ...issue, [field]: value } : issue
+    ));
+  };
+
+  const saveMissingRelationships = async () => {
+    const ambiguous = resolutionIssues.filter(issue => issue.kind === 'duplicate_reference');
+    if (ambiguous.length) {
+      toast.error('توجد أرقام وحدات متكررة أو ملتبسة داخل قاعدة البيانات. يجب تصحيحها أولاً حتى لا يتم ربط التذاكر بوحدة خاطئة.');
+      return;
+    }
+    const invalid = resolutionIssues.filter(issue => !issue.name.trim() || !issue.phone.trim());
+    if (invalid.length) {
+      toast.error('أدخل اسم العميل ورقم جواله لكل وحدة قبل المتابعة.');
+      return;
+    }
+
+    setSavingResolution(true);
+    setLoading(true);
+    try {
+      const byProject = new Map<string, typeof resolutionIssues>();
+      for (const issue of resolutionIssues) {
+        const group = byProject.get(issue.projectId) ?? [];
+        group.push(issue);
+        byProject.set(issue.projectId, group);
+      }
+
+      for (const [projectId, issues] of byProject) {
+        await projectsApi.importStructure(projectId, issues.map(issue => ({
+          unitNumber: issue.normalizedRef,
+          blockNumber: issue.blockNumber.trim(),
+          name: issue.name.trim(),
+          phone: issue.phone.trim(),
+        })));
+      }
+
+      let added = 0;
+      let updated = 0;
+      let failed = 0;
+      for (let index = 0; index < pendingBatches.length; index++) {
+        const batch = pendingBatches[index];
+        const result = await ticketsApi.importExcel(
+          batch.file,
+          batch.project.id,
+          closeMissing,
+          value => setProgress((index + value) / pendingBatches.length),
+          skipDateFilter,
+        );
+        added += Number(result.added ?? 0);
+        updated += Number(result.updated ?? 0);
+        failed += Number(result.failed ?? 0);
+        if (result.unresolvedUnits?.length || result.unitsWithoutClient?.length) {
+          throw new Error(`ما زالت توجد وحدات أو عملاء غير مربوطين في مشروع ${batch.project.name}. راجع بيانات الوحدات والعملاء.`);
+        }
+      }
+
+      toast.success(`تم حفظ ${resolutionIssues.length} ربط وحدة/عميل، ثم استيراد التذاكر بنجاح. إضافة: ${added}، تحديث: ${updated}، فشل: ${failed}`);
+      setResolutionIssues([]);
+      setPendingBatches([]);
+      setOpen(false);
+      onImportSuccess?.();
+    } catch (error: any) {
+      toast.error('تعذر استكمال الربط والاستيراد: ' + (error?.message || 'خطأ غير معروف'));
+    } finally {
+      setSavingResolution(false);
+      setLoading(false);
+      setProgress(0);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
@@ -240,6 +351,51 @@ export function UnifiedImportModal({
           <DialogTitle className="text-xl font-bold text-white text-right">استيراد تذاكر صيانة</DialogTitle>
         </DialogHeader>
         <div className="space-y-5 py-2">
+          {resolutionIssues.length > 0 ? (
+            <div className="space-y-4 text-right" dir="rtl">
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="font-bold text-amber-200">تم إيقاف الاستيراد مؤقتاً لحل بيانات الوحدات والعملاء</p>
+                <p className="mt-1 text-xs text-slate-300">لم يتم إنشاء أو إغلاق أي تذكرة بعد. أكمل بيانات العميل لكل وحدة ثم تابع الاستيراد.</p>
+              </div>
+              <div className="max-h-[52vh] space-y-3 overflow-y-auto pr-1">
+                {resolutionIssues.map((issue, index) => (
+                  <div key={`${issue.projectId}-${issue.normalizedRef}-${index}`} className="rounded-xl border border-border bg-white/[0.03] p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-bold text-white">{issue.projectCode} · {issue.ref}</div>
+                      <span className="text-[11px] text-slate-400">{issue.count} تذكرة</span>
+                    </div>
+                    {issue.kind === 'duplicate_reference' ? (
+                      <p className="text-xs text-red-300">رقم الوحدة يطابق أكثر من وحدة بعد توحيد الأرقام. صحح التكرار في بيانات المشروع أولاً.</p>
+                    ) : (
+                      <>
+                        <p className="text-[11px] text-amber-300">{issue.kind === 'missing_unit' ? 'الوحدة غير مسجلة — سيتم إنشاؤها وربط العميل بها.' : 'الوحدة موجودة ولكن ليس لها عميل مرتبط.'}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <label className="text-xs text-slate-400">اسم العميل
+                            <input value={issue.name} onChange={event => updateResolutionIssue(index, 'name', event.target.value)} disabled={savingResolution} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-white outline-none focus:border-blue-500" placeholder="اسم العميل" />
+                          </label>
+                          <label className="text-xs text-slate-400">رقم الجوال
+                            <input value={issue.phone} onChange={event => updateResolutionIssue(index, 'phone', event.target.value)} disabled={savingResolution} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-white outline-none focus:border-blue-500" placeholder="05xxxxxxxx" dir="ltr" />
+                          </label>
+                          {issue.kind === 'missing_unit' && (
+                            <label className="text-xs text-slate-400 sm:col-span-2">رقم البلوك (اختياري)
+                              <input value={issue.blockNumber} onChange={event => updateResolutionIssue(index, 'blockNumber', event.target.value)} disabled={savingResolution} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-white outline-none focus:border-blue-500" placeholder="رقم البلوك" />
+                            </label>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <button type="button" onClick={() => { setResolutionIssues([]); setPendingBatches([]); }} disabled={savingResolution} className="rounded-lg border border-border px-4 py-2 text-sm text-slate-300 disabled:opacity-50">إلغاء</button>
+                <button type="button" onClick={saveMissingRelationships} disabled={savingResolution || resolutionIssues.some(issue => issue.kind === 'duplicate_reference')} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+                  {savingResolution ? 'جاري الحفظ والاستيراد...' : 'حفظ الربط ومتابعة الاستيراد'}
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="flex items-center justify-end gap-2 px-1">
             <label htmlFor="skipDateFilter" className="text-xs text-slate-300 cursor-pointer select-none">
               استيراد جميع التذاكر (بما في ذلك التذاكر المغلقة القديمة)
@@ -303,6 +459,8 @@ export function UnifiedImportModal({
             <p>• <span className="text-blue-400">التصنيف الذكي</span> — تصنيف التذاكر التي لا تحتوي على نوع صيانة بواسطة الذكاء الاصطناعي لاحقاً.</p>
             <p>• <span className="text-blue-400">ربط العميل</span> — من خلال مطابقة رقم الفيلا بقاعدة بيانات العملاء داخل المشروع المحدد.</p>
           </div>
+          </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

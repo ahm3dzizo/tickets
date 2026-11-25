@@ -745,6 +745,54 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       );
     }
 
+    // Preflight is deliberately read-only: never create/update/close tickets
+    // until every missing unit/client relationship has been resolved.
+    if (req.body.preflight === "true" || req.body.preflight === true) {
+      const issueMap = new Map<string, {
+        ref: string;
+        normalizedRef: string;
+        kind: "missing_unit" | "missing_client" | "duplicate_reference";
+        count: number;
+      }>();
+      const seen = new Set<string>();
+      for (const row of allData) {
+        const ticketId = normalizeTicketId(String(mapping.ticketId ? row[mapping.ticketId] ?? "" : "").trim());
+        if (!ticketId || seen.has(ticketId)) continue;
+        seen.add(ticketId);
+        const rawRef = String(mapping.excelUnitReference ? row[mapping.excelUnitReference] ?? "" : "").trim();
+        const normalizedRef = normalizeUnitNumber(rawRef);
+        if (!normalizedRef) continue;
+        const unit = excelUnitLookup.get(normalizedRef);
+        const kind = duplicateExcelUnitReferences.has(normalizedRef)
+          ? "duplicate_reference"
+          : !unit ? "missing_unit" : !unit.clientId ? "missing_client" : null;
+        if (!kind) continue;
+        const key = `${kind}:${normalizedRef}`;
+        const existing = issueMap.get(key);
+        if (existing) existing.count++;
+        else issueMap.set(key, {
+          ref: rawRef || normalizedRef,
+          normalizedRef,
+          kind,
+          count: 1,
+        });
+      }
+
+      const issues = [...issueMap.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.normalizedRef.localeCompare(b.normalizedRef));
+      res.write(JSON.stringify({
+        done: true,
+        result: {
+          preflight: true,
+          projectId,
+          projectName: project.name,
+          projectCode: project.abbreviation,
+          issues,
+          duplicateUnitReferences: [...duplicateExcelUnitReferences],
+        },
+      }) + "\n");
+      return res.end();
+    }
+
     // ── Build waiting-status map to inherit for new tickets ───────────────
     const waitingByUnit = new Map<string, boolean>();
     const waitingByClient = new Map<string, boolean>();
@@ -763,6 +811,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
 
     // ── 5. Process rows ───────────────────────────────────────────────────────
     const toCreate: any[] = [];
+    const toLink: Array<{ id: string; unitId?: string; clientId?: string }> = [];
     const toUpdate: {
       id: string;
       status: string;
@@ -871,6 +920,16 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         // Duplicate check (DB)
         const existing = existingMap.get(ticketId);
         if (existing) {
+          // Restore missing relationships for previously imported unlinked tickets,
+          // but never overwrite a non-null or conflicting relationship.
+          if (unitId && (!existing.unitId || existing.unitId === unitId) &&
+              (!existing.clientId || !clientId || existing.clientId === clientId)) {
+            const link: { id: string; unitId?: string; clientId?: string } = { id: existing.id };
+            if (!existing.unitId) link.unitId = unitId;
+            if (clientId && !existing.clientId) link.clientId = clientId;
+            if (link.unitId || link.clientId) toLink.push(link);
+          }
+
           // التحديث: الوصف والتصنيف فقط — الحالة لا تتغير أبداً عند الاستيراد
           const typeNeedsUpdate =
             (!existing.type || existing.type === "unclassified") &&
@@ -926,6 +985,29 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
     }
 
     sendProgress(0.4);
+
+    // Repair relationship gaps on already-existing tickets only when the
+    // imported unit belongs to this project and the ticket has no conflict.
+    let linkedExisting = 0;
+    for (let i = 0; i < toLink.length; i += 100) {
+      const batch = toLink.slice(i, i + 100);
+      const results = await Promise.all(batch.map(async link => {
+        try {
+          await prisma.ticket.update({
+            where: { id: link.id },
+            data: {
+              ...(link.unitId ? { unitId: link.unitId } : {}),
+              ...(link.clientId ? { clientId: link.clientId } : {}),
+            },
+          });
+          return true;
+        } catch (error: any) {
+          errors.push(`تعذر استعادة ربط التذكرة ${link.id}: ${error.message}`);
+          return false;
+        }
+      }));
+      linkedExisting += results.filter(Boolean).length;
+    }
 
     // ── 6. Bulk create in batches ──────────────────────────────────────────────
     const BATCH = 200;
@@ -1115,6 +1197,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         ok: true,
         added,
         updated,
+        linkedExisting,
         closedMissing: closedMissingCount,
         missingNotClosed: missingCount - closedMissingCount,
         skippedByDateFilter,
