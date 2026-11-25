@@ -751,7 +751,7 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
       const issueMap = new Map<string, {
         ref: string;
         normalizedRef: string;
-        kind: "missing_unit" | "missing_client";
+        kind: "missing_unit" | "missing_client" | "duplicate_reference";
         count: number;
       }>();
       const seen = new Set<string>();
@@ -763,7 +763,9 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         const normalizedRef = normalizeUnitNumber(rawRef);
         if (!normalizedRef) continue;
         const unit = excelUnitLookup.get(normalizedRef);
-        const kind = !unit ? "missing_unit" : !unit.clientId ? "missing_client" : null;
+        const kind = duplicateExcelUnitReferences.has(normalizedRef)
+          ? "duplicate_reference"
+          : !unit ? "missing_unit" : !unit.clientId ? "missing_client" : null;
         if (!kind) continue;
         const key = `${kind}:${normalizedRef}`;
         const existing = issueMap.get(key);
