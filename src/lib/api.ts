@@ -256,7 +256,7 @@ export const ticketsApi = {
   getNextId:    (projectId: string)                    => get<{ nextId: string }>(`/tickets/next-id?projectId=${projectId}`).then(res => res.nextId),
   getTicketIds: (projectId: string)                    => get<{ ticketId: string; id: string; type: string; status: string; closedAt: string | null }[]>(`/tickets/ticketids?projectId=${projectId}`),
   autoLink:     ()                                     => post<{ count: number; message: string }>('/tickets/auto-link', {}),
-  importExcel: async (file: File, projectId: string, closeMissingTickets: boolean = false, onProgress?: (p: number) => void, skipDateFilter: boolean = false) => {
+  importExcel: async (file: File, projectId: string, closeMissingTickets: boolean = false, onProgress?: (p: number) => void, skipDateFilter: boolean = false, preflight: boolean = false) => {
     const form = new FormData();
     form.append('file', file);
     form.append('projectId', projectId);
@@ -265,6 +265,9 @@ export const ticketsApi = {
     }
     if (skipDateFilter) {
       form.append('skipDateFilter', 'true');
+    }
+    if (preflight) {
+      form.append('preflight', 'true');
     }
     const token = localStorage.getItem('retal_auth_token') || localStorage.getItem('token') || '';
 
@@ -315,7 +318,28 @@ export const ticketsApi = {
     }
 
     if (!result) throw new Error('اكتمل الطلب ولكن لم يتم إرجاع نتيجة');
-    return result as { ok: boolean; added: number; updated: number; closedMissing: number; missingNotClosed: number; skippedByDateFilter: number; skippedInFile: number; skippedInDB: number; failed: number; classified: number; unclassified: number; errors: string[]; unresolvedUnits?: { ref: string; count: number }[]; unitsWithoutClient?: { ref: string; count: number }[] };
+    return result as {
+      ok?: boolean;
+      preflight?: boolean;
+      projectId?: string;
+      projectName?: string;
+      projectCode?: string;
+      issues?: { ref: string; normalizedRef: string; kind: 'missing_unit' | 'missing_client' | 'duplicate_reference'; count: number }[];
+      duplicateUnitReferences?: string[];
+      added?: number;
+      updated?: number;
+      closedMissing?: number;
+      missingNotClosed?: number;
+      skippedByDateFilter?: number;
+      skippedInFile?: number;
+      skippedInDB?: number;
+      failed?: number;
+      classified?: number;
+      unclassified?: number;
+      errors?: string[];
+      unresolvedUnits?: { ref: string; count: number }[];
+      unitsWithoutClient?: { ref: string; count: number }[];
+    };
   },
 };
 
