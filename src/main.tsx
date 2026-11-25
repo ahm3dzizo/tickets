@@ -6,6 +6,55 @@ import './index.css';
 
 import { registerSW } from 'virtual:pwa-register';
 
+const CHUNK_RECOVERY_KEY = 'retal:chunk-recovery-attempt';
+
+function recoverFromStaleChunk(event: Event) {
+  const preloadEvent = event as Event & { payload?: { message?: string } };
+  const marker = `${window.location.pathname}:${preloadEvent.payload?.message || 'preload-error'}`;
+
+  // A single automatic retry prevents a broken deployment/cache from creating
+  // an endless reload loop. A later healthy boot clears the guard.
+  try {
+    if (sessionStorage.getItem(CHUNK_RECOVERY_KEY) === marker) return;
+    sessionStorage.setItem(CHUNK_RECOVERY_KEY, marker);
+  } catch {
+    // Storage may be unavailable in private browsing; continue with recovery.
+  }
+
+  void (async () => {
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter(key => key.startsWith('retal-app-assets-') || key.startsWith('workbox-precache-'))
+            .map(key => caches.delete(key)),
+        );
+      }
+    } catch (error) {
+      console.warn('[app] Could not clear stale asset caches:', error);
+    } finally {
+      window.location.reload();
+    }
+  })();
+}
+
+// Vite emits this when a lazy-loaded route chunk cannot be fetched, commonly
+// when an already-open tab requests assets from the previous deployment.
+window.addEventListener('vite:preloadError', event => {
+  event.preventDefault();
+  recoverFromStaleChunk(event);
+});
+
+// If the retry booted successfully, allow a future deployment to recover too.
+window.setTimeout(() => {
+  try {
+    sessionStorage.removeItem(CHUNK_RECOVERY_KEY);
+  } catch {
+    // Ignore unavailable session storage.
+  }
+}, 15000);
+
 function applyRouteManifest() {
   const isTechRoute = window.location.pathname === '/tech' || window.location.pathname.startsWith('/tech/');
   const manifestHref = isTechRoute ? '/tech-manifest.webmanifest' : '/manifest.webmanifest';
