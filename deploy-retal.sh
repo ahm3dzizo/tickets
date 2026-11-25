@@ -227,10 +227,13 @@ PY
 
   banner "7) FRONTEND — DEPLOY DIST"
   sudo mkdir -p "$WEB_DIR"
-  sudo rm -rf "$WEB_DIR"/*
+  # Keep content-hashed chunks from previous releases so already-open tabs
+  # can finish lazy-loading after a deployment. Retain them for 30 days.
+  sudo mkdir -p "$WEB_DIR/assets"
   sudo cp -a dist/. "$WEB_DIR/"
+  sudo find "$WEB_DIR/assets" -type f -mtime +30 -delete
   sudo chown -R www-data:www-data "$WEB_DIR"
-  echo "✅ Frontend deployed"
+  echo "✅ Frontend deployed (previous hashed assets retained for 30 days)"
 
   banner "8) FRONTEND — VERIFY DEPLOYED FILES"
   ls -lah "$WEB_DIR/index.html"
