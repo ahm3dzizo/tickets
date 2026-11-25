@@ -922,7 +922,8 @@ router.post("/", requireAuth, upload.single("file"), async (req: AuthRequest, re
         if (existing) {
           // Restore missing relationships for previously imported unlinked tickets,
           // but never overwrite a non-null or conflicting relationship.
-          if (unitId && (!existing.unitId || existing.unitId === unitId)) {
+          if (unitId && (!existing.unitId || existing.unitId === unitId) &&
+              (!existing.clientId || !clientId || existing.clientId === clientId)) {
             const link: { id: string; unitId?: string; clientId?: string } = { id: existing.id };
             if (!existing.unitId) link.unitId = unitId;
             if (clientId && !existing.clientId) link.clientId = clientId;
